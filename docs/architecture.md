@@ -1,68 +1,81 @@
 # Spoorline architecture and stack
 
+The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decision 0001](decisions/0001-effect-and-cloudflare.md).
+
 ## Shape
 
 ```
-┌──────────────── apps/web (TanStack Start) ────────────────┐
-│ UI routes · server functions · /share/:token · /api/* (later) │
-└──────────────┬───────────────────────────────▲────────────┘
-               │ enqueue audit (pg-boss)        │ progress + results (SSE from Postgres)
-               ▼                                │
-┌──────────────── apps/worker (Node + Chromium) ─────────────┐
-│ for each page × scenario:                                   │
-│   capture (Playwright) → decoders → Hit[]                   │
-│ rules(captures) → Finding[]                                 │
-│ llm.explain(findings) (optional, BYOK)                      │
-└──────────────┬──────────────────────────────────────────────┘
-               ▼
-         Postgres 17 — app data, queue (pg-boss), runs, hits (jsonb), findings
-         Object storage — screenshots, HAR (local disk, or S3-compatible such as R2 or MinIO)
-```
+┌──────────── apps/web — TanStack Start on Workers ────────────┐
+│ UI routes · server functions (Effect runtime) · /share/:token │
+└──────┬──────────────────────────────────────────▲─────────────┘
+       │ start audit                               │ WebSocket: live progress
+       ▼                                           │
+┌──── AuditWorkflow (Cloudflare Workflows) ────┐   ┌── AuditRoom (Durable Object, 1 per audit) ──┐
+│ step per page × scenario:                    │──▶│ fan-out of run events to open tabs          │
+│   capture.run(...)  ──────────────┐          │   └─────────────────────────────────────────────┘
+│   decoders → Hit[] → store        │          │
+│ rules(captures) → Finding[]       │          │
+│ llm.explain(findings) (BYOK)      │          │
+└───────────────────────────────────┼──────────┘
+                                    ▼
+            ┌── apps/capture — Cloudflare Container ──┐
+            │ Node + Playwright + real Chromium       │
+            │ network, dataLayer shim, cookies, CMP,  │
+            │ screenshots, report PDF                 │
+            └─────────────────────────────────────────┘
 
-There are two processes and one database. ClickHouse, Redis and Kafka are left out until volume requires them.
+Postgres (Neon) via Hyperdrive — app data, audits, runs, hits (jsonb), findings
+R2 — screenshots, HAR, PDFs
+```
 
 ## Stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Language | TypeScript, Node 22+ | One language from crawler to UI |
+| Language | TypeScript | One language from crawler to UI |
+| Core library | **Effect 4** (`effect@4.0.x`) | Typed errors fit "audits fail partially"; services and layers keep Cloudflare out of the core; one style across Ovriq |
+| Cloudflare bindings | **effect-cf** (Effect-native Workers, Durable Objects, Workflows, Queues, R2) | Bindings as layers instead of a global `env` |
 | Monorepo | pnpm workspaces + Turborepo | Already set up |
-| Web | **TanStack Start** (React 19, Vite) + TanStack Router / Query / Table | Your choice; open-seo uses the same base |
+| Web | **TanStack Start** on Workers via `@cloudflare/vite-plugin`, + TanStack Router / Query / Table | Server functions call into one `ManagedRuntime` |
 | UI kit | Tailwind v4 + shadcn/ui (Radix) + lucide icons | Owned components, accessible, fast to build |
-| Charts (v0.3) | Recharts or visx | Volume trends for monitoring |
-| DB / ORM | Postgres + **Drizzle** | SQL-shaped, light migrations, open-seo pattern; a good way to learn SQL |
-| Auth | **better-auth** + organization plugin | Workspaces, invites, roles out of the box |
-| Jobs | **pg-boss** | Queue in Postgres; nothing extra to run |
-| Live progress | Worker writes `run_events` rows → web streams via SSE | No websockets or Redis needed |
-| Browser | **Playwright** + real Chromium in the worker image | Fidelity; tracking code behaves like it does for real users |
-| Consent clicking | **@duckduckgo/autoconsent** (MPL-2.0) | Deterministic accept/reject for common CMPs |
-| LLM | **Vercel AI SDK**, bring your own key: Anthropic, OpenAI, OpenRouter, Ollama | Keys stored encrypted per workspace; audits work without a key |
-| Validation | Zod | Shared between server functions, rules config and the LLM output schema |
-| PDF | The worker prints the report route with Playwright `page.pdf()` | Reuses the browser already running in the worker |
-| Email (invites) | react-email + nodemailer (SMTP) | Self-hosters bring their own SMTP |
-| Tests | Vitest (units), fixture sites (rules), Playwright Test (web e2e) | See "Testing" below |
-| Lint / format | Biome | One fast tool |
-| CI | GitHub Actions: typecheck, test, build, docker build | |
-| Deploy | Docker Compose: `web`, `worker`, `postgres` | Self-host and our own cloud use the same artifact; host the cloud on a VPS (Hetzner + Coolify), since serverless can't run Chromium well |
+| Validation | **Effect Schema** | Replaces Zod; shared by server functions, rule config and LLM output |
+| Database | **Postgres (Neon) through Hyperdrive**, `@effect/sql-pg`, SQL migrations via the Effect migrator | Postgres keeps a non-Cloudflare self-host path open; D1 would not |
+| Auth | **better-auth** + organization plugin, on the same Postgres | Workspaces, invites, roles; runs on Workers |
+| Orchestration | **Cloudflare Workflows**: one workflow instance per audit, one step per page × scenario | Durable retries per step; replaces pg-boss |
+| Live progress | **Durable Object per audit** with hibernating WebSockets | Replaces SSE-from-Postgres |
+| Browser | **Cloudflare Container** running Playwright + Chromium | Browser Rendering self-identifies as a bot, which breaks audit fidelity on protected sites |
+| Browser (fallback) | Browser Rendering (`@cloudflare/playwright`) | Cheap quick checks; optional |
+| Consent clicking | **@duckduckgo/autoconsent** (MPL-2.0), injected in the container | Deterministic accept/reject for common CMPs |
+| Files | **R2** | Screenshots, HAR, PDFs |
+| LLM | **@effect/ai** with `@effect/ai-anthropic`, `-openai`, `-openrouter`; Ollama through the OpenAI-compatible client | Bring your own key, encrypted per workspace; audits work without a key |
+| PDF | The container prints the report route with `page.pdf()` | Reuses the browser |
+| Email (invites) | Cloudflare Email Service | Same platform |
+| Tests | `@effect/vitest`, `@cloudflare/vitest-plugin` for Workers code, fixture sites, Playwright Test (web e2e) | |
+| Lint / format | Biome, plus `@effect/language-service` | |
+| CI / deploy | GitHub Actions: typecheck, test, build, `wrangler deploy` | |
 
 ## Packages
 
 ```
 apps/
-  web/          TanStack Start app (UI, server fns, share pages)
-  worker/       pg-boss consumer: runs audits, renders PDFs
-  cli/          thin CLI over capture+rules (kept, low priority)
+  web/          TanStack Start on Workers (UI, server fns, share pages), AuditWorkflow, AuditRoom DO
+  capture/      container image: Node HTTP server (Effect) wrapping packages/capture
+  cli/          local Playwright + rules, no Cloudflare (kept, low priority)
 packages/
-  decoders/     request → Hit (exists)
+  decoders/     request → Hit (exists; pure TS, no Effect needed)
   capture/      Playwright session: network, dataLayer shim, cookies, CMP state, screenshots
-  rules/        rule registry; Rule = (RunCapture) => Finding[]
-  llm/          provider factory, prompts, Zod output schemas
-  db/           Drizzle schema, migrations, queries
+  rules/        rule registry; Rule = (RunCapture) => Finding[] (pure)
+  llm/          @effect/ai provider layers, prompts, Schema output
+  db/           schema, migrations, queries (@effect/sql-pg)
+  core/         Effect services: AuditRepo, Storage, Capture, Llm — interfaces only
   fixtures/     static test sites with known tracking bugs
-  ui/           shared shadcn components (only if web + report diverge)
-docker/         Dockerfiles, compose.yml
-docs/           product, architecture, ui, roadmap, decisions/
 ```
+
+### Where Effect goes
+
+- **Pure code stays plain:** decoders and rules are pure functions, and stay easy to test and reuse in the CLI.
+- **Effect at the edges:** anything with I/O, retries, timeouts or failure modes (capture, DB, R2, LLM, workflow steps) is an Effect service in `packages/core`, with a Cloudflare layer in `apps/web` and a Node layer in `apps/cli`.
+- **Error codes are tagged errors:** `BotBlocked`, `Timeout`, `CmpNotFound`, … map 1:1 to the partial-failure codes shown in the UI.
 
 ## Data model (v0.1)
 
@@ -71,14 +84,12 @@ organization ─< member >─ user              (better-auth)
 organization ─< client ─< site ─< audit ─< run (page × scenario × viewport)
                                      │         ├─< hit        (decoded, jsonb params)
                                      │         ├─< datalayer_push
-                                     │         └─ artifacts (screenshot, har keys)
+                                     │         └─ artifacts (R2 keys: screenshot, har)
                                      ├─< finding (rule_id, severity, evidence refs, status, llm_explanation)
                                      └─ report_share (token, revoked_at)
 organization ─ llm_credential (provider, encrypted key, model)
 organization ─ branding (logo, accent, report footer)
 ```
-
-Hits are stored as rows with `jsonb` params. That's fine up to millions of rows; ClickHouse comes in only for continuous monitoring ingestion.
 
 ## Key design rules
 
@@ -87,14 +98,26 @@ Hits are stored as rows with `jsonb` params. That's fine up to millions of rows;
 3. **Vendor matchers are data plus small decoders,** so endpoint changes are one-line fixes.
 4. **Crawled pages are untrusted.** Their content goes to the LLM only as quoted evidence. The agent gets no credentials, and navigation is restricted to an allow-list of the site's domains.
 5. **Read-only by default** toward GTM, GA4 and Meta when connectors arrive in v0.2.
-6. **Audits fail partially, not completely.** If one page or scenario breaks, the report still renders, with a closed set of error codes (`bot_blocked`, `timeout`, `cmp_not_found`, …), as open-seo does.
+6. **Audits fail partially, not completely.** Each page × scenario is its own workflow step; a failed step records a tagged error and the report still renders.
+7. **No Cloudflare in the core.** `packages/*` never import Workers types; only `apps/web` does. That keeps the CLI and a future Node self-host target possible.
+
+## Self-hosting
+
+- **v0.1:** deploy to your own Cloudflare account (`wrangler deploy` + a Neon or any Postgres URL). Free-tier friendly except Containers, which need Workers Paid.
+- **Later:** a Node target (`@effect/platform-node` layers + Docker Compose) using the same packages, if self-hosters ask for it.
 
 ## Testing
 
 - **Decoders and rules:** Vitest with recorded real requests.
-- **Fixture sites** (`packages/fixtures`): small static pages, each with one known bug, for example a pixel firing before consent, a duplicate purchase, or a lost gclid. They are served locally in CI, and the full capture-plus-rules pipeline must produce exactly the expected findings. This is the main safety net.
+- **Fixture sites** (`packages/fixtures`): small static pages, each with one known bug, for example a pixel firing before consent, a duplicate purchase, or a lost gclid. In CI they run through local Playwright plus rules, and must produce exactly the expected findings. This is the main safety net.
+- **Workers code:** `@cloudflare/vitest-plugin` for the workflow, Durable Object and server functions.
 - **Web:** Playwright Test covering sign up → add site → run audit against a fixture → see findings → open the share link.
 - **LLM:** later, Promptfoo evals over fixture findings, run with a cheap model.
+
+## Open questions to settle by spike (M1)
+
+- How bot-protected sites treat traffic from Cloudflare Containers (datacenter IPs either way, but no bot signature).
+- Container cold start and cost for 10 pages × 3 scenarios; whether one container per audit with many tabs beats one per step.
 
 ## Decisions log
 

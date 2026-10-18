@@ -13,9 +13,9 @@
 
 | # | Milestone | Demo at the end |
 |---|---|---|
-| M0 | **Foundations:** CI, Biome, Docker Compose with Postgres, `packages/db` (Drizzle), TanStack Start app shell with better-auth and organizations | Sign up, create a workspace, invite a teammate |
-| M1 | **Capture:** `packages/capture` (Playwright network capture, dataLayer shim, cookies, screenshots), autoconsent scenarios, Google Ads and TikTok decoders, `packages/fixtures` | A test runs a fixture site under 3 consent scenarios and prints the decoded hits |
-| M2 | **Audit pipeline:** clients and sites CRUD, the New audit form, pg-boss job, worker, run_events streamed over SSE, hits stored | Run an audit from the UI, watch it progress, and browse the Hits explorer |
+| M0 | **Foundations:** CI, Biome, Effect 4 + effect-cf setup, `packages/core` services, `packages/db` (`@effect/sql-pg`, Neon via Hyperdrive), TanStack Start on Workers with better-auth and organizations, `wrangler deploy` from CI | Sign up on the deployed Worker, create a workspace, invite a teammate |
+| M1 | **Capture:** `packages/capture` (Playwright network capture, dataLayer shim, cookies, screenshots), autoconsent scenarios, Google Ads and TikTok decoders, `packages/fixtures`, `apps/capture` container image. **Spike:** container vs Browser Rendering on 5 bot-protected sites, and cold start/cost | A fixture site captured locally and inside the container under 3 consent scenarios, with matching hits |
+| M2 | **Audit pipeline:** clients and sites CRUD, the New audit form, AuditWorkflow (step per page × scenario), AuditRoom Durable Object over WebSocket, hits in Postgres, artifacts in R2 | Run an audit from the UI, watch it progress, and browse the Hits explorer |
 | M3 | **Rules and findings:** `packages/rules` with the ~20 v0.1 rules and the Findings screen with its evidence panel | Audit a real client site and get correct findings with evidence |
 | M4 | **Matrix, overview and LLM:** Tag matrix, Overview score, `packages/llm` (BYOK keys, explanations, fix steps, cached) | A consultant-ready view of everything that fires where |
 | M5 | **Report:** branding settings, report page, share link, PDF | Send a white-label report to a client |
