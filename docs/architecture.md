@@ -52,7 +52,8 @@ R2 — screenshots, HAR, PDFs
 | Email (invites) | Cloudflare Email Service | Same platform |
 | Tests | `@effect/vitest`, `@cloudflare/vitest-plugin` for Workers code, fixture sites, Playwright Test (web e2e) | |
 | Lint / format | Biome, plus `@effect/language-service` | |
-| CI / deploy | GitHub Actions: typecheck, test, build, `wrangler deploy` | |
+| Infra as code | **Alchemy** (`alchemy@2`, "Infrastructure as Effects") in `infra/alchemy.run.ts`: `Cloudflare.Website.Vite` for TanStack Start, Workflows, Durable Objects, Containers, R2, Hyperdrive, plus the Neon project and branches | Infra in TypeScript and Effect, same as the app; no hand-written `wrangler.jsonc`; a Neon branch + Worker per PR preview |
+| CI / deploy | GitHub Actions: typecheck, test, build, `alchemy deploy` (per-PR stage, destroyed on close) | |
 
 ## Packages
 
@@ -69,6 +70,8 @@ packages/
   db/           schema, migrations, queries (@effect/sql-pg)
   core/         Effect services: AuditRepo, Storage, Capture, Llm — interfaces only
   fixtures/     static test sites with known tracking bugs
+infra/
+  alchemy.run.ts  every Cloudflare and Neon resource, per stage (dev, pr-N, prod)
 ```
 
 ### Where Effect goes
@@ -103,7 +106,7 @@ organization ─ branding (logo, accent, report footer)
 
 ## Self-hosting
 
-- **v0.1:** deploy to your own Cloudflare account (`wrangler deploy` + a Neon or any Postgres URL). Free-tier friendly except Containers, which need Workers Paid.
+- **v0.1:** deploy to your own Cloudflare account with `alchemy deploy` (Neon, or any Postgres URL for Hyperdrive). Free-tier friendly except Containers, which need Workers Paid.
 - **Later:** a Node target (`@effect/platform-node` layers + Docker Compose) using the same packages, if self-hosters ask for it.
 
 ## Testing
