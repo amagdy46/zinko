@@ -16,7 +16,7 @@ import * as Redacted from "effect/Redacted"
  * (HYPERDRIVE, DB, STORAGE, ROOM, ...), so app code never changes between wrangler and Alchemy.
  */
 export default Alchemy.Stack(
-  "spoorline",
+  "zinko",
   {
     providers: Cloudflare.providers(),
     // CI shares state through a Cloudflare-hosted store; locally it is a `.alchemy/` folder.

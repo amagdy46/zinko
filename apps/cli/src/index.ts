@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { decode } from "@ovriq/spoorline-decoders"
+import { decode } from "@ovriq/zinko-decoders"
 
-const USAGE = `spoorline — open-source tracking auditor
+const USAGE = `zinko — open-source tracking auditor
 
 Usage:
-  spoorline decode <hit-url> [--body <raw-body>]   Decode a GA4 or Meta Pixel request
-  spoorline audit <site-url>                       Crawl and audit a site (coming soon)
+  zinko decode <hit-url> [--body <raw-body>]   Decode a GA4 or Meta Pixel request
+  zinko audit <site-url>                       Crawl and audit a site (coming soon)
 `
 
 function main(argv: string[]): number {
@@ -25,7 +25,7 @@ function main(argv: string[]): number {
     }
     case "audit":
       console.error(
-        "`audit` is not implemented yet. Track progress at https://github.com/ovriq/spoorline",
+        "`audit` is not implemented yet. Track progress at https://github.com/ovriq/zinko",
       )
       return 2
   }

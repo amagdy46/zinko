@@ -1,5 +1,5 @@
 {
-  "name": "@ovriq/spoorline-decoders",
+  "name": "@ovriq/zinko-decoders",
   "version": "0.0.0",
   "description": "Decode marketing tracking hits (GA4, Meta Pixel, ...) into a normalized event model.",
   "license": "AGPL-3.0-only",

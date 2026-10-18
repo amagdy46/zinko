@@ -4,7 +4,7 @@ Date: 2026-10-18 · Status: accepted
 
 ## Context
 
-Ovriq's house stack is Effect and Cloudflare. Spoorline's first plan used Node, pg-boss and Docker Compose on a VPS. Spoorline needs a real browser that behaves like a visitor's, which is the one part that doesn't fit Workers directly.
+Ovriq's house stack is Effect and Cloudflare. Zinko's first plan used Node, pg-boss and Docker Compose on a VPS. Zinko needs a real browser that behaves like a visitor's, which is the one part that doesn't fit Workers directly.
 
 ## Decision
 

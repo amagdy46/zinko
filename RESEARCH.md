@@ -1,4 +1,4 @@
-# Spoorline research and decisions
+# Zinko research and decisions
 
 Compiled 2026-10-18 from agent-assisted research. Most pricing figures come from third-party aggregators, and most data-quality statistics come from vendors that sell audits. Treat them as indicative, not as facts to quote.
 
@@ -8,7 +8,7 @@ Compiled 2026-10-18 from agent-assisted research. Most pricing figures come from
 - **Not building (yet):** a RedTrack-style ad tracker or PostHog-style product analytics. Each is its own funded market, and they sell to different buyers.
 - **License:** AGPL-3.0 for the core. SDKs, the snippet and the plan format may later be MIT. Use a CLA so a commercial license can be offered later, and keep the license fixed after that.
 - **Business model:** productized audits ($1–5k) delivered with the tool from day one. Then a hosted cloud at about $49 / $199 / $499 per month with metered LLM usage. Then agency plans with multiple client workspaces and white-label reports.
-- **Name:** Spoorline, from *spoor*, the trail an animal leaves. Published under the Ovriq org. "OpenTrack" was dropped because the name is taken by `opentrack/opentrack`.
+- **Name:** Zinko (renamed from Spoorline on 2026-10-19). Published under the Ovriq org. "OpenTrack" was dropped because the name is taken by `opentrack/opentrack`.
 
 ## 2. Demand evidence
 
@@ -32,7 +32,7 @@ Compiled 2026-10-18 from agent-assisted research. Most pricing figures come from
 | Segment | Players | Open-source gap |
 |---|---|---|
 | Ad trackers | RedTrack, Voluum, Binom, Keitaro, ClickMagick, Hyros, Triple Whale, Northbeam | No Voluum-class open-source tracker exists. It is also hard and sells on SLAs. |
-| Tracking QA / plans | Trackingplan (has an audit agent), Avo (has an MCP server), Segment Protocols, Amplitude Data, RudderStack, ObservePoint, DataTrue | **No credible open-source equivalent. This is Spoorline's opening.** |
+| Tracking QA / plans | Trackingplan (has an audit agent), Avo (has an MCP server), Segment Protocols, Amplitude Data, RudderStack, ObservePoint, DataTrue | **No credible open-source equivalent. This is Zinko's opening.** |
 | AI audits | GAfix, RundataAI, Measuremate, Tracking Auditor; the GA4 MCP server plus Claude works for free | Single-vendor "chat with GA4" tools are commoditized. The open space is runtime evidence across vendors plus regression monitoring. |
 
 ## 4. Architecture

@@ -353,7 +353,7 @@ importers:
 
   apps/cli:
     dependencies:
-      '@ovriq/spoorline-decoders':
+      '@ovriq/zinko-decoders':
         specifier: workspace:*
         version: link:../../packages/decoders
     devDependencies:

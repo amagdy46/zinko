@@ -1,10 +1,10 @@
-# Spoorline roadmap and how we build
+# Zinko roadmap and how we build
 
 ## How we work
 
 - **Vertical slices.** Every milestone ends in something you can demo end to end in the web app, never "the backend is done".
 - **Rules start from fixtures.** For a new check, first add a fixture page with the bug, then a failing test, then the rule.
-- **Use it on real work.** From M3 on, every client audit you do runs through Spoorline. Anything it misses becomes a new rule plus a fixture.
+- **Use it on real work.** From M3 on, every client audit you do runs through Zinko. Anything it misses becomes a new rule plus a fixture.
 - **Issue tracking.** GitHub Issues, with one milestone per row below. Keep PRs small, and use squash merges on `main`.
 - **CI on every PR:** typecheck, test (including the fixture pipeline), and build.
 - **Decision records** for anything we'd otherwise argue about twice go in `docs/decisions/`.

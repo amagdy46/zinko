@@ -54,7 +54,7 @@ export default defineConfig({
       // generated or edited by efforge transforms (JSONC with trailing commas the formatter adds)
       "efforge.jsonc",
       "wrangler.jsonc",
-      // Spoorline prose kept as authored
+      // Zinko prose kept as authored
       "docs/**",
       "RESEARCH.md",
     ],

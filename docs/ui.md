@@ -1,8 +1,8 @@
-# Spoorline UI
+# Zinko UI
 
 ## Direction
 
-Spoorline should feel like a professional debugging tool: dense, calm and fast, in the spirit of Linear and Sentry, not a marketing dashboard. Consultants live in it, and their clients see only the polished report.
+Zinko should feel like a professional debugging tool: dense, calm and fast, in the spirit of Linear and Sentry, not a marketing dashboard. Consultants live in it, and their clients see only the polished report.
 
 - Dark and light themes, with light as the default for reports.
 - Neutral greys with one brand accent. Severity colors carry meaning: critical red, warning amber, info blue, pass green. Color is never decorative.
@@ -56,9 +56,9 @@ Each finding has three actions: mark as accepted risk, copy the fix steps, and o
 **6. Hits explorer.** A virtualized timeline filterable by vendor, event and scenario. Clicking a hit opens a decoded parameter table next to the raw request. `dataLayer` pushes are interleaved, so you can see the push → tag → hit chain.
 
 **7. Report (client-facing).**
-- The agency logo and accent color, with Spoorline credited in a small footer.
+- The agency logo and accent color, with Zinko credited in a small footer.
 - Sections: summary, score, issues ordered by business impact (each with evidence and fix steps), a tag inventory, and a methodology note.
-- A read-only share link at `/share/:token`, and a PDF export. No Spoorline chrome or navigation appears in the shared view.
+- A read-only share link at `/share/:token`, and a PDF export. No Zinko chrome or navigation appears in the shared view.
 
 ## States to design
 

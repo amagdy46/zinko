@@ -1,4 +1,4 @@
-# Spoorline: what we're building
+# Zinko: what we're building
 
 ## Who it's for
 
@@ -56,6 +56,6 @@ Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 
 ## Success for v0.1
 
-- You deliver 3 paid client audits using only Spoorline output.
+- You deliver 3 paid client audits using only Zinko output.
 - An audit of 10 pages × 3 consent scenarios finishes in under 5 minutes.
 - Every finding links to evidence, and none relies only on the LLM's judgment.

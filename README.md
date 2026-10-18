@@ -1,8 +1,6 @@
-# Spoorline
+# Zinko
 
-**Open-source AI tracking auditor.** Spoorline finds what's broken in your marketing tracking: GA4, Google Tag Manager, Meta Pixel / Conversions API, consent mode, and click-ID persistence. It explains each problem and how to fix it.
-
-> _Spoor_ (n.): the trail an animal leaves. Spoorline reads the trail your tracking leaves and shows you where it breaks.
+**Open-source AI tracking auditor.** Zinko finds what's broken in your marketing tracking: GA4, Google Tag Manager, Meta Pixel / Conversions API, consent mode, and click-ID persistence. It explains each problem and how to fix it.
 
 Status: **early development.** Only hit decoding works today.
 
@@ -45,10 +43,10 @@ pnpm dev        # web app on http://localhost:3000 (or the port Vite prints)
 ```
 apps/web            TanStack Start app on Workers (generated)
 apps/browser        Playwright container (generated)
-apps/cli            spoorline CLI (Spoorline)
+apps/cli            zinko CLI (Zinko)
 packages/core       Effect service interfaces (generated)
 packages/db         Drizzle schema + migrations (generated)
-packages/decoders   GA4 / Meta Pixel hit decoders -> normalized Hit model (Spoorline)
+packages/decoders   GA4 / Meta Pixel hit decoders -> normalized Hit model (Zinko)
 infra/              Alchemy infrastructure (generated)
 ```
 

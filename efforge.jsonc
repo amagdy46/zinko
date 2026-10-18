@@ -2,7 +2,7 @@
 {
   "efforgeVersion": "0.1.0",
   "stack": {
-    "name": "spoorline",
+    "name": "zinko",
     "runtime": "cloudflare",
     "database": "postgres",
     "orm": "drizzle",
@@ -17,7 +17,7 @@
       "email"
     ]
   },
-  "command": "npm create efforge spoorline -- --infra=alchemy --ai=effect-ai-byok --extras=workflows,realtime,browser,storage,email",
+  "command": "npm create efforge zinko -- --infra=alchemy --ai=effect-ai-byok --extras=workflows,realtime,browser,storage,email",
   "files": {
     ".gitignore": "4d42cd9db1eeb272",
     "CLAUDE.md": "336cc4fbf19beaad",
