@@ -1,12 +1,12 @@
-import { Data, Effect } from 'effect'
-import { LlmError } from './llm'
+import { Data, Effect } from "effect"
+import { LlmError } from "./llm"
 
 /** `LLM_ENCRYPTION_KEY` is missing or not 32 base64-encoded bytes, so the Llm layer can't be built. */
-export class LlmConfigError extends Data.TaggedError('LlmConfigError')<{
+export class LlmConfigError extends Data.TaggedError("LlmConfigError")<{
   readonly message: string
 }> {}
 
-const VERSION = 'v1'
+const VERSION = "v1"
 const KEY_BYTES = 32
 const IV_BYTES = 12
 
@@ -16,7 +16,7 @@ const fromBase64 = (text: string): Uint8Array<ArrayBuffer> =>
 
 const invalidKey = new LlmConfigError({
   message:
-    'LLM_ENCRYPTION_KEY must be 32 random bytes, base64 encoded. Generate one with `openssl rand -base64 32` and set it as a secret (.dev.vars locally).',
+    "LLM_ENCRYPTION_KEY must be 32 random bytes, base64 encoded. Generate one with `openssl rand -base64 32` and set it as a secret (.dev.vars locally).",
 })
 
 /** Imports the AES-GCM key from `LLM_ENCRYPTION_KEY`; fails with a clear message when it is unusable. */
@@ -24,12 +24,12 @@ export const loadEncryptionKey = (
   value: string | undefined,
 ): Effect.Effect<CryptoKey, LlmConfigError> =>
   Effect.gen(function* () {
-    const text = (value ?? '').trim()
+    const text = (value ?? "").trim()
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(text)) return yield* invalidKey
     const raw = yield* Effect.try({ try: () => fromBase64(text), catch: () => invalidKey })
     if (raw.length !== KEY_BYTES) return yield* invalidKey
     return yield* Effect.promise(() =>
-      crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']),
+      crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]),
     )
   })
 
@@ -46,13 +46,13 @@ export const encryptSecret = (
     try: async () => {
       const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES))
       const encrypted = await crypto.subtle.encrypt(
-        { name: 'AES-GCM', iv, additionalData: new TextEncoder().encode(context) },
+        { name: "AES-GCM", iv, additionalData: new TextEncoder().encode(context) },
         key,
         new TextEncoder().encode(plaintext),
       )
       return `${VERSION}.${toBase64(iv)}.${toBase64(new Uint8Array(encrypted))}`
     },
-    catch: (cause) => new LlmError({ operation: 'encrypt', cause }),
+    catch: (cause) => new LlmError({ operation: "encrypt", cause }),
   })
 
 export const decryptSecret = (
@@ -62,15 +62,15 @@ export const decryptSecret = (
 ): Effect.Effect<string, LlmError> =>
   Effect.tryPromise({
     try: async () => {
-      const [version, iv, data] = payload.split('.')
+      const [version, iv, data] = payload.split(".")
       if (version !== VERSION || iv === undefined || data === undefined)
-        throw new Error('unknown ciphertext format')
+        throw new Error("unknown ciphertext format")
       const decrypted = await crypto.subtle.decrypt(
-        { name: 'AES-GCM', iv: fromBase64(iv), additionalData: new TextEncoder().encode(context) },
+        { name: "AES-GCM", iv: fromBase64(iv), additionalData: new TextEncoder().encode(context) },
         key,
         fromBase64(data),
       )
       return new TextDecoder().decode(decrypted)
     },
-    catch: (cause) => new LlmError({ operation: 'decrypt', cause }),
+    catch: (cause) => new LlmError({ operation: "decrypt", cause }),
   })

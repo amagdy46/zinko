@@ -1,5 +1,5 @@
-import handler from '@tanstack/react-start/server-entry'
-import { type WorkerRoute, workerRoutes } from './server/routes'
+import handler from "@tanstack/react-start/server-entry"
+import { type WorkerRoute, workerRoutes } from "./server/routes"
 
 /**
  * The Worker entry (`main` in wrangler.jsonc). Cloudflare requires Durable Object and Workflow
@@ -20,6 +20,6 @@ const tryRoutes = (routes: ReadonlyArray<WorkerRoute>, request: Request): Promis
   if (head === undefined) return Promise.resolve(handler.fetch(request))
   return head(request).then((response) => response ?? tryRoutes(tail, request))
 }
-export { Example } from './workflows/Example'
-export { Room } from './realtime/Room'
-export { BrowserContainer } from './browser/BrowserContainer'
+export { Example } from "./workflows/Example"
+export { Room } from "./realtime/Room"
+export { BrowserContainer } from "./browser/BrowserContainer"

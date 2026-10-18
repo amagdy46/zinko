@@ -1,8 +1,8 @@
-import { Llm } from '@repo/core/llm'
-import { createServerFn } from '@tanstack/react-start'
-import { Effect, Schema } from 'effect'
-import { requireSession } from './require-session'
-import { runtime } from './runtime'
+import { Llm } from "@repo/core/llm"
+import { createServerFn } from "@tanstack/react-start"
+import { Effect, Schema } from "effect"
+import { requireSession } from "./require-session"
+import { runtime } from "./runtime"
 
 const GenerateInput = Schema.Struct({
   prompt: Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(4000)),
@@ -12,7 +12,7 @@ const GenerateInput = Schema.Struct({
  * Demo: sends `prompt` to the configured model and returns its text, or a message saying why not.
  * Gated by `requireSession` when the project has auth. Call it from a component or a loader.
  */
-export const generateText = createServerFn({ method: 'POST' })
+export const generateText = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(GenerateInput))
   .handler(({ data }) =>

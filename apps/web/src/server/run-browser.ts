@@ -1,8 +1,8 @@
-import { Browser } from '@repo/core'
-import { createServerFn } from '@tanstack/react-start'
-import { Effect, Schema } from 'effect'
-import { requireSession } from './require-session'
-import { runtime } from './runtime'
+import { Browser } from "@repo/core"
+import { createServerFn } from "@tanstack/react-start"
+import { Effect, Schema } from "effect"
+import { requireSession } from "./require-session"
+import { runtime } from "./runtime"
 
 const RunInput = Schema.Struct({
   url: Schema.String.check(Schema.isPattern(/^https?:\/\//i), Schema.isMaxLength(2048)),
@@ -14,7 +14,7 @@ const RunInput = Schema.Struct({
  * add-on this function is gated by `requireSession`; without one, add your own check before
  * exposing it to anonymous users.
  */
-export const runBrowser = createServerFn({ method: 'POST' })
+export const runBrowser = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(RunInput))
   .handler(({ data }) =>

@@ -1,8 +1,8 @@
-import { ga4 } from './providers/ga4.js'
-import { meta } from './providers/meta.js'
-import type { Decoder, Hit, RequestLike } from './types.js'
+import { ga4 } from "./providers/ga4.js"
+import { meta } from "./providers/meta.js"
+import type { Decoder, Hit, RequestLike } from "./types.js"
 
-export type { ConsentState, Decoder, Hit, RequestLike, Vendor } from './types.js'
+export type { ConsentState, Decoder, Hit, RequestLike, Vendor } from "./types.js"
 export { ga4, meta }
 
 export const decoders: readonly Decoder[] = [ga4, meta]

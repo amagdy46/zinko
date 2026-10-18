@@ -1,6 +1,6 @@
-import { Context, Data, type Effect, type Option } from 'effect'
+import { Context, Data, type Effect, type Option } from "effect"
 
-export class StorageError extends Data.TaggedError('StorageError')<{
+export class StorageError extends Data.TaggedError("StorageError")<{
   readonly operation: string
   readonly cause: unknown
 }> {}
@@ -17,7 +17,7 @@ export interface StoredFile extends StoredObject {
 }
 
 /** The Storage layer could not be built: a required secret is missing or too weak. */
-export class StorageConfigError extends Data.TaggedError('StorageConfigError')<{
+export class StorageConfigError extends Data.TaggedError("StorageConfigError")<{
   readonly message: string
 }> {}
 
@@ -61,4 +61,4 @@ export class Storage extends Context.Service<
       signature: string | null,
     ) => Effect.Effect<boolean, StorageError>
   }
->()('@repo/core/Storage') {}
+>()("@repo/core/Storage") {}

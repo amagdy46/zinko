@@ -1,5 +1,5 @@
-import { Context, type Effect, type Option } from 'effect'
-import type { LlmError } from './llm'
+import { Context, type Effect, type Option } from "effect"
+import type { LlmError } from "./llm"
 
 /** One organization's model settings; the key is encrypted (see `llm-crypto.ts`). */
 export interface LlmCredentialRow {
@@ -18,4 +18,4 @@ export class LlmCredentialStore extends Context.Service<
     readonly upsert: (row: LlmCredentialRow) => Effect.Effect<void, LlmError>
     readonly remove: (orgId: string) => Effect.Effect<void, LlmError>
   }
->()('@repo/core/LlmCredentialStore') {}
+>()("@repo/core/LlmCredentialStore") {}

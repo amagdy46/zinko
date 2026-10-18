@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import type { ReactNode } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 /** The centered card shared by the sign-in, sign-up and onboarding pages. */
 export function AuthCard({

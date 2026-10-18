@@ -1,6 +1,6 @@
-import { Context, Data, type Effect } from 'effect'
+import { Context, Data, type Effect } from "effect"
 
-export class RealtimeError extends Data.TaggedError('RealtimeError')<{
+export class RealtimeError extends Data.TaggedError("RealtimeError")<{
   readonly operation: string
   readonly cause: unknown
 }> {}
@@ -16,4 +16,4 @@ export class Realtime extends Context.Service<
     /** Number of clients currently connected to the room. */
     readonly connections: (roomId: string) => Effect.Effect<number, RealtimeError>
   }
->()('@repo/core/Realtime') {}
+>()("@repo/core/Realtime") {}

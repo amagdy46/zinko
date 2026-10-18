@@ -1,9 +1,9 @@
-import { createServer } from 'node:http'
-import { NodeHttpServer, NodeRuntime } from '@effect/platform-node'
-import { Effect, Layer, Schema } from 'effect'
-import { HttpRouter, HttpServerRequest, HttpServerResponse } from 'effect/http'
-import { type Browser, chromium } from 'playwright'
-import { checkUrl } from './url-policy.ts'
+import { createServer } from "node:http"
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
+import { Effect, Layer, Schema } from "effect"
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http"
+import { type Browser, chromium } from "playwright"
+import { checkUrl } from "./url-policy.ts"
 
 /*
  * SECURITY (SSRF): this server loads any URL it is sent, from inside your network. Requests are
@@ -21,7 +21,7 @@ const RunRequest = Schema.Struct({
 
 let browser: Promise<Browser> | undefined
 const getBrowser = () => {
-  browser ??= chromium.launch({ args: ['--no-sandbox'] })
+  browser ??= chromium.launch({ args: ["--no-sandbox"] })
   return browser
 }
 
@@ -29,17 +29,17 @@ const getBrowser = () => {
 const inspect = async (url: string) => {
   const context = await (await getBrowser()).newContext()
   try {
-    await context.route('**/*', (route) => {
+    await context.route("**/*", (route) => {
       const target = route.request().url()
       const allowed = !/^https?:/i.test(target) || checkUrl(target, ALLOW_PRIVATE_NETWORKS).ok
-      return allowed ? route.continue() : route.abort('blockedbyclient')
+      return allowed ? route.continue() : route.abort("blockedbyclient")
     })
     const page = await context.newPage()
     let requests = 0
-    page.on('request', () => {
+    page.on("request", () => {
       requests += 1
     })
-    await page.goto(url, { waitUntil: 'load', timeout: 30_000 })
+    await page.goto(url, { waitUntil: "load", timeout: 30_000 })
     return { title: await page.title(), requests }
   } finally {
     await context.close()
@@ -47,8 +47,8 @@ const inspect = async (url: string) => {
 }
 
 const run = HttpRouter.add(
-  'POST',
-  '/run',
+  "POST",
+  "/run",
   Effect.gen(function* () {
     const { url: raw } = yield* HttpServerRequest.schemaBodyJson(RunRequest)
     const checked = checkUrl(raw, ALLOW_PRIVATE_NETWORKS)
@@ -67,12 +67,12 @@ const run = HttpRouter.add(
   ),
 )
 
-const health = HttpRouter.add('GET', '/health', HttpServerResponse.text('ok'))
+const health = HttpRouter.add("GET", "/health", HttpServerResponse.text("ok"))
 
 const port = Number(process.env.PORT ?? 8080)
 
 const server = HttpRouter.serve(Layer.mergeAll(run, health)).pipe(
-  Layer.provide(NodeHttpServer.layer(createServer, { port, host: '0.0.0.0' })),
+  Layer.provide(NodeHttpServer.layer(createServer, { port, host: "0.0.0.0" })),
 )
 
 NodeRuntime.runMain(Layer.launch(server))

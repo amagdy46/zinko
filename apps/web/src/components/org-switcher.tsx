@@ -1,6 +1,6 @@
-import { Link, useRouter } from '@tanstack/react-router'
-import { Check, ChevronsUpDown, Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Link, useRouter } from "@tanstack/react-router"
+import { Check, ChevronsUpDown, Plus } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,8 +8,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { authClient } from '@/lib/auth-client'
+} from "@/components/ui/dropdown-menu"
+import { authClient } from "@/lib/auth-client"
 
 interface Organization {
   readonly id: string
@@ -40,7 +40,7 @@ export function OrgSwitcher({
           className="w-full justify-between"
           aria-label="Switch organization"
         >
-          <span className="truncate">{active?.name ?? 'Select organization'}</span>
+          <span className="truncate">{active?.name ?? "Select organization"}</span>
           <ChevronsUpDown className="size-4 opacity-50" />
         </Button>
       </DropdownMenuTrigger>

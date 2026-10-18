@@ -31,28 +31,28 @@ The secondary user is the agency's **client**, who sees the white-label report.
 
 ### Checks in v0.1 (about 20 deterministic rules)
 
-| Area       | Rules                                                                                                                                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Consent    | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after reject; Google hits without denied `gcs` before consent; `consent default` arriving after the Google tag |
-| Click IDs  | `gclid`, `fbclid` and `ttclid` lost across navigation; `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent; IDs missing on the conversion page                                                 |
-| Coverage   | `purchase` missing `transaction_id`, `value` or `currency`; currency format invalid; key page with no page_view                                                                                       |
-| Duplicates | Same event fired twice for one action; multiple GA4 IDs on one page; Meta Pixel initialized twice                                                                                                     |
-| Dedup      | Meta browser `eventID` missing, or not unique per action                                                                                                                                              |
-| Hygiene    | PII (email or phone) in URLs or params; tags failing with 4xx/5xx; hits sent from staging hosts                                                                                                       |
+| Area | Rules |
+|---|---|
+| Consent | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after reject; Google hits without denied `gcs` before consent; `consent default` arriving after the Google tag |
+| Click IDs | `gclid`, `fbclid` and `ttclid` lost across navigation; `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent; IDs missing on the conversion page |
+| Coverage | `purchase` missing `transaction_id`, `value` or `currency`; currency format invalid; key page with no page_view |
+| Duplicates | Same event fired twice for one action; multiple GA4 IDs on one page; Meta Pixel initialized twice |
+| Dedup | Meta browser `eventID` missing, or not unique per action |
+| Hygiene | PII (email or phone) in URLs or params; tags failing with 4xx/5xx; hits sent from staging hosts |
 
 Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 
 ## Not in v0.1
 
-| Feature                                                                    | When                                                                               |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| GTM / GA4 / Meta API connections (configured vs fired)                     | v0.2                                                                               |
-| Agent-driven funnel discovery: find add-to-cart and checkout automatically | v0.2                                                                               |
-| Scheduled audits, volume-drop alerts, Slack                                | v0.3, the first paid cloud feature                                                 |
-| Tracking plan (YAML), plan drift, GitHub Action                            | v0.4                                                                               |
-| Billing                                                                    | When the cloud version launches                                                    |
-| CLI                                                                        | The capture and rules packages are CLI-ready, so this is cheap to add at any point |
-| Ad tracker, product analytics                                              | Not planned                                                                        |
+| Feature | When |
+|---|---|
+| GTM / GA4 / Meta API connections (configured vs fired) | v0.2 |
+| Agent-driven funnel discovery: find add-to-cart and checkout automatically | v0.2 |
+| Scheduled audits, volume-drop alerts, Slack | v0.3, the first paid cloud feature |
+| Tracking plan (YAML), plan drift, GitHub Action | v0.4 |
+| Billing | When the cloud version launches |
+| CLI | The capture and rules packages are CLI-ready, so this is cheap to add at any point |
+| Ad tracker, product analytics | Not planned |
 
 ## Success for v0.1
 

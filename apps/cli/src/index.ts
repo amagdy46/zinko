@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { decode } from '@ovriq/spoorline-decoders'
+import { decode } from "@ovriq/spoorline-decoders"
 
 const USAGE = `spoorline — open-source tracking auditor
 
@@ -11,26 +11,26 @@ Usage:
 function main(argv: string[]): number {
   const [command, target, ...rest] = argv
   switch (command) {
-    case 'decode': {
+    case "decode": {
       if (!target) break
-      const bodyFlag = rest.indexOf('--body')
+      const bodyFlag = rest.indexOf("--body")
       const body = bodyFlag >= 0 ? rest[bodyFlag + 1] : undefined
       const hits = decode({ url: target, body })
       if (hits.length === 0) {
-        console.error('No known tracking hit in that request.')
+        console.error("No known tracking hit in that request.")
         return 1
       }
       process.stdout.write(`${JSON.stringify(hits, null, 2)}\n`)
       return 0
     }
-    case 'audit':
+    case "audit":
       console.error(
-        '`audit` is not implemented yet. Track progress at https://github.com/ovriq/spoorline',
+        "`audit` is not implemented yet. Track progress at https://github.com/ovriq/spoorline",
       )
       return 2
   }
   process.stdout.write(USAGE)
-  return command && command !== 'help' && command !== '--help' ? 1 : 0
+  return command && command !== "help" && command !== "--help" ? 1 : 0
 }
 
 process.exitCode = main(process.argv.slice(2))

@@ -1,9 +1,9 @@
-import { type BetterAuthOptions, betterAuth } from 'better-auth'
-import { organization } from 'better-auth/plugins'
-import { sendInvitationEmail } from './invitation-email'
+import { type BetterAuthOptions, betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+import { sendInvitationEmail } from "./invitation-email"
 
 export interface AuthSettings {
-  readonly database: NonNullable<BetterAuthOptions['database']>
+  readonly database: NonNullable<BetterAuthOptions["database"]>
   readonly secret: string
   readonly baseURL: string | undefined
 }

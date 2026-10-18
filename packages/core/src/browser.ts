@@ -1,6 +1,6 @@
-import { Context, Data, type Effect } from 'effect'
+import { Context, Data, type Effect } from "effect"
 
-export class BrowserError extends Data.TaggedError('BrowserError')<{
+export class BrowserError extends Data.TaggedError("BrowserError")<{
   readonly operation: string
   readonly cause: unknown
 }> {}
@@ -18,4 +18,4 @@ export class Browser extends Context.Service<
     /** Loads `url` and reports what the page did. */
     readonly run: (url: string) => Effect.Effect<BrowserRun, BrowserError>
   }
->()('@repo/core/Browser') {}
+>()("@repo/core/Browser") {}

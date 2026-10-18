@@ -1,16 +1,16 @@
-import { createFileRoute, redirect } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
-import { AuthCard } from '@/components/auth-card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { authClient } from '@/lib/auth-client'
-import { formField } from '@/lib/form'
-import { getSession } from '@/server/session'
+import { createFileRoute, redirect } from "@tanstack/react-router"
+import { type FormEvent, useState } from "react"
+import { AuthCard } from "@/components/auth-card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { authClient } from "@/lib/auth-client"
+import { formField } from "@/lib/form"
+import { getSession } from "@/server/session"
 
-export const Route = createFileRoute('/onboarding')({
+export const Route = createFileRoute("/onboarding")({
   beforeLoad: async () => {
-    if ((await getSession()) === null) throw redirect({ to: '/sign-in' })
+    if ((await getSession()) === null) throw redirect({ to: "/sign-in" })
   },
   component: Onboarding,
 })
@@ -20,8 +20,8 @@ const slugify = (name: string) =>
   `${
     name
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'org'
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "org"
   }-${crypto.randomUUID().slice(0, 6)}`
 
 function Onboarding() {
@@ -30,16 +30,16 @@ function Onboarding() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const name = formField(new FormData(event.currentTarget), 'name').trim()
+    const name = formField(new FormData(event.currentTarget), "name").trim()
     setPending(true)
     setError(null)
     const { error: failure } = await authClient.organization.create({ name, slug: slugify(name) })
     if (failure) {
-      setError(failure.message ?? 'Could not create the organization')
+      setError(failure.message ?? "Could not create the organization")
       setPending(false)
       return
     }
-    window.location.assign('/app')
+    window.location.assign("/app")
   }
 
   return (

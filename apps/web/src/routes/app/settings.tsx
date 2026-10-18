@@ -1,12 +1,12 @@
-import { createFileRoute, Link, Outlet } from '@tanstack/react-router'
+import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 
-export const Route = createFileRoute('/app/settings')({ component: SettingsLayout })
+export const Route = createFileRoute("/app/settings")({ component: SettingsLayout })
 
 /** Tabs of the settings area; `efforge add` extras link their own pages here. */
 const tabs = [
-  { to: '/app/settings', label: 'Profile' },
-  { to: '/app/settings/members', label: 'Members' },
-  { to: '/app/settings/ai', label: 'AI' },
+  { to: "/app/settings", label: "Profile" },
+  { to: "/app/settings/members", label: "Members" },
+  { to: "/app/settings/ai", label: "AI" },
 ] as const
 
 function SettingsLayout() {

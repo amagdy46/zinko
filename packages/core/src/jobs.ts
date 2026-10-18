@@ -1,6 +1,6 @@
-import { Context, Data, type Effect } from 'effect'
+import { Context, Data, type Effect } from "effect"
 
-export class JobError extends Data.TaggedError('JobError')<{
+export class JobError extends Data.TaggedError("JobError")<{
   readonly operation: string
   readonly cause: unknown
 }> {}
@@ -18,16 +18,16 @@ export interface JobRun {
 
 export interface JobStatus {
   readonly status:
-    | 'queued'
-    | 'rollingBack'
-    | 'running'
-    | 'paused'
-    | 'errored'
-    | 'terminated'
-    | 'complete'
-    | 'waiting'
-    | 'waitingForPause'
-    | 'unknown'
+    | "queued"
+    | "rollingBack"
+    | "running"
+    | "paused"
+    | "errored"
+    | "terminated"
+    | "complete"
+    | "waiting"
+    | "waitingForPause"
+    | "unknown"
   readonly output: unknown
   readonly error: string | undefined
 }
@@ -42,4 +42,4 @@ export class Jobs extends Context.Service<
     ) => Effect.Effect<JobRun, JobError>
     readonly status: (job: JobName, id: string) => Effect.Effect<JobStatus, JobError>
   }
->()('@repo/core/Jobs') {}
+>()("@repo/core/Jobs") {}

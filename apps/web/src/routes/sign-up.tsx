@@ -1,15 +1,15 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
-import { AuthCard } from '@/components/auth-card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { authClient } from '@/lib/auth-client'
-import { formField } from '@/lib/form'
-import { redirectSearch, safeRedirect } from '@/lib/redirect'
-import { getSession } from '@/server/session'
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
+import { type FormEvent, useState } from "react"
+import { AuthCard } from "@/components/auth-card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { authClient } from "@/lib/auth-client"
+import { formField } from "@/lib/form"
+import { redirectSearch, safeRedirect } from "@/lib/redirect"
+import { getSession } from "@/server/session"
 
-export const Route = createFileRoute('/sign-up')({
+export const Route = createFileRoute("/sign-up")({
   validateSearch: redirectSearch,
   beforeLoad: async ({ search }) => {
     if ((await getSession()) !== null) throw redirect({ href: safeRedirect(search.redirect) })
@@ -28,12 +28,12 @@ function SignUp() {
     setPending(true)
     setError(null)
     const { error: failure } = await authClient.signUp.email({
-      name: formField(form, 'name'),
-      email: formField(form, 'email'),
-      password: formField(form, 'password'),
+      name: formField(form, "name"),
+      email: formField(form, "email"),
+      password: formField(form, "password"),
     })
     if (failure) {
-      setError(failure.message ?? 'Could not create the account')
+      setError(failure.message ?? "Could not create the account")
       setPending(false)
       return
     }
@@ -46,7 +46,7 @@ function SignUp() {
       description="Start with an email and a password."
       footer={
         <>
-          Already have an account?{' '}
+          Already have an account?{" "}
           <Link
             to="/sign-in"
             search={next === undefined ? {} : { redirect: next }}

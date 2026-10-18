@@ -1,15 +1,15 @@
-import { createFileRoute, Link, redirect } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
-import { AuthCard } from '@/components/auth-card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { authClient } from '@/lib/auth-client'
-import { formField } from '@/lib/form'
-import { redirectSearch, safeRedirect } from '@/lib/redirect'
-import { getSession } from '@/server/session'
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
+import { type FormEvent, useState } from "react"
+import { AuthCard } from "@/components/auth-card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { authClient } from "@/lib/auth-client"
+import { formField } from "@/lib/form"
+import { redirectSearch, safeRedirect } from "@/lib/redirect"
+import { getSession } from "@/server/session"
 
-export const Route = createFileRoute('/sign-in')({
+export const Route = createFileRoute("/sign-in")({
   validateSearch: redirectSearch,
   beforeLoad: async ({ search }) => {
     if ((await getSession()) !== null) throw redirect({ href: safeRedirect(search.redirect) })
@@ -28,11 +28,11 @@ function SignIn() {
     setPending(true)
     setError(null)
     const { error: failure } = await authClient.signIn.email({
-      email: formField(form, 'email'),
-      password: formField(form, 'password'),
+      email: formField(form, "email"),
+      password: formField(form, "password"),
     })
     if (failure) {
-      setError(failure.message ?? 'Could not sign in')
+      setError(failure.message ?? "Could not sign in")
       setPending(false)
       return
     }
@@ -45,7 +45,7 @@ function SignIn() {
       description="Welcome back."
       footer={
         <>
-          No account yet?{' '}
+          No account yet?{" "}
           <Link
             to="/sign-up"
             search={next === undefined ? {} : { redirect: next }}

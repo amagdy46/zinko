@@ -1,11 +1,11 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { useState } from 'react'
-import { AuthCard } from '@/components/auth-card'
-import { Button } from '@/components/ui/button'
-import { authClient } from '@/lib/auth-client'
-import { getSession } from '@/server/session'
+import { createFileRoute, Link } from "@tanstack/react-router"
+import { useState } from "react"
+import { AuthCard } from "@/components/auth-card"
+import { Button } from "@/components/ui/button"
+import { authClient } from "@/lib/auth-client"
+import { getSession } from "@/server/session"
 
-export const Route = createFileRoute('/accept-invite/$id')({
+export const Route = createFileRoute("/accept-invite/$id")({
   loader: async () => ({ session: await getSession() }),
   component: AcceptInvite,
 })
@@ -22,11 +22,11 @@ function AcceptInvite() {
     setError(null)
     const { error: failure } = await authClient.organization.acceptInvitation({ invitationId: id })
     if (failure) {
-      setError(failure.message ?? 'Could not accept the invitation')
+      setError(failure.message ?? "Could not accept the invitation")
       setPending(false)
       return
     }
-    window.location.assign('/app')
+    window.location.assign("/app")
   }
 
   if (session === null)

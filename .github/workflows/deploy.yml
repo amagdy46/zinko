@@ -24,7 +24,7 @@ env:
   BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
   LLM_ENCRYPTION_KEY: ${{ secrets.LLM_ENCRYPTION_KEY }}
   MAIL_FROM: ${{ secrets.MAIL_FROM }}
-  CI: 'true'
+  CI: "true"
 
 jobs:
   deploy:

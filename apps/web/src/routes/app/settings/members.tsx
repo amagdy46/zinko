@@ -1,32 +1,32 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { authClient } from '@/lib/auth-client'
-import { formField } from '@/lib/form'
+import { createFileRoute } from "@tanstack/react-router"
+import { type FormEvent, useState } from "react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { authClient } from "@/lib/auth-client"
+import { formField } from "@/lib/form"
 
-export const Route = createFileRoute('/app/settings/members')({ component: Members })
+export const Route = createFileRoute("/app/settings/members")({ component: Members })
 
-const roles = ['member', 'admin', 'owner'] as const
-const inviteRoles = ['member', 'admin'] as const
+const roles = ["member", "admin", "owner"] as const
+const inviteRoles = ["member", "admin"] as const
 
 const selectClass =
-  'h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+  "h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
 const inviteLink = (invitationId: string) =>
   `${window.location.origin}/accept-invite/${invitationId}`
 
 async function copy(text: string) {
   await navigator.clipboard.writeText(text)
-  toast.success('Link copied')
+  toast.success("Link copied")
 }
 
 async function cancel(invitationId: string) {
   const { error } = await authClient.organization.cancelInvitation({ invitationId })
-  if (error) toast.error(error.message ?? 'Could not cancel the invitation')
+  if (error) toast.error(error.message ?? "Could not cancel the invitation")
 }
 
 const isRole = (value: string): value is (typeof roles)[number] =>
@@ -40,21 +40,21 @@ function Members() {
   if (!org) return <p className="text-sm text-muted-foreground">Loading members...</p>
 
   const me = org.members.find((member) => member.userId === session.userId)
-  const canManage = me?.role === 'owner' || me?.role === 'admin'
-  const pending = org.invitations.filter((invitation) => invitation.status === 'pending')
+  const canManage = me?.role === "owner" || me?.role === "admin"
+  const pending = org.invitations.filter((invitation) => invitation.status === "pending")
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
-    const role = data.get('role') === 'admin' ? 'admin' : 'member'
+    const role = data.get("role") === "admin" ? "admin" : "member"
     const { data: created, error } = await authClient.organization.inviteMember({
-      email: formField(data, 'email'),
+      email: formField(data, "email"),
       role,
       organizationId: org?.id,
     })
     if (error || !created) {
-      toast.error(error?.message ?? 'Could not create the invitation')
+      toast.error(error?.message ?? "Could not create the invitation")
       return
     }
     form.reset()
@@ -67,7 +67,7 @@ function Members() {
       role,
       organizationId: org?.id,
     })
-    if (error) toast.error(error.message ?? 'Could not change the role')
+    if (error) toast.error(error.message ?? "Could not change the role")
   }
 
   async function remove(memberId: string) {
@@ -75,7 +75,7 @@ function Members() {
       memberIdOrEmail: memberId,
       organizationId: org?.id,
     })
-    if (error) toast.error(error.message ?? 'Could not remove the member')
+    if (error) toast.error(error.message ?? "Could not remove the member")
   }
 
   return (
@@ -172,7 +172,7 @@ function Members() {
                   {pending.map((invitation) => (
                     <li key={invitation.id} className="flex items-center gap-2 py-2 text-sm">
                       <span className="flex-1 truncate">
-                        {invitation.email}{' '}
+                        {invitation.email}{" "}
                         <span className="text-muted-foreground">({invitation.role})</span>
                       </span>
                       <Button

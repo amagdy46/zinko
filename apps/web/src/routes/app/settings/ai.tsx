@@ -1,34 +1,34 @@
-import { createFileRoute, useRouter } from '@tanstack/react-router'
-import { type FormEvent, useState } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { formField } from '@/lib/form'
+import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { type FormEvent, useState } from "react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { formField } from "@/lib/form"
 import {
   clearLlmSettings,
   getLlmSettings,
   saveLlmSettings,
   testLlmSettings,
-} from '@/server/ai-settings'
+} from "@/server/ai-settings"
 
-export const Route = createFileRoute('/app/settings/ai')({
+export const Route = createFileRoute("/app/settings/ai")({
   loader: () => getLlmSettings(),
   component: AiSettings,
 })
 
 const providers = [
-  { id: 'anthropic', label: 'Anthropic', model: 'claude-sonnet-5-5' },
-  { id: 'openai', label: 'OpenAI', model: 'gpt-5' },
-  { id: 'openrouter', label: 'OpenRouter', model: 'anthropic/claude-sonnet-5-5' },
-  { id: 'ollama', label: 'Ollama (OpenAI-compatible)', model: 'llama3.2' },
+  { id: "anthropic", label: "Anthropic", model: "claude-sonnet-5-5" },
+  { id: "openai", label: "OpenAI", model: "gpt-5" },
+  { id: "openrouter", label: "OpenRouter", model: "anthropic/claude-sonnet-5-5" },
+  { id: "ollama", label: "Ollama (OpenAI-compatible)", model: "llama3.2" },
 ] as const
 
-type ProviderId = (typeof providers)[number]['id']
+type ProviderId = (typeof providers)[number]["id"]
 
 const selectClass =
-  'h-9 w-full rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+  "h-9 w-full rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
 const isProviderId = (value: string): value is ProviderId =>
   providers.some((provider) => provider.id === value)
@@ -47,14 +47,14 @@ function AiSettings() {
       settings?.provider !== undefined &&
       isProviderId(settings.provider)
       ? settings.provider
-      : 'anthropic',
+      : "anthropic",
   )
 
   if (settings === null)
     return <p className="text-sm text-muted-foreground">Select an organization to set up AI.</p>
 
   const { canManage, configured, last4 } = settings
-  const needsUrl = provider === 'ollama' || provider === 'openai'
+  const needsUrl = provider === "ollama" || provider === "openai"
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -63,9 +63,9 @@ function AiSettings() {
     const result = await saveLlmSettings({
       data: {
         provider,
-        model: formField(data, 'model'),
-        apiKey: formField(data, 'apiKey'),
-        baseUrl: formField(data, 'baseUrl'),
+        model: formField(data, "model"),
+        apiKey: formField(data, "apiKey"),
+        baseUrl: formField(data, "baseUrl"),
       },
     })
     if (!result.ok) {
@@ -73,14 +73,14 @@ function AiSettings() {
       return
     }
     form.reset()
-    toast.success('AI settings saved')
+    toast.success("AI settings saved")
     await router.invalidate()
   }
 
   async function clear() {
     const result = await clearLlmSettings()
     if (!result.ok) toast.error(result.message)
-    else toast.success('API key removed')
+    else toast.success("API key removed")
     await router.invalidate()
   }
 
@@ -98,10 +98,10 @@ function AiSettings() {
           <p className="text-sm" data-testid="ai-status">
             Using {settings.provider} / {settings.model}
             {last4 === null ? (
-              ''
+              ""
             ) : (
               <>
-                {' '}
+                {" "}
                 with the key ending in <code>{last4}</code>
               </>
             )}
@@ -149,7 +149,7 @@ function AiSettings() {
                 name="apiKey"
                 type="password"
                 autoComplete="off"
-                placeholder={configured ? 'Leave empty to keep the current key' : 'sk-...'}
+                placeholder={configured ? "Leave empty to keep the current key" : "sk-..."}
               />
             </div>
             {needsUrl ? (
@@ -161,9 +161,9 @@ function AiSettings() {
                   type="url"
                   defaultValue={settings.baseUrl ?? undefined}
                   placeholder={
-                    provider === 'ollama'
-                      ? 'http://localhost:11434/v1'
-                      : 'https://api.openai.com/v1'
+                    provider === "ollama"
+                      ? "http://localhost:11434/v1"
+                      : "https://api.openai.com/v1"
                   }
                 />
               </div>

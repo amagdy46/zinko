@@ -83,8 +83,16 @@ Zero errors and zero warnings are the bar.
 - Server: `apps/web/src/server/auth.ts` builds the Better Auth instance (`makeAuth`); `auth-live.ts` provides it and the `Auth` service from `@repo/core`. Read the session in Effect code through `Auth.currentSession`, never from cookies directly.
 - `/api/auth/*` is served by `auth-route.ts` (a `workerRoutes` entry). Client: `authClient` in `apps/web/src/lib/auth-client.ts`.
 - Route guard: `routes/app.tsx` redirects signed-out visitors to `/sign-in?redirect=...`; build redirects with `safeRedirect`, never from raw input.
-- Auth tables are in `packages/db` (`auth-schema.ts` or `migrations/0002_auth.sql`); after changing Better Auth plugins regenerate the schema and add a migration, never edit applied ones.
-- `BETTER_AUTH_SECRET` signs sessions: set it as a Worker secret (`.dev.vars` locally, `.env` / the deploy workflow secret with infra=alchemy). Never log or return it. `BETTER_AUTH_URL` is the public origin; when unset Better Auth infers it from the request.
+
+<!-- efforge:section:auth-schema -->
+
+- Auth tables are in `packages/db/src/auth-schema.ts` (Drizzle); after changing Better Auth plugins regenerate the schema and generate a new migration in `packages/db/drizzle/`, never edit applied ones.
+
+<!-- efforge:section:auth-secret -->
+
+- `BETTER_AUTH_SECRET` signs sessions: Alchemy passes it to the Worker from `.env` locally and from the deploy workflow secret in CI. Never log or return it. `BETTER_AUTH_URL` is the public origin; when unset Better Auth infers it from the request.
+
+<!-- efforge:section:organizations -->
 
 ## Organizations
 

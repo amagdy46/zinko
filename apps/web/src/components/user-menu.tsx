@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,8 +6,8 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { authClient } from '@/lib/auth-client'
+} from "@/components/ui/dropdown-menu"
+import { authClient } from "@/lib/auth-client"
 
 const initials = (name: string) =>
   name
@@ -15,11 +15,11 @@ const initials = (name: string) =>
     .filter(Boolean)
     .slice(0, 2)
     .map((part) => part.charAt(0).toUpperCase())
-    .join('') || '?'
+    .join("") || "?"
 
 async function signOut() {
   await authClient.signOut()
-  window.location.assign('/sign-in')
+  window.location.assign("/sign-in")
 }
 
 /** The avatar in the app header; opens a menu with the account and a sign-out action. */

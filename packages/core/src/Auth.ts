@@ -1,7 +1,7 @@
-import { Context, Data, type Effect } from 'effect'
+import { Context, Data, type Effect } from "effect"
 
 /** The current request has no signed-in user. */
-export class Unauthorized extends Data.TaggedError('Unauthorized')<{
+export class Unauthorized extends Data.TaggedError("Unauthorized")<{
   readonly message: string
 }> {}
 
@@ -17,4 +17,4 @@ export interface Session {
 export class Auth extends Context.Service<
   Auth,
   { readonly currentSession: Effect.Effect<Session, Unauthorized> }
->()('@repo/core/Auth') {}
+>()("@repo/core/Auth") {}

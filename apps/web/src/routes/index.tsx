@@ -1,16 +1,16 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { Button } from '@/components/ui/button'
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { createFileRoute, Link } from "@tanstack/react-router"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { Button } from "@/components/ui/button"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
-export const Route = createFileRoute('/')({ component: Landing })
+export const Route = createFileRoute("/")({ component: Landing })
 
 const features = [
-  { title: 'Effect 4', description: 'Typed errors and services, composed with layers.' },
-  { title: 'TanStack Start', description: 'Full-stack React with server functions.' },
+  { title: "Effect 4", description: "Typed errors and services, composed with layers." },
+  { title: "TanStack Start", description: "Full-stack React with server functions." },
   {
-    title: 'Cloudflare Workers',
-    description: 'Deployed at the edge, configured in wrangler.jsonc.',
+    title: "Cloudflare Workers",
+    description: "Deployed at the edge, configured in wrangler.jsonc.",
   },
 ]
 
@@ -30,7 +30,7 @@ function Landing() {
         <div className="space-y-4 text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">Ship your idea</h1>
           <p className="mx-auto max-w-xl text-muted-foreground">
-            A fresh Effect + TanStack Start + Cloudflare monorepo. Edit{' '}
+            A fresh Effect + TanStack Start + Cloudflare monorepo. Edit{" "}
             <code className="rounded bg-muted px-1.5 py-0.5 text-sm">apps/web/src/routes</code> to
             make it yours.
           </p>

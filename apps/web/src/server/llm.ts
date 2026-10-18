@@ -1,14 +1,14 @@
-import { Auth } from '@repo/core/Auth'
-import { Llm, LlmError, LlmNotConfigured, type LlmProvider, llmProviders } from '@repo/core/llm'
-import { decryptSecret, encryptSecret, loadEncryptionKey } from '@repo/core/llm-crypto'
-import { LlmCredentialStore } from '@repo/core/llm-store'
-import { DatabaseLayer } from '@repo/db'
-import { Config, Context, Effect, Layer, Option, Redacted } from 'effect'
-import { WorkerConfig } from 'effect-cf'
-import { AuthLive } from './auth-live'
-import { WorkerEnvLive } from './cloudflare'
-import { generateWith, type LlmSettings } from './llm-provider'
-import { LlmCredentialStoreLive } from './llm-store'
+import { Auth } from "@repo/core/Auth"
+import { Llm, LlmError, LlmNotConfigured, type LlmProvider, llmProviders } from "@repo/core/llm"
+import { decryptSecret, encryptSecret, loadEncryptionKey } from "@repo/core/llm-crypto"
+import { LlmCredentialStore } from "@repo/core/llm-store"
+import { DatabaseLayer } from "@repo/db"
+import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
+import { WorkerConfig } from "effect-cf"
+import { AuthLive } from "./auth-live"
+import { WorkerEnvLive } from "./cloudflare"
+import { generateWith, type LlmSettings } from "./llm-provider"
+import { LlmCredentialStoreLive } from "./llm-store"
 
 /** What the settings page may see: never the key, only its last four characters. */
 export interface LlmCredentialSummary {
@@ -44,11 +44,11 @@ export class LlmCredentials extends Context.Service<
     /** The decrypted settings, for making a request. */
     readonly resolve: (orgId: string) => Effect.Effect<LlmSettings, LlmError | LlmNotConfigured>
   }
->()('LlmCredentials') {}
+>()("LlmCredentials") {}
 
 const none = () =>
   new LlmNotConfigured({
-    message: 'No API key is set for this organization. Add one in Settings > AI.',
+    message: "No API key is set for this organization. Add one in Settings > AI.",
   })
 
 const LlmCredentialsLive = Layer.effect(
@@ -59,7 +59,7 @@ const LlmCredentialsLive = Layer.effect(
     // built with the layer: a missing or malformed LLM_ENCRYPTION_KEY stops the app at startup
     const key = yield* loadEncryptionKey(
       Option.getOrUndefined(
-        yield* Config.option(Config.String('LLM_ENCRYPTION_KEY')).parse(provider),
+        yield* Config.option(Config.String("LLM_ENCRYPTION_KEY")).parse(provider),
       ),
     )
 
@@ -86,12 +86,12 @@ const LlmCredentialsLive = Layer.effect(
             input.apiKey === undefined &&
             Option.isSome(existing) &&
             existing.value.provider === input.provider
-          if (input.apiKey === undefined && input.provider !== 'ollama' && !keep)
-            return yield* new LlmNotConfigured({ message: 'Enter an API key.' })
+          if (input.apiKey === undefined && input.provider !== "ollama" && !keep)
+            return yield* new LlmNotConfigured({ message: "Enter an API key." })
           const encryptedKey =
             keep && Option.isSome(existing)
               ? existing.value.encryptedKey
-              : yield* encryptSecret(key, input.apiKey ?? '', orgId)
+              : yield* encryptSecret(key, input.apiKey ?? "", orgId)
           return yield* store.upsert({
             orgId,
             provider: input.provider,
@@ -109,7 +109,7 @@ const LlmCredentialsLive = Layer.effect(
           return {
             provider: found.value.provider,
             model: found.value.model,
-            apiKey: apiKey === '' ? undefined : Redacted.make(apiKey),
+            apiKey: apiKey === "" ? undefined : Redacted.make(apiKey),
             baseUrl: found.value.baseUrl ?? undefined,
           }
         }),
@@ -134,10 +134,10 @@ export const LlmLive = Layer.effect(
       generateText: (prompt) =>
         Effect.gen(function* () {
           const session = yield* auth.currentSession.pipe(
-            Effect.mapError(() => new LlmNotConfigured({ message: 'Sign in to use AI.' })),
+            Effect.mapError(() => new LlmNotConfigured({ message: "Sign in to use AI." })),
           )
           if (session.activeOrganizationId === null)
-            return yield* new LlmNotConfigured({ message: 'Select an organization first.' })
+            return yield* new LlmNotConfigured({ message: "Select an organization first." })
           const settings = yield* credentials.resolve(session.activeOrganizationId)
           return yield* generateWith(settings, prompt)
         }),

@@ -1,9 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { getGreeting } from '@/server/greeting'
-import { listNotes } from '@/server/notes'
+import { createFileRoute } from "@tanstack/react-router"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { getGreeting } from "@/server/greeting"
+import { listNotes } from "@/server/notes"
 
-export const Route = createFileRoute('/app/')({
+export const Route = createFileRoute("/app/")({
   loader: async () => ({ greeting: await getGreeting(), notes: await listNotes() }),
   component: Dashboard,
 })

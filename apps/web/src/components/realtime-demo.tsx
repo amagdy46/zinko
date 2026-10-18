@@ -1,19 +1,19 @@
-import { type FormEvent, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { useRoom } from '@/lib/use-room'
+import { type FormEvent, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { useRoom } from "@/lib/use-room"
 
 /** Open this page in two tabs: messages sent in one appear in the other, through a Durable Object. */
 export function RealtimeDemo() {
-  const { messages, status, send } = useRoom('demo')
-  const [text, setText] = useState('')
+  const { messages, status, send } = useRoom("demo")
+  const [text, setText] = useState("")
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    if (text.trim() === '') return
+    if (text.trim() === "") return
     send(text)
-    setText('')
+    setText("")
   }
 
   return (
@@ -30,7 +30,7 @@ export function RealtimeDemo() {
         </ul>
         <form onSubmit={submit} className="flex gap-2">
           <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="Say hi" />
-          <Button type="submit" disabled={status !== 'open'}>
+          <Button type="submit" disabled={status !== "open"}>
             Send
           </Button>
         </form>

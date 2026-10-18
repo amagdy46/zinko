@@ -6,9 +6,9 @@ export interface RequestLike {
   body?: string | null
 }
 
-export type Vendor = 'ga4' | 'meta'
+export type Vendor = "ga4" | "meta"
 
-export type ConsentState = 'granted' | 'denied' | 'unknown'
+export type ConsentState = "granted" | "denied" | "unknown"
 
 /** One tracking event decoded from a request. A single request can carry several (GA4 batching). */
 export interface Hit {

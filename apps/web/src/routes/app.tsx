@@ -1,24 +1,24 @@
-import { createFileRoute, Link, Outlet, redirect } from '@tanstack/react-router'
-import { LayoutDashboard, Settings } from 'lucide-react'
-import { OrgSwitcher } from '@/components/org-switcher'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { UserMenu } from '@/components/user-menu'
-import { getAppState } from '@/server/session'
+import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
+import { LayoutDashboard, Settings } from "lucide-react"
+import { OrgSwitcher } from "@/components/org-switcher"
+import { ThemeToggle } from "@/components/theme-toggle"
+import { UserMenu } from "@/components/user-menu"
+import { getAppState } from "@/server/session"
 
-export const Route = createFileRoute('/app')({
+export const Route = createFileRoute("/app")({
   beforeLoad: async () => {
     const state = await getAppState()
-    if (state === null) throw redirect({ to: '/sign-in' })
+    if (state === null) throw redirect({ to: "/sign-in" })
     // first sign-in: nothing to work in yet, so create an organization
-    if (state.organizations.length === 0) throw redirect({ to: '/onboarding' })
+    if (state.organizations.length === 0) throw redirect({ to: "/onboarding" })
     return state
   },
   component: AppShell,
 })
 
 const nav = [
-  { to: '/app', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/app/settings', label: 'Settings', icon: Settings },
+  { to: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/app/settings", label: "Settings", icon: Settings },
 ] as const
 
 function AppShell() {
@@ -35,7 +35,7 @@ function AppShell() {
             <Link
               key={to}
               to={to}
-              activeOptions={{ exact: to === '/app' }}
+              activeOptions={{ exact: to === "/app" }}
               className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground [&.active]:bg-accent [&.active]:text-accent-foreground"
             >
               <Icon className="size-4" />

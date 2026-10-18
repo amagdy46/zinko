@@ -1,6 +1,6 @@
-import { authRoute } from './auth-route'
-import { realtimeRoute } from './realtime-route'
-import { storageRoute } from './storage-route'
+import { authRoute } from "./auth-route"
+import { realtimeRoute } from "./realtime-route"
+import { storageRoute } from "./storage-route"
 /** Handles a request outside the TanStack router (WebSocket upgrades, file downloads), or returns undefined. */
 export type WorkerRoute = (request: Request) => Promise<Response | undefined>
 

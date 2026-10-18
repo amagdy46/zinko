@@ -1,6 +1,6 @@
-import { Mailer } from '@repo/core/mailer'
-import { Effect, ManagedRuntime } from 'effect'
-import { MailerLive } from './mailer'
+import { Mailer } from "@repo/core/mailer"
+import { Effect, ManagedRuntime } from "effect"
+import { MailerLive } from "./mailer"
 
 // Better Auth calls this from inside `makeAuth`, which the app layers import, so it can't reach
 // back into `runtime` (an import cycle). The Mailer needs nothing but the Worker env: own runtime.
@@ -33,6 +33,6 @@ export const sendInvitationEmail = (data: Invitation, request?: Request): Promis
         text: `${inviter} invited you to join ${name}.\n\nAccept the invitation: ${link}\n`,
         html: `<p>${escapeHtml(inviter)} invited you to join <strong>${escapeHtml(name)}</strong>.</p><p><a href="${escapeHtml(link)}">Accept the invitation</a></p>`,
       })
-    }).pipe(Effect.catch((error) => Effect.logError('Could not send the invitation email', error))),
+    }).pipe(Effect.catch((error) => Effect.logError("Could not send the invitation email", error))),
   )
 }

@@ -1,5 +1,5 @@
-import { Effect, type Layer } from 'effect'
-import { AppLayer } from './layers'
+import { Effect, type Layer } from "effect"
+import { AppLayer } from "./layers"
 
 /**
  * Server functions run their Effects through here. Workers must not reuse I/O (such as a
