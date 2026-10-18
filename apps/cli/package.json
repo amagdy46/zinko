@@ -3,14 +3,22 @@
   "version": "0.0.0",
   "description": "Open-source AI tracking auditor for GA4, GTM, Meta Pixel/CAPI and consent.",
   "license": "AGPL-3.0-only",
+  "bin": {
+    "spoorline": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "type": "module",
-  "bin": { "spoorline": "./dist/index.js" },
-  "files": ["dist"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@ovriq/spoorline-decoders": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

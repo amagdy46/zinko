@@ -1,6 +1,11 @@
-node_modules/
-dist/
-.turbo/
+node_modules
+dist
+.turbo
+.wrangler
+.alchemy
+routeTree.gen.ts
+.dev.vars
+.env
+.env.local
 *.log
-.env*
-coverage/
+.DS_Store

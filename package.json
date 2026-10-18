@@ -2,17 +2,31 @@
   "name": "spoorline-monorepo",
   "private": true,
   "license": "AGPL-3.0-only",
-  "packageManager": "pnpm@12.4.2",
-  "engines": { "node": ">=22" },
+  "type": "module",
   "scripts": {
+    "dev": "alchemy dev infra/alchemy.run.ts",
     "build": "turbo run build",
+    "typecheck": "turbo run typecheck && tsc -p infra",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "lint": "vp lint",
+    "format": "vp fmt",
+    "check": "vp check",
+    "prepare": "effect-tsgo patch --typescript --oxlint",
+    "db:migrate": "pnpm --filter @repo/db db:migrate",
+    "deploy": "alchemy deploy infra/alchemy.run.ts",
+    "destroy": "alchemy destroy infra/alchemy.run.ts"
   },
   "devDependencies": {
-    "@types/node": "^26.6.5",
-    "turbo": "^2.11.9",
-    "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
-  }
+    "@effect/platform-node": "catalog:",
+    "@effect/tsgo": "catalog:",
+    "@types/node": "catalog:",
+    "alchemy": "catalog:",
+    "effect": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "packageManager": "pnpm@12.4.2"
 }
