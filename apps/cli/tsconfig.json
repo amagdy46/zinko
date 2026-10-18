@@ -1,5 +1,12 @@
 {
+  "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist", "types": ["node"] },
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    "noEmit": false,
+    "allowImportingTsExtensions": false
+  },
   "include": ["src"]
 }

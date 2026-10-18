@@ -1,0 +1,66 @@
+name: Deploy
+
+# main -> stage `prod`; every pull request -> its own stage `pr-<number>`, destroyed when the PR closes.
+# Live deploys are not part of efforge's tests: set the secrets below, then push.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+concurrency:
+  group: deploy-${{ github.event.number || 'prod' }}
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  # Not read by alchemy 2.0.0-beta.83 itself (state encryption is managed by the Cloudflare state
+  # store); kept so a password-protecting release picks it up without a workflow change.
+  ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+  # Postgres only: the origin Hyperdrive connects to. Every PR preview shares this one database.
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+  LLM_ENCRYPTION_KEY: ${{ secrets.LLM_ENCRYPTION_KEY }}
+  MAIL_FROM: ${{ secrets.MAIL_FROM }}
+  CI: 'true'
+
+jobs:
+  deploy:
+    # fork PRs get no secrets
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.action != 'closed' &&
+        github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy
+        env:
+          ALCHEMY_STAGE: ${{ github.event_name == 'push' && 'prod' || format('pr-{0}', github.event.number) }}
+        run: pnpm exec alchemy deploy infra/alchemy.run.ts --yes
+
+  destroy:
+    if: >-
+      github.event_name == 'pull_request' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Destroy the preview stage
+        env:
+          ALCHEMY_STAGE: pr-${{ github.event.number }}
+        run: pnpm exec alchemy destroy infra/alchemy.run.ts --yes

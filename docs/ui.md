@@ -34,20 +34,22 @@ Workspace switcher
 **2. Audit running.** A grid with one tile per page × scenario. Each tile shows a status, a screenshot thumbnail and a hit count. Findings stream into a side list as rules finish, so you can start reading before the audit is done.
 
 **3. Overview.**
+
 - A health score (0–100, weighted by severity) with its change since the last run.
 - Counts by severity and by area (Consent, Click IDs, Coverage, Duplicates, Dedup, Hygiene).
 - The "Top issues" list, written in plain business language: "Purchases are counted twice in GA4 (inflates revenue by ~2×)".
 
 **4. Findings.**
 
-| Pane | Shows |
-|---|---|
-| Left: the list | Severity, title, area, affected page and scenario count, status |
+| Pane                        | Shows                                                                                                                                                                 |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Left: the list              | Severity, title, area, affected page and scenario count, status                                                                                                       |
 | Right: the selected finding | Explanation, why it matters, fix steps, and evidence tabs: **Hit** (decoded params table), **Request** (raw URL and body), **Screenshot**, **Cookies**, **dataLayer** |
 
 Each finding has three actions: mark as accepted risk, copy the fix steps, and open in Hits.
 
 **5. Tag matrix.**
+
 - Rows: each destination (GA4 G-XXXX, Meta pixel 123…, Ads AW-…, TikTok).
 - Columns: pages, each split by scenario (∅, ✓ accept, ✗ reject).
 - Cells: the events that fired. A red cell means the tag fired when it shouldn't have, for example under reject. An empty amber cell means the tag was expected but didn't fire.
@@ -56,6 +58,7 @@ Each finding has three actions: mark as accepted risk, copy the fix steps, and o
 **6. Hits explorer.** A virtualized timeline filterable by vendor, event and scenario. Clicking a hit opens a decoded parameter table next to the raw request. `dataLayer` pushes are interleaved, so you can see the push → tag → hit chain.
 
 **7. Report (client-facing).**
+
 - The agency logo and accent color, with Spoorline credited in a small footer.
 - Sections: summary, score, issues ordered by business impact (each with evidence and fix steps), a tag inventory, and a methodology note.
 - A read-only share link at `/share/:token`, and a PDF export. No Spoorline chrome or navigation appears in the shared view.

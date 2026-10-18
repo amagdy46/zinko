@@ -1,0 +1,26 @@
+{
+  "name": "@repo/db",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/migrate.ts",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@effect/sql-pg": "catalog:",
+    "@repo/core": "workspace:*",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:",
+    "effect-cf": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "typescript": "catalog:"
+  }
+}
