@@ -13,28 +13,13 @@
   <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: early development.** Only the hit decoder works today: `zinko decode` turns a GA4 or Meta Pixel request into readable JSON. The audit pipeline, the rules and the web app below are being built ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Licensed AGPL-3.0: you can self-host and modify it, but a modified version you run as a service must publish its source.
+**Status: early development.** Only the hit decoder works today: `zinko decode` turns a GA4 or Meta Pixel request into readable JSON. The audit pipeline, the rules and the web app are being built ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
-![Zinko audit overview: a tracking health score of 62/100, issue counts by area, changes since the last audit, and top issues such as purchases counted twice in GA4. This is a design mockup, not a working screen.](https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/overview-mockup.png)
-
-_Design mockup of the planned audit overview. The data is sample data, and this screen is not built yet._
-
-## Why Zinko
-
-A client says their conversions don't match. Today that means an afternoon in Tag Assistant and Omnibug, clicking through the site once per consent choice and copying hits into a spreadsheet. Paid tools such as ObservePoint and Trackingplan automate it, but they are closed source and billed monthly.
-
-Zinko is being built to do that audit in one run, in the open. The design:
-
-- **Evidence, not opinions.** Zinko loads your pages in a real browser and records every tracking request, `dataLayer` push, cookie and consent signal. Each finding links to the decoded hit, the raw request and a screenshot.
-- **Deterministic checks.** Rules are plain functions over the captured data, each with a fixture page and a test. An LLM can explain a finding and write fix steps, but it never decides pass or fail, and every check works without one.
-- **Every consent path.** Each page runs with no banner interaction, after "accept all" and after "reject all", with and without click IDs such as `gclid` and `fbclid` in the landing URL.
-- **Made for consultants and agencies.** Client workspaces, a tag matrix of what fires where, re-runs that mark findings new or fixed, and a white-label report.
-
-Use something else if you need ongoing monitoring of production traffic today, or vendors beyond GA4, Google Ads, Meta and TikTok.
+Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
 ## Try the decoder
 
-Needs Node 24.11+ and pnpm.
+Needs Node 24.11+ or 26+ (not 25) and pnpm.
 
 ```sh
 git clone https://github.com/ovriq/zinko.git && cd zinko
@@ -59,16 +44,33 @@ node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/colle
 
 Meta Pixel requests (`facebook.com/tr`) decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the capture pipeline lands.
 
+## Why Zinko
+
+A client says their conversions don't match. Today that usually means an afternoon in Tag Assistant and Omnibug, going through the site once per consent choice, then assembling the evidence into a report by hand. Commercial products such as ObservePoint and Trackingplan automate parts of this as closed-source subscriptions.
+
+Zinko is being built to do that audit in one run, in the open. The design:
+
+- **Evidence, not opinions.** Zinko loads your pages in a real browser and records every tracking request, `dataLayer` push, cookie and consent signal. Each finding links to the decoded hit, the raw request and a screenshot.
+- **Deterministic checks.** Rules are plain functions over the captured data, each with a fixture page and a test. An LLM can explain a finding and write fix steps, but it never decides pass or fail, and every check works without one.
+- **Every consent path.** Each page runs with no banner interaction, after "accept all" and after "reject all", with and without click IDs such as `gclid` and `fbclid` in the landing URL.
+- **Made for consultants and agencies.** Client workspaces, a tag matrix of what fires where, re-runs that mark findings new or fixed, and a white-label report.
+
+![Zinko audit overview: a tracking health score of 62/100, issue counts by area, changes since the last audit, and top issues such as purchases counted twice in GA4. This is a design mockup, not a working screen.](https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/overview-mockup.png)
+
+_Design mockup of the planned audit overview. The data is sample data, and this screen is not built yet._
+
+Use something else if you need ongoing monitoring of production traffic today, or vendors beyond GA4, Google Ads, Meta and TikTok.
+
 ## Planned checks (v0.1)
 
-| Area       | What it catches                                                                                                                                 |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Consent    | Ad or analytics cookies set before consent; pixels firing before consent or after "reject all"; `consent default` arriving after the Google tag |
-| Click IDs  | `gclid`, `fbclid` and `ttclid` lost across navigation; `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent                               |
-| Coverage   | `purchase` without `transaction_id`, `value` or `currency`; key pages with no `page_view`                                                       |
-| Duplicates | The same event fired twice for one action; several GA4 IDs on one page; Meta Pixel initialized twice                                            |
-| Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated                                                       |
-| Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts                             |
+| Area       | What it catches                                                                                                                                                                                                               |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consent    | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after "reject all"; Google hits before consent without a denied consent state (`gcs`); `consent default` arriving after the Google tag |
+| Click IDs  | `gclid`, `fbclid` and `ttclid` lost across navigation; `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent                                                                                                             |
+| Coverage   | `purchase` without `transaction_id`, `value` or `currency`; key pages with no `page_view`                                                                                                                                     |
+| Duplicates | The same event fired twice for one action; several GA4 IDs on one page; Meta Pixel initialized twice                                                                                                                          |
+| Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated                                                                                                                                     |
+| Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts                                                                                                           |
 
 The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/ovriq/zinko/blob/main/docs/product.md).
 
@@ -88,18 +90,7 @@ The stack is Effect 4 and TanStack Start on Cloudflare Workers, Postgres through
 
 ## Contributing
 
-Issues and pull requests are welcome.
-
-```sh
-pnpm install
-pnpm build                 # the CLI imports the built decoders package
-pnpm check && pnpm typecheck && pnpm test
-```
-
-- [AGENTS.md](https://github.com/ovriq/zinko/blob/main/AGENTS.md): code layout and rules, for people and coding agents.
-- [infra/README.md](https://github.com/ovriq/zinko/blob/main/infra/README.md): running the web app locally (`pnpm dev`) and deploying it.
-- [docs/architecture.md](https://github.com/ovriq/zinko/blob/main/docs/architecture.md) and [docs/decisions/](https://github.com/ovriq/zinko/tree/main/docs/decisions): how the pieces fit and why.
-- A new check starts with a fixture page that has the bug, then a failing test, then the rule.
+Issues and pull requests are welcome. Setup, checks and where things live: [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md).
 
 ## License
 
