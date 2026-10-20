@@ -1,12 +1,11 @@
 name: Deploy
 
-# main -> stage `prod`; every pull request -> its own stage `pr-<number>`, destroyed when the PR closes.
-# Live deploys are not part of efforge's tests: set the secrets below, then push.
+# Manual only until the Cloudflare secrets below exist: run it from the Actions tab to deploy stage `prod`.
+# To deploy on every push and give each PR its own `pr-<number>` stage again, restore these triggers:
+#   push: { branches: [main] }
+#   pull_request: { types: [opened, synchronize, reopened, closed] }
 on:
-  push:
-    branches: [main]
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
+  workflow_dispatch:
 
 concurrency:
   group: deploy-${{ github.event.number || 'prod' }}
@@ -30,7 +29,7 @@ jobs:
   deploy:
     # fork PRs get no secrets
     if: >-
-      github.event_name == 'push' ||
+      github.event_name != 'pull_request' ||
       (github.event.action != 'closed' &&
         github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
@@ -44,7 +43,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Deploy
         env:
-          ALCHEMY_STAGE: ${{ github.event_name == 'push' && 'prod' || format('pr-{0}', github.event.number) }}
+          ALCHEMY_STAGE: ${{ github.event_name != 'pull_request' && 'prod' || format('pr-{0}', github.event.number) }}
         run: pnpm exec alchemy deploy infra/alchemy.run.ts --yes
 
   destroy:
