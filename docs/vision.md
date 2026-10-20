@@ -29,7 +29,7 @@ New audit form (apps/web)
           dataLayer pushes, cookies, CMP state, screenshot
       → packages/decoders: request → Hit
       → store: hits and pushes in Postgres (Drizzle), screenshots and HAR in R2 (Storage service)
-      → AuditRoom Durable Object (Realtime service) pushes progress to open tabs
+      → AuditRoom Durable Object (AuditProgress service) pushes progress to open tabs
   → packages/rules: captures → Finding[] (deterministic)
   → Llm service: explanation and fix steps per finding, cached
   → Findings, Tag matrix, Hit explorer, Report
@@ -86,7 +86,7 @@ Each row below says which of these, or which other run, showed it working. Not r
 | Clients and sites | Drizzle tables scoped by `activeOrganizationId`, CRUD server functions | planned |
 | New audit form | Start URL, up to 20 key URLs, scenarios, viewport, click IDs | planned |
 | Durable runs | `AuditWorkflow`, one step per page × scenario × viewport; typed errors (`BotBlocked`, `Timeout`, `CmpNotFound`) become partial-failure codes in the UI | planned |
-| Live progress | `AuditRoom` Durable Object over WebSocket, thumbnail per finished step | planned |
+| Live progress | `AuditRoom` Durable Object over WebSocket (one per audit, listen-only, 50 sockets), thumbnail per finished step. `/ws/audits/<id>` checks Origin (403), session (401) and the `member` row plus the audit in that organization (404, so removed members are refused); the room is named by the database lowercase id. Verified in M2 Task 6 | built, page in Task 7 |
 | Hit explorer | Timeline of decoded hits and `dataLayer` pushes per run, filterable ("Omnibug in the browser") | planned |
 
 ### Rules and findings (M3)

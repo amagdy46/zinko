@@ -16,5 +16,10 @@ export interface Session {
 /** Who is making the current request. Implemented by Better Auth in apps/web/src/server/auth-live.ts. */
 export class Auth extends Context.Service<
   Auth,
-  { readonly currentSession: Effect.Effect<Session, Unauthorized> }
+  {
+    /** The session of the server function being handled (read from its request cookies). */
+    readonly currentSession: Effect.Effect<Session, Unauthorized>
+    /** The session carried by `headers`, for Worker routes that have no server-function context. */
+    readonly sessionFromHeaders: (headers: Headers) => Effect.Effect<Session, Unauthorized>
+  }
 >()("@repo/core/Auth") {}

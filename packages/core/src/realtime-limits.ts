@@ -1,26 +1,15 @@
 /**
- * Limits and pure helpers shared by the room (server) and `useRoom` (browser). No imports, so the
- * client bundle stays free of Effect.
+ * Limits and pure helpers shared by the audit room (server) and `useAuditRoom` (browser). No
+ * imports, so the client bundle stays free of Effect.
  */
 
-/** Room ids: 1-64 letters, digits, `_` or `-`. */
-export const ROOM_ID_PATTERN = /^[\w-]{1,64}$/
+/** Audit ids are UUIDs; anything else never reaches the database or the room. */
+const AUDIT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-export const isValidRoomId = (roomId: string): boolean => ROOM_ID_PATTERN.test(roomId)
+export const isAuditId = (id: string): boolean => AUDIT_ID_PATTERN.test(id)
 
-/** Largest message a client may send, in UTF-8 bytes. */
-export const MAX_MESSAGE_BYTES = 4096
-
-/** Most clients connected to one room at a time. */
-export const MAX_ROOM_CONNECTIONS = 100
-
-/** Messages `useRoom` keeps in memory. */
-export const MAX_KEPT_MESSAGES = 200
-
-const encoder = new TextEncoder()
-
-export const isMessageTooLarge = (message: string): boolean =>
-  encoder.encode(message).byteLength > MAX_MESSAGE_BYTES
+/** Most browsers connected to one audit room at a time. */
+export const MAX_ROOM_CONNECTIONS = 50
 
 const BASE_DELAY_MS = 1000
 const MAX_DELAY_MS = 30_000

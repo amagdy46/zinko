@@ -33,10 +33,10 @@ export const AuthLive = Layer.effect(
   Auth,
   Effect.gen(function* () {
     const auth = yield* BetterAuth
-    return Auth.of({
-      currentSession: Effect.gen(function* () {
+    const sessionFromHeaders = (headers: Headers) =>
+      Effect.gen(function* () {
         const found = yield* Effect.tryPromise({
-          try: () => auth.api.getSession({ headers: getRequestHeaders() }),
+          try: () => auth.api.getSession({ headers }),
           catch: unauthorized,
         })
         if (found === null) return yield* unauthorized()
@@ -46,7 +46,10 @@ export const AuthLive = Layer.effect(
           name: found.user.name,
           activeOrganizationId: found.session.activeOrganizationId ?? null,
         }
-      }),
+      })
+    return Auth.of({
+      currentSession: Effect.suspend(() => sessionFromHeaders(getRequestHeaders())),
+      sessionFromHeaders,
     })
   }),
 ).pipe(Layer.provideMerge(BetterAuthLive))

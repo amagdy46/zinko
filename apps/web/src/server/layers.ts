@@ -6,7 +6,7 @@ import { WorkerEnvLive } from "./cloudflare"
 import { JobsLive } from "./jobs"
 import { LlmLive } from "./llm"
 import { MailerLive } from "./mailer"
-import { RealtimeLive } from "./realtime"
+import { AuditProgressLive } from "./audit-progress"
 import { StorageLive } from "./storage"
 
 /**
@@ -19,7 +19,7 @@ export const AppLayer = Layer.mergeAll(
   AuthLive,
   LlmLive,
   JobsLive,
-  RealtimeLive,
+  AuditProgressLive,
   BrowserLive,
   StorageLive,
   MailerLive,

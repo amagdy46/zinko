@@ -13,7 +13,7 @@ import * as Redacted from "effect/Redacted"
  *
  * Every Cloudflare binding of the Worker lives here, in the `env` object of the website below.
  * `efforge add` appends resources above the marker and binds them by the name effect-cf reads
- * (HYPERDRIVE, DB, STORAGE, ROOM, ...), so app code never changes between wrangler and Alchemy.
+ * (HYPERDRIVE, DB, STORAGE, AUDIT_ROOM, ...), so app code never changes between wrangler and Alchemy.
  */
 export default Alchemy.Stack(
   "zinko",
@@ -47,7 +47,7 @@ export default Alchemy.Stack(
     const betterAuthUrl = yield* Config.String("BETTER_AUTH_URL").pipe(Config.withDefault(""))
     const llmEncryptionKey = yield* Config.Redacted("LLM_ENCRYPTION_KEY")
     const exampleWorkflow = Cloudflare.Workflow("Example", { className: "Example" })
-    const room = Cloudflare.DurableObject("Room")
+    const auditRoom = Cloudflare.DurableObject("AuditRoom")
     const stage = (yield* Alchemy.Stack).stage
     // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
     // named `dev` or `dev_<user>`; a deployed stage such as `devops` is never local.
@@ -93,7 +93,7 @@ export default Alchemy.Stack(
         BETTER_AUTH_URL: betterAuthUrl,
         LLM_ENCRYPTION_KEY: llmEncryptionKey,
         EXAMPLE_WORKFLOW: exampleWorkflow,
-        ROOM: room,
+        AUDIT_ROOM: auditRoom,
         ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),
         STORAGE: storage,
         STORAGE_SIGNING_SECRET: storageSigningSecret,

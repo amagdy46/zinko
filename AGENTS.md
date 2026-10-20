@@ -107,7 +107,7 @@ Zero errors and zero warnings are the bar.
 ## Organizations
 
 - The `organization()` plugin is enabled: members, roles (`owner`, `admin`, `member`) and invitations live in the `organization`, `member` and `invitation` tables.
-- The session carries `activeOrganizationId`; new users are sent to `/onboarding` to create their first organization. Scope data by it.
+- The session carries `activeOrganizationId`; new users are sent to `/onboarding` to create their first organization. Scope data by `activeMembership(session)` from `apps/web/src/server/org-access.ts`, not by `session.activeOrganizationId` alone: a removed member's session keeps the stale id, and `activeMembership` checks the `member` table (it fails with `NotAMember`; answer 404).
 - Member management is at `/app/settings/members`; invitations are accepted at `/accept-invite/$id` (the invite link is shown to the inviter, and with the `email` extra it is also emailed).
 - Check roles on the server before changing another member's data; the UI hides controls but does not enforce permissions.
 
@@ -125,9 +125,11 @@ Zero errors and zero warnings are the bar.
 
 ## Realtime
 
-- Rooms are a Durable Object (`Room`, exported from `apps/web/src/server.ts`); WebSocket upgrades are handled by a Worker route in `server/routes.ts`.
-- Use the `Realtime` service from `@repo/core` on the server and the `useRoom` hook in `apps/web/src/lib/use-room.ts` in the UI.
-- Keep message payloads small and validate incoming messages with `Schema` before using them.
+- The realtime extra's generated public room (`Room`, `Realtime`, `useRoom`, `/ws/rooms/*`) was replaced by the audit room; `efforge.jsonc` still lists the old files, leave it alone.
+- Live audit progress goes through one Durable Object per audit, `AuditRoom` (`apps/web/src/realtime/AuditRoom.ts`, exported from `apps/web/src/server.ts`, bound as `AUDIT_ROOM`, named by audit id). Sockets hibernate, at most 50 per room, and client messages are ignored: browsers only listen.
+- Server code publishes with `AuditProgress.publish(auditId, event)` from `@repo/core` (`audit.ts`; `AuditEvent` is a `Schema`). Do not call the namespace directly.
+- `/ws/audits/<auditId>` (`server/audit-room-route.ts`) validates the id, resolves the session with `Auth.sessionFromHeaders` (401), and checks the `Origin` is the app's own (403), then with `activeMembership` that the audit is in an organization the user belongs to (404) before touching the Durable Object. Keep that order; never add a route to a room without an auth check.
+- In the UI use `useAuditRoom(auditId, onSignal)` (`apps/web/src/lib/use-audit-room.ts`). Every signal (`refresh` on open and every 4 minutes, `run`, `audit`) means "refetch the audit". It validates messages with `Schema` and reconnects with backoff.
 
 <!-- efforge:section:storage -->
 

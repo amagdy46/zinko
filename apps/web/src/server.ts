@@ -21,5 +21,5 @@ const tryRoutes = (routes: ReadonlyArray<WorkerRoute>, request: Request): Promis
   return head(request).then((response) => response ?? tryRoutes(tail, request))
 }
 export { Example } from "./workflows/Example"
-export { Room } from "./realtime/Room"
+export { AuditRoom } from "./realtime/AuditRoom"
 export { BrowserContainer } from "./browser/BrowserContainer"
