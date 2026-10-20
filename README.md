@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/logo.svg" width="96" height="96" alt="Zinko logo: a white Z drawn as a trace, with a ring on the diagonal marking one inspected hit">
+  <img src="https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/logo.svg" width="96" height="96" alt="Zinko logo: a gecko's foot whose five toe pads are recorded hits, with one ringed in violet as the hit being inspected">
 </p>
 
 <h1 align="center">Zinko</h1>
