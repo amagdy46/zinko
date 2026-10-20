@@ -7,8 +7,7 @@
     "./*": "./src/*.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@effect/sql-pg": "catalog:",
@@ -17,9 +16,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
-    "@effect/vitest": "catalog:",
     "@types/node": "catalog:",
-    "typescript": "catalog:",
-    "vitest": "catalog:"
+    "typescript": "catalog:"
   }
 }

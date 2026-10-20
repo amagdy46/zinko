@@ -52,7 +52,6 @@ Rules for AI agents (and humans) working in this repo. Read this before changing
 | `pnpm lint`                | Lint only                                                         |
 | `pnpm typecheck`           | Regenerate the route tree, then type-check every workspace        |
 | `pnpm --filter web routes` | Regenerate `routeTree.gen.ts` after adding or moving a route file |
-| `pnpm test`                | Tests (`@effect/vitest`)                                          |
 | `pnpm build`               | Build every workspace                                             |
 
 Lint and format are configured in the root `vite.config.ts`. The Effect rules need the
@@ -62,9 +61,18 @@ patched install that `pnpm install` performs (`prepare` script); re-run it if th
 clone works after `pnpm install`. Run `pnpm --filter web routes` after adding a route file if
 your editor reports a stale route tree.
 
+## Current phase: prove it works, write the vision
+
+This overrides the test-first guidance in `docs/roadmap.md`, `CONTRIBUTING.md` and the handoff briefs until it is removed.
+
+- Do not write unit or integration tests yet, and do not use test-driven development. What we build is still settling, and tests would lock in shapes that will change.
+- Verify by running the real thing: the CLI, the dev server, a capture against a fixture page, the page in a browser. Report the command you ran and what you saw. "It type-checks" is not "it works".
+- There is no test runner: the old tests and Vitest were removed. Do not add them back.
+- Keep `docs/vision.md` current: every feature we plan to build and how we will build it (packages, services, data flow, the open questions). Update it whenever a spike or a working feature changes the plan.
+
 ## Before you finish
 
-Run `pnpm check && pnpm typecheck && pnpm test && pnpm build` and fix everything it reports.
+Run `pnpm check && pnpm typecheck && pnpm build` and fix everything it reports.
 Zero errors and zero warnings are the bar.
 
 <!-- efforge:section:database -->

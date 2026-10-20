@@ -7,7 +7,6 @@
     "dev": "alchemy dev infra/alchemy.run.ts",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck && tsc -p infra",
-    "test": "turbo run test",
     "lint": "vp lint",
     "format": "vp fmt",
     "check": "vp check",

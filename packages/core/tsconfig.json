@@ -2,5 +2,5 @@
   "$schema": "../../node_modules/@effect/tsgo/schema.json",
   "extends": "../../tsconfig.base.json",
   "compilerOptions": { "types": ["node"], "noEmit": true },
-  "include": ["src", "test"]
+  "include": ["src"]
 }
