@@ -13,7 +13,7 @@
   <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: early development.** Only the hit decoder works today: `zinko decode` turns a GA4 or Meta Pixel request into readable JSON. The audit pipeline, the rules and the web app are being built ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: early development.** Capture works locally: `zinko capture` loads a page in a real browser under a consent choice and lists every GA4, Google Ads, Meta and TikTok hit it sends, and `zinko decode` turns a single request into readable JSON. The capture engine has not been run in its container image yet. The audit pipeline, the rules and the web app are being built ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
@@ -42,18 +42,45 @@ node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/colle
 ]
 ```
 
-Meta Pixel requests (`facebook.com/tr`) decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the audit pipeline lands.
+Meta Pixel (`facebook.com/tr`), Google Ads and TikTok requests decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the audit pipeline lands.
 
-### Capture a page (needs the capture engine running)
+### Capture a page
 
-`zinko capture` loads a page in the capture engine under a consent choice and lists every tracking hit it sent: when, on which document, and whether it fired after the consent action. It needs the engine from `apps/browser` listening on `http://localhost:8080` (or pass `--engine <url>`).
+`zinko capture` loads a page in the capture engine under a consent choice and lists every tracking hit it sent: when, on which document, and whether it fired after the consent action. The engine is a Node server in `apps/browser` that drives Chromium through a Python child process (Scrapling), so it also needs Python 3.12+ and [uv](https://docs.astral.sh/uv/). Set that up once:
 
 ```sh
-node apps/cli/dist/index.js capture https://example.com --scenario reject --block-vendors
-node apps/cli/dist/index.js capture https://example.com --scenario all --click '#buy' --json
+(cd apps/browser/scrapling && uv sync --frozen && .venv/bin/patchright install chromium)
 ```
 
-`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit.
+Start the engine and the fixture sites (small fake shops, each with one known tracking bug) in two terminals. `ALLOW_PRIVATE_NETWORKS=true` lets the engine load `localhost`; use it for local fixtures only, because the engine refuses private and local addresses by default.
+
+```sh
+ALLOW_PRIVATE_NETWORKS=true pnpm --filter browser start     # engine on http://localhost:8080
+pnpm --filter @repo/fixtures serve                          # fixtures on http://localhost:4400
+```
+
+Then capture a fixture. `meta-before-consent` fires a Meta `PageView` before the visitor chooses, so it fires even when they reject:
+
+```sh
+node apps/cli/dist/index.js capture http://localhost:4400/meta-before-consent/ --scenario reject --block-vendors
+```
+
+```text
+== http://localhost:4400/meta-before-consent/  [reject]
+engine: scrapling 0.5 (patchright 1.64.1)
+consent: rejected, cmp cookieconsent3, action at 6211ms, completed at 6217ms
+
+hits (3); "after" = sent after consent completed; 1 vendor request(s) not decoded
+  time    document                  vendor  destination      event            consent                note
+  ------  ------------------------  ------  ---------------  ---------------  ---------------------  -----
+  2421ms  #0 /meta-before-consent/  meta    100000000000001  PageView         ad:unknown an:unknown
+  3166ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     page_view        ad:denied an:denied
+  9415ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     user_engagement  ad:denied an:denied    after
+```
+
+The Meta hit lands at 2.4 s, before the reject action at 6.2 s. The output goes on to list cookies per snapshot and errors. `--block-vendors` answers collection requests locally, so no hit reaches Google, Meta or TikTok; the SDK files themselves (gtag.js, fbevents.js, the TikTok pixel) are still downloaded from the vendors. Against a real site, drop it and leave `ALLOW_PRIVATE_NETWORKS` unset; load only sites you are allowed to test.
+
+`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--engine <url>` points at another engine. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit.
 
 ## Why Zinko
 
@@ -88,10 +115,12 @@ The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, 
 ## Repository layout
 
 ```
-apps/cli            zinko CLI (decode works; audit is planned)
+apps/cli            zinko CLI (decode and capture work; audit is planned)
 apps/web            TanStack Start web app on Cloudflare Workers (scaffold so far)
-apps/browser        Playwright container where captures will run
-packages/decoders   GA4 and Meta Pixel decoders -> a normalized Hit
+apps/browser        capture engine: Node server, egress proxy, Scrapling (Python) in a container image
+packages/decoders   GA4, Google Ads, Meta Pixel and TikTok decoders -> a normalized Hit
+packages/capture-contract  Effect Schemas for the engine's POST /capture
+packages/fixtures   fake shops, each with one known tracking bug
 packages/core       Effect service interfaces
 packages/db         Postgres schema and migrations (Drizzle)
 infra/              Cloudflare resources, declared with Alchemy
