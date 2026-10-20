@@ -7,21 +7,23 @@ design: ../../vision.md
 # M2 Audit Pipeline Plan
 
 **Goal:** Run an audit from the web app (a site's pages × consent scenarios × viewports), watch it progress live, and browse the decoded hits.
-**Approach:** One Cloudflare Workflow per audit with one durable step per capture. Each step calls the M1 engine, writes the screenshot and the raw capture to R2, writes decoded hits and `dataLayer` pushes to Postgres, and publishes a small progress event to an authenticated per-audit Durable Object. The trade-off: captures run one at a time (the container takes one capture at a time), so a 10 pages × 3 scenarios audit takes about 5 minutes; parallel containers wait for a later milestone.
+**Approach:** One Cloudflare Workflow per audit. Each run gets two durable steps: `capture` calls the M1 engine and writes the immutable capture to R2; `persist` derives the hit and `dataLayer` rows from that stored capture in one transaction. Progress goes to an authenticated per-audit Durable Object. The trade-off: captures run one at a time within an audit, on a container instance of its own, so a 10 pages × 3 scenarios audit takes several minutes. Task 5 measures it; parallel captures wait for a later milestone.
 
-Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product.md` (v0.1 steps 2–4 and 7), `docs/ui.md` (Navigation, screens 1, 2 and 6, States), `docs/architecture.md` (data model), `docs/decisions/0002-capture-engine.md`, and the M1 code.
+Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product.md` (v0.1 steps 2–4 and 7), `docs/ui.md` (Navigation, screens 1, 2 and 6, States), `docs/architecture.md` (data model), `docs/decisions/0002-capture-engine.md`, and the M1 code. Reviewed by GPT-6.1-Sol on 2026-10-20; its findings are folded in.
 
 ## Global constraints
 
 - **No unit or integration tests** (`AGENTS.md`, current phase). Each task's "Verify" lines are its acceptance check: run the real thing and report the command and what it showed. UI tasks are verified by driving the app in a browser (Playwright MCP) and looking at screenshots.
 - `pnpm check && pnpm typecheck && pnpm build` pass with zero errors and zero warnings after every task.
 - Effect rules from `AGENTS.md`: services in `packages/core`, layers wired only in `apps/web/src/server/layers.ts`, tagged errors, `Schema` at every boundary (server function input, WebSocket messages, Workflow payloads, R2 JSON), no `any`, no `try/catch` around Effects.
-- **Organization scoping.** Every table carries `org_id`. Every server function runs behind `requireSession`, reads `activeOrganizationId` from the session, and filters every query by it. An id from another organization behaves exactly like a missing id (404), never a 403.
-- **Roles.** Any member can create clients, sites and audits. Only `owner` and `admin` can delete a client or site; check on the server.
-- **Pages stay on the site.** Every audited URL must be on the site's host or a subdomain of it; reject others at the server boundary. This is the allow-list from `docs/architecture.md` rule 4.
-- **Test traffic stays out of client analytics.** The New audit form has "Answer tracking requests locally", **on by default**, which sets `blockVendorRequests` on every capture. Hits are still recorded; vendors never receive them. Fixture audits always run with it on.
-- **Workflow step results stay small.** Cloudflare caps a step's result at 1 MiB: screenshots and raw captures go to R2 through `Storage`, never through a step result.
-- **Idempotent steps.** A retried step must not duplicate rows or artifacts: storage keys are deterministic and hit and push inserts are keyed so a rerun replaces, not appends.
+- **Organization scoping.** Every table carries `org_id`. Every server function runs behind `requireSession`, reads `activeOrganizationId` from the session, and filters every query by it; child records (runs, hits, screenshots, raw requests) are reached only through their owning audit, checked against the organization. An id from another organization behaves exactly like a missing id (404), never a 403.
+- **Roles.** Any member can create clients, sites and audits. Only `owner` and `admin` can archive or delete a client or site; check on the server.
+- **Evidence is never deleted by accident.** Foreign keys from audits upward use `on delete restrict`. A client or site with audits can only be archived (`archived_at`), which hides it; deleting is allowed only when it has no audits. Purging evidence (rows and R2 objects) is a separate, explicit feature for a later milestone.
+- **Site allow-list.** A URL belongs to a site when, after parsing with `URL`: the scheme is http or https, there are no credentials, and the hostname (lowercased, punycode ASCII as `URL` gives it, one trailing dot removed) equals the site's host or ends with `"." + siteHost`. Enforced when pages are submitted (Task 6) and, for top-level navigations including redirects, inside the engine (Task 3).
+- **No private targets outside development.** Outside a `dev` stage, a site whose host is `localhost`, a `.local`/`.internal` name or a private, loopback or link-local IP literal is refused when created. The engine's DNS-pinned policy stays the backstop.
+- **Test traffic stays out of client analytics.** The New audit form has "Answer tracking requests locally", **on by default**, which sets `blockVendorRequests`. Hits are recorded as attempted requests; vendors never receive them. Fixture audits always run with it on.
+- **Workflow step results stay small.** Cloudflare caps a step's result at 1 MiB, so screenshots and captures go to R2 through `Storage`; steps return ids and keys only.
+- **Idempotent persistence.** A capture is written to R2 once per run and never overwritten. Rows are derived from the stored capture inside one transaction that deletes the run's existing hit and push rows first, so a rerun reproduces the same rows.
 - Migrations are generated (`pnpm --filter @repo/db db:generate`), never hand-written; never edit files under `packages/db/drizzle/`.
 - No new dependencies without asking. Tables are plain HTML tables with server-side pagination.
 - `TMPDIR=$HOME/.cache/tmp`. Never use sudo; hand any `sudo docker` command to the user. Never push.
@@ -30,121 +32,133 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 
 | Model | Used for |
 |---|---|
-| **Opus** | The audit workflow and persistence (Task 4): durability, retries, idempotency and partial failure |
-| **Sonnet** | Schema (1), clients and sites (2), local dev wiring (3), live progress (5), New audit and running screens (6), Hits explorer (7), demo and docs (8) |
-| **GPT-6.1-Sol** (Fable 5.1 when Sol is over its limit) | Reviews each task's diff before it merges |
+| **Opus** | The engine allow-list (3) and the audit workflow and persistence (5): durability, retries, idempotency, partial failure |
+| **Sonnet** | Schema (1), local dev wiring (2), clients and sites (4), live progress (6), New audit and running screens (7), Hits explorer (8), demo and docs (9) |
+| **GPT-6.1-Sol** (Fable 5.1 when Sol is over its limit) | Reviews each task's diff before it merges; Tasks 1 and 6 get a second round |
 
 ## Review focus
 
-1. **Cross-organization access.** Ids come from URLs. Verified in Tasks 2, 6 and 7 by signing in as a second user in another organization and requesting the first organization's client, site, audit and hits by id (404 each), and in Task 5 by connecting to another organization's audit room (refused).
-2. **Retried steps.** A step that fails after writing must not leave duplicate hits. Verified in Task 4 by forcing a failure after the inserts on the first attempt and checking the row counts after the retry.
-3. **Partial audits.** A blocked page or an unreachable host must give a `partial` run with its error code, and the audit still finishes. Verified in Task 4 with an unreachable page in the audit.
-4. **WebSocket authorization.** The scaffold's `/ws/rooms/*` route has no authentication. The audit room must check the session and the audit's organization before upgrading, and must ignore client messages. Verified in Task 5.
-5. **Off-site URLs.** A page on another host, or a `gclid`-style parameter that smuggles a different URL, is rejected. Verified in Task 6.
-6. **Large captures.** A capture with 2,000 requests and a 10 MB result must finish its step without hitting the 1 MiB step limit. Verified in Task 4 with the engine's request-cap probe page.
+1. **Cross-organization access.** Ids come from URLs. Verified in Tasks 4, 7 and 8 by signing in as a second user in another organization and requesting the first organization's client, site, audit, screenshot and hit detail by id (404 each), and in Task 6 by connecting to another organization's audit room (refused).
+2. **Retried steps.** A `persist` step that fails after writing rows must produce identical rows on the retry, and a retried `capture` step must not overwrite a stored capture. Verified in Task 5 by comparing row contents (not counts) before and after a forced failure.
+3. **Partial audits.** A refused or unreachable page gives a run with its error code, and the audit still finishes. Verified in Task 5.
+4. **WebSocket authorization.** The scaffold's `/ws/rooms/*` route has no authentication and is removed. The audit room checks the session and the audit's organization before upgrading and ignores client messages. Verified in Task 6.
+5. **Leaving the site.** An off-site page in the form is refused (Task 7); a page that redirects off the site stops at the redirect with a `Navigation` error (Task 3).
+6. **Large captures.** A capture with 2,000 requests and a near-10 MB result completes both steps. Verified in Task 5.
+7. **Concurrent audits.** Two audits started together both finish. Verified in Task 5.
 
 ### Task 1: Audit tables
 
 **Model:** Sonnet
 **Files:** create `packages/db/src/audit-schema.ts`; modify `packages/db/src/index.ts`; generated migration in `packages/db/drizzle/`
-**Interfaces:** produces Drizzle tables and inferred types, all with `id uuid primary key default random`, `org_id text not null` and `created_at timestamptz default now()`:
-- `client`: `name text not null`
-- `site`: `client_id uuid not null references client on delete cascade`, `name text not null`, `origin text not null` (scheme and host, no path, e.g. `https://shop.example`)
-- `audit`: `site_id uuid not null references site on delete cascade`, `created_by text not null` (user id), `config jsonb not null` (`AuditConfig`, Task 4), `status text not null` (`queued | running | complete | partial | failed`), `workflow_id text`, `started_at timestamptz`, `finished_at timestamptz`
-- `run`: `audit_id uuid not null references audit on delete cascade`, `ordinal integer not null`, `page_url text not null`, `scenario text not null`, `viewport text not null`, `status text not null` (`pending | running | complete | partial | failed`), `engine jsonb`, `consent jsonb`, `documents jsonb`, `cookies jsonb`, `errors jsonb`, `complete boolean`, `truncated boolean`, `screenshot_key text`, `capture_key text`, `hit_count integer not null default 0`, `started_at timestamptz`, `finished_at timestamptz`; unique `(audit_id, ordinal)`
-- `hit`: `run_id uuid not null references run on delete cascade`, `request_id text not null`, `batch_index integer not null`, `document_id text not null`, `at integer not null` (ms since capture start), `vendor text not null`, `destination_id text not null`, `event text not null`, `params jsonb not null`, `ids jsonb not null`, `consent jsonb not null`, `host text not null`, `url text not null`, `after_consent boolean not null`; unique `(run_id, request_id, batch_index)`
+**Interfaces:** produces Drizzle tables and inferred types. Every table has `id uuid primary key default random`, `org_id text not null` and `created_at timestamptz default now()`:
+- `client`: `name text not null`, `archived_at timestamptz`
+- `site`: `client_id uuid not null references client on delete restrict`, `name text not null`, `origin text not null` (scheme and host, e.g. `https://shop.example`), `host text not null` (canonical, see Global constraints), `archived_at timestamptz`
+- `audit`: `site_id uuid not null references site on delete restrict`, `created_by text not null`, `config jsonb not null` (`AuditConfig`, Task 5), `status text not null` (`queued | running | complete | partial | failed`), `error text` (launch failures), `workflow_id text`, `started_at timestamptz`, `finished_at timestamptz`
+- `run`: `audit_id uuid not null references audit on delete cascade`, `ordinal integer not null`, `page_url text not null`, `scenario text not null`, `viewport text not null`, `status text not null` (`pending | running | complete | partial | failed`), `engine jsonb` (name, version, fallbackReason), `decoder_version text`, `consent jsonb`, `documents jsonb`, `cookies jsonb`, `errors jsonb`, `complete boolean`, `truncated boolean`, `screenshot_key text`, `capture_key text`, `hit_count integer not null default 0`, `started_at timestamptz`, `finished_at timestamptz`; unique `(audit_id, ordinal)`
+- `hit`: `run_id uuid not null references run on delete cascade`, `request_id text not null`, `batch_index integer not null`, `document_id text not null`, `at integer not null` (ms since capture start), `vendor text not null`, `destination_id text not null`, `event text not null`, `params jsonb not null`, `ids jsonb not null`, `consent jsonb not null`, `host text not null`, `url text not null`, `blocked boolean not null`, `status integer`, `after_consent_action boolean not null`; unique `(run_id, request_id, batch_index)`
 - `datalayer_push`: `run_id uuid not null references run on delete cascade`, `seq integer not null`, `document_id text not null`, `at integer not null`, `value jsonb not null`; unique `(run_id, seq)`
-- Indexes: `client(org_id)`, `site(org_id, client_id)`, `audit(org_id, site_id, created_at desc)`, `run(audit_id)`, `hit(run_id, at)`, `hit(run_id, vendor)`, `datalayer_push(run_id, at)`
-**Blocked by:** none
+- Indexes: `client(org_id, archived_at)`, `site(org_id, client_id)`, `audit(org_id, site_id, created_at desc)`, `run(audit_id, ordinal)`, `hit(run_id, at, id)`, `hit(run_id, vendor, event)`, `datalayer_push(run_id, at, seq)`
+- Comment in the schema file: a hit's identity across re-runs (for M6 compare) is page URL + scenario + viewport + vendor + destination + event + its order among equal hits; M3 counts purchases by transaction ID and label, not by hit.
+**Blocked by:** Before execution (a database)
 
-- [ ] Write the tables; the remaining example `note` table stays as is
-- [ ] `pnpm --filter @repo/db db:generate`, then `pnpm db:migrate` against the local database
-- [ ] Verify: `psql "$DATABASE_URL" -c '\d hit'` (and `run`, `audit`) shows the columns, foreign keys, unique constraints and indexes; paste them
+- [ ] Write the tables; the example `note` table stays as is
+- [ ] `pnpm --filter @repo/db db:generate`, then `pnpm db:migrate`
+- [ ] Verify: `psql "$DATABASE_URL" -c '\d hit'` (and `run`, `audit`, `site`) shows the columns, foreign keys with their `on delete` actions, unique constraints and indexes; paste them
 
-### Task 2: Clients and sites
-
-**Model:** Sonnet
-**Files:** create `apps/web/src/server/clients.ts`, `apps/web/src/routes/app/clients/index.tsx`, `apps/web/src/routes/app/clients/$clientId.tsx`, `apps/web/src/routes/app/sites/$siteId.tsx`; modify the app shell navigation (`apps/web/src/routes/app.tsx`)
-**Interfaces:** consumes Task 1 tables; produces server functions `listClients()`, `createClient({ name })`, `deleteClient({ id })`, `getClient({ id })` (with its sites), `createSite({ clientId, name, url })`, `deleteSite({ id })`, `getSite({ id })` (with its audits, newest first, 20 per page); and the `/app/sites/$siteId` page that Task 6 adds the "New audit" button to
-**Blocked by:** 1
-
-- [ ] `createSite` takes any http(s) URL and stores its origin (scheme and host, lowercased, default port dropped); names are 1–100 characters
-- [ ] Delete functions check `owner` or `admin` on the server; the UI hides the button for members
-- [ ] Empty states: no clients yet, no sites yet, no audits yet (`docs/ui.md`, States)
-- [ ] Verify in the browser: create a client and a site with `http://localhost:4400/clean/`; the site shows origin `http://localhost:4400`; screenshot each page; a member account sees no delete buttons and a direct `deleteSite` call fails; a second user in another organization gets 404 for the first organization's client and site ids
-
-### Task 3: Local development with the real engine
+### Task 2: Local development with the real engine
 
 **Model:** Sonnet
-**Files:** modify `apps/web/src/server/browser.ts`, `apps/web/src/server/layers.ts` (or wherever the Browser layer is chosen), `infra/alchemy.run.ts` or `.dev.vars` as `pnpm dev` requires; `README.md` and `CONTRIBUTING.md` (local setup)
-**Interfaces:** produces `BROWSER_URL`: when set, `Browser.capture` posts to `${BROWSER_URL}/capture` over plain HTTP instead of the container binding, with the same decoding and error handling; unset, the container binding is used as now
+**Files:** modify `apps/web/src/server/browser.ts`, `apps/web/src/server/layers.ts`, `infra/alchemy.run.ts`, `.env.example` or `.dev.vars` as `pnpm dev` requires; `README.md` and `CONTRIBUTING.md` (local setup)
+**Interfaces:** produces `BROWSER_URL`: on a `dev` stage, when set, `Browser.capture` posts to `${BROWSER_URL}/capture` over HTTP instead of the container binding, with the same decoding and errors, and the container resource is not provisioned; other stages ignore it. Produces `Browser.capture(request, options?: { instance?: string })`: the container instance name (default `"default"`), used by Task 5. `BrowserError` keeps the HTTP status (`status?: number`).
 **Blocked by:** none
 
-- [ ] Find out how `pnpm dev` (Alchemy dev) runs Containers locally; if it needs Docker (and so sudo here), use `BROWSER_URL` for local development and say so in `CONTRIBUTING.md`
-- [ ] `BROWSER_URL` is accepted only for `dev` stages; any other stage ignores it and uses the container
-- [ ] Verify: with Postgres up, the engine at `http://localhost:8080` (started with `ALLOW_PRIVATE_NETWORKS=true`) and the fixtures served, `pnpm dev` starts; signed in, calling `runBrowser` from the browser console (or a temporary page) on `http://localhost:4400/clean/` with `blockVendorRequests: true` returns a `CaptureResult`; paste its `engine`, `consent` and request count
+- [ ] Alchemy's local Containers need Docker (sudo here): on `dev` with `BROWSER_URL`, skip the container resource and binding; document it in `CONTRIBUTING.md`
+- [ ] Check which secrets `pnpm dev` needs (`BETTER_AUTH_SECRET`, `LLM_ENCRYPTION_KEY`, `STORAGE_SIGNING_SECRET`, `DATABASE_URL`); document generating local-only values
+- [ ] Verify: with the database up, the engine at `http://localhost:8080` (`ALLOW_PRIVATE_NETWORKS=true`) and the fixtures served, `pnpm dev` starts; signed in, `runBrowser` on `http://localhost:4400/clean/` with `blockVendorRequests: true` returns a `CaptureResult`; paste its `engine`, `consent` and request count
 
-### Task 4: Audit workflow and persistence
+### Task 3: Site allow-list in the engine
 
 **Model:** Opus
-**Files:** modify `packages/core/src/audit.ts` (adds `AuditConfig` and `TEST_CLICK_IDS`); create `apps/web/src/workflows/Audit.ts`, `apps/web/src/server/audits.ts`; modify `packages/core/src/jobs.ts` (`JobPayloads.audit`), `packages/core/src/index.ts`, `apps/web/src/server/jobs.ts`, `apps/web/src/server.ts` (export `Audit`), `infra/alchemy.run.ts` (Workflow `Audit`, binding `AUDIT_WORKFLOW`)
+**Files:** modify `packages/capture-contract/src/index.ts`, `apps/browser/src/*` (both engines), `apps/browser/scrapling/capture.py`
+**Interfaces:** `CaptureRequest` gains `allowedHosts?: string[]` (canonical hosts; a navigation is allowed when its host equals one or ends with `"." + host`). When set, a top-level navigation (the start URL, any redirect hop and any journey step) to another host is stopped before it loads and recorded as a `Navigation` error naming the host; subresources are unaffected
+**Blocked by:** none
+
+- [ ] Enforce it for document requests in both engines, including redirect hops (the egress proxy sees them; the engines know which requests are top-level)
+- [ ] Verify with the fixtures server's `/r?to=` redirect: `allowedHosts: ["localhost"]` and a start URL redirecting to `http://127.0.0.1:4400/clean/` stops with `Navigation` on both engines; the same capture without `allowedHosts` follows it; a normal `clean` capture with `allowedHosts: ["localhost"]` is unchanged
+
+### Task 4: Clients and sites
+
+**Model:** Sonnet
+**Files:** create `apps/web/src/server/clients.ts`, `apps/web/src/lib/site-url.ts` (the shared canonical-host and allow-list helpers), `apps/web/src/routes/app/clients/index.tsx`, `apps/web/src/routes/app/clients/$clientId.tsx`, `apps/web/src/routes/app/sites/$siteId.tsx`; modify `apps/web/src/routes/app.tsx` (navigation)
+**Interfaces:** consumes Task 1; produces `canonicalHost(url: string): string | null`, `isOnSite(url: string, siteHost: string): boolean`, and server functions `listClients()`, `createClient({ name })`, `archiveClient({ id })`, `deleteClient({ id })` (only without audits), `getClient({ id })` (with its sites), `createSite({ clientId, name, url })`, `archiveSite({ id })`, `deleteSite({ id })` (only without audits), `getSite({ id })` (with its audits newest first, 20 per page, and the latest audit's config for the form's last-used settings)
+**Blocked by:** 1
+
+- [ ] `createSite` stores the origin and canonical host and refuses private hosts outside `dev` (Global constraints); names are 1–100 characters
+- [ ] Archive and delete check `owner` or `admin` on the server; the UI hides the buttons for members; archived clients and sites are hidden from lists
+- [ ] Empty states: no clients yet, no sites yet, no audits yet (`docs/ui.md`, States)
+- [ ] Verify in the browser: create a client and a site with `http://localhost:4400/clean/` (origin `http://localhost:4400`, host `localhost`); screenshot each page; a member sees no archive or delete buttons and a direct call fails; a second user in another organization gets 404 for the first organization's client and site; `isOnSite` returns false for `https://evilshop.example` against `shop.example`, true for `https://www.shop.example.`, false for `https://user@shop.example`
+
+### Task 5: Audit workflow and persistence
+
+**Model:** Opus
+**Files:** create `packages/core/src/audit.ts` (adds `AuditConfig`, `TEST_CLICK_IDS`; Task 6 adds `AuditEvent` and `AuditProgress` here first), `apps/web/src/workflows/Audit.ts`, `apps/web/src/server/audits.ts`; modify `packages/core/src/jobs.ts`, `packages/core/src/index.ts`, `apps/web/src/server/jobs.ts`, `apps/web/src/server.ts` (export `Audit`), `infra/alchemy.run.ts` (Workflow `Audit`, binding `AUDIT_WORKFLOW`; container `maxInstances` 3)
 **Interfaces:**
-- `AuditConfig = { pages: string[] /* 1–20, first is the start URL */, scenarios: Scenario[] /* non-empty */, viewports: ("desktop" | "mobile")[] /* non-empty */, clickIds: boolean, blockVendorRequests: boolean }` in `@repo/core`
-- `TEST_CLICK_IDS = { gclid: "ZINKO-TEST-GCLID", fbclid: "ZINKO-TEST-FBCLID", ttclid: "ZINKO-TEST-TTCLID", utm_source: "zinko", utm_medium: "cpc", utm_campaign: "zinko-audit" }`, appended to every page URL when `clickIds` is on
-- `JobPayloads.audit = { auditId: string }`
-- server functions: `startAudit({ siteId, config }) → { auditId }` (creates the `audit` row and one `run` row per page × scenario × viewport in that order, `ordinal` from 0, then starts the workflow and stores its id); `getAudit({ id })` (audit, config, runs with status, hit counts and signed screenshot URLs)
-- consumes Task 5: `AuditProgress.publish(auditId, event: AuditEvent)` where `AuditEvent = { type: "run", runId, ordinal, status, hitCount, errors: { code, message }[] } | { type: "audit", status }`
-**Blocked by:** 1, 3, 5
+- `AuditConfig = { pages: string[] /* 1–20, first is the start URL */, scenarios: Scenario[] /* non-empty */, viewports: ("desktop" | "mobile")[] /* non-empty */, clickIds: boolean, blockVendorRequests: boolean }`
+- `TEST_CLICK_IDS = { gclid: "ZINKO-TEST-GCLID", fbclid: "ZINKO-TEST-FBCLID", ttclid: "ZINKO-TEST-TTCLID", utm_source: "zinko", utm_medium: "cpc", utm_campaign: "zinko-audit" }`, appended **to the start URL only** when `clickIds` is on (a landing from an ad). Whether IDs survive into other pages needs journeys, which M3 adds
+- `Jobs.start(job, payload, options?: { id?: string })`: the workflow instance id; audits use the audit id, so a repeated start is detected instead of duplicated
+- `startAudit({ siteId, config }) → { auditId }`: validates `config` against the site (Global constraints), inserts the audit (`queued`) and its runs (page × scenario × viewport in that order, `ordinal` from 0) in one transaction, then starts the workflow with the audit id; if the start fails, sets the audit `failed` with `error` and returns it. `getAudit({ id })`: audit, config, runs with status, error codes, hit counts and screenshot URLs signed for 5 minutes (refetched by the page)
+- consumes Task 6: `AuditProgress.publish(auditId, event)`; consumes Task 3: `allowedHosts` set to the site's host on every capture
+**Blocked by:** 1, 2, 3, 6
 
-- [ ] Workflow `Audit`: step `start` marks the audit `running`; then one step `run-<ordinal>` per run, in order; then step `finish` sets the audit status (`complete` when every run is `complete`, `failed` when none produced a result, `partial` otherwise) and publishes `{ type: "audit" }`
-- [ ] Each `run-<ordinal>` step: marks the run `running` and publishes it; calls `Browser.capture`; writes the screenshot to `audits/<auditId>/runs/<runId>/screenshot.png` and the result without the screenshot to `audits/<auditId>/runs/<runId>/capture.json` through `Storage`; decodes every request with `@ovriq/zinko-decoders` and inserts hits (`after_consent` = `startedAt > consent.completedAt`) and `dataLayer` pushes with `onConflictDoNothing` on the unique keys; updates the run (status `complete`, or `partial` when `complete` is false, engine, consent, documents, cookies, errors, flags, keys, `hit_count`); publishes the run event; returns only `{ runId, status, hitCount }`
-- [ ] Errors: `BrowserError` carrying `CaptureRejected` (`PolicyDenied`, `InvalidRequest`) is non-retryable and marks the run `failed` with that code; other `BrowserError`s (including 429 busy) retry 5 times with exponential backoff from 10 s, then mark the run `failed` with `EngineFailure`; step timeout 4 minutes
-- [ ] Verify with the fixtures (vendor answering on): an audit of `clean`, `meta-before-consent` and `ga4-batch` × none/accept/reject × desktop finishes `complete` with 9 runs; `select count(*) from hit group by run` matches each run's `hit_count`; the `ga4-batch` accept run has three hits sharing one `request_id`; the R2 keys exist (`Storage.get`)
-- [ ] Verify the review-focus cases: an audit including `http://10.255.255.1/` on a site with that origin ends `partial` with that run `failed`/`PolicyDenied` (with the engine's private networks off for this run, or a public unroutable address); forcing the first attempt of one step to fail after its inserts leaves the same row counts after the retry; a capture of the engine's 2,000-request probe page completes its step
+- [ ] Steps: `start` marks the audit `running`. For each run, `capture-<ordinal>`: if the run already has a `capture_key`, return it; otherwise mark the run `running`, publish, call `Browser.capture(request, { instance: auditId })`, write the screenshot to `audits/<auditId>/runs/<runId>/screenshot.png` and the result without the screenshot to `…/capture.json`, store both keys on the run, return the keys. Then `persist-<ordinal>`: read `capture.json`, decode every request with `@ovriq/zinko-decoders`, and in one transaction delete the run's hits and pushes, insert them (`after_consent_action` = `completedAt !== null && startedAt > completedAt`, which includes a reject), and update the run (status `complete`, or `partial` when `complete` is false, engine, `decoder_version`, consent, documents, cookies, errors, flags, `hit_count`); publish the run event. Then `finish` sets the audit status and publishes it
+- [ ] Audit status: `complete` when every run is `complete`; `failed` when no run has a capture; `partial` otherwise
+- [ ] Errors inside `capture-<ordinal>`: a rejected request (`PolicyDenied`, `InvalidRequest`) is caught in the step and stored as a `failed` run with that code (not thrown, so not retried); a busy engine (HTTP 429) and other `BrowserError`s are retried by the step (8 times, exponential from 15 s); when retries are exhausted, a separate step `fail-<ordinal>` records the run `failed` with `EngineFailure` and the audit continues. Step timeout 4 minutes. Publishing progress never fails a step
+- [ ] Verify with the fixtures (vendor answering on): an audit of `clean`, `meta-before-consent` and `ga4-batch` × none/accept/reject × desktop finishes `complete` with 9 runs; per run, the hit rows match the stored capture decoded again by hand; the `ga4-batch` accept run has three hits sharing one `request_id`; record the wall time and the mean seconds per run (it sets the form's estimate)
+- [ ] Verify the review-focus cases: a page that redirects off the site ends `partial` with `Navigation`; an audit whose only page is refused ends `failed`; forcing `persist-<n>` to fail after its inserts on the first attempt gives rows identical to a clean run (compare a `select … order by` dump); the engine's 2,000-request probe page completes both steps; two audits started at the same time both finish
 
-### Task 5: Live progress over an authenticated audit room
-
-**Model:** Sonnet
-**Files:** create `packages/core/src/audit.ts` (`AuditEvent` schema and the `AuditProgress` service), `apps/web/src/realtime/AuditRoom.ts`, `apps/web/src/server/audit-progress.ts`, `apps/web/src/server/audit-room-route.ts`, `apps/web/src/lib/use-audit-room.ts`; modify `apps/web/src/server.ts` (export `AuditRoom`), `apps/web/src/server/routes.ts`, `apps/web/src/server/layers.ts`, `infra/alchemy.run.ts` (Durable Object `AuditRoom`, binding `AUDIT_ROOM`)
-**Interfaces:** produces in `@repo/core`: `AuditEvent` (as defined in Task 4's interfaces) and `AuditProgress` with `publish(auditId: string, event: AuditEvent): Effect<void, AuditProgressError>`; produces `AuditProgressLive`, the route `/ws/audits/<auditId>`, and `useAuditRoom(auditId): { events: AuditEvent[], connected: boolean }`
-**Blocked by:** none. Its access check reads the `audit` table, so it needs Task 1's schema to verify; it can be written in parallel
-
-- [ ] `AuditRoom` is one Durable Object per audit (named by audit id) with hibernating sockets: `publish(event)` sends the JSON to every socket; client messages are ignored; at most 50 sockets
-- [ ] The route resolves the session from the request headers through Better Auth and refuses the upgrade (401 signed out, 404 when the audit is not in the session's active organization) before touching the Durable Object
-- [ ] `useAuditRoom` validates every message with `Schema` and reconnects with backoff; the page reloads state from `getAudit` on reconnect, so missed events cost nothing
-- [ ] Verify: in the browser, an audit page receives run events as an audit runs (log them); `websocat` (or a Node `WebSocket`) without a session cookie gets 401, and with another organization's session gets 404; a client-sent message reaches no other socket
-
-### Task 6: New audit form and the running audit
+### Task 6: Live progress over an authenticated audit room
 
 **Model:** Sonnet
-**Files:** create `apps/web/src/routes/app/sites/$siteId.audits.new.tsx`, `apps/web/src/routes/app/audits/$auditId.tsx` (the audit shell with tabs, Overview and Findings left for M3/M4) and its running grid; modify `apps/web/src/routes/app/sites/$siteId.tsx` (New audit button, audit history)
-**Interfaces:** consumes `startAudit`, `getAudit` (Task 4) and `useAuditRoom` (Task 5)
-**Blocked by:** 2, 4, 5
+**Files:** create `packages/core/src/audit.ts` (or add to it: `AuditEvent`, `AuditProgress`, `AuditProgressError`), `apps/web/src/realtime/AuditRoom.ts`, `apps/web/src/server/audit-progress.ts`, `apps/web/src/server/audit-room-route.ts`, `apps/web/src/lib/use-audit-room.ts`; modify `packages/core/src/Auth.ts` and `apps/web/src/server/auth-live.ts` (`sessionFromHeaders`), `apps/web/src/server.ts`, `apps/web/src/server/routes.ts`, `apps/web/src/server/layers.ts`, `infra/alchemy.run.ts` (Durable Object `AuditRoom`, binding `AUDIT_ROOM`); remove the scaffold's public room (`apps/web/src/realtime/Room.ts`, `realtime-route.ts`, `realtime.ts`, `components/realtime-demo.tsx`, `lib/use-room.ts`, the `Realtime` service and the `ROOM` binding) and the Realtime section of `AGENTS.md`, replacing it with the audit room
+**Interfaces:** produces `AuditEvent = { type: "run", runId, ordinal, status, hitCount, errors: { code, message }[] } | { type: "audit", status }`; `AuditProgress.publish(auditId: string, event: AuditEvent): Effect<void, AuditProgressError>`; `Auth.sessionFromHeaders(headers: Headers)`, backed by Better Auth, for Worker routes; the route `/ws/audits/<auditId>`; `useAuditRoom(auditId, onEvent): { connected: boolean }`
+**Blocked by:** 1
 
-- [ ] Form (`docs/ui.md` screen 1): start URL (prefilled with the site origin), key pages (one URL per line, at most 19 more), consent scenario checkboxes (none, accept, reject, GPC; none/accept/reject checked by default), viewport (desktop, mobile, or both), "Simulate an ad click" (`clickIds`), and "Answer tracking requests locally" (`blockVendorRequests`, on). Validate on the server: every URL on the site's host or a subdomain, at most 20 pages; show field errors below each input
-- [ ] Estimated duration: runs × 12 s, shown as minutes, updating as the form changes
-- [ ] Running audit (`docs/ui.md` screen 2): one tile per run with page path, scenario, viewport, status, hit count and screenshot thumbnail (the signed URL, scaled by CSS); tiles update from `useAuditRoom`; a `partial` or `failed` tile shows the error code in plain words (bot blocked, timed out, consent banner not found, page refused, engine failed)
-- [ ] Verify in the browser on the fixtures site: start an audit of 3 pages × 3 scenarios; screenshot the grid at the start, midway and at the end; an off-site page in the form is refused with a field error; another organization's audit id gives 404
+- [ ] `AuditRoom` is one Durable Object per audit (named by audit id), hibernating sockets: `publish(event)` sends JSON to every socket; client messages are ignored; at most 50 sockets
+- [ ] The route resolves the session with `sessionFromHeaders` and refuses the upgrade (401 signed out, 404 when the audit is not in the session's active organization) before touching the Durable Object
+- [ ] `useAuditRoom` validates each message with `Schema` and reconnects with backoff; the page refetches `getAudit` when the socket opens and after each run event, so missed events and fresh screenshot URLs cost nothing
+- [ ] Verify with a seeded audit row and a temporary server function that publishes an event (removed before commit): a signed-in browser receives it; a Node `WebSocket` without a session cookie gets 401 and with another organization's session gets 404; a client-sent message reaches no other socket; `/ws/rooms/x` now returns 404
 
-### Task 7: Hits explorer
+### Task 7: New audit form and the running audit
+
+**Model:** Sonnet
+**Files:** create `apps/web/src/routes/app/sites/$siteId.audits.new.tsx`, `apps/web/src/routes/app/audits/$auditId.tsx` (the audit shell, with Overview and Findings tabs left for M3/M4) and its running grid; modify `apps/web/src/routes/app/sites/$siteId.tsx` (New audit button, audit history)
+**Interfaces:** consumes `startAudit`, `getAudit` (Task 5), `useAuditRoom` (Task 6), `isOnSite` (Task 4)
+**Blocked by:** 4, 5, 6
+
+- [ ] Form (`docs/ui.md` screen 1), prefilled from the site's last audit when there is one: start URL (default the site origin), key pages (one URL per line, at most 19 more), consent scenarios (none, accept, reject, GPC; the first three checked by default), viewport (desktop, mobile or both), "Simulate an ad click" (`clickIds`, adds test click IDs to the start URL), "Answer tracking requests locally" (`blockVendorRequests`, on). The server validates every URL with `isOnSite`; field errors show below each input
+- [ ] Estimated duration: runs × the mean seconds per run measured in Task 5, in minutes
+- [ ] Running audit (`docs/ui.md` screen 2): one tile per run with page path, scenario, viewport, status, hit count and screenshot thumbnail (scaled by CSS); a `partial` or `failed` tile names its error in plain words (bot blocked, timed out, consent banner not found, left the site, page refused, engine failed); the audit header shows its status, including a launch failure
+- [ ] Verify in the browser on the fixtures site: an audit of 3 pages × 3 scenarios, screenshots of the grid at the start, midway and at the end; an off-site page and a credentialed URL are refused with field errors; another organization's audit id gives 404
+
+### Task 8: Hits explorer
 
 **Model:** Sonnet
 **Files:** create `apps/web/src/server/hits.ts`, `apps/web/src/routes/app/audits/$auditId.hits.tsx`
-**Interfaces:** consumes Task 1 tables and Task 4's R2 capture JSON; produces `listTimeline({ auditId, runId?, vendor?, event?, scenario?, cursor? }) → { items: (Hit | DataLayerPush)[], nextCursor }` (200 per page, ordered by run then `at`) and `getHitDetail({ hitId }) → { hit, request: CapturedRequest }` (the raw request read from `capture.json` by `request_id`)
-**Blocked by:** 4
+**Interfaces:** consumes Task 1 and Task 5's stored captures; produces `listTimeline({ auditId, runId?, vendor?, event?, scenario?, cursor? }) → { items: ({ kind: "hit" } & Hit | { kind: "push" } & DataLayerPush)[], nextCursor: string | null }` (200 per page, ordered by run ordinal, `at`, kind, id; the cursor encodes that tuple) and `getHitDetail({ auditId, hitId }) → { hit, request: CapturedRequest }` (the raw request read from `capture.json` by `request_id`, checked through the audit)
+**Blocked by:** 7
 
-- [ ] Timeline (`docs/ui.md` screen 6): run selector, filters for vendor, event and scenario, hits and `dataLayer` pushes interleaved by time, each hit marked when sent after consent
-- [ ] Selecting a hit opens its decoded parameters, ids and consent next to the raw request (method, URL, body)
-- [ ] Verify in the browser on the finished Task 6 audit: filter to Meta under reject on `meta-before-consent` and see the `PageView` before consent with nothing after; open a GA4 hit from the `ga4-batch` batch and see the raw body with three events; screenshot both; another organization's audit gives 404
+- [ ] Timeline (`docs/ui.md` screen 6): run selector, filters for vendor, event and scenario, hits and `dataLayer` pushes interleaved by time, hits after the consent action marked, answered-locally hits labelled as attempts
+- [ ] Selecting a hit opens its decoded parameters, ids and consent beside the raw request (method, URL, body)
+- [ ] Verify in the browser on the Task 7 audit: filter to Meta on `meta-before-consent` under reject and see the `PageView` before the consent action and none after; open a GA4 hit from the `ga4-batch` batch and see the raw body with three events; page through a long timeline with the cursor; screenshot each; another organization's audit and hit give 404
 
-### Task 8: M2 demo and docs
+### Task 9: M2 demo and docs
 
 **Model:** Sonnet
-**Files:** modify `docs/vision.md`, `docs/roadmap.md`, `README.md`, `docs/architecture.md`
-**Blocked by:** 1–7
+**Files:** modify `docs/vision.md`, `docs/roadmap.md`, `README.md`, `docs/architecture.md`, `AGENTS.md` (organization scoping and the audit room)
+**Blocked by:** 1–8
 
-- [ ] Run the roadmap demo end to end on the fixtures: sign up, create a client and site, run an audit, watch it progress, browse the Hits explorer; screenshots of each step saved under `mockups/m2-demo/` (untracked)
-- [ ] `vision.md`: M2 rows become **working** with one line on how each was verified; record anything the build changed (sequential captures and the audit duration, `blockVendorRequests` defaulting on, `BROWSER_URL` for local development)
+- [ ] Run the roadmap demo end to end on the fixtures: sign up, create a client and site, run an audit, watch it progress, browse the Hits explorer; screenshots under `mockups/m2-demo/` (untracked)
+- [ ] `vision.md`: M2 rows become **working** with one line on how each was verified; record the measured audit duration against the 5-minute target, `blockVendorRequests` on by default, click IDs on the start URL only, archiving instead of deleting, and `BROWSER_URL` for local development
 - [ ] `architecture.md`: the data model matches Task 1; the realtime section describes the authenticated audit room
 - [ ] `roadmap.md`: M2 done; `README.md`: status line
 - [ ] Verify: `pnpm check` passes
@@ -152,15 +166,18 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 ## Execution order
 
 ```
-wave 1:  1 schema (Sonnet)   3 local dev (Sonnet)   5 audit room (Sonnet)
-wave 2:  2 clients and sites (Sonnet)   4 workflow (Opus)        after 1, 3 and 5
-wave 3:  6 form and running grid (Sonnet)   7 hits explorer (Sonnet)   after 2, 4, 5
-wave 4:  8 demo and docs (Sonnet)
+wave 0:  Before execution: a database (user)
+wave 1:  1 schema (Sonnet)   2 local dev (Sonnet)   3 engine allow-list (Opus)
+wave 2:  4 clients and sites (Sonnet)   6 audit room (Sonnet)         after 1
+wave 3:  5 workflow (Opus)                                            after 1, 2, 3, 6
+wave 4:  7 form and running grid (Sonnet)                             after 4, 5, 6
+wave 5:  8 hits explorer (Sonnet)                                     after 7
+wave 6:  9 demo and docs (Sonnet)
 ```
 
 Each task runs in its own worktree and merges to `main` after review and its pasted verify output.
 
 ## Before execution
 
-- **A local Postgres is needed** for every task from 1 on. `docker compose up -d` needs `sudo` on this machine, so either the user runs `sudo docker compose up -d` once, or the user provides a `DATABASE_URL` for a development database (for example a Neon branch).
-- `.env` needs `BETTER_AUTH_SECRET`, `LLM_ENCRYPTION_KEY` and `STORAGE_SIGNING_SECRET` for `pnpm dev`; Task 3 checks which are missing and generates local-only values.
+- **A local Postgres.** `docker compose up -d` needs `sudo` on this machine: either the user runs `sudo docker compose up -d` once, or a development `DATABASE_URL` (for example a Neon branch) is provided.
+- **Throughput.** The product target is 10 pages × 3 scenarios in under 5 minutes. Sequential captures at about 10–12 s each take 5–6 minutes; Task 5 measures it, and if it misses, parallel captures move into a later milestone rather than M2.
