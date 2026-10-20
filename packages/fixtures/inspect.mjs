@@ -21,7 +21,7 @@ const collectionEndpoints = [
 const sdkFiles =
   /^https:\/\/(www\.googletagmanager\.com\/(gtag\/js|gtm\.js)|connect\.facebook\.net\/(\w+\/fbevents\.js|signals\/config\/)|analytics\.tiktok\.com\/i18n\/pixel\/)/
 const vendorHosts =
-  /(^|\.)(google-analytics|googletagmanager|doubleclick|googleadservices|facebook|facebook\.net|tiktok)\.(com|net)$|^(www\.)?google\.com$/
+  /(^|\.)(google-analytics|googletagmanager|doubleclick|googleadservices|facebook|facebook\.net|tiktok|googlesyndication)\.(com|net)$|(^|\.)tiktokw\.us$|^(www\.)?google\.com$/
 
 const [target, action = "none"] = process.argv.slice(2)
 const siteName = target?.split("/")[0] ?? ""
