@@ -131,7 +131,7 @@ The bot-protection comparison on 5 sites is **not** in this task: the user appro
 **Blocked by:** 3 and 5 to build, so it starts alongside Task 4; 2 and 4 for the demo
 
 - [ ] Posts one `CaptureRequest` per scenario (`all` runs the four), validates with `CaptureResult`, decodes every captured request, keeps each hit's request `id` and `batchIndex`
-- [ ] Default output per scenario: the consent outcome and when it happened, then a table of hits with time, document, vendor, destination, event and consent, then cookies per snapshot, then `errors`; `--json` prints hits, cookies, consent and errors as JSON
+- [ ] Default output per scenario: the consent outcome and when it happened, then a table of hits with time, document, vendor, destination, event and consent, then cookies per snapshot, then `errors`; `--json` prints hits, cookies, consent and errors as JSON, plus `undecoded`: vendor requests no decoder turned into a hit (such as Google `ccm` pings, the only place Ads consent state appears), kept out of hit counts
 - [ ] Update the usage text; `zinko audit` stays as is
 - [ ] Verify (the M1 demo), with the engine and fixtures running and `--block-vendors`:
   - `meta-before-consent` with `--scenario reject`: a Meta `PageView` timed before the reject action and no Meta hit after it
