@@ -12,6 +12,9 @@ export default defineConfig({
       "**/.wrangler/**",
       "**/routeTree.gen.ts",
       "**/package-lock.json",
+      "packages/fixtures/vendor/cookieconsent/**",
+      "packages/fixtures/vendor/meta-pixel/**",
+      "packages/fixtures/vendor/tiktok-pixel/**",
     ],
     categories: { correctness: "error", suspicious: "error", perf: "error" },
     // an explicit list replaces oxlint's defaults, so keep oxc/typescript/unicorn
@@ -51,6 +54,9 @@ export default defineConfig({
       "**/.wrangler/**",
       "**/routeTree.gen.ts",
       "**/package-lock.json",
+      "packages/fixtures/vendor/cookieconsent/**",
+      "packages/fixtures/vendor/meta-pixel/**",
+      "packages/fixtures/vendor/tiktok-pixel/**",
       // generated or edited by efforge transforms (JSONC with trailing commas the formatter adds)
       "efforge.jsonc",
       "wrangler.jsonc",

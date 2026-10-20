@@ -61,7 +61,7 @@ Status: **working**, **scaffolded** (generated code exists, not Zinko-specific y
 | Click-ID entry | Landing URL with and without `gclid`, `fbclid`, `ttclid`, `utm_*` | planned |
 | Cookies and screenshots | Cookie jar before and after consent; one screenshot per step to R2 | planned |
 | Google Ads and TikTok decoders | New decoders in `packages/decoders`, built from recorded real requests | planned |
-| Fixture sites | `packages/fixtures`: static pages, each with one known bug, used as capture targets we run and inspect by hand | planned |
+| Fixture sites | `packages/fixtures`: 11 fake shops, each with one known bug, used as capture targets we run and inspect by hand (`pnpm --filter @repo/fixtures serve`, `inspect`). Banner is vanilla-cookieconsent 3.1.0, because autoconsent has no generic Klaro rule. Findings: gtag also sends `google.com/rmkt/collect`, `google.com/ccm/collect` and `ad.doubleclick.net/ccm/s/collect`, which the vendor-blocking list must cover; the GA4 cookieless ping (`gcs=G100`) before consent is expected and must not be flagged; with Consent Mode default denied, gtag holds events until the consent update and then sends them batched | working |
 
 ### Audit pipeline (M2)
 
