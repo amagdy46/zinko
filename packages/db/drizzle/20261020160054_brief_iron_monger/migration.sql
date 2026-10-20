@@ -1,0 +1,1 @@
+DROP INDEX "run_audit_ordinal_idx";
