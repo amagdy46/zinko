@@ -1,0 +1,197 @@
+# Zinko vision
+
+Every feature we plan to build, how we will build it, what we take from other products, and what is still open. `docs/product.md` is the v0.1 scope, `docs/architecture.md` the stack, `docs/roadmap.md` the milestones; this file ties them together and is updated whenever a spike or a working feature changes the plan.
+
+Last updated 2026-10-20.
+
+## What Zinko is
+
+An open-source (AGPL-3.0) tracking auditor for consultants and agencies. It loads a client's pages in a real browser under each consent choice, records every tracking request, `dataLayer` push, cookie and consent signal, and turns that into findings with evidence and a white-label report.
+
+The bet, from the research below: every competitor either needs an install on the client's site (Trackingplan, Elevar, Avo Inspector), reads configuration instead of behavior (Tracking Auditor, Measuremate, GAfix, Tag Diagnostics), covers only Google tags (Tag Assistant), or is a managed service priced for enterprises (ObservePoint, DataTrue at $16k+/year). Nobody open-source captures what actually fires, across vendors, per consent choice, from the outside.
+
+## Principles
+
+1. **Evidence, not opinions.** Every finding links to the decoded hit, the raw request, a screenshot and a cookie snapshot.
+2. **Rules decide, the LLM explains.** Checks are deterministic functions over captured data. The LLM (bring your own key) writes explanations and fix steps, never pass or fail, and every check works without it.
+3. **No install on the client's site.** Zinko audits from the outside, so it works before a sale and for one-off audits.
+4. **Audits fail partially.** Each page × scenario is its own step; a failed step records a typed error and the report still renders.
+5. **Cross-vendor.** GA4, Google Ads, Meta and TikTok first; the decoders are data plus small functions, so more vendors are cheap.
+6. **Self-serve and open.** No credits, no seat pricing, the API on every tier. The paid cloud sells hosting, scheduling and alerts, not access to features.
+
+## How a run flows
+
+```
+New audit form (apps/web)
+  → AuditWorkflow (Cloudflare Workflows), one step per page × scenario × viewport
+      → Browser service → apps/browser container (Scrapling StealthySession; Playwright fallback)
+          init script: dataLayer shim + autoconsent → load page → requests (with POST bodies),
+          dataLayer pushes, cookies, CMP state, screenshot
+      → packages/decoders: request → Hit
+      → store: hits and pushes in Postgres (Drizzle), screenshots and HAR in R2 (Storage service)
+      → AuditRoom Durable Object (Realtime service) pushes progress to open tabs
+  → packages/rules: captures → Finding[] (deterministic)
+  → Llm service: explanation and fix steps per finding, cached
+  → Findings, Tag matrix, Hit explorer, Report
+```
+
+Effect services live in `packages/core`, layers are wired in `apps/web/src/server/layers.ts`. Decoders and rules stay plain TypeScript so the CLI can reuse them without Cloudflare.
+
+## Features
+
+Status: **working**, **scaffolded** (generated code exists, not Zinko-specific yet), **planned**, or **proposed** (from the competitor research below, not yet agreed).
+
+### Foundations (M0)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Sign up, workspaces, invites, roles | Better Auth with the organization plugin; `/onboarding`, `/app/settings/members`, `/accept-invite/$id` | scaffolded |
+| Infra per stage | `infra/alchemy.run.ts`: Worker, Workflows, Durable Objects, Container, R2, Postgres | scaffolded, never deployed |
+| Bring-your-own LLM key | `llm_credential` table, AES-GCM with `LLM_ENCRYPTION_KEY`, `/app/settings/ai` | scaffolded |
+| Hit decoder CLI | `packages/decoders` (GA4, Meta) behind `zinko decode` in `apps/cli` | working |
+
+### Capture (M1)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Network capture with POST bodies | Scrapling `StealthySession` in Python inside `apps/browser`, typed HTTP contract on the TS side with `Schema`; plain Playwright in the same container as fallback | planned, spike first |
+| `dataLayer` shim | Init script injected before page scripts, records every push with a timestamp | planned |
+| Consent scenarios: none, accept, reject | `@duckduckgo/autoconsent` Playwright build injected per scenario; CMP state read from `__tcfapi` and Google consent state | planned |
+| **GPC scenario** | A fourth scenario that sends `Sec-GPC: 1` and sets `navigator.globalPrivacyControl` (ObservePoint and DataTrue both test it) | proposed |
+| Click-ID entry | Landing URL with and without `gclid`, `fbclid`, `ttclid`, `utm_*` | planned |
+| Cookies and screenshots | Cookie jar before and after consent; one screenshot per step to R2 | planned |
+| Google Ads and TikTok decoders | New decoders in `packages/decoders`, built from recorded real requests | planned |
+| Fixture sites | `packages/fixtures`: static pages, each with one known bug, used as capture targets we run and inspect by hand | planned |
+
+### Audit pipeline (M2)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Clients and sites | Drizzle tables scoped by `activeOrganizationId`, CRUD server functions | planned |
+| New audit form | Start URL, up to 20 key URLs, scenarios, viewport, click IDs | planned |
+| Durable runs | `AuditWorkflow`, one step per page × scenario × viewport; typed errors (`BotBlocked`, `Timeout`, `CmpNotFound`) become partial-failure codes in the UI | planned |
+| Live progress | `AuditRoom` Durable Object over WebSocket, thumbnail per finished step | planned |
+| Hit explorer | Timeline of decoded hits and `dataLayer` pushes per run, filterable ("Omnibug in the browser") | planned |
+
+### Rules and findings (M3)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| ~20 v0.1 rules | `packages/rules`: pure `(captures, config) → Finding[]`; areas: consent, click IDs, coverage, duplicates, dedup, hygiene (`docs/product.md`) | planned |
+| Finding card | Severity, why it matters, evidence panel, fix steps (LLM or static template), triage: open, accepted risk, fixed | planned |
+| **Three outcomes per check** | Pass, fail, and **inconclusive** (the page or CMP didn't load), plus **"suppressed, with reason"** (for example "no consent, so the Ads hit was correctly not sent"). From Trackingplan and Elevar | proposed |
+| **Google's names where we overlap** | Reuse Tag Diagnostics wording and severity (Urgent, Needs attention) for overlapping rules, so findings read the way users already know them | proposed |
+| **Click ID survives redirects** | A rule that follows redirects on the landing URL and checks the ID reaches the final page and its cookie (a Tag Diagnostics check) | proposed |
+| **Approved vendor list per client** | Each client lists allowed, required and forbidden vendors or domains per consent category; a rule flags anything outside it (ObservePoint Consent Categories, DataTrue policies) | proposed |
+
+### Matrix, overview and LLM (M4)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Tag matrix | Vendor and destination ID × page × scenario, which events fired; TanStack Table | planned |
+| Overview score | Health score and issue counts by area; worst finding shown in full up front (the free-preview pattern from Tracking Auditor and GAfix) | planned |
+| **Consent default vs update per tag** | Per-tag view of the consent state at default and after the update, as Tag Assistant's Consent tab shows it, but for all vendors and all scenarios side by side | proposed |
+| LLM explanations | `Llm` service, explanation and fix steps per finding, cached; crawled content only ever goes in as quoted evidence | planned |
+
+### Report (M5)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| White-label report | Branding table (logo, accent, footer), report route | planned |
+| Share link | Secret token, revocable, no login needed (DataTrue's hosted report) | planned |
+| PDF | The container prints the report route with `page.pdf()` | planned |
+| **Audit register export** | A CSV or sheet of every finding next to the report, for consultants who track fixes in spreadsheets (Tracking Auditor's Sheet export) | proposed |
+
+### Compare and polish (M6, v0.1 release)
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Re-run and compare | Findings marked new, fixed or unchanged; diff every tag and every field (ObservePoint compares only 3 tags by default) | planned |
+| **"What changed" briefing** | A short summary at the top of a re-run's report (DataTrue's Briefing) | proposed |
+| **Tag disappeared** | Flag a tag that fired on the last run and is gone now (Elevar's missing-embed alert) | proposed |
+| Self-host guide, public demo | `alchemy deploy` to your own Cloudflare account | planned |
+
+### v0.2: configured vs fired, funnels
+
+| Feature | How we build it | Status |
+|---|---|---|
+| GTM, GA4 Admin, Meta connectors | Read-only API access; GA4 MCP and gtm-mcp-server run as sidecars | planned |
+| GTM container diff | Show which container version is live and what changed since the last audit (Trackingplan, RundataAI) | planned |
+| LinkedIn decoder | `packages/decoders` | planned |
+| Funnel discovery | Stagehand-style agent finds add-to-cart and checkout once, outputs a replayable spec with real selectors; plain Playwright replays it with no LLM; a failed replay step is flagged as drift | planned |
+| **Region simulation** | Run from or emulate an EEA vs US visitor so consent defaults per region are checked (Tag Assistant makes you do this by hand) | proposed |
+
+### v0.3: monitoring and the paid cloud
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Scheduled audits | Cron-triggered `AuditWorkflow` | planned |
+| Alerts | Thresholds on rates and counts (not only single events), with a preview of how the alert would have fired on past runs (ObservePoint); email through `Mailer`, Slack and webhooks from day one | planned |
+| **Daily client digest** | One red/yellow/green line per client across the agency (Trackingplan's agency digest) | proposed |
+| Billing | Polar or Stripe, cloud only | planned |
+
+### v0.4: tracking plans in git
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Tracking plan as YAML | Events and properties as JSON Schema inside YAML, versioned in the client's repo (Segment Protocols' schema model, without the SaaS database) | planned |
+| Plan status per entry | Planned but never seen, seen and valid, seen but violating (Avo Inspector, Amplitude Observe) | planned |
+| Plan lint | Check the plan itself for naming and type problems, separately from the site audit (Avo Branch Audit) | planned |
+| GitHub Action | Run an audit against a pinned plan version and fail the PR on new findings (Amplitude `ampli status`, Lighthouse CI) | planned |
+| Plan-editing MCP | Agents propose plan changes only as a PR against the YAML; a person merges (Avo's MCP can never merge to main) | planned |
+| Typed code generation | Generate `dataLayer` and gtag helpers from the plan (Typewriter is unmaintained, a warning against tying codegen to one SDK) | planned |
+
+### Later
+
+Chrome extension, CLI parity with the web app, Shopify or CRM order reconciliation (Elevar's Channel Accuracy treats orders as the source of truth; Zinko would need a connector to do the same).
+
+### Not planned
+
+An ad tracker (RedTrack, Voluum class), product analytics (integrate with PostHog instead), a managed audit service (DataTrue's model), a credit system.
+
+## What we take from other products
+
+Researched 2026-10-20 from first-party product pages, docs, pricing and changelogs. Prices change; check before quoting.
+
+### Closed source
+
+| Product | What it is | Take | Do differently |
+|---|---|---|---|
+| [ObservePoint](https://www.observepoint.com) | Scheduled site scans and scripted journeys for tags, privacy, accessibility. Priced per page scan per year (amounts not public) | Opted In / Opted Out / GPC scenario naming; Consent Categories (approved and unapproved lists per geo); reusable action sets for consent clicks and login; alert preview on past runs | Diff every tag and field, not 3; webhooks and Slack, not email only |
+| [DataTrue](https://datatrue.com) | Mostly a managed service: staff build scans and journeys. Clicks real banners, tests none/accept/opt-out/GPC, policy engine, synthetic PII on forms. $16k–90k/year | Finding card (priority, why, fix, evidence); "what changed" briefing; no-login report link; synthetic PII entered into forms | Self-serve, not a service; deterministic results, no confidence guesses; API on every tier |
+| [Trackingplan](https://www.trackingplan.com) | Passive monitoring through an installed tag; learns the plan from traffic; anomaly detection; an audit agent with OK / Needs attention / Inconclusive verdicts. €89–2,000+/month plus €1 credits | The Inconclusive outcome; GTM version history; daily per-client digest; saved journeys | No install on the client's site; explicit rules and plans, not a baseline learned from traffic, because a site that was always broken looks normal to a baseline |
+| [Avo](https://avo.app) | Tracking plan with git-like branches and review, codegen, Inspector (schemas only, no values), MCP that writes only to branches. Free, $250/month, Enterprise | Branch-only MCP writes; plan lint; implementation status per plan entry | The plan lives as YAML in git, not in a SaaS database; CI is a first-class path |
+| [Segment Protocols](https://www.twilio.com/docs/segment/protocols) | JSON Schema per event, can block or drop non-conforming events, event versions. Paid add-on | JSON Schema inside the YAML plan; versions tied to a release | Observe and report, never block data |
+| [Amplitude Data](https://amplitude.com/docs/data) | Plan branches tied to git branches, `ampli status` in CI, Protected Schema | CI check against a pinned plan; "planned but never seen" as its own finding | Cross-vendor, not tied to one analytics product |
+| [Google Tag Assistant and Tag Diagnostics](https://support.google.com/tagmanager/answer/14681508) | Free per-session debugger with a Consent tab; Diagnostics flags issues from observed traffic. Google tags only | Diagnostic names and severities; default vs update consent view; click ID through redirects; exportable session file | All vendors, all scenarios side by side, region as a setting; a clean status doesn't prove values are right |
+| [Elevar](https://docs.getelevar.com) (now Audiense Online) | Shopify server-side tracking; Channel Accuracy reconciles destinations against orders; threshold alerts. $0–3,000+/month | "Suppressed, with reason" outcome; tag-disappeared alert; alerts on rates | Audit from the outside, any stack, no install |
+| [RundataAI](https://rundataai.com) | Closest competitor: DOM scans without login, 19 modules, rescan comparison, GTM diffs, consent sequencing. Free to $149/month plus credits | Container diffs; rescan comparison | Real browser capture per consent scenario and click ID; open source, no credits |
+| [Tracking Auditor](https://www.trackingauditor.io) | Reads GTM and 30 days of GA4 through Google sign-in; A–F grades; branded Doc and Sheet. £79 per audit | Free preview pattern (grade plus worst finding); audit register export; config-side checks for a future GTM connector | Captured behavior, not configuration only |
+| [GAfix](https://www.gafix.ai), [Measuremate](https://themeasuremate.com) | GA4 audits as a funnel into paid fix services; Measuremate's original domain has lapsed | Health score up front | Say plainly that rules decide and the LLM only explains; no fix-service upsell |
+
+### Open source
+
+Licenses verified from each repository's LICENSE file on 2026-10-20. All five are usable in AGPL-3.0 Zinko.
+
+| Project | License | Take | Conditions |
+|---|---|---|---|
+| [Omnibug](https://github.com/MisterPhilip/omnibug) | MIT | 69 vendor decoders in `src/providers/*.js` to port; the Hit explorer idea | Keep the MIT notice on ported code. Last push 2025-06-30 |
+| [autoconsent](https://github.com/duckduckgo/autoconsent) | MPL-2.0 | Accept and reject on common CMPs; ships `dist/autoconsent.playwright.js` to inject | Use unmodified as a dependency; any edits to its own files must stay MPL |
+| [Blacklight collector](https://github.com/the-markup/blacklight-collector) | GPL-3.0 | One inspector per behavior (`src/inspectors/`: cookies, key logging, session recording, third-party trackers; fingerprinting plugins); typed evidence events `{type, url, stack, data}` | Code can be combined into AGPL (GPLv3 §13), copied files stay GPL with their notices. It is Puppeteer/TS, so mostly ideas to port. Its bundled EasyList data has its own license, unchecked |
+| [walkerOS](https://github.com/elbwalker/walkerOS) | MIT | `dataLayer` and CMP sources; its MCP package | Keep the notice |
+| [Stagehand](https://github.com/browserbase/stagehand) | MIT | `observe`/`act` return real selectors, so a discovered funnel can be replayed without the LLM | Keep the notice |
+
+The rest of the reference list (open-seo, Lighthouse CI, OpenStatus, Typewriter, Documenso, Formbricks, the GA4 and GTM MCP servers) and the avoid list are in `RESEARCH.md` §6.
+
+## Open questions
+
+- **Capture engine:** can Scrapling run an init script before page scripts, record POST bodies, read cookies and take screenshots? Settled by the M1 spike in `spikes/m1-capture/`, recorded as decision 0002.
+- **Bot protection:** how protected sites treat Cloudflare Container traffic; container cold start and cost for 10 pages × 3 scenarios.
+- **`gcd` decoding:** sources disagree on the letter mapping, so any `gcd` rule stays heuristic until verified.
+- **Proposed features above:** which go into v0.1. GPC and the inconclusive outcome change the scope of M1 and M3.
+- **Region simulation:** emulate (headers, timezone, locale) or actually route through a region; emulation may not trigger server-side geo logic in CMPs.
+- **Deploy:** whether the deploy workflow becomes manual-only until Cloudflare secrets exist.
+
+## Gaps in the research
+
+ObservePoint's prices and webhook support; DataTrue's journey syntax and whether it checks Google Consent Mode; Trackingplan's MCP tool list and white-label details (its docs were behind bot protection); RundataAI's scan engine (real browser or static HTML); GAfix's connection method.

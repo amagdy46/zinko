@@ -69,7 +69,7 @@ CLI / Web / GitHub Action → API (Hono) → jobs (pg-boss) → worker (Playwrig
 | [walkerOS](https://github.com/elbwalker/walkerOS) | MIT | dataLayer and CMP sources; MCP package |
 | [DuckDuckGo autoconsent](https://github.com/duckduckgo/autoconsent) | MPL-2.0 | Rule-based cookie-banner accept/reject, with a Playwright build |
 | [Stagehand](https://github.com/browserbase/stagehand) | MIT | `observe`/`act` return real selectors, so a found funnel can be replayed |
-| [Blacklight](https://github.com/the-markup/blacklight-collector) | GPL-3.0 (verify) | Per-behavior inspectors; evidence bundles |
+| [Blacklight](https://github.com/the-markup/blacklight-collector) | GPL-3.0 (verified 2026-10-20) | Per-behavior inspectors; evidence bundles |
 | [Lighthouse CI](https://github.com/GoogleChrome/lighthouse-ci) | Apache-2.0 | Collect-then-assert CI pattern |
 | [OpenStatus](https://github.com/openstatusHQ/openstatus) | AGPL-3.0 | Monitoring architecture and private-location runners |
 | [Typewriter](https://github.com/segmentio/typewriter) | MIT | Code generation from a tracking plan |
