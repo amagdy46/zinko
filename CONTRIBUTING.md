@@ -40,6 +40,16 @@ pnpm dev                                          # app on http://localhost:1337
 - `BETTER_AUTH_URL` can stay empty; Better Auth then uses the request's origin, so any port works.
 - `MAIL_TRANSPORT=console` prints emails (invitations) to the `pnpm dev` log.
 
+## Run an audit locally
+
+With everything above running (Postgres, the engine with `ALLOW_PRIVATE_NETWORKS=true`, the fixtures, `pnpm dev`; the engine, the fixtures and the dev server each need their own terminal), open http://localhost:1337:
+
+1. Sign up, then create an organization.
+2. Clients: create a client, then a site with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only).
+3. On the site, choose New audit. Start URL `http://localhost:4400/clean/`, key pages `http://localhost:4400/meta-before-consent/` and `http://localhost:4400/ga4-batch/`, scenarios none, accept and reject, desktop. Leave "Answer tracking requests locally" on, so fixture traffic never reaches Google, Meta or TikTok.
+4. Start the audit and watch the run grid fill in. Nine runs take about 1.5 to 2 minutes.
+5. Open the Hits tab. Filter the run to `/meta-before-consent/` under reject and the vendor to Meta: the `PageView` fires before the consent update, and nothing follows it. Open the `ga4-batch` accept hit to see one request carrying three events.
+
 - [AGENTS.md](./AGENTS.md): code layout and rules, for people and coding agents.
 - [infra/README.md](./infra/README.md): running the web app locally (`pnpm dev`) and deploying it.
 - [docs/architecture.md](./docs/architecture.md) and [docs/decisions/](./docs/decisions/): how the pieces fit and why.

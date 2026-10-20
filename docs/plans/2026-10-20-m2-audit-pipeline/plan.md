@@ -1,6 +1,6 @@
 ---
 type: plan
-status: draft
+status: implemented
 design: ../../vision.md
 ---
 
@@ -62,9 +62,9 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 - Comment in the schema file: a hit's identity across re-runs (for M6 compare) is page URL + scenario + viewport + vendor + destination + event + its order among equal hits; M3 counts purchases by transaction ID and label, not by hit.
 **Blocked by:** Before execution (a database)
 
-- [ ] Write the tables; the example `note` table stays as is
-- [ ] `pnpm --filter @repo/db db:generate`, then `pnpm db:migrate`
-- [ ] Verify: `psql "$DATABASE_URL" -c '\d hit'` (and `run`, `audit`, `site`) shows the columns, foreign keys with their `on delete` actions, unique constraints and indexes; paste them
+- [x] Write the tables; the example `note` table stays as is
+- [x] `pnpm --filter @repo/db db:generate`, then `pnpm db:migrate`
+- [x] Verify: `psql "$DATABASE_URL" -c '\d hit'` (and `run`, `audit`, `site`) shows the columns, foreign keys with their `on delete` actions, unique constraints and indexes; paste them
 
 ### Task 2: Local development with the real engine
 
@@ -73,9 +73,9 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** produces `BROWSER_URL`: on a `dev` stage, when set, `Browser.capture` posts to `${BROWSER_URL}/capture` over HTTP instead of the container binding, with the same decoding and errors, and the container resource is not provisioned; other stages ignore it. Produces `Browser.capture(request, options?: { instance?: string })`: the container instance name (default `"default"`), used by Task 5. `BrowserError` keeps the HTTP status (`status?: number`); a container that cannot start or is over `maxInstances` (Cloudflare answers 503) is a `BrowserError` with status 503. `BrowserContainer` sleeps after 2 minutes idle so per-audit instances are released.
 **Blocked by:** none
 
-- [ ] Alchemy's local Containers need Docker (sudo here): on `dev` with `BROWSER_URL`, skip the container resource and binding; document it in `CONTRIBUTING.md`
-- [ ] Check which secrets `pnpm dev` needs (`BETTER_AUTH_SECRET`, `LLM_ENCRYPTION_KEY`, `STORAGE_SIGNING_SECRET`, `DATABASE_URL`); document generating local-only values
-- [ ] Verify: with the database up, the engine at `http://localhost:8080` (`ALLOW_PRIVATE_NETWORKS=true`) and the fixtures served, `pnpm dev` starts; signed in, `runBrowser` on `http://localhost:4400/clean/` with `blockVendorRequests: true` returns a `CaptureResult`; paste its `engine`, `consent` and request count
+- [x] Alchemy's local Containers need Docker (sudo here): on `dev` with `BROWSER_URL`, skip the container resource and binding; document it in `CONTRIBUTING.md`
+- [x] Check which secrets `pnpm dev` needs (`BETTER_AUTH_SECRET`, `LLM_ENCRYPTION_KEY`, `STORAGE_SIGNING_SECRET`, `DATABASE_URL`); document generating local-only values
+- [x] Verify: with the database up, the engine at `http://localhost:8080` (`ALLOW_PRIVATE_NETWORKS=true`) and the fixtures served, `pnpm dev` starts; signed in, `runBrowser` on `http://localhost:4400/clean/` with `blockVendorRequests: true` returns a `CaptureResult`; paste its `engine`, `consent` and request count
 
 ### Task 3: Site allow-list in the engine
 
@@ -84,9 +84,10 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** `CaptureRequest` gains `allowedHosts?: string[]` (canonical hosts; a navigation is allowed when its host equals one or ends with `"." + host`). When set, a top-level navigation (the start URL, any redirect hop and any journey step) to another host is stopped before it loads and recorded as a `Navigation` error naming the host; subresources are unaffected
 **Blocked by:** none
 
-- [ ] First settle the mechanism with a short probe on both engines, because page routes miss redirect hops (decision 0002) and the egress proxy cannot tell a document from a subresource. Try, in order: the CDP `Fetch` domain with a `Document` resource-type pattern on the main frame (does it pause each redirect hop?); Playwright's `request` events with `redirectedFrom` plus aborting the navigation. Use the first that stops an off-site redirect hop **before** its response loads while external subresources still load. If neither does, fall back to stopping at the first off-site document (it loads, but recording stops and the capture ends with `Navigation`), and record which one was chosen in decision 0002
-- [ ] Enforce it with the chosen mechanism in both engines
+- [x] First settle the mechanism with a short probe on both engines, because page routes miss redirect hops (decision 0002) and the egress proxy cannot tell a document from a subresource. Try, in order: the CDP `Fetch` domain with a `Document` resource-type pattern on the main frame (does it pause each redirect hop?); Playwright's `request` events with `redirectedFrom` plus aborting the navigation. Use the first that stops an off-site redirect hop **before** its response loads while external subresources still load. If neither does, fall back to stopping at the first off-site document (it loads, but recording stops and the capture ends with `Navigation`), and record which one was chosen in decision 0002
+- [x] Enforce it with the chosen mechanism in both engines
 - [ ] Verify with the fixtures server's `/r?to=` redirect (paste the probe results first): `allowedHosts: ["localhost"]` and a start URL redirecting to `http://127.0.0.1:4400/clean/` stops with `Navigation` on both engines; the same capture without `allowedHosts` follows it; a normal `clean` capture with `allowedHosts: ["localhost"]` is unchanged, including its vendor SDK and collection requests to other hosts
+  *Not re-run in Task 9. Task 3's result is recorded in `docs/vision.md` (Site allow-list row): both engines, `/r?to=` stopped, followed without `allowedHosts`, `clean` unchanged.*
 
 ### Task 4: Clients and sites
 
@@ -95,10 +96,11 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** consumes Task 1; produces `canonicalHost(url: string): string | null`, `isOnSite(url: string, siteHost: string): boolean`, and server functions `listClients()`, `createClient({ name })`, `archiveClient({ id })`, `deleteClient({ id })` (only without audits), `getClient({ id })` (with its sites), `createSite({ clientId, name, url })`, `archiveSite({ id })`, `deleteSite({ id })` (only without audits), `getSite({ id })` (with its audits newest first, 20 per page, and the latest audit's config for the form's last-used settings)
 **Blocked by:** 1
 
-- [ ] `createSite` stores the origin and canonical host and refuses private hosts outside `dev` (Global constraints); names are 1–100 characters
-- [ ] Archive and delete check `owner` or `admin` on the server; the UI hides the buttons for members; archived clients and sites are hidden from lists
-- [ ] Empty states: no clients yet, no sites yet, no audits yet (`docs/ui.md`, States)
+- [x] `createSite` stores the origin and canonical host and refuses private hosts outside `dev` (Global constraints); names are 1–100 characters
+- [x] Archive and delete check `owner` or `admin` on the server; the UI hides the buttons for members; archived clients and sites are hidden from lists
+- [x] Empty states: no clients yet, no sites yet, no audits yet (`docs/ui.md`, States)
 - [ ] Verify in the browser: create a client and a site with `http://localhost:4400/clean/` (origin `http://localhost:4400`, host `localhost`); screenshot each page; a member sees no archive or delete buttons and a direct call fails; a second user in another organization gets 404 for the first organization's client and site; `isOnSite` returns false for `https://evilshop.example` against `shop.example`, true for `https://www.shop.example.`, false for `https://user@shop.example`
+  *Run in Task 9: created a client and a site for `http://localhost:4400/` in the browser. Not re-run: the member and direct-call checks, the second organization's 404s, and the `isOnSite` cases.*
 
 ### Task 5: Audit workflow and persistence
 
@@ -112,11 +114,13 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 - consumes Task 6: `AuditProgress.publish(auditId, event)`; consumes Task 3: `allowedHosts` set to the site's host on every capture
 **Blocked by:** 1, 2, 3, 4 (`isOnSite`), 6
 
-- [ ] Steps: `start` marks the audit `running`. For each run, `capture-<ordinal>` returns a tagged outcome, `Captured { captureKey, screenshotKey } | Rejected { code }`: reuse a stored capture as Global constraints say; otherwise mark the run `running`, publish, call `Browser.capture(request, { instance: auditId })`, write the screenshot to `audits/<auditId>/runs/<runId>/screenshot.png` and the result without the screenshot to `…/capture.json`, store both keys on the run. The workflow wraps the step in `Effect.catchTag("WorkflowStepError", …)` (how effect-cf surfaces an exhausted step) and maps it to `Exhausted`. `Rejected` and `Exhausted` go to step `fail-<ordinal>`, which records the run `failed` (the rejection code, or `failure = EngineFailure`), publishes, and skips persisting. `Captured` goes to `persist-<ordinal>`; an exhausted `persist` step is caught the same way and goes to `fail-<ordinal>` with `failure = PersistFailure`, keeping the stored capture. `persist-<ordinal>`: read `capture.json`, decode every request with `@ovriq/zinko-decoders`, and in one transaction delete the run's hits and pushes, insert them (`after_consent_action` = `actionAt !== null && startedAt >= actionAt`: sent at or after the consent action, a reject included; gtag sends its held batch between the action and autoconsent's completion, so `completedAt` would misfile it. With no action (`none`, `gpc`, no banner) it is false, and M3 rules branch on `consent.outcome`), with `created_at` set to the run's `finished_at` rather than the default `now()` so a rerun reproduces identical rows, and update the run (status `complete`, or `partial` when `complete` is false, engine, `decoder_version`, consent, documents, cookies, errors, flags, `hit_count`); publish the run event. Then `finish` sets the audit status and publishes it
-- [ ] Audit status: `complete` when every run is `complete`; `failed` when no run has a capture; `partial` otherwise
-- [ ] Errors inside `capture-<ordinal>`: a rejected request (`PolicyDenied`, `InvalidRequest`) returns `Rejected` (not thrown, so not retried); a busy engine (429), a container that cannot start (503) and other `BrowserError`s fail the step, which retries 8 times, exponential from 15 s, before becoming `Exhausted`. Step timeout 4 minutes. Publishing progress never fails a step
+- [x] Steps: `start` marks the audit `running`. For each run, `capture-<ordinal>` returns a tagged outcome, `Captured { captureKey, screenshotKey } | Rejected { code }`: reuse a stored capture as Global constraints say; otherwise mark the run `running`, publish, call `Browser.capture(request, { instance: auditId })`, write the screenshot to `audits/<auditId>/runs/<runId>/screenshot.png` and the result without the screenshot to `…/capture.json`, store both keys on the run. The workflow wraps the step in `Effect.catchTag("WorkflowStepError", …)` (how effect-cf surfaces an exhausted step) and maps it to `Exhausted`. `Rejected` and `Exhausted` go to step `fail-<ordinal>`, which records the run `failed` (the rejection code, or `failure = EngineFailure`), publishes, and skips persisting. `Captured` goes to `persist-<ordinal>`; an exhausted `persist` step is caught the same way and goes to `fail-<ordinal>` with `failure = PersistFailure`, keeping the stored capture. `persist-<ordinal>`: read `capture.json`, decode every request with `@ovriq/zinko-decoders`, and in one transaction delete the run's hits and pushes, insert them (`after_consent_action` = `actionAt !== null && startedAt >= actionAt`: sent at or after the consent action, a reject included; gtag sends its held batch between the action and autoconsent's completion, so `completedAt` would misfile it. With no action (`none`, `gpc`, no banner) it is false, and M3 rules branch on `consent.outcome`), with `created_at` set to the run's `finished_at` rather than the default `now()` so a rerun reproduces identical rows, and update the run (status `complete`, or `partial` when `complete` is false, engine, `decoder_version`, consent, documents, cookies, errors, flags, `hit_count`); publish the run event. Then `finish` sets the audit status and publishes it
+- [x] Audit status: `complete` when every run is `complete`; `failed` when no run has a capture; `partial` otherwise
+- [x] Errors inside `capture-<ordinal>`: a rejected request (`PolicyDenied`, `InvalidRequest`) returns `Rejected` (not thrown, so not retried); a busy engine (429), a container that cannot start (503) and other `BrowserError`s fail the step, which retries 8 times, exponential from 15 s, before becoming `Exhausted`. Step timeout 4 minutes. Publishing progress never fails a step
 - [ ] Verify with the fixtures (vendor answering on): an audit of `clean`, `meta-before-consent` and `ga4-batch` × none/accept/reject × desktop finishes `complete` with 9 runs; per run, the hit rows match the stored capture decoded again by hand; the `ga4-batch` accept run has three hits sharing one `request_id`; record the wall time and the mean seconds per run (it sets the form's estimate)
+  *Run in Task 9: 9 runs `complete` in 90.7 s (10.1 s per run); a first audit took 120.7 s and ended `partial` (one `Navigation` timeout). The ga4-batch accept hit shows one request with three events. Not re-run: the by-hand comparison of hit rows with the stored capture. Task 5's own measurement, 115 s and 12.8 s per run, is in `docs/vision.md`.*
 - [ ] Verify the review-focus cases: a page that redirects off the site ends `partial` with `Navigation`; an audit whose only page is refused ends `failed`; forcing `persist-<n>` to fail after its inserts on the first attempt gives rows identical to a clean run, keys included (compare a `select … order by` dump); forcing the database update after the R2 write to fail reuses the stored object instead of capturing again (the engine log shows one capture); forcing `persist-<n>` to exhaust its retries leaves that run `failed` with `PersistFailure` and its capture in R2, and the audit finishes; the engine's 2,000-request probe page completes both steps; four audits started at the same time with `maxInstances` 3 all finish (the fourth through 503 retries)
+  *Not re-run in Task 9. Task 5's results are recorded in `docs/vision.md` (Durable runs row).*
 
 ### Task 6: Live progress over an authenticated audit room
 
@@ -125,10 +129,11 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** produces `AuditEvent = { type: "run", runId, ordinal, status, hitCount, errors: { code, message }[] } | { type: "audit", status }`; `AuditProgress.publish(auditId: string, event: AuditEvent): Effect<void, AuditProgressError>`; `Auth.sessionFromHeaders(headers: Headers)`, backed by Better Auth, for Worker routes; the route `/ws/audits/<auditId>`; `useAuditRoom(auditId, onEvent): { connected: boolean }`
 **Blocked by:** 1
 
-- [ ] `AuditRoom` is one Durable Object per audit (named by audit id), hibernating sockets: `publish(event)` sends JSON to every socket; client messages are ignored; at most 50 sockets
-- [ ] The route resolves the session with `sessionFromHeaders` and refuses the upgrade (401 signed out, 404 when the audit is not in the session's active organization) before touching the Durable Object
-- [ ] `useAuditRoom` validates each message with `Schema` and reconnects with backoff; the page refetches `getAudit` when the socket opens, after every run and audit event, and every 4 minutes while open (screenshot URLs expire after 5), so missed events and expired URLs cost nothing
+- [x] `AuditRoom` is one Durable Object per audit (named by audit id), hibernating sockets: `publish(event)` sends JSON to every socket; client messages are ignored; at most 50 sockets
+- [x] The route resolves the session with `sessionFromHeaders` and refuses the upgrade (401 signed out, 404 when the audit is not in the session's active organization) before touching the Durable Object
+- [x] `useAuditRoom` validates each message with `Schema` and reconnects with backoff; the page refetches `getAudit` when the socket opens, after every run and audit event, and every 4 minutes while open (screenshot URLs expire after 5), so missed events and expired URLs cost nothing
 - [ ] Verify with a seeded audit row and a temporary server function that publishes an event (removed before commit): a signed-in browser receives it; a Node `WebSocket` without a session cookie gets 401 and with another organization's session gets 404; a client-sent message reaches no other socket; `/ws/rooms/x` now returns 404
+  *Not re-run in Task 9. Task 6's results are recorded in `docs/vision.md` (Live progress row); the demo only watched the live grid.*
 
 ### Task 7: New audit form and the running audit
 
@@ -137,10 +142,11 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** consumes `startAudit`, `getAudit` (Task 5), `useAuditRoom` (Task 6), `isOnSite` (Task 4)
 **Blocked by:** 4, 5, 6
 
-- [ ] Form (`docs/ui.md` screen 1), prefilled from the site's last audit when there is one: start URL (default the site origin), key pages (one URL per line, at most 19 more), consent scenarios (none, accept, reject, GPC; the first three checked by default), viewport (desktop, mobile or both), "Simulate an ad click" (`clickIds`, adds test click IDs to the start URL), "Answer tracking requests locally" (`blockVendorRequests`, on). The server validates every URL with `isOnSite`; field errors show below each input
-- [ ] Estimated duration: runs × the mean seconds per run measured in Task 5, in minutes
-- [ ] Running audit (`docs/ui.md` screen 2): one tile per run with page path, scenario, viewport, status, hit count and screenshot thumbnail (scaled by CSS); a `partial` or `failed` tile names its error in plain words (bot blocked, timed out, consent banner not found, left the site, page refused, engine failed); the audit header shows its status, including a launch failure
+- [x] Form (`docs/ui.md` screen 1), prefilled from the site's last audit when there is one: start URL (default the site origin), key pages (one URL per line, at most 19 more), consent scenarios (none, accept, reject, GPC; the first three checked by default), viewport (desktop, mobile or both), "Simulate an ad click" (`clickIds`, adds test click IDs to the start URL), "Answer tracking requests locally" (`blockVendorRequests`, on). The server validates every URL with `isOnSite`; field errors show below each input
+- [x] Estimated duration: runs × the mean seconds per run measured in Task 5, in minutes
+- [x] Running audit (`docs/ui.md` screen 2): one tile per run with page path, scenario, viewport, status, hit count and screenshot thumbnail (scaled by CSS); a `partial` or `failed` tile names its error in plain words (bot blocked, timed out, consent banner not found, left the site, page refused, engine failed); the audit header shows its status, including a launch failure
 - [ ] Verify in the browser on the fixtures site: an audit of 3 pages × 3 scenarios, screenshots of the grid at the start, midway and at the end; an off-site page and a credentialed URL are refused with field errors; another organization's audit id gives 404
+  *Run in Task 9: a 9-run audit on the fixtures with screenshots at the start, midway and the end (`mockups/m2-demo/`). Not re-run: the off-site and credentialed URL refusals, and another organization's audit id.*
 
 ### Task 8: Hits explorer
 
@@ -149,9 +155,10 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Interfaces:** consumes Task 1 and Task 5's stored captures; produces `listTimeline({ auditId, runId?, vendor?, event?, scenario?, cursor? }) → { items: ({ kind: "hit" } & Hit | { kind: "push" } & DataLayerPush)[], nextCursor: string | null }` (200 per page, ordered by run ordinal, `at`, kind, then `request_id, batch_index` for hits or `seq` for pushes; the cursor encodes that tuple) and `getHitDetail({ auditId, runId, requestId, batchIndex }) → { hit, request: CapturedRequest }` (the raw request read from `capture.json` by `request_id`, checked through the audit)
 **Blocked by:** 7
 
-- [ ] Timeline (`docs/ui.md` screen 6): run selector, filters for vendor, event and scenario, hits and `dataLayer` pushes interleaved by time, hits after the consent action marked, answered-locally hits labelled as attempts
-- [ ] Selecting a hit opens its decoded parameters, ids and consent beside the raw request (method, URL, body)
+- [x] Timeline (`docs/ui.md` screen 6): run selector, filters for vendor, event and scenario, hits and `dataLayer` pushes interleaved by time, hits after the consent action marked, answered-locally hits labelled as attempts
+- [x] Selecting a hit opens its decoded parameters, ids and consent beside the raw request (method, URL, body)
 - [ ] Verify in the browser on the Task 7 audit: filter to Meta on `meta-before-consent` under reject and see the `PageView` before the consent action and none after; open a GA4 hit from the `ga4-batch` batch and see the raw body with three events; page through a long timeline with the cursor; screenshot each; another organization's audit and hit give 404
+  *Run in Task 9: Meta under reject on `meta-before-consent` (one `PageView` before the consent update, none after) and the `ga4-batch` batch hit with its three-event body. Not re-run: paging through a long timeline with the cursor, and another organization's audit and hit.*
 
 ### Task 9: M2 demo and docs
 
@@ -159,11 +166,11 @@ Design sources: `docs/vision.md` (Audit pipeline M2, M2/M3 notes), `docs/product
 **Files:** modify `docs/vision.md`, `docs/roadmap.md`, `README.md`, `docs/architecture.md`, `AGENTS.md` (organization scoping and the audit room)
 **Blocked by:** 1–8
 
-- [ ] Run the roadmap demo end to end on the fixtures: sign up, create a client and site, run an audit, watch it progress, browse the Hits explorer; screenshots under `mockups/m2-demo/` (untracked)
-- [ ] `vision.md`: M2 rows become **working** with one line on how each was verified; record the measured audit duration against the 5-minute target, `blockVendorRequests` on by default, click IDs on the start URL only, archiving instead of deleting, and `BROWSER_URL` for local development
-- [ ] `architecture.md`: the data model matches Task 1; the realtime section describes the authenticated audit room
-- [ ] `roadmap.md`: M2 done; `README.md`: status line
-- [ ] Verify: `pnpm check` passes
+- [x] Run the roadmap demo end to end on the fixtures: sign up, create a client and site, run an audit, watch it progress, browse the Hits explorer; screenshots under `mockups/m2-demo/` (untracked)
+- [x] `vision.md`: M2 rows become **working** with one line on how each was verified; record the measured audit duration against the 5-minute target, `blockVendorRequests` on by default, click IDs on the start URL only, archiving instead of deleting, and `BROWSER_URL` for local development
+- [x] `architecture.md`: the data model matches Task 1; the realtime section describes the authenticated audit room
+- [x] `roadmap.md`: M2 done; `README.md`: status line
+- [x] Verify: `pnpm check` passes
 
 ## Execution order
 

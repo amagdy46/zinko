@@ -13,7 +13,7 @@
   <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: early development.** Capture works locally: `zinko capture` loads a page in a real browser under a consent choice and lists every GA4, Google Ads, Meta and TikTok hit it sends, and `zinko decode` turns a single request into readable JSON. The capture engine has not been run in its container image yet. The audit pipeline, the rules and the web app are being built ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: early development.** Capture works locally: `zinko capture` loads a page in a real browser under a consent choice and lists every GA4, Google Ads, Meta and TikTok hit it sends, and `zinko decode` turns a single request into readable JSON. The web app also runs audits locally: add a client and a site, audit its pages under each consent choice, watch the run grid fill in, and browse every decoded hit and `dataLayer` push in the Hits explorer. The capture engine has not been run in its container image yet, and nothing has been deployed to Cloudflare. The rules, findings and reports are next ([roadmap](https://github.com/ovriq/zinko/blob/main/docs/roadmap.md)). Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
@@ -42,7 +42,11 @@ node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/colle
 ]
 ```
 
-Meta Pixel (`facebook.com/tr`), Google Ads and TikTok requests decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the audit pipeline lands.
+Meta Pixel (`facebook.com/tr`), Google Ads and TikTok requests decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. The CLI `audit` command is not built; audits run in the web app.
+
+### Run an audit locally
+
+The web app runs audits against a capture engine you start by hand, on the fixture sites or any site you may audit. Setup (database, secrets, engine, `pnpm dev`) and the click-through are in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ### Capture a page
 
@@ -91,7 +95,7 @@ A client says their conversions don't match. Today that usually means an afterno
 Zinko is being built to do that audit in one run, in the open. The design:
 
 - **Evidence, not opinions.** Zinko loads your pages in a real browser and records every tracking request, `dataLayer` push, cookie and consent signal. Each finding links to the decoded hit, the raw request and a screenshot.
-- **Deterministic checks.** Rules are plain functions over the captured data, each with a fixture page and a test. An LLM can explain a finding and write fix steps, but it never decides pass or fail, and every check works without one.
+- **Deterministic checks.** Rules are plain functions over the captured data, each checked against a fixture page. An LLM can explain a finding and write fix steps, but it never decides pass or fail, and every check works without one.
 - **Every consent path.** Each page runs with no banner interaction, after "accept all" and after "reject all", with and without click IDs such as `gclid` and `fbclid` in the landing URL.
 - **Made for consultants and agencies.** Client workspaces, a tag matrix of what fires where, re-runs that mark findings new or fixed, and a white-label report.
 
@@ -118,7 +122,7 @@ The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, 
 
 ```
 apps/cli            zinko CLI (decode and capture work; audit is planned)
-apps/web            TanStack Start web app on Cloudflare Workers (scaffold so far)
+apps/web            TanStack Start web app on Cloudflare Workers: clients, sites, audits, live progress, Hits explorer
 apps/browser        capture engine: Node server, egress proxy, Scrapling (Python) in a container image
 packages/decoders   GA4, Google Ads, Meta Pixel and TikTok decoders -> a normalized Hit
 packages/capture-contract  Effect Schemas for the engine's POST /capture

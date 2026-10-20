@@ -10,13 +10,18 @@ The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decisi
 └──────┬──────────────────────────────────────────▲─────────────┘
        │ start audit                               │ WebSocket: live progress
        ▼                                           │
-┌──── AuditWorkflow (Cloudflare Workflows) ────┐   ┌── AuditRoom (Durable Object, 1 per audit) ──┐
-│ step per page × scenario:                    │──▶│ fan-out of run events to open tabs          │
-│   Browser.capture(...)  ──────────┐          │   └─────────────────────────────────────────────┘
-│   decoders → Hit[] → store        │          │
-│ rules(captures) → Finding[]       │          │
-│ llm.explain(findings) (BYOK)      │          │
-└───────────────────────────────────┼──────────┘
+┌──── Audit workflow (Cloudflare Workflows) ───┐   ┌── AuditRoom (Durable Object, 1 per audit) ──┐
+│ start, then per run (page × scenario ×       │──▶│ publish-only fan-out of run events to the   │
+│ viewport):                                   │   │ tabs of that audit's organization           │
+│   capture-<n>: Browser.capture(...) ─────┐   │   └─────────────────────────────────────────────┘
+│     → capture.json + screenshot in R2    │   │
+│   persist-<n>: decode → hits, pushes     │   │
+│     → Postgres in one transaction        │   │
+│   (or fail-<n>: record the run's error)  │   │
+│ finish: audit status                     │   │
+│ later (M3, M4): rules → Finding[]        │   │
+│ later (M4): llm.explain(findings) (BYOK) │   │
+└──────────────────────────────────────────┼───┘
                                     │ POST /capture (packages/capture-contract)
                                     ▼
    ┌── apps/browser — Cloudflare Container (standard-1) ──────────────┐
@@ -28,8 +33,8 @@ The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decisi
    │ network, dataLayer shim, cookies, CMP, screenshot                │
    └──────────────────────────────────────────────────────────────────┘
 
-Postgres (Neon) via Hyperdrive — app data, audits, runs, hits (jsonb), findings
-R2 — screenshots, HAR, PDFs
+Postgres (Neon) via Hyperdrive — app data, clients, sites, audits, runs, hits (jsonb), dataLayer pushes; findings later
+R2 — per run: screenshot.png and capture.json (the immutable capture); PDFs later
 ```
 
 ## Stack
@@ -45,14 +50,14 @@ R2 — screenshots, HAR, PDFs
 | Validation | **Effect Schema** | Replaces Zod; shared by server functions, rule config and LLM output |
 | Database | **Postgres (Neon) through Hyperdrive**, **Drizzle** (`drizzle-orm/effect-postgres`); `drizzle-kit` generates the migrations, `pnpm db:migrate` applies them | Postgres keeps a non-Cloudflare self-host path open; D1 would not |
 | Auth | **better-auth** + organization plugin, on the same Postgres | Workspaces, invites, roles; runs on Workers |
-| Orchestration | **Cloudflare Workflows**: one workflow instance per audit, one step per page × scenario | Durable retries per step; replaces pg-boss |
-| Live progress | **Durable Object per audit** with hibernating WebSockets | Replaces SSE-from-Postgres |
+| Orchestration | **Cloudflare Workflows**: one workflow instance per audit (instance id = audit id); per run a `capture-<n>` step, then `persist-<n>` or `fail-<n>`; `start` and `finish` around them | Durable retries per step; a failed run does not stop the audit; replaces pg-boss |
+| Live progress | **Durable Object per audit** (`AuditRoom`) with hibernating WebSockets, behind an authenticated Worker route (see Realtime below) | Replaces SSE-from-Postgres |
 | Browser | **Scrapling 0.5** (`AsyncStealthySession`, Python, on patchright) in a Cloudflare Container, behind the `Browser` service ([decision 0002](decisions/0002-capture-engine.md)) | Stealth browser launcher; `capture.py` drives the page with the Playwright API (routes, request listeners, cookies, screenshot) rather than Scrapling's `fetch()`. Every capability capture needs works, some through `additional_args`. Less visible to fingerprint checks than plain Playwright (spike RESULTS.md, 2026-10-20) |
 | Browser (fallback) | Plain Playwright + Chromium in the same container (`apps/browser/src/engines/playwright.ts`) | Operational fallback, picked per request when Scrapling fails to launch or with `CAPTURE_ENGINE=playwright`, and the comparison baseline. Shares the shim, vendor list and autoconsent bridge; `engine` on the result says which ran |
 | Browser (egress) | A per-capture HTTP proxy in the Node server; Chromium starts with `--proxy-server` | Playwright routes never see redirect hops, so the SSRF policy and `blockVendorRequests` are enforced where every connection passes |
 | Browser (quick checks) | Browser Rendering (`@cloudflare/playwright`) | Cheap quick checks; optional, not built |
 | Consent clicking | **@duckduckgo/autoconsent** (MPL-2.0), injected in the container | Deterministic accept/reject for common CMPs |
-| Files | **R2** | Screenshots, HAR, PDFs |
+| Files | **R2**, through the `Storage` service | Screenshots and captures now; PDFs later |
 | LLM | **`effect/ai`** (Effect 4) with the Anthropic, OpenAI and OpenRouter providers; Ollama through the OpenAI-compatible client | Bring your own key, encrypted per workspace; audits work without a key |
 | PDF | The container prints the report route with `page.pdf()` | Reuses the browser |
 | Email (invites) | Cloudflare Email Service | Same platform |
@@ -64,7 +69,7 @@ R2 — screenshots, HAR, PDFs
 
 ```
 apps/
-  web/          generated: TanStack Start on Workers (UI, server fns, auth, realtime, workflows); will host AuditWorkflow and AuditRoom
+  web/          generated, now Zinko's app: TanStack Start on Workers (UI, server fns, auth, clients and sites, audits); hosts the `Audit` workflow, the `AuditRoom` Durable Object and the `BrowserContainer`
   browser/      Zinko: the capture container image (Node server, egress proxy, Scrapling engine in scrapling/, Playwright fallback)
   cli/          Zinko: `decode` and `capture` (against the engine), rules later, no Cloudflare
 packages/
@@ -88,17 +93,39 @@ Zinko's own packages (`decoders`, `capture-contract`, `cli`) are plain TypeScrip
 
 ## Data model (v0.1)
 
+The source of truth is `packages/db/src/audit-schema.ts` (migrations in `packages/db/drizzle/`). Every table carries `org_id`, and everything below an audit is reached through its owning audit, checked against the organization; an id from another organization behaves like a missing one (404).
+
 ```
 organization ─< member >─ user              (better-auth)
-organization ─< client ─< site ─< audit ─< run (page × scenario × viewport)
-                                     │         ├─< hit        (decoded, jsonb params)
-                                     │         ├─< datalayer_push
-                                     │         └─ artifacts (R2 keys: screenshot, har)
-                                     ├─< finding (rule_id, severity, evidence refs, status, llm_explanation)
-                                     └─ report_share (token, revoked_at)
+organization ─< client ─< site ─< audit ─< run (page × scenario × viewport, `ordinal`)
+                                           ├─< hit             (decoded, jsonb params)
+                                           ├─< datalayer_push
+                                           └─ R2 keys: screenshot_key, capture_key
 organization ─ llm_credential (provider, encrypted key, model)
-organization ─ branding (logo, accent, report footer)
+later: finding (M3), report_share and branding (M5)
 ```
+
+| Table | Key columns |
+|---|---|
+| `client` | `id`, `org_id`, `name`, `archived_at` |
+| `site` | `client_id` (restrict), `name`, `origin`, `host` (canonical; the allow-list), `archived_at` |
+| `audit` | `site_id` (restrict), `created_by`, `config` (jsonb `AuditConfig`), `status` (`queued`, `running`, `complete`, `partial`, `failed`), `error` (launch failures), `workflow_id`, `started_at`, `finished_at` |
+| `run` | `audit_id` (cascade), `ordinal` (unique with `audit_id`), `page_url`, `scenario`, `viewport`, `status` (`pending`, `running`, `complete`, `partial`, `failed`), `failure` (`EngineFailure`, `EngineBusy`, `PersistFailure`; null when the engine refused the request), `engine`, `decoder_version`, `consent`, `documents`, `cookies`, `errors` (all jsonb), `complete`, `truncated`, `screenshot_key`, `capture_key`, `hit_count`, `started_at`, `finished_at` |
+| `hit` | primary key `(run_id, request_id, batch_index)`, no `id`; `document_id`, `at` (ms since capture start), `vendor`, `destination_id`, `event`, `params`, `ids`, `consent`, `host`, `url`, `blocked`, `status`, `after_consent_action` |
+| `datalayer_push` | primary key `(run_id, seq)`, no `id`; `document_id`, `at`, `value` |
+
+- **Evidence is archived, never deleted by accident.** Foreign keys from audits upward are `on delete restrict`; a client or site with audits can only be archived (`archived_at`). Runs, hits and pushes cascade from their audit. Purging evidence (rows and R2 objects) is a later, explicit feature.
+- **Natural keys make a rerun reproduce its rows.** `persist-<n>` deletes the run's hits and pushes and reinserts them from the stored `capture.json` in one transaction, with `created_at` set to the run's `finished_at`, so a retry gives identical rows, keys included. A finding that references a hit (M3) needs a deferrable foreign key, or findings regenerated in the same transaction.
+- **The capture is written once.** `capture-<n>` reuses a `capture_key` already on the run, then an object already at `audits/<audit>/runs/<run>/capture.json` (found with `Storage.head`), and only then captures and writes. Workflow step results are capped at 1 MiB, so steps return keys, never captures.
+- **`after_consent_action`** is `startedAt >= consent.actionAt`, false whenever there was no action (`none`, `gpc`, no banner); rules branch on the run's `consent.outcome` first.
+
+## Realtime
+
+Live audit progress goes through `AuditRoom`, one Durable Object per audit named by the audit id (`apps/web/src/realtime/AuditRoom.ts`, bound as `AUDIT_ROOM`). It hibernates its sockets, accepts at most 50 of them and ignores whatever a client sends: browsers only listen, and the only way a message enters is the server-only `AuditProgress.publish(auditId, event)` (`@repo/core`), which the workflow calls and which never fails or stalls a step.
+
+The room is reached through `/ws/audits/<auditId>` (`apps/web/src/server/audit-room-route.ts`, a `workerRoutes` entry), which refuses an upgrade before it touches the Durable Object, in this order: a malformed id (404); an `Origin` that is not the app's own, which closes the cross-site WebSocket hijack (403); no session (401); then `activeMembership(session)` (`server/org-access.ts`), which reads the `member` table, so a removed member whose session still names the organization is refused, and finally the audit looked up in that organization (404, the same answer as a missing audit). The room is named by the id the database returns, so URL letter case cannot select another room.
+
+Events (`AuditEvent`, a `Schema`) carry a run's or the audit's new status; the page (`useAuditRoom`) validates them, reconnects with backoff, and refetches the audit on every event, when the socket opens and every 4 minutes (screenshot URLs expire after 5), so a missed event costs nothing. The scaffold's public `Room`, its `Realtime` service, `useRoom` hook and `/ws/rooms/*` route were removed.
 
 ## Key design rules
 
@@ -107,7 +134,7 @@ organization ─ branding (logo, accent, report footer)
 3. **Vendor matchers are data plus small decoders,** so endpoint changes are one-line fixes.
 4. **Crawled pages are untrusted.** Their content goes to the LLM only as quoted evidence. The agent gets no credentials, and navigation is restricted to an allow-list of the site's domains.
 5. **Read-only by default** toward GTM, GA4 and Meta when connectors arrive in v0.2.
-6. **Audits fail partially, not completely.** Each page × scenario is its own workflow step; a failed step records a tagged error and the report still renders.
+6. **Audits fail partially, not completely.** Each run is its own `capture-<n>` and `persist-<n>` step pair; a run that is refused or runs out of retries is recorded with its error code (`fail-<n>`), the audit still finishes (`partial`, or `failed` when no run has a capture) and the report still renders.
 7. **No Cloudflare in the core.** `packages/*` never import Workers types; only `apps/web` does. That keeps the CLI and a future Node self-host target possible.
 
 ## Self-hosting
@@ -122,7 +149,7 @@ No unit or integration tests in the current phase: we verify by running the real
 ## Open questions
 
 - **Bot protection:** the 2026-10-20 comparison on 5 test pages (spike RESULTS.md) found Scrapling passes the fingerprint checks that flag plain Playwright (`HeadlessChrome`, `navigator.webdriver`), and both fail the SwiftShader WebGL check. Still open: real Cloudflare challenges (nowsecure.nl now serves a forced-interactive Turnstile test key that nothing passes, the `fetch()` solver included), BotD (its demo URL now 404s), and how protected sites treat traffic from Cloudflare Containers, since that run used a residential IP.
-- Container cold start and cost for 10 pages × 3 scenarios; whether one container per audit with many tabs beats one per step. The engine runs one capture at a time per container and launches a browser per scenario.
+- Container cold start and cost for 10 pages × 3 scenarios; whether captures can run in parallel within an audit (several container instances, or several pages per engine) to meet the 5-minute target, since one capture at a time takes about 5 to 6.4 minutes for 30 runs. The engine runs one capture at a time per container and launches a browser per scenario. A container instance per audit is capped by `maxInstances` (3); admission control for captures is open (`docs/vision.md`).
 
 ## Decisions log
 

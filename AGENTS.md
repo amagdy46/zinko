@@ -81,7 +81,10 @@ Zero errors and zero warnings are the bar.
 
 ## Database (Postgres, Drizzle)
 
-- Tables live in `packages/db/src/schema.ts`; queries go through the `Database` service from `@repo/core`.
+- Tables live in `packages/db/src/schema.ts`, `auth-schema.ts` (Better Auth) and `audit-schema.ts` (`client`, `site`, `audit`, `run`, `hit`, `datalayer_push`); queries go through the `Database` service from `@repo/core`.
+- Every audit table carries `org_id`; filter by `activeMembership(session).organizationId` and reach runs, hits and pushes only through their audit, checked against the organization. An id from another organization is a 404, never a 403.
+- Foreign keys from audits upward are `on delete restrict`: clients and sites with audits are archived (`archived_at`), never deleted; deleting is allowed only without audits.
+- `hit` and `datalayer_push` have natural primary keys, `(run_id, request_id, batch_index)` and `(run_id, seq)`, and no `id`. Persisting a run deletes and reinserts its rows in one transaction with `created_at` taken from the run's `finished_at`, so a retry reproduces identical rows. Keep it that way: no `defaultNow()` or random ids in derived rows.
 - Change the schema, then run `pnpm --filter @repo/db db:generate` to write a migration to `packages/db/drizzle/`, then `pnpm db:migrate`.
 - Never edit files under `packages/db/drizzle/` by hand; they are generated.
 - Start the local database with `docker compose up -d`.
@@ -128,14 +131,14 @@ Zero errors and zero warnings are the bar.
 - The realtime extra's generated public room (`Room`, `Realtime`, `useRoom`, `/ws/rooms/*`) was replaced by the audit room; `efforge.jsonc` still lists the old files, leave it alone.
 - Live audit progress goes through one Durable Object per audit, `AuditRoom` (`apps/web/src/realtime/AuditRoom.ts`, exported from `apps/web/src/server.ts`, bound as `AUDIT_ROOM`, named by audit id). Sockets hibernate, at most 50 per room, and client messages are ignored: browsers only listen.
 - Server code publishes with `AuditProgress.publish(auditId, event)` from `@repo/core` (`audit.ts`; `AuditEvent` is a `Schema`). Do not call the namespace directly.
-- `/ws/audits/<auditId>` (`server/audit-room-route.ts`) validates the id, resolves the session with `Auth.sessionFromHeaders` (401), and checks the `Origin` is the app's own (403), then with `activeMembership` that the audit is in an organization the user belongs to (404) before touching the Durable Object. Keep that order; never add a route to a room without an auth check.
-- In the UI use `useAuditRoom(auditId, onSignal)` (`apps/web/src/lib/use-audit-room.ts`). Every signal (`refresh` on open and every 4 minutes, `run`, `audit`) means "refetch the audit". It validates messages with `Schema` and reconnects with backoff.
+- `/ws/audits/<auditId>` (`server/audit-room-route.ts`) validates the id, checks the `Origin` is the app's own (403), resolves the session with `Auth.sessionFromHeaders` (401), then checks with `activeMembership` that the audit is in an organization the user belongs to (404) before touching the Durable Object. Keep that order; never add a route to a room without an auth check.
+- In the UI use `useAuditRoom(auditId, onSignal, enabled)` (no socket while `enabled` is false, so a finished audit costs nothing) (`apps/web/src/lib/use-audit-room.ts`). Every signal (`refresh` on open and every 4 minutes, `run`, `audit`) means "refetch the audit". It validates messages with `Schema` and reconnects with backoff.
 
 <!-- efforge:section:storage -->
 
 ## Storage
 
-- Use the `Storage` service from `@repo/core` (put, get, delete, signedUrl, verify); do not touch the R2 binding directly.
+- Use the `Storage` service from `@repo/core` (put, head, get, delete, signedUrl, verify); do not touch the R2 binding directly. `head` returns an object's metadata without its body, `Option.none` when absent: use it to ask whether a key exists (the audit workflow reuses a stored `capture.json` this way) instead of `get`.
 - The implementation is `apps/web/src/server/storage.ts` on the `STORAGE` R2 binding; downloads are served by the Worker route in `storage-route.ts`.
 - Signed URLs are HMAC-signed with the `STORAGE_SIGNING_SECRET` secret (at least 32 characters; the app fails to start without it). Never log or return it.
 - Storage keys are opaque: generate them on the server, never from raw user input. Files are served as attachments with `nosniff`, inline only for raster images.
