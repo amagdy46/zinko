@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
-import { LayoutDashboard, Settings } from "lucide-react"
+import { LayoutDashboard, Settings, Users } from "lucide-react"
 import { OrgSwitcher } from "@/components/org-switcher"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { UserMenu } from "@/components/user-menu"
@@ -18,6 +18,7 @@ export const Route = createFileRoute("/app")({
 
 const nav = [
   { to: "/app", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/app/clients", label: "Clients", icon: Users },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ] as const
 

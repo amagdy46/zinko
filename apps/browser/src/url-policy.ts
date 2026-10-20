@@ -13,6 +13,7 @@
  * Anything that does not go through the proxy (none is expected; WebRTC is limited to proxied
  * UDP) is only stopped by the container's egress limits, so keep those as well.
  */
+// The host rules below are mirrored by `isPrivateHost` in packages/capture-contract/src/private-host.ts (the web app uses that copy); change both together.
 import type { LookupAddress } from "node:dns"
 import { lookup } from "node:dns/promises"
 

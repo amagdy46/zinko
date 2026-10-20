@@ -198,3 +198,5 @@ export function isVendorHost(url: string): boolean {
 export function isSdkFile(url: string): boolean {
   return SDK_FILES.test(url)
 }
+
+export { isPrivateHost } from "./private-host.js"

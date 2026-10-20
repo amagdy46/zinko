@@ -23,5 +23,6 @@ export const AppLayer = Layer.mergeAll(
   BrowserLive,
   StorageLive,
   MailerLive,
+  WorkerEnvLive,
   /* efforge:layers */
 )

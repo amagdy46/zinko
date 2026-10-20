@@ -95,6 +95,8 @@ export default Alchemy.Stack(
         EXAMPLE_WORKFLOW: exampleWorkflow,
         AUDIT_ROOM: auditRoom,
         ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),
+        // set on local dev stages only: lets a site be on localhost (server/clients.ts)
+        ...(isDev ? { ALLOW_PRIVATE_SITES: "true" } : {}),
         STORAGE: storage,
         STORAGE_SIGNING_SECRET: storageSigningSecret,
         EMAIL: email,
