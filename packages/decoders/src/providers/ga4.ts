@@ -20,7 +20,7 @@ function parseGcs(gcs: string | undefined): Hit["consent"] {
   return { adStorage: flag(gcs[2]), analyticsStorage: flag(gcs[3]), raw: gcs }
 }
 
-function toHit(params: URLSearchParams, url: URL): Hit | null {
+function toHit(params: URLSearchParams, url: URL, batchIndex: number): Hit | null {
   const destinationId = params.get("tid")
   const event = params.get("en")
   if (!destinationId || !event) return null
@@ -47,6 +47,7 @@ function toHit(params: URLSearchParams, url: URL): Hit | null {
     vendor: "ga4",
     destinationId,
     event,
+    batchIndex,
     params: eventParams,
     ids,
     consent: parseGcs(params.get("gcs") ?? undefined),
@@ -57,6 +58,7 @@ function toHit(params: URLSearchParams, url: URL): Hit | null {
 
 export const ga4: Decoder = {
   vendor: "ga4",
+  methods: ["GET", "POST"],
   // Matches Google's endpoints and first-party (server-side GTM) collectors alike.
   matches: (url) => url.pathname.endsWith("/g/collect") && url.searchParams.get("v") === "2",
 
@@ -64,10 +66,10 @@ export const ga4: Decoder = {
     const lines = (request.body ?? "").split(/\r?\n/).filter((l) => l.trim() !== "")
     // Batched POSTs: shared params in the URL, one event per body line.
     const batches = lines.length > 0 ? lines : [""]
-    return batches.flatMap((line) => {
+    return batches.flatMap((line, index) => {
       const merged = new URLSearchParams(url.search)
       for (const [k, v] of new URLSearchParams(line)) merged.set(k, v)
-      const hit = toHit(merged, url)
+      const hit = toHit(merged, url, index)
       return hit ? [hit] : []
     })
   },

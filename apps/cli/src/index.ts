@@ -4,7 +4,7 @@ import { decode } from "@ovriq/zinko-decoders"
 const USAGE = `zinko — open-source tracking auditor
 
 Usage:
-  zinko decode <hit-url> [--body <raw-body>]   Decode a GA4 or Meta Pixel request
+  zinko decode <hit-url> [--body <raw-body>]   Decode a GA4, Meta, Google Ads or TikTok request
   zinko audit <site-url>                       Crawl and audit a site (coming soon)
 `
 
@@ -15,7 +15,7 @@ function main(argv: string[]): number {
       if (!target) break
       const bodyFlag = rest.indexOf("--body")
       const body = bodyFlag >= 0 ? rest[bodyFlag + 1] : undefined
-      const hits = decode({ url: target, body })
+      const hits = decode({ url: target, method: body === undefined ? "GET" : "POST", body })
       if (hits.length === 0) {
         console.error("No known tracking hit in that request.")
         return 1

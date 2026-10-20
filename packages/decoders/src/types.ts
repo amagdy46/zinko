@@ -6,16 +6,18 @@ export interface RequestLike {
   body?: string | null
 }
 
-export type Vendor = "ga4" | "meta"
+export type Vendor = "ga4" | "meta" | "google-ads" | "tiktok"
 
 export type ConsentState = "granted" | "denied" | "unknown"
 
 /** One tracking event decoded from a request. A single request can carry several (GA4 batching). */
 export interface Hit {
   vendor: Vendor
-  /** Destination ID: GA4 measurement ID (G-XXXX) or Meta pixel ID. */
+  /** Destination ID: GA4 measurement ID (G-XXXX), Meta pixel ID, Google Ads AW-<id> or TikTok pixel code. */
   destinationId: string
   event: string
+  /** Position of this hit within its request (0 unless the request batches several events). */
+  batchIndex: number
   /** Event parameters with vendor prefixes stripped; numeric params are numbers. */
   params: Record<string, string | number>
   /** Vendor-level identifiers (client ID, session ID, event ID, fbp/fbc...). */
@@ -28,6 +30,8 @@ export interface Hit {
 
 export interface Decoder {
   vendor: Vendor
+  /** HTTP methods this vendor uses for hits; other methods (OPTIONS preflights, HEAD) are not hits. */
+  methods: readonly string[]
   matches(url: URL): boolean
   decode(request: RequestLike, url: URL): Hit[]
 }

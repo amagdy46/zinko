@@ -48,7 +48,7 @@ Status: **working**, **scaffolded** (generated code exists, not Zinko-specific y
 | Sign up, workspaces, invites, roles | Better Auth with the organization plugin; `/onboarding`, `/app/settings/members`, `/accept-invite/$id` | scaffolded |
 | Infra per stage | `infra/alchemy.run.ts`: Worker, Workflows, Durable Objects, Container, R2, Postgres | scaffolded, never deployed |
 | Bring-your-own LLM key | `llm_credential` table, AES-GCM with `LLM_ENCRYPTION_KEY`, `/app/settings/ai` | scaffolded |
-| Hit decoder CLI | `packages/decoders` (GA4, Meta) behind `zinko decode` in `apps/cli` | working |
+| Hit decoder CLI | `packages/decoders` (GA4, Meta, Google Ads, TikTok) behind `zinko decode` in `apps/cli` | working |
 
 ### Capture (M1)
 
@@ -60,8 +60,8 @@ Status: **working**, **scaffolded** (generated code exists, not Zinko-specific y
 | **GPC scenario** | A fourth scenario that sends `Sec-GPC: 1` and sets `navigator.globalPrivacyControl` (ObservePoint and DataTrue both test it) | proposed |
 | Click-ID entry | Landing URL with and without `gclid`, `fbclid`, `ttclid`, `utm_*` | planned |
 | Cookies and screenshots | Cookie jar before and after consent; one screenshot per step to R2 | planned |
-| Google Ads and TikTok decoders | New decoders in `packages/decoders`, built from recorded real requests | planned |
-| Fixture sites | `packages/fixtures`: 11 fake shops, each with one known bug, used as capture targets we run and inspect by hand (`pnpm --filter @repo/fixtures serve`, `inspect`). Banner is vanilla-cookieconsent 3.1.0, because autoconsent has no generic Klaro rule. Findings: gtag also sends `google.com/rmkt/collect`, `google.com/ccm/collect` and `ad.doubleclick.net/ccm/s/collect`, which the vendor-blocking list must cover; the GA4 cookieless ping (`gcs=G100`) before consent is expected and must not be flagged; with Consent Mode default denied, gtag holds events until the consent update and then sends them batched | working |
+| Google Ads and TikTok decoders | `packages/decoders`, built from recorded fixture traffic. On the wire: Ads conversions are GET `googleadservices.com/pagead/conversion/<id>/` and remarketing is POST `google.com/rmkt/collect/<id>/`, both with the click ID as `gclaw`; TikTok sends one event per POST to `/api/v2/pixel` and `CompletePayment` goes out as `Purchase`. Not decoded: `google.com/ccm/collect` and `ad.doubleclick.net/ccm/s/collect` (they duplicate the same events), `/api/v2/pixel/act` (page metadata, no event) and `1p-user-list` (echo of `rmkt`). Ads consent (`gcs`) appears only on `ccm`, so the M3 consent rules need the raw `ccm` requests, not decoded hits. Only GET and POST are decoded, so preflights never become hits | working |
+| Fixture sites | `packages/fixtures`: 11 fake shops, each with one known bug, used as capture targets we run and inspect by hand (`pnpm --filter @repo/fixtures serve`, `inspect`). Banner is vanilla-cookieconsent 3.1.0, which autoconsent supports (`cookieconsent3` rule); autoconsent also handles Klaro, which the spike used. Findings: gtag also sends `google.com/rmkt/collect`, `google.com/ccm/collect` and `ad.doubleclick.net/ccm/s/collect`, which the vendor-blocking list must cover; the GA4 cookieless ping (`gcs=G100`) before consent is expected and must not be flagged; with Consent Mode default denied, gtag holds events until the consent update and then sends them batched | working |
 
 ### Audit pipeline (M2)
 

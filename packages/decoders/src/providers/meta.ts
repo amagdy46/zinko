@@ -9,6 +9,7 @@ const ID_KEYS: Record<string, string> = {
 
 export const meta: Decoder = {
   vendor: "meta",
+  methods: ["GET", "POST"],
   matches: (url) => /(^|\.)facebook\.com$/.test(url.hostname) && /^\/tr\/?$/.test(url.pathname),
 
   decode(request, url) {
@@ -40,6 +41,7 @@ export const meta: Decoder = {
         vendor: "meta",
         destinationId,
         event,
+        batchIndex: 0,
         params: eventParams,
         ids,
         consent: { adStorage: "unknown", analyticsStorage: "unknown" },
