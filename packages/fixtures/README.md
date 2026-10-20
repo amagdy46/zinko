@@ -17,8 +17,8 @@ Meta `100000000000001`, TikTok `ZINKOTT0001`.
 ## Banner
 
 [vanilla-cookieconsent](https://github.com/orestbida/cookieconsent) 3.1.0 (MIT), vendored in
-`vendor/cookieconsent/` with its license. autoconsent (16.57.0) has no generic Klaro rule (only a
-site-specific one for `escaparium.ca`), so Klaro was skipped. `cookieconsent3` is the maintained self-hostable open-source CMP it supports (the older `cookieconsent2` and `tarteaucitron` also have rules), so it is the pick. Rule:
+`vendor/cookieconsent/` with its license. autoconsent (16.57.0) supports it with the JSON rule below; it also
+supports Klaro, through code in `lib/cmps/klaro.ts` rather than a rule file, which the M1 spike used. Rule:
 `rules/autoconsent/cookieconsent3.json`. Buttons: accept `.cm__btn[data-role=all]`,
 reject `.cm__btn[data-role=necessary]`.
 

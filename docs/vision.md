@@ -54,7 +54,7 @@ Status: **working**, **scaffolded** (generated code exists, not Zinko-specific y
 
 | Feature | How we build it | Status |
 |---|---|---|
-| Network capture with POST bodies | Scrapling `StealthySession` in Python inside `apps/browser`, typed HTTP contract on the TS side with `Schema`; plain Playwright in the same container as fallback | planned, spike first |
+| Network capture with POST bodies | Scrapling `AsyncStealthySession` (patchright) launches the browser and `capture.py` drives the page with the Playwright API, as a Python child of the Node server in `apps/browser`; the child writes NDJSON checkpoints and enforces the URL policy itself; plain Playwright in the same container as fallback (decision 0002) | planned |
 | `dataLayer` shim | Init script injected before page scripts, records every push with a timestamp | planned |
 | Consent scenarios: none, accept, reject | `@duckduckgo/autoconsent` Playwright build injected per scenario; CMP state read from `__tcfapi` and Google consent state | planned |
 | **GPC scenario** | A fourth scenario that sends `Sec-GPC: 1` and sets `navigator.globalPrivacyControl` (ObservePoint and DataTrue both test it) | proposed |
@@ -185,8 +185,7 @@ The rest of the reference list (open-seo, Lighthouse CI, OpenStatus, Typewriter,
 
 ## Open questions
 
-- **Capture engine:** can Scrapling run an init script before page scripts, record POST bodies, read cookies and take screenshots? Settled by the M1 spike in `spikes/m1-capture/`, recorded as decision 0002.
-- **Bot protection:** how protected sites treat Cloudflare Container traffic; container cold start and cost for 10 pages × 3 scenarios.
+- **Bot protection:** how protected sites treat Cloudflare Container traffic, and whether Scrapling beats plain Playwright there (decision 0002 calls its stealth benefit provisional, since driving the page directly skips `fetch()`'s Cloudflare solver); container cold start and cost for 10 pages × 3 scenarios.
 - **`gcd` decoding:** sources disagree on the letter mapping, so any `gcd` rule stays heuristic until verified.
 - **Proposed features above:** which go into v0.1. GPC and the inconclusive outcome change the scope of M1 and M3.
 - **Region simulation:** emulate (headers, timezone, locale) or actually route through a region; emulation may not trigger server-side geo logic in CMPs.
