@@ -1,7 +1,8 @@
 /**
  * Files and rules both engines share. `inject/vendors.json` is the one list of vendor hosts and
- * SDK files (the Python engine reads the same file); it mirrors the rule in
- * `packages/fixtures/inspect.mjs`, since this image cannot import workspace packages. `chromium-args.json` holds the
+ * SDK files (the Python engine reads the same file); it is mirrored by
+ * `isVendorHost` and `isSdkFile` in `@repo/capture-contract`, since this image cannot import
+ * workspace packages. `chromium-args.json` holds the
  * Chromium switches that keep every byte on the egress proxy: no direct DNS, no QUIC, WebRTC
  * limited to proxied UDP, and no background or component-update traffic. Chromium keeps only
  * the last `--disable-features` it is given, so that list merges Playwright's defaults,

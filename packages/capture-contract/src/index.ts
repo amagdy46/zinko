@@ -144,3 +144,35 @@ export const CaptureRejected = Schema.Struct({
   message: Schema.String,
 })
 export type CaptureRejected = typeof CaptureRejected.Type
+
+// Mirrors `apps/browser/src/inject/vendors.json`, which the engine reads (its image cannot
+// import this package). Keep the two in step.
+const VENDOR_DOMAINS = [
+  "google-analytics.com",
+  "googletagmanager.com",
+  "googleadservices.com",
+  "google.com",
+  "doubleclick.net",
+  "googlesyndication.com",
+  "facebook.com",
+  "connect.facebook.net",
+  "instagram.com",
+  "conversionsapigateway.com",
+  "tiktok.com",
+  "tiktokw.us",
+]
+const SDK_FILES = new RegExp(
+  String.raw`^https://(www\.googletagmanager\.com/(gtag/js|gtm\.js)(?=[?#]|$)|connect\.facebook\.net/([\w-]+/fbevents\.js(?=[?#]|$)|signals/config/)|analytics\.tiktok\.com/i18n/pixel/)`,
+)
+
+/** The URL's host is a vendor domain or any subdomain of one. */
+export function isVendorHost(url: string): boolean {
+  if (!URL.canParse(url)) return false
+  const host = new URL(url).hostname.toLowerCase().replace(/\.$/, "")
+  return VENDOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
+}
+
+/** A vendor SDK file (gtag, GTM, the Meta and TikTok pixel scripts): loaded, not a hit. */
+export function isSdkFile(url: string): boolean {
+  return SDK_FILES.test(url)
+}

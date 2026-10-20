@@ -42,7 +42,18 @@ node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/colle
 ]
 ```
 
-Meta Pixel requests (`facebook.com/tr`) decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the capture pipeline lands.
+Meta Pixel requests (`facebook.com/tr`) decode the same way. For a POST hit, pass its body with `--body '<raw-body>'`. `zinko audit` is a placeholder until the audit pipeline lands.
+
+### Capture a page (needs the capture engine running)
+
+`zinko capture` loads a page in the capture engine under a consent choice and lists every tracking hit it sent: when, on which document, and whether it fired after the consent action. It needs the engine from `apps/browser` listening on `http://localhost:8080` (or pass `--engine <url>`).
+
+```sh
+node apps/cli/dist/index.js capture https://example.com --scenario reject --block-vendors
+node apps/cli/dist/index.js capture https://example.com --scenario all --click '#buy' --json
+```
+
+`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit.
 
 ## Why Zinko
 

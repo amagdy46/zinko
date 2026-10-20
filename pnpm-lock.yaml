@@ -353,6 +353,12 @@ importers:
       '@ovriq/zinko-decoders':
         specifier: workspace:*
         version: link:../../packages/decoders
+      '@repo/capture-contract':
+        specifier: workspace:*
+        version: link:../../packages/capture-contract
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.5
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -546,6 +552,10 @@ importers:
         version: 7.0.2
 
   packages/fixtures:
+    dependencies:
+      '@repo/capture-contract':
+        specifier: workspace:*
+        version: link:../capture-contract
     devDependencies:
       playwright:
         specifier: 1.64.1

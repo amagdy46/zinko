@@ -1,6 +1,7 @@
 // Usage: pnpm --filter @repo/fixtures inspect <site>[/page] [accept|reject]
 // Opens a fixture site on a private server, answers vendor collection requests with 204 so
 // nothing reaches the vendors, clicks the banner and prints every vendor request with its time.
+import { isSdkFile, isVendorHost } from "@repo/capture-contract"
 import { chromium } from "playwright"
 import { sites } from "./sites.mjs"
 import { startServer } from "./server.mjs"
@@ -18,10 +19,6 @@ const collectionEndpoints = [
   { vendor: "meta", test: /^https:\/\/www\.facebook\.com\/tr/ },
   { vendor: "tiktok", test: /^https:\/\/analytics\.tiktok\.com\/api\/v2\/pixel/ },
 ]
-const sdkFiles =
-  /^https:\/\/(www\.googletagmanager\.com\/(gtag\/js|gtm\.js)|connect\.facebook\.net\/(\w+\/fbevents\.js|signals\/config\/)|analytics\.tiktok\.com\/i18n\/pixel\/)/
-const vendorHosts =
-  /(^|\.)(google-analytics|googletagmanager|doubleclick|googleadservices|googlesyndication|facebook|facebook\.net|instagram|conversionsapigateway|tiktok)\.(com|net)$|(^|\.)tiktokw\.us$|^(www\.)?google\.com$/
 
 const [target, action = "none"] = process.argv.slice(2)
 const siteName = target?.split("/")[0] ?? ""
@@ -66,11 +63,8 @@ await context.route("**/*", async (route) => {
   const request = route.request()
   const url = request.url()
   const endpoint = collectionEndpoints.find((candidate) => candidate.test.test(url))
-  const host = new URL(url).hostname
-  // Only the SDK files themselves load from vendors. gtag also sends collection pings as
-  // script requests, so "any script" would let those through.
-  const isSdk = ["script", "stylesheet"].includes(request.resourceType()) && sdkFiles.test(url)
-  const stray = !endpoint && !isSdk && vendorHosts.test(host)
+  // Only the SDK files themselves load from vendors, whatever their resource type.
+  const stray = !endpoint && !isSdkFile(url) && isVendorHost(url)
   if (!endpoint && !stray) return route.continue()
 
   const requestOrigin = request.headers().origin ?? "*"

@@ -1,11 +1,14 @@
 import type { ConsentState, Decoder, Hit } from "../types.js"
 
-// gtag sends conversions to googleadservices.com and remarketing to google.com/rmkt/collect.
+// gtag sends conversions to googleadservices.com and remarketing to google.com/rmkt/collect. While
+// ad_storage is denied it sends the conversion to pagead2.googlesyndication.com instead (a POST with
+// gcs=G100, same label and oid), and sends the googleadservices one only after consent.
 // Left out on purpose: google.com/ccm/collect and ad.doubleclick.net/ccm/s/collect mirror the same
 // events for Consent Mode (the latter has no account ID), and google.com/pagead/1p-user-list is an
 // audience-sync echo of each rmkt hit; decoding them would count every event twice.
 const ENDPOINTS = [
   { host: /(^|\.)googleadservices\.com$/, path: /^\/pagead\/conversion\/(\d+)\/?$/ },
+  { host: /^pagead2\.googlesyndication\.com$/, path: /^\/pagead\/conversion\/(\d+)\/?$/ },
   { host: /^(www\.)?google\.com$/, path: /^\/pagead\/1p-conversion\/(\d+)\/?$/ },
   { host: /^(www\.)?google\.com$/, path: /^\/rmkt\/collect\/(\d+)\/?$/ },
   {
@@ -50,6 +53,9 @@ export const googleAds: Decoder = {
     // The GA-style event that triggered the hit (purchase, view_item, gtag.config...).
     const eventName = q.get("en")
     if (eventName) params.event_name = eventName
+    // gtag's denied-consent conversion sends npa=1 and the granted one npa=0.
+    const npa = q.get("npa")
+    if (npa === "0" || npa === "1") params.npa = Number(npa)
     const value = q.get("value")
     if (value && Number.isFinite(Number(value))) params.value = Number(value)
     for (const [key, name] of [
