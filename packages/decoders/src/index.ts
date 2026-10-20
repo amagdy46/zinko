@@ -9,6 +9,12 @@ export { ga4, googleAds, meta, tiktok }
 
 export const decoders: readonly Decoder[] = [ga4, googleAds, meta, tiktok]
 
+/**
+ * Stored with every decoded hit, so hits decoded by an older version can be found and decoded
+ * again from their stored capture. Raise it whenever a decoder's output changes.
+ */
+export const DECODER_VERSION = "1"
+
 /** Decode a request into zero or more hits. Returns [] for requests no decoder recognizes. */
 export function decode(request: RequestLike, using: readonly Decoder[] = decoders): Hit[] {
   let url: URL

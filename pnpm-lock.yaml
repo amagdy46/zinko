@@ -381,6 +381,9 @@ importers:
       '@effect/ai-openrouter':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)
+      '@ovriq/zinko-decoders':
+        specifier: workspace:*
+        version: link:../../packages/decoders
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../../packages/capture-contract

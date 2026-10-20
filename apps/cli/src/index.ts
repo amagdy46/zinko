@@ -188,11 +188,11 @@ function renderText(
   const undecodedNote = undecoded.length
     ? `; ${undecoded.length} vendor request(s) not decoded`
     : ""
-  out(`hits (${hits.length}); "after" = sent after consent completed${undecodedNote}`)
+  out(`hits (${hits.length}); "after" = sent at or after the consent action${undecodedNote}`)
   if (hits.length === 0) {
     out("  none")
   } else {
-    const { completedAt } = consent
+    const { actionAt } = consent
     const rows = hits.map((h) => [
       ms(h.startedAt),
       docLabel(h.documentId),
@@ -202,7 +202,7 @@ function renderText(
         ? `${h.event} [${h.batchIndex}]`
         : h.event,
       `ad:${h.consent.adStorage} an:${h.consent.analyticsStorage}`,
-      completedAt !== null && h.startedAt > completedAt ? "after" : "",
+      actionAt !== null && h.startedAt >= actionAt ? "after" : "",
     ])
     const headers = ["time", "document", "vendor", "destination", "event", "consent", "note"]
     for (const l of table(headers, rows)) out(`  ${l}`)

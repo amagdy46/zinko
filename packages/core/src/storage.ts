@@ -49,6 +49,8 @@ export class Storage extends Context.Service<
       body: string | Uint8Array,
       options?: PutOptions,
     ) => Effect.Effect<StoredObject, StorageError>
+    /** The object's metadata without its body; none when the key is absent. */
+    readonly head: (key: string) => Effect.Effect<Option.Option<StoredObject>, StorageError>
     readonly get: (key: string) => Effect.Effect<Option.Option<StoredFile>, StorageError>
     readonly delete: (key: string) => Effect.Effect<void, StorageError>
     readonly signedUrl: (

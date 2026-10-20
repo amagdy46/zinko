@@ -50,6 +50,15 @@ const make = Effect.gen(function* () {
           })),
           Effect.mapError(fail("put")),
         ),
+    head: (key) =>
+      bucket
+        .head(key)
+        .pipe(
+          Effect.map(
+            Option.map((o) => ({ key, size: o.size, contentType: o.httpMetadata?.contentType })),
+          ),
+          Effect.mapError(fail("head")),
+        ),
     get: (key) =>
       Effect.gen(function* () {
         const found = yield* bucket.get(key)

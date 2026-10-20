@@ -1,67 +1,25 @@
-import type { Session } from "@repo/core/Auth"
 import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
-import { notFound } from "@tanstack/react-router"
 import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, inArray, isNull, max } from "drizzle-orm"
-import { Config, Data, Effect, type Layer, Option, Schema } from "effect"
+import { Config, Effect, Option, Schema } from "effect"
 import { WorkerConfig } from "effect-cf"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
-import type { AppLayer } from "./layers"
-import { activeMembership } from "./org-access"
 import { requireSession } from "./require-session"
-import { runtime } from "./runtime"
-
-class NotFound extends Data.TaggedError("NotFound")<{ readonly message: string }> {}
-class Forbidden extends Data.TaggedError("Forbidden")<{ readonly message: string }> {}
-class Invalid extends Data.TaggedError("Invalid")<{ readonly message: string }> {}
-
-type Env = Layer.Success<typeof AppLayer>
+import {
+  atomically,
+  Forbidden,
+  Invalid,
+  isUuid,
+  membership,
+  NotFound,
+  read,
+  respond,
+  siteInOrg,
+} from "./server-fn"
 
 const AUDITS_PER_PAGE = 20
-
-type Expected = NotFound | Forbidden | Invalid
-
-const isExpected = (error: unknown): error is Expected =>
-  error instanceof NotFound || error instanceof Forbidden || error instanceof Invalid
-
-/**
- * Runs a server function's Effect. An id from another organization, or none at all, is a 404 for
- * everyone; the other expected failures come back as a message for the form. A database failure
- * is a defect and surfaces as a server error.
- */
-const respond = <A, E, R extends Env>(effect: Effect.Effect<A, E, R>) =>
-  runtime
-    .runPromise(
-      effect.pipe(
-        Effect.map((value) => ({ ok: true as const, value })),
-        Effect.catch((error: E) =>
-          isExpected(error)
-            ? Effect.succeed({
-                ok: false as const,
-                missing: error instanceof NotFound,
-                message: error.message,
-              })
-            : Effect.die(error),
-        ),
-      ),
-    )
-    .then((result) => {
-      if (result.ok) return { ok: true as const, value: result.value }
-      if (result.missing) throw notFound()
-      return { ok: false as const, message: result.message }
-    })
-
-const read = <A, E, R extends Env>(effect: Effect.Effect<A, E, R>) =>
-  respond(effect).then((result) => {
-    if (!result.ok) throw notFound()
-    return result.value
-  })
-
-/** The session's organization and role; a user who is not (or no longer) a member gets a 404. */
-const membership = (session: Session) =>
-  activeMembership(session).pipe(Effect.mapError(() => new NotFound({ message: "Not found" })))
 
 /** The role is a comma-separated list, such as `member,admin`. */
 const isManager = (role: string) => {
@@ -107,9 +65,6 @@ const parseSiteUrl = (value: string) =>
     return { origin: url.origin, host }
   })
 
-const isUuid = (value: string) =>
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
-
 const IdInput = Schema.Struct({ id: Schema.String })
 
 /** `lock` takes a row lock; it only holds inside `atomically`. */
@@ -126,19 +81,6 @@ const clientInOrg = (orgId: string, id: string, lock = false) =>
     return found
   })
 
-const siteInOrg = (orgId: string, id: string, lock = false) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    if (!isUuid(id)) return yield* new NotFound({ message: "Not found" })
-    const query = db
-      .select()
-      .from(site)
-      .where(and(eq(site.id, id), eq(site.orgId, orgId)))
-    const [found] = yield* lock ? query.for("update") : query
-    if (found === undefined) return yield* new NotFound({ message: "Not found" })
-    return found
-  })
-
 const auditCount = (orgId: string, siteIds: readonly string[]) =>
   Effect.gen(function* () {
     const { db } = yield* Database
@@ -148,13 +90,6 @@ const auditCount = (orgId: string, siteIds: readonly string[]) =>
       .from(audit)
       .where(and(eq(audit.orgId, orgId), inArray(audit.siteId, [...siteIds])))
     return row?.total ?? 0
-  })
-
-/** Runs the statements in one database transaction: they all apply or none does. */
-const atomically = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    return yield* db.$client.withTransaction(effect)
   })
 
 const ARCHIVE_INSTEAD = (what: string) =>

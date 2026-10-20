@@ -23,12 +23,15 @@ The bet, from the research below: every competitor either needs an install on th
 
 ```
 New audit form (apps/web)
-  → AuditWorkflow (Cloudflare Workflows), one step per page × scenario × viewport
+  → startAudit: audit + runs (page × scenario × viewport) in one transaction
+  → Audit workflow (Cloudflare Workflows, instance id = audit id): start, then per run
+    capture-<n> → persist-<n> (or fail-<n>), then finish
       → Browser service → apps/browser container (Scrapling AsyncStealthySession; Playwright fallback)
           init script: dataLayer shim + autoconsent → load page → requests (with POST bodies),
           dataLayer pushes, cookies, CMP state, screenshot
       → packages/decoders: request → Hit
-      → store: hits and pushes in Postgres (Drizzle), screenshots and HAR in R2 (Storage service)
+      → store: capture.json and screenshot in R2 (Storage service), then hits and pushes
+        derived from the stored capture into Postgres (Drizzle)
       → AuditRoom Durable Object (AuditProgress service) pushes progress to open tabs
   → packages/rules: captures → Finding[] (deterministic)
   → Llm service: explanation and fix steps per finding, cached
@@ -85,7 +88,7 @@ Each row below says which of these, or which other run, showed it working. Not r
 |---|---|---|
 | Clients and sites | Drizzle tables scoped by `activeOrganizationId`, CRUD server functions | planned |
 | New audit form | Start URL, up to 20 key URLs, scenarios, viewport, click IDs | planned |
-| Durable runs | `AuditWorkflow`, one step per page × scenario × viewport; typed errors (`BotBlocked`, `Timeout`, `CmpNotFound`) become partial-failure codes in the UI | planned |
+| Durable runs | `startAudit` (`server/audits.ts`) inserts the audit and its runs in one transaction and starts the `Audit` workflow (`workflows/Audit.ts`) with the audit id as instance id, so a second start fails instead of duplicating. Steps: `start`; per run `capture-<n>`, then `persist-<n>` or `fail-<n>`; `finish`. `capture` reuses a stored capture (keys on the run, then an object already at `audits/<audit>/runs/<run>/capture.json`), else calls the engine with `allowedHosts: [site.host]` on container instance `<auditId>`, writes the screenshot, then `capture.json` (the result with `screenshot: null`), and returns only keys. `persist` decodes the stored capture and in one transaction deletes and reinserts the run's hits and pushes (natural keys, `created_at` = the run's `finished_at`). A refused request (`PolicyDenied`, `InvalidRequest`) is not retried, nor is a missing run, an undecodable config or stored capture, or a 400 the contract cannot read (`WorkflowStepNonRetryableError`); other engine errors retry 8 times from 15 s; a step that gives up becomes `failure = EngineBusy` (429 or 503 to the end), `EngineFailure` or `PersistFailure`, and the audit goes on. Hits are marked `after_consent_action` when sent at or after `consent.actionAt`. Audit: `complete` when every run is, `failed` when no run has a capture, else `partial`. Each step builds `AppLayer` afresh (`runtime.provide`). Verified in M2 Task 5 on the fixtures: 3 pages × 3 scenarios `complete`, every run's rows equal to its `capture.json` decoded again; off-site redirect → `Navigation`, audit `partial`; refused page → audit `failed`; a forced `persist` failure after commit → identical rows on retry; a forced failure after the R2 write → one engine capture; exhausted `persist` → run `failed`, capture kept; 2,000-request probes (10.4 MB, and 1,999 GA4 hits) complete; four audits at once all finish. Throughput: 115 s for 9 runs alone (12.8 s per run wall, 12.7 s mean capture; the workflow adds ~0.1 s per run) | working locally; not yet on Cloudflare |
 | Live progress | `AuditRoom` Durable Object over WebSocket (one per audit, listen-only, 50 sockets), thumbnail per finished step. `/ws/audits/<id>` checks Origin (403), session (401) and the `member` row plus the audit in that organization (404, so removed members are refused); the room is named by the database lowercase id. Verified in M2 Task 6 | built, page in Task 7 |
 | Hit explorer | Timeline of decoded hits and `dataLayer` pushes per run, filterable ("Omnibug in the browser") | planned |
 
@@ -202,6 +205,9 @@ The rest of the reference list (open-seo, Lighthouse CI, OpenStatus, Typewriter,
 ## Open questions
 
 - **Bot protection:** on the 2026-10-20 test pages Scrapling passed the checks that flag plain Playwright (`HeadlessChrome`, `navigator.webdriver`; BrowserScan "Normal" vs "Robot", CreepJS 33% vs 100% headless), and both fail the SwiftShader WebGL check. Still open: how protected sites treat Cloudflare Container (datacenter) traffic, and real Cloudflare challenges, since nowsecure.nl's forced-interactive Turnstile test key stopped both engines and `fetch()`'s solver alike. Also open: container cold start and cost for 10 pages × 3 scenarios.
+- **Audit throughput:** captures run one at a time per audit, at 12.8 s per run locally (M2 Task 5), so 10 pages × 3 scenarios take about 6.4 minutes against the 5-minute target, before container cold start. Parallel captures within an audit (several container instances, or several pages per engine) move to a later milestone. Locally every audit shares the one `BROWSER_URL` engine, so concurrent audits queue through 429 retries: four 3-run audits started together finished after 52 s, 2.4, 4.2 and 8.2 minutes, with the engine idle between backoffs. On Cloudflare each running audit has its own instance (`maxInstances` 3), and a fourth waits through 503 retries (up to about an hour) until one sleeps.
+- **Admission control for captures:** nothing limits how many audits start at once. Each capture step that meets a busy engine (429) or no free container (503) backs off on its own, 15 s doubling over 8 retries, about 64 minutes per step, and there is no fairness between audits: whichever retry lands when an instance frees up wins, and the engine sits idle between backoffs. A step that runs out records `EngineBusy` (Zinko was busy; re-run), not `EngineFailure`. A counting Durable Object or a Queue in front of the containers would admit audits in order; out of scope for M2.
+- **Consent timing of hits (decided in M2 Task 5 review):** gtag sends what it held under Consent Mode within milliseconds of the click, before autoconsent reports completion (`ga4-batch` under accept: action at 10,060 ms, the batch at 10,074 ms, completion at 10,081 ms). So `after_consent_action` is `startedAt >= consent.actionAt`, and the CLI's "after" marker uses the same rule. It is false whenever there was no action (`none`, `gpc`, `not-found`), so M3 rules branch on `consent.outcome` first rather than reading `false` as "before consent".
 - **`gcd` decoding:** sources disagree on the letter mapping, so any `gcd` rule stays heuristic until verified.
 - **Proposed features above:** which go into v0.1. GPC is in M1 and working; the inconclusive outcome still changes the scope of M3.
 - **Region simulation:** emulate (headers, timezone, locale) or actually route through a region; emulation may not trigger server-side geo logic in CMPs.

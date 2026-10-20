@@ -47,6 +47,7 @@ export default Alchemy.Stack(
     const betterAuthUrl = yield* Config.String("BETTER_AUTH_URL").pipe(Config.withDefault(""))
     const llmEncryptionKey = yield* Config.Redacted("LLM_ENCRYPTION_KEY")
     const exampleWorkflow = Cloudflare.Workflow("Example", { className: "Example" })
+    const auditWorkflow = Cloudflare.Workflow("Audit", { className: "Audit" })
     const auditRoom = Cloudflare.DurableObject("AuditRoom")
     const stage = (yield* Alchemy.Stack).stage
     // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
@@ -66,7 +67,9 @@ export default Alchemy.Stack(
             // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
             // leaves too little room. 4 GiB, 1/2 vCPU.
             instanceType: "standard-1",
-            maxInstances: 2,
+            // one instance per running audit (`Browser.capture(.., { instance: auditId })`); a
+            // fourth audit waits through 503 retries until one sleeps after 2 minutes idle
+            maxInstances: 3,
           })
         : undefined
     const storage = yield* Cloudflare.R2.Bucket("Storage", {
@@ -93,6 +96,7 @@ export default Alchemy.Stack(
         BETTER_AUTH_URL: betterAuthUrl,
         LLM_ENCRYPTION_KEY: llmEncryptionKey,
         EXAMPLE_WORKFLOW: exampleWorkflow,
+        AUDIT_WORKFLOW: auditWorkflow,
         AUDIT_ROOM: auditRoom,
         ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),
         // set on local dev stages only: lets a site be on localhost (server/clients.ts)

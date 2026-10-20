@@ -8,6 +8,12 @@ export class JobError extends Data.TaggedError("JobError")<{
 /** Payload per job name. Add an entry here when you add a workflow. */
 export interface JobPayloads {
   readonly example: { readonly name: string }
+  readonly audit: { readonly auditId: string }
+}
+
+export interface JobStartOptions {
+  /** The instance id. Starting a second instance with the same id fails instead of duplicating it. */
+  readonly id?: string
 }
 
 export type JobName = keyof JobPayloads
@@ -39,6 +45,7 @@ export class Jobs extends Context.Service<
     readonly start: <N extends JobName>(
       job: N,
       payload: JobPayloads[N],
+      options?: JobStartOptions,
     ) => Effect.Effect<JobRun, JobError>
     readonly status: (job: JobName, id: string) => Effect.Effect<JobStatus, JobError>
   }
