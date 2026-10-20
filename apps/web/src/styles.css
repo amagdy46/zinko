@@ -23,6 +23,8 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
+  --success: oklch(0.55 0.14 150);
+  --warning: oklch(0.62 0.15 70);
 }
 
 .dark {
@@ -44,6 +46,8 @@
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
   --ring: oklch(0.556 0 0);
+  --success: oklch(0.72 0.15 150);
+  --warning: oklch(0.8 0.15 80);
 }
 
 @theme inline {
@@ -69,6 +73,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
 }
 
 @layer base {

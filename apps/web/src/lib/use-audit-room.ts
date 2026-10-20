@@ -19,8 +19,15 @@ const PING = "effect-cf:ping"
 const PONG = "effect-cf:pong"
 const PING_MS = 30_000
 
-/** Listens to an audit's progress. Reconnects with exponential backoff and jitter (up to 30 s). */
-export function useAuditRoom(auditId: string, onEvent: (signal: AuditRoomSignal) => void) {
+/**
+ * Listens to an audit's progress. Reconnects with exponential backoff and jitter (up to 30 s).
+ * While `enabled` is false there is no socket and no timer, so a finished audit costs nothing.
+ */
+export function useAuditRoom(
+  auditId: string,
+  onEvent: (signal: AuditRoomSignal) => void,
+  enabled: boolean,
+) {
   const [connected, setConnected] = useState(false)
   const handler = useRef(onEvent)
   useEffect(() => {
@@ -28,6 +35,7 @@ export function useAuditRoom(auditId: string, onEvent: (signal: AuditRoomSignal)
   })
 
   useEffect(() => {
+    if (!enabled) return undefined
     let closed = false
     let attempt = 0
     let retry: ReturnType<typeof setTimeout> | undefined
@@ -67,7 +75,7 @@ export function useAuditRoom(auditId: string, onEvent: (signal: AuditRoomSignal)
       clearInterval(refresh)
       ws?.close()
     }
-  }, [auditId])
+  }, [auditId, enabled])
 
   return { connected }
 }

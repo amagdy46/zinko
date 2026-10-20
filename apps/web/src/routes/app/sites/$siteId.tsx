@@ -1,6 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { StatusBadge } from "@/components/status-badge"
 import { Button } from "@/components/ui/button"
 import { archiveSite, deleteSite, getSite } from "@/server/clients"
 
@@ -70,20 +71,32 @@ function SitePage() {
         </p>
       </div>
       <section className="space-y-3">
-        <h2 className="text-lg font-medium">Audits</h2>
+        <div className="flex max-w-xl items-center justify-between">
+          <h2 className="text-lg font-medium">Audits</h2>
+          {site.archived ? null : (
+            <Button size="sm" asChild>
+              <Link to="/app/sites/$siteId/audits/new" params={{ siteId: site.id }}>
+                New audit
+              </Link>
+            </Button>
+          )}
+        </div>
         {audits.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No audits yet. Run the first audit to see which tags fire on this site.
           </p>
         ) : (
-          <ul className="grid max-w-xl gap-2">
+          <ul className="grid max-w-xl gap-2" data-testid="audit-history">
             {audits.map((audit) => (
-              <li
-                key={audit.id}
-                className="flex items-center justify-between rounded-md border px-4 py-3 text-sm"
-              >
-                <time>{new Date(audit.createdAt).toLocaleString()}</time>
-                <span className="text-muted-foreground">{audit.status}</span>
+              <li key={audit.id}>
+                <Link
+                  to="/app/audits/$auditId"
+                  params={{ auditId: audit.id }}
+                  className="flex items-center justify-between rounded-md border px-4 py-3 text-sm hover:bg-accent"
+                >
+                  <time>{new Date(audit.createdAt).toLocaleString()}</time>
+                  <StatusBadge status={audit.status} />
+                </Link>
               </li>
             ))}
           </ul>

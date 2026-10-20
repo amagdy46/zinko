@@ -16,3 +16,18 @@ export const isOnSite = (url: string, siteHost: string): boolean => {
   const host = canonicalHost(url)
   return host !== null && (host === siteHost || host.endsWith(`.${siteHost}`))
 }
+
+/** A URL that carries a username or password. */
+export const hasCredentials = (url: string): boolean => {
+  const parsed = parse(url)
+  return parsed !== null && (parsed.username !== "" || parsed.password !== "")
+}
+
+/** The URL with any username and password removed, so it can be shown without echoing a secret. */
+export const withoutCredentials = (url: string): string => {
+  const parsed = parse(url)
+  if (parsed === null) return url
+  parsed.username = ""
+  parsed.password = ""
+  return parsed.href
+}

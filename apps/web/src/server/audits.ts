@@ -4,7 +4,7 @@ import { audit, run, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
-import { isOnSite } from "@/lib/site-url"
+import { hasCredentials, isOnSite, withoutCredentials } from "@/lib/site-url"
 import { requireSession } from "./require-session"
 import {
   atomically,
@@ -33,6 +33,10 @@ const normalizePages = (pages: ReadonlyArray<string>, siteHost: string) =>
   Effect.gen(function* () {
     const hrefs: string[] = []
     for (const page of pages) {
+      if (hasCredentials(page))
+        return yield* new Invalid({
+          message: `${withoutCredentials(page)} is refused: URLs must not contain a username or password.`,
+        })
       if (!isOnSite(page, siteHost))
         return yield* new Invalid({ message: `${page} is not on ${siteHost}.` })
       const { href } = new URL(page)
