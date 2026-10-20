@@ -60,7 +60,7 @@ The M1 demo, run locally on 2026-10-20 with the engine (`ALLOW_PRIVATE_NETWORKS=
 - `lost-gclid?gclid=TEST`, `--click 'a[href="/lost-gclid/product"]'`: the second document's URL has no `gclid`, and no `_gcl_aw` cookie at `end`.
 - `gpc-echo`, `--scenario gpc`: the engine's screenshot of the page shows `Sec-GPC: 1` and `navigator.globalPrivacyControl === true`.
 
-Each row below says which of these, or which other run, showed it working. Not run yet: the container image (building it needs `sudo docker`, which an agent does not run) and the bot-protection comparison (it needs user-approved sites).
+Each row below says which of these, or which other run, showed it working. Not run yet: the container image (building it needs `sudo docker`, which an agent does not run). The bot-protection comparison ran on 2026-10-20 from a residential IP (spike RESULTS.md).
 
 | Feature | How we build it | Status |
 |---|---|---|
@@ -200,7 +200,7 @@ The rest of the reference list (open-seo, Lighthouse CI, OpenStatus, Typewriter,
 
 ## Open questions
 
-- **Bot protection:** how protected sites treat Cloudflare Container traffic, and whether Scrapling beats plain Playwright there (decision 0002 calls its stealth benefit provisional, since driving the page directly skips `fetch()`'s Cloudflare solver); container cold start and cost for 10 pages × 3 scenarios.
+- **Bot protection:** on the 2026-10-20 test pages Scrapling passed the checks that flag plain Playwright (`HeadlessChrome`, `navigator.webdriver`; BrowserScan "Normal" vs "Robot", CreepJS 33% vs 100% headless), and both fail the SwiftShader WebGL check. Still open: how protected sites treat Cloudflare Container (datacenter) traffic, and real Cloudflare challenges, since nowsecure.nl's forced-interactive Turnstile test key stopped both engines and `fetch()`'s solver alike. Also open: container cold start and cost for 10 pages × 3 scenarios.
 - **`gcd` decoding:** sources disagree on the letter mapping, so any `gcd` rule stays heuristic until verified.
 - **Proposed features above:** which go into v0.1. GPC is in M1 and working; the inconclusive outcome still changes the scope of M3.
 - **Region simulation:** emulate (headers, timezone, locale) or actually route through a region; emulation may not trigger server-side geo logic in CMPs.

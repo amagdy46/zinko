@@ -47,7 +47,7 @@ R2 — screenshots, HAR, PDFs
 | Auth | **better-auth** + organization plugin, on the same Postgres | Workspaces, invites, roles; runs on Workers |
 | Orchestration | **Cloudflare Workflows**: one workflow instance per audit, one step per page × scenario | Durable retries per step; replaces pg-boss |
 | Live progress | **Durable Object per audit** with hibernating WebSockets | Replaces SSE-from-Postgres |
-| Browser | **Scrapling 0.5** (`AsyncStealthySession`, Python, on patchright) in a Cloudflare Container, behind the `Browser` service ([decision 0002](decisions/0002-capture-engine.md)) | Stealth browser launcher; `capture.py` drives the page with the Playwright API (routes, request listeners, cookies, screenshot) rather than Scrapling's `fetch()`. Every capability capture needs works, some through `additional_args`. The bot-protection benefit over plain Playwright is provisional |
+| Browser | **Scrapling 0.5** (`AsyncStealthySession`, Python, on patchright) in a Cloudflare Container, behind the `Browser` service ([decision 0002](decisions/0002-capture-engine.md)) | Stealth browser launcher; `capture.py` drives the page with the Playwright API (routes, request listeners, cookies, screenshot) rather than Scrapling's `fetch()`. Every capability capture needs works, some through `additional_args`. Less visible to fingerprint checks than plain Playwright (spike RESULTS.md, 2026-10-20) |
 | Browser (fallback) | Plain Playwright + Chromium in the same container (`apps/browser/src/engines/playwright.ts`) | Operational fallback, picked per request when Scrapling fails to launch or with `CAPTURE_ENGINE=playwright`, and the comparison baseline. Shares the shim, vendor list and autoconsent bridge; `engine` on the result says which ran |
 | Browser (egress) | A per-capture HTTP proxy in the Node server; Chromium starts with `--proxy-server` | Playwright routes never see redirect hops, so the SSRF policy and `blockVendorRequests` are enforced where every connection passes |
 | Browser (quick checks) | Browser Rendering (`@cloudflare/playwright`) | Cheap quick checks; optional, not built |
@@ -121,8 +121,7 @@ No unit or integration tests in the current phase: we verify by running the real
 
 ## Open questions
 
-- **Bot protection:** Scrapling vs plain Playwright vs patchright on 5 bot-protected sites: does the page load like a real visitor's and do the tags fire? Pending: it needs 5 sites the user has approved, and until then decision 0002 treats Scrapling's stealth benefit as provisional.
-- How bot-protected sites treat traffic from Cloudflare Containers (datacenter IPs either way, but no bot signature).
+- **Bot protection:** the 2026-10-20 comparison on 5 test pages (spike RESULTS.md) found Scrapling passes the fingerprint checks that flag plain Playwright (`HeadlessChrome`, `navigator.webdriver`), and both fail the SwiftShader WebGL check. Still open: real Cloudflare challenges (nowsecure.nl now serves a forced-interactive Turnstile test key that nothing passes, the `fetch()` solver included), BotD (its demo URL now 404s), and how protected sites treat traffic from Cloudflare Containers, since that run used a residential IP.
 - Container cold start and cost for 10 pages × 3 scenarios; whether one container per audit with many tabs beats one per step. The engine runs one capture at a time per container and launches a browser per scenario.
 
 ## Decisions log

@@ -222,5 +222,29 @@ Note for the fixtures README: autoconsent 16.57.0 does have a generic Klaro rule
 
 ## Not covered here
 
-- The bot-protection comparison on 5 user-approved sites. It is appended here later.
+- The bot-protection comparison on 5 user-approved sites: see "Bot-detection comparison (2026-10-20)" below.
 - patchright on its own: Scrapling already drives Chromium through patchright, so the Scrapling column is the patchright result.
+
+## Bot-detection comparison (2026-10-20)
+
+**Question.** Are Scrapling and plain Playwright equally visible to bot detection when each runs the way the engine runs it?
+
+**Setup.** The real engine ran from `apps/browser` (`node --experimental-strip-types src/server.ts`), without `ALLOW_PRIVATE_NETWORKS`: once on Scrapling 0.5 (patchright 1.64.1) and once with `CAPTURE_ENGINE=playwright` (Playwright 1.64.1, Chromium 156.0.8078.4). Both used the same headless full Chromium build, the shared `chromium-args.json` switches, the egress proxy and the capture flow, on the same machine. Each page got one `POST /capture` with `scenario: "none"`, `viewport: "desktop"` and `blockVendorRequests: false`. Nothing was retried. The verdicts come from the returned screenshot, which covers the 1366×768 viewport only, so rows below the fold were not seen.
+
+**This ran from a residential IP, not a Cloudflare Container datacenter IP.** How protected sites treat container traffic is still an open question.
+
+| Page | Scrapling (engine) | Playwright (engine) |
+|---|---|---|
+| bot.sannysoft.com | **1 red row:** WebGL Renderer (`SwiftShader driver`). User Agent is `Chrome/156`, WebDriver is `missing (passed)` and Permissions is `granted`. `complete`, no errors, title "Antibot", 22 requests. | **3 red rows:** User Agent (`HeadlessChrome/156`), WebDriver `present (failed)`, WebGL Renderer (SwiftShader). Permissions is `prompt`. `complete`, no errors, title "Antibot", 22 requests. |
+| CreepJS | **33% headless**, 50% like-headless, 0% stealth. The lies panel was below the fold. `complete`, no errors, title "CreepJS", 5 requests. | **100% headless** (flagged red), 56% like-headless, 0% stealth. The lies panel was below the fold. `complete`, no errors, title "CreepJS", 5 requests. |
+| BrowserScan bot detection | **"Normal"**: Webdriver, User-Agent, CDP and Navigator all pass. `complete`, no errors, 64 requests. | **"Robot"**: Webdriver and User-Agent fail; CDP and Navigator pass. `complete`, no errors, 63 requests. |
+| nowsecure.nl | **Not passed.** The page document loaded with a 200 and its Turnstile widget made its first calls. The screenshot then timed out (`EngineFailure`, `Page.screenshot: Timeout 5000ms exceeded`), so `complete: false`, with no image. Title "nowsecure.nl", 12 requests. | **Not passed.** The screenshot shows the page with an unticked "Verify you are human" Turnstile box. `complete`, no errors, title "nowsecure.nl", 12 requests. |
+| fingerprintjs.github.io/BotD/main/ | **Not measured:** GitHub Pages 404, "Site not found". `complete`, 1 request. | **Not measured:** the same 404. `complete`, 1 request. |
+
+**What it shows.**
+- **Scrapling is less visible to fingerprint checks.** On the three pages that gave a verdict, plain Playwright gave itself away through `HeadlessChrome` in the user agent and `navigator.webdriver`. Scrapling passed both checks.
+- **Both engines fail the WebGL check.** Each renders WebGL on SwiftShader, which sannysoft flags.
+- **nowsecure.nl did not tell the engines apart.** It no longer serves a Cloudflare interstitial. It is nodriver's demo page, with a Turnstile widget using sitekey `3x00000000000000000000FF`, Cloudflare's test key that always forces an interactive challenge. No browser passes it without a click, and the capture does not click.
+- **BotD was not measured.** Its URL now returns 404, and no substitute was loaded.
+
+**Second pass: Scrapling `fetch()` with its solver, on nowsecure.nl.** This used a standalone `StealthySession(headless=True, google_search=False, network_idle=True, solve_cloudflare=True).fetch("https://nowsecure.nl/")` with Scrapling's defaults: no egress proxy and no shared switches. The spike's own script pins DNS to 127.0.0.1, so it could not load the page. Scrapling logged `The turnstile version discovered is "embedded"` and returned a 200 after **134 s**. The Turnstile frames had moved to `auto_timeout`, and the screenshot still shows the unticked box. **The solver did not pass this test-key widget either.** For this page, giving up the solver costs nothing, but a forced-interactive test key says little about real Cloudflare challenges.
