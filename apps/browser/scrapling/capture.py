@@ -152,6 +152,10 @@ class Capture:
         self.arrived = asyncio.Event()
         self.autoconsent_active = self.scenario in ("accept", "reject")
         self.after_consent_taken = False
+        self.allowed_hosts: list[str] | None = self.request.get("allowedHosts")
+        # The host of the first top-level navigation refused for leaving the site.
+        self.left_site: str | None = None
+        self.popup_refused = False
 
     def at(self) -> int:
         return max(0, round(time.time() * 1000 - self.started_at))
@@ -216,6 +220,15 @@ class Capture:
             await route.abort("blockedbyclient")
             return
         self.admitted += 1
+        if self.is_popup_request(req):
+            log(f"popup request refused: {url}")
+            self.blocked.add(req)
+            rid = self.request_ids.get(req)
+            if rid is not None:
+                self.requests[rid]["blocked"] = True
+                self.dirty.add(rid)
+            await route.abort("blockedbyclient")
+            return
         # The egress proxy refuses vendor hosts outright; these answers only keep page requests on
         # the record, and SDK files come through the proxy's /sdk fetch.
         if self.block_vendors and self.is_vendor_host(url):
@@ -325,6 +338,89 @@ class Capture:
                 return
             await asyncio.sleep(0.1)
 
+    # --- site allow-list ------------------------------------------------------------------------
+
+    def off_site(self, url: str) -> str | None:
+        """Mirrors `offSite` in `src/engines/playwright.ts`: why `url` may not be a top-level page."""
+        if self.allowed_hosts is None:
+            return None
+        try:
+            parts = urlsplit(url)
+            host = (parts.hostname or "").removesuffix(".")
+            credentials = parts.username is not None or parts.password is not None
+        except ValueError:
+            return "not a URL"
+        if parts.scheme not in ("http", "https"):
+            return "not an http(s) page"
+        if credentials:
+            return "the URL carries credentials"
+        # `URL` keeps the brackets around an IPv6 literal; urlsplit drops them.
+        host = f"[{host}]" if ":" in host else host
+        if any(host == allowed or host.endswith("." + allowed) for allowed in self.allowed_hosts):
+            return None
+        return f"{host} is not one of the allowed hosts"
+
+    def leave_site(self, url: str, reason: str) -> None:
+        if self.left_site is None:
+            self.left_site = reason
+            self.error("Navigation", f"{url}: {reason}")
+
+    async def guard_navigations(self) -> None:
+        """Pauses every main-frame document request, redirect hops included (page routes never see
+        those), and fails an off-site one before it is sent. Subresources and subframes are not paused.
+        A navigation that sends no request (`about:blank`, `blob:`) is caught when it commits."""
+        if self.allowed_hosts is None:
+            return
+        cdp = await self.context.new_cdp_session(self.page)
+        tree = await cdp.send("Page.getFrameTree")
+        main_frame_id = tree["frameTree"]["frame"]["id"]
+
+        async def reply(method: str, params: dict) -> None:
+            try:
+                await cdp.send(method, params)
+            except Exception as exc:
+                log(f"fetch: {exc}")
+
+        def on_paused(event: dict) -> None:
+            url = event["request"]["url"]
+            reason = self.off_site(url) if event.get("frameId") == main_frame_id else None
+            if reason is None:
+                asyncio.ensure_future(reply("Fetch.continueRequest", {"requestId": event["requestId"]}))
+                return
+            asyncio.ensure_future(reply("Fetch.failRequest", {"requestId": event["requestId"], "errorReason": "BlockedByClient"}))
+            self.leave_site(url, reason)
+
+        def on_navigated(frame) -> None:
+            # Chromium's error page follows a failed navigation, which reports its own error.
+            if frame != self.page.main_frame or self.current_document is None or frame.url.startswith("chrome-error:"):
+                return
+            reason = self.off_site(frame.url)
+            if reason is not None:
+                self.leave_site(frame.url, reason)
+
+        cdp.on("Fetch.requestPaused", on_paused)
+        await cdp.send(
+            "Fetch.enable",
+            {"patterns": [{"urlPattern": "*", "resourceType": "Document", "requestStage": "Request"}]},
+        )
+        self.page.on("framenavigated", on_navigated)
+
+    def is_popup_request(self, req) -> bool:
+        """Popups get no navigation guard, so with `allowedHosts` every request a popup makes is refused
+        in the context route (which sees a popup's first request) and the popup is closed."""
+        return self.allowed_hosts is not None and self.page is not None and req.frame.page != self.page
+
+    async def refuse_popup(self, popup) -> None:
+        if self.allowed_hosts is None or popup == self.page:
+            return
+        if not self.popup_refused:
+            self.popup_refused = True
+            self.error("Navigation", f"popup blocked: the page opened {popup.url}")
+        try:
+            await popup.close()
+        except Exception as exc:
+            log(f"popup: {exc}")
+
     # --- page state ---------------------------------------------------------------------------
 
     async def evaluate(self, expression: str, frame=None):
@@ -361,7 +457,7 @@ class Capture:
         except Exception as exc:
             log(f"drain: {exc}")
         doc = self.documents.get(self.current_document or "")
-        if doc is not None and self.committed:
+        if doc is not None and self.committed and self.left_site is None:
             try:
                 doc["title"] = await self.page.title()
             except Exception as exc:
@@ -563,6 +659,8 @@ class Capture:
         ctx.on("requestfinished", self.on_request_done)
         ctx.on("requestfailed", self.on_request_done)
         self.page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        await self.guard_navigations()
+        ctx.on("page", self.refuse_popup)
         self.page.on("pageerror", lambda exc: log(f"pageerror: {exc}"))
         await self.page.expose_binding("__zinkoDataLayer", self.on_data_layer)
         if self.autoconsent_active:
@@ -577,6 +675,10 @@ class Capture:
         await self.observe_window()
         await self.observe_consent()
         await self.checkpoint()
+        if self.left_site is not None:
+            # The page sent itself off the site (a script redirect) while it was being observed.
+            await self.finish()
+            return
 
         if self.scenario in ("accept", "reject"):
             await self.run_consent(loaded_at)
@@ -598,7 +700,9 @@ class Capture:
         try:
             response = await self.page.goto(url, wait_until="load", timeout=timeout)
         except Exception as exc:
-            self.error(code, f"{url}: {exc}".split("\n")[0])
+            # A refused off-site hop has its own `Navigation` error.
+            if self.left_site is None:
+                self.error(code, f"{url}: {exc}".split("\n")[0])
             await self.checkpoint()
             return False
         self.committed = True
@@ -614,6 +718,8 @@ class Capture:
         return True
 
     async def run_step(self, index: int, step: dict) -> bool:
+        if self.left_site is not None:
+            return False
         before = self.current_document
         await self.flush_beacons()
         held = await self.snapshot("document-end")
@@ -633,13 +739,15 @@ class Capture:
         await self.observe_window()
         if step["action"] == "click" and self.current_document != before:
             emit({"type": "cookies", "snapshot": held})
-        return True
+        # A click can start an off-site navigation after `load` has already resolved.
+        return self.left_site is None
 
     async def finish(self) -> None:
         """The end snapshot and the screenshot. Also the cooperative flush when Node asks to finalize."""
         if self.page is None:
             return
-        if self.committed:
+        # After a refused navigation the page shows Chromium's error page: nothing to photograph.
+        if self.committed and self.left_site is None:
             try:
                 shot = await self.page.screenshot(type="png", scale="css", timeout=5000)
                 emit({"type": "screenshot", "data": base64.b64encode(shot).decode("ascii")})

@@ -20,12 +20,34 @@ export const JourneyStep = Schema.Union([
 ])
 export type JourneyStep = typeof JourneyStep.Type
 
+/**
+ * A hostname exactly as `URL` gives it (lowercase, punycode ASCII, IP literals normalized), without
+ * a trailing dot. Mirrored in `apps/browser/src/contract.ts`.
+ */
+const CanonicalHost = Schema.String.check(
+  Schema.isMaxLength(253),
+  Schema.makeFilter(
+    (host: string) =>
+      !host.endsWith(".") &&
+      URL.canParse(`http://${host}`) &&
+      new URL(`http://${host}`).hostname === host,
+    { expected: "a canonical hostname, as URL gives it, with no trailing dot" },
+  ),
+)
+
 export const CaptureRequest = Schema.Struct({
   url: TargetUrl,
   scenario: Scenario,
   viewport: Schema.Literals(["desktop", "mobile"]),
   journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(5))),
   blockVendorRequests: Schema.optionalKey(Schema.Boolean),
+  /**
+   * The site's hosts. A top-level navigation (the start URL, each redirect hop, each journey step)
+   * whose host is not one of these or a subdomain of one is stopped before it is sent, and the
+   * capture ends with a `Navigation` error naming the host; so does a main-frame navigation to a
+   * non-http(s) URL such as `about:blank`. Popups are blocked. Subresources are not affected.
+   */
+  allowedHosts: Schema.optionalKey(Schema.Array(CanonicalHost).check(Schema.isMaxLength(20))),
 })
 export type CaptureRequest = typeof CaptureRequest.Type
 

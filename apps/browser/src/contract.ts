@@ -13,12 +13,24 @@ const JourneyStep = Schema.Union([
   Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
 ])
 
+const CanonicalHost = Schema.String.check(
+  Schema.isMaxLength(253),
+  Schema.makeFilter(
+    (host: string) =>
+      !host.endsWith(".") &&
+      URL.canParse(`http://${host}`) &&
+      new URL(`http://${host}`).hostname === host,
+    { expected: "a canonical hostname, as URL gives it, with no trailing dot" },
+  ),
+)
+
 export const CaptureRequest = Schema.Struct({
   url: TargetUrl,
   scenario: Scenario,
   viewport: Schema.Literals(["desktop", "mobile"]),
   journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(5))),
   blockVendorRequests: Schema.optionalKey(Schema.Boolean),
+  allowedHosts: Schema.optionalKey(Schema.Array(CanonicalHost).check(Schema.isMaxLength(20))),
 })
 export type CaptureRequest = typeof CaptureRequest.Type
 

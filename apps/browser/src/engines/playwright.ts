@@ -249,6 +249,84 @@ const observeWindow = () =>
     }, 100)
   })
 
+// --- site allow-list ----------------------------------------------------------------------------
+
+const allowedHosts = captureRequest.allowedHosts
+/** Why the first top-level navigation off the site was refused; the capture stops there. */
+let leftSite: string | undefined
+let popupRefused = false
+
+/**
+ * Why `url` may not be a top-level page under `allowedHosts`: not http(s), credentials, or a host
+ * that is neither an allowed host nor a subdomain of one. `undefined` when it may.
+ */
+const offSite = (url: string): string | undefined => {
+  if (allowedHosts === undefined) return undefined
+  if (!URL.canParse(url)) return "not a URL"
+  const parsed = new URL(url)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "not an http(s) page"
+  if (parsed.username !== "" || parsed.password !== "") return "the URL carries credentials"
+  const host = parsed.hostname.replace(/\.$/, "")
+  return allowedHosts.some((allowed) => host === allowed || host.endsWith(`.${allowed}`))
+    ? undefined
+    : `${host} is not one of the allowed hosts`
+}
+
+const leaveSite = (url: string, reason: string) => {
+  if (leftSite !== undefined) return
+  leftSite = reason
+  error("Navigation", `${url}: ${reason}`)
+}
+
+/**
+ * Pauses every main-frame document request, redirect hops included (page routes never see those),
+ * and fails an off-site one before it is sent. Subresources and subframes are not paused. A
+ * navigation that sends no request (`about:blank`, `blob:`) is caught when it commits.
+ */
+const guardNavigations = async (target: Page) => {
+  if (allowedHosts === undefined) return
+  const cdp = await target.context().newCDPSession(target)
+  const { frameTree } = await cdp.send("Page.getFrameTree")
+  const mainFrameId = frameTree.frame.id
+  cdp.on("Fetch.requestPaused", (event) => {
+    const { requestId, request } = event
+    const reason = event.frameId === mainFrameId ? offSite(request.url) : undefined
+    const reply =
+      reason === undefined
+        ? cdp.send("Fetch.continueRequest", { requestId })
+        : cdp.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" })
+    reply.catch((cause: unknown) => log(`fetch: ${firstLine(cause)}`))
+    if (reason !== undefined) leaveSite(request.url, reason)
+  })
+  await cdp.send("Fetch.enable", {
+    patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }],
+  })
+  target.on("framenavigated", (frame) => {
+    const url = frame.url()
+    if (frame !== target.mainFrame() || currentDocument === undefined) return
+    // Chromium's error page follows a failed navigation, which reports its own error.
+    if (url.startsWith("chrome-error:")) return
+    const reason = offSite(url)
+    if (reason !== undefined) leaveSite(url, reason)
+  })
+}
+
+/**
+ * Popups get no navigation guard, so with `allowedHosts` every request a popup makes is refused
+ * in the context route (which sees a popup's first request) and the popup is closed.
+ */
+const isPopupRequest = (req: Request) =>
+  allowedHosts !== undefined && page !== undefined && req.frame().page() !== page
+
+const refusePopup = (popup: Page) => {
+  if (allowedHosts === undefined) return
+  if (!popupRefused) {
+    popupRefused = true
+    error("Navigation", `popup blocked: the page opened ${popup.url()}`)
+  }
+  popup.close().catch((cause: unknown) => log(`popup: ${firstLine(cause)}`))
+}
+
 // --- page state ---------------------------------------------------------------------------------
 
 const addDataLayer = (entries: unknown) => {
@@ -280,7 +358,7 @@ const drainPage = async () => {
     }),
   )
   const document = currentDocument === undefined ? undefined : documents.get(currentDocument)
-  if (document !== undefined && committed && page !== undefined) {
+  if (document !== undefined && committed && leftSite === undefined && page !== undefined) {
     const title = await page.title().catch(() => null)
     documents.set(document.id, { ...document, title })
   }
@@ -455,7 +533,8 @@ const navigate = async (url: string, code: "Navigation" | "JourneyStep") => {
       timeout: Math.min(NAVIGATION_TIMEOUT_MS, remainingMs()),
     })
   } catch (cause) {
-    error(code, `${url}: ${firstLine(cause)}`)
+    // A refused off-site hop has its own `Navigation` error.
+    if (leftSite === undefined) error(code, `${url}: ${firstLine(cause)}`)
     await checkpoint()
     return false
   }
@@ -473,7 +552,7 @@ const runStep = async (
   index: number,
   step: NonNullable<EngineJob["request"]["journey"]>[number],
 ) => {
-  if (page === undefined) return false
+  if (page === undefined || leftSite !== undefined) return false
   const before = currentDocument
   await flushBeacons()
   const held = await snapshot("document-end")
@@ -496,12 +575,14 @@ const runStep = async (
   await observeWindow()
   if (step.action === "click" && currentDocument !== before)
     emit({ type: "cookies", snapshot: held })
-  return true
+  // A click can start an off-site navigation after `load` has already resolved.
+  return leftSite === undefined
 }
 
 const finish = async () => {
   if (page === undefined) return
-  if (committed) {
+  // After a refused navigation the page shows Chromium's error page: nothing to photograph.
+  if (committed && leftSite === undefined) {
     try {
       const shot = await page.screenshot({ type: "png", scale: "css", timeout: 5_000 })
       emit({ type: "screenshot", data: shot.toString("base64") })
@@ -569,6 +650,12 @@ const run = async () => {
       return route.abort("blockedbyclient")
     }
     admitted += 1
+    if (isPopupRequest(req)) {
+      log(`popup request refused: ${url}`)
+      blocked.add(req)
+      update(req, { blocked: true })
+      return route.abort("blockedbyclient")
+    }
     const host = URL.canParse(url) ? new URL(url).hostname : ""
     // The egress proxy refuses vendor hosts outright; these answers only keep page requests on
     // the record, and SDK files come through the proxy's /sdk fetch.
@@ -594,6 +681,8 @@ const run = async () => {
   context.on("requestfinished", onRequestDone)
   context.on("requestfailed", onRequestDone)
   page = await context.newPage()
+  await guardNavigations(page)
+  context.on("page", refusePopup)
   page.on("pageerror", (cause) => log(`pageerror: ${firstLine(cause)}`))
   const main = page.mainFrame()
   await page.exposeBinding("__zinkoDataLayer", ({ frame }, entry: unknown) => {
@@ -614,6 +703,8 @@ const run = async () => {
   await observeWindow()
   await observeConsent()
   await checkpoint()
+  // The page sent itself off the site (a script redirect) while it was being observed.
+  if (leftSite !== undefined) return finish()
 
   if (scenario === "accept" || scenario === "reject") {
     await runConsent(loadedAt)
