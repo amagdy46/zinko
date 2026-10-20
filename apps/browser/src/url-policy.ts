@@ -6,9 +6,15 @@
  * `.local`/`.internal` hosts, and IP literals in private, loopback, link-local (cloud metadata
  * at 169.254.169.254), carrier-grade NAT, multicast and reserved ranges, IPv4 and IPv6.
  *
- * Limit: hostnames are checked by name. A public-looking DNS name that resolves to a private
- * address is not caught here, so also restrict egress at the network level if the URLs are untrusted.
+ * `checkUrl` judges a URL by its text; `resolveHost` also resolves the name and refuses it if any
+ * address is private. The egress proxy (`egress-proxy.ts`) runs both on every connection the
+ * browser opens, redirects included, and connects to the address it checked, so Chromium never
+ * looks the name up itself and a DNS answer cannot change between the check and the connection.
+ * Anything that does not go through the proxy (none is expected; WebRTC is limited to proxied
+ * UDP) is only stopped by the container's egress limits, so keep those as well.
  */
+import type { LookupAddress } from "node:dns"
+import { lookup } from "node:dns/promises"
 
 export type UrlCheck =
   | { readonly ok: true; readonly url: URL }
@@ -81,6 +87,32 @@ const isPrivateIpv6 = (g: ReadonlyArray<number>): boolean => {
     (g0 & 0xffc0) === 0xfe80 || // link-local fe80::/10
     (g0 & 0xff00) === 0xff00 // multicast
   )
+}
+
+/** Whether an IP address, as `dns.lookup` returns it, is private, local or reserved. */
+export const isPrivateAddress = (address: string): boolean => {
+  const v4 = ipv4Octets(address)
+  if (v4 !== undefined) return isPrivateIpv4(v4)
+  const v6 = ipv6Groups(address.replace(/%.*$/, ""))
+  return v6 === undefined || isPrivateIpv6(v6)
+}
+
+export type HostCheck =
+  | { readonly ok: true; readonly addresses: ReadonlyArray<string> }
+  | { readonly ok: false; readonly reason: string }
+
+/** Resolves `host` and refuses it if any address is private, unless `allowPrivate` is set. */
+export const resolveHost = async (host: string, allowPrivate: boolean): Promise<HostCheck> => {
+  const name = host.replace(/^\[|\]$/g, "")
+  const answers: ReadonlyArray<LookupAddress> = await lookup(name, {
+    all: true,
+    verbatim: true,
+  }).catch(() => [])
+  const [first] = answers
+  if (first === undefined) return { ok: false, reason: `could not resolve ${name}` }
+  if (!allowPrivate && answers.some((answer) => isPrivateAddress(answer.address)))
+    return { ok: false, reason: `${name} resolves to a private or local address` }
+  return { ok: true, addresses: answers.map((answer) => answer.address) }
 }
 
 /** Parses `raw` with `new URL` and applies the policy. `allowPrivate` turns the network checks off. */

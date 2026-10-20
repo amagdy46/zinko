@@ -328,6 +328,9 @@ importers:
 
   apps/browser:
     dependencies:
+      '@duckduckgo/autoconsent':
+        specifier: 16.57.0
+        version: 16.57.0
       '@effect/platform-node':
         specifier: 4.0.5
         version: 4.0.5(effect@4.0.5)(redis@6.3.0)
@@ -933,6 +936,9 @@ packages:
 
   '@drizzle-team/brocli@0.12.1':
     resolution: {integrity: sha512-yHwomvolVafvUXhy5TdiJVkuNCxXn+bKOs2aWiWEQh/5YaV97Oa/abJz3dmx7lxgIUsUlS1Jl4mEfvJPo3YsVw==}
+
+  '@duckduckgo/autoconsent@16.57.0':
+    resolution: {integrity: sha512-aBlUp+ys23A055avljhZL1kn39pDIBB7tCb9OUWTjbnrq6lTVBmYHv/yensK6jDJBb+lr33IlD76bZptnN96kQ==}
 
   '@effect/ai-anthropic@4.0.5':
     resolution: {integrity: sha512-Vb8pEJrwqeRd3UT0BtOM2IHlLgRp32XunUnWfEd/DpV0jyKgZHSKVVxsDs6AsMyZpRsD1klDtvfCndDiQV4TyQ==}
@@ -4707,6 +4713,12 @@ packages:
     resolution: {integrity: sha512-LgO3D9yZJjApUiuUfl9iFAwrtaX4+lok3wJIqttGoKCHlWUqHqbQpnxCf82L8FjgKsh4iGo78hqJwgL8F6To2A==}
     engines: {node: '>=14.0.0'}
 
+  tldts-core@7.4.18:
+    resolution: {integrity: sha512-KI2PKvCmvQI/xD6ypPqkU0i7oxNXR/O58RLRaHR4svsgVUQ2JE/XC8BtMbG6PSehD27I8sZJRcC1ASnCy6lp3g==}
+
+  tldts-experimental@7.4.18:
+    resolution: {integrity: sha512-IErxVvjgDme6GfcjahlKkVpjgrtvOIzUs8oSc9vftTjFen8/R+oKlBlJ1jIY/ffVo/eYAZVzf3he/aBC304PyQ==}
+
   totalist@3.0.1:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
@@ -5400,6 +5412,10 @@ snapshots:
       effect: 4.0.5
 
   '@drizzle-team/brocli@0.12.1': {}
+
+  '@duckduckgo/autoconsent@16.57.0':
+    dependencies:
+      tldts-experimental: 7.4.18
 
   '@effect/ai-anthropic@4.0.5(effect@4.0.5)':
     dependencies:
@@ -8556,6 +8572,12 @@ snapshots:
   tinypool@2.2.0: {}
 
   tinyrainbow@3.2.0: {}
+
+  tldts-core@7.4.18: {}
+
+  tldts-experimental@7.4.18:
+    dependencies:
+      tldts-core: 7.4.18
 
   totalist@3.0.1: {}
 

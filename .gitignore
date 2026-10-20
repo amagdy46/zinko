@@ -9,3 +9,5 @@ routeTree.gen.ts
 .env.local
 *.log
 .DS_Store
+.venv
+__pycache__

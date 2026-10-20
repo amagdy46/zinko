@@ -1,1 +1,3 @@
 node_modules
+scrapling/.venv
+**/__pycache__

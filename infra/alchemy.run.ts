@@ -45,6 +45,10 @@ export default Alchemy.Stack(
     const browser = Cloudflare.Container("Browser", {
       className: "BrowserContainer",
       context: "apps/browser",
+      // A capture (Node, Python and Chromium) peaked at 534–750 MiB on the `clean` fixture and at
+      // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
+      // leaves too little room. 4 GiB, 1/2 vCPU.
+      instanceType: "standard-1",
       maxInstances: 2,
     })
     const storage = yield* Cloudflare.R2.Bucket("Storage", {

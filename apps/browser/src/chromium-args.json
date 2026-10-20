@@ -1,0 +1,52 @@
+{
+  "args": [
+    "--proxy-bypass-list=<-loopback>",
+    "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
+    "--disable-quic",
+    "--webrtc-ip-handling-policy=disable_non_proxied_udp",
+    "--force-webrtc-ip-handling-policy",
+    "--disable-background-networking",
+    "--disable-component-update",
+    "--disable-sync",
+    "--no-pings",
+    "--disable-domain-reliability",
+    "--disable-client-side-phishing-detection",
+    "--metrics-recording-only"
+  ],
+  "disableFeatures": [
+    "AvoidUnnecessaryBeforeUnloadCheckSync",
+    "DestroyProfileOnBrowserClose",
+    "DialMediaRouteProvider",
+    "GlobalMediaControls",
+    "HttpsUpgrades",
+    "LensOverlay",
+    "MediaRouter",
+    "PaintHolding",
+    "ThirdPartyStoragePartitioning",
+    "BlockOriginHeaderModificationOnRedirect",
+    "AvoidCorsURLLoaderRestartOnRedirect",
+    "Translate",
+    "AutoDeElevate",
+    "OptimizationHints",
+    "NetworkTimeServiceQuerying",
+    "AimEnabled",
+    "AudioServiceOutOfProcess",
+    "TranslateUI",
+    "BlinkGenPropertyTrees",
+    "DnsOverHttps",
+    "AutofillServerCommunication",
+    "CertificateTransparencyComponentUpdater",
+    "OptimizationGuideModelDownloading",
+    "PreconnectToSearch"
+  ],
+  "serviceHosts": [
+    "update.googleapis.com",
+    "clientservices.googleapis.com",
+    "safebrowsing.googleapis.com",
+    "optimizationguide-pa.googleapis.com",
+    "content-autofill.googleapis.com",
+    "redirector.gvt1.com",
+    "edgedl.me.gvt1.com",
+    "dl.google.com"
+  ]
+}

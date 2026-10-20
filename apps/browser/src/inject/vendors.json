@@ -1,0 +1,17 @@
+{
+  "hosts": [
+    "google-analytics.com",
+    "googletagmanager.com",
+    "googleadservices.com",
+    "google.com",
+    "doubleclick.net",
+    "googlesyndication.com",
+    "facebook.com",
+    "connect.facebook.net",
+    "instagram.com",
+    "conversionsapigateway.com",
+    "tiktok.com",
+    "tiktokw.us"
+  ],
+  "sdkFiles": "^https://(www\\.googletagmanager\\.com/(gtag/js|gtm\\.js)(?=[?#]|$)|connect\\.facebook\\.net/([\\w-]+/fbevents\\.js(?=[?#]|$)|signals/config/)|analytics\\.tiktok\\.com/i18n/pixel/)"
+}
