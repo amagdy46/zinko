@@ -5,7 +5,7 @@ import { chromium } from "playwright"
 import { sites } from "./sites.mjs"
 import { startServer } from "./server.mjs"
 
-// Same endpoint list as the capture engine's blockVendorRequests (plan, Task 4).
+// The same rule as the capture engine's blockVendorRequests (plan, Task 4).
 const collectionEndpoints = [
   { vendor: "ga4", test: /^https:\/\/([^/]+\.)?google-analytics\.com\/g\/collect/ },
   { vendor: "ga4", test: /^https:\/\/([^/]+\.)?googletagmanager\.com\/g\/collect/ },
@@ -18,6 +18,8 @@ const collectionEndpoints = [
   { vendor: "meta", test: /^https:\/\/www\.facebook\.com\/tr/ },
   { vendor: "tiktok", test: /^https:\/\/analytics\.tiktok\.com\/api\/v2\/pixel/ },
 ]
+const sdkFiles =
+  /^https:\/\/(www\.googletagmanager\.com\/(gtag\/js|gtm\.js)|connect\.facebook\.net\/(\w+\/fbevents\.js|signals\/config\/)|analytics\.tiktok\.com\/i18n\/pixel\/)/
 const vendorHosts =
   /(^|\.)(google-analytics|googletagmanager|doubleclick|googleadservices|facebook|facebook\.net|tiktok)\.(com|net)$|^(www\.)?google\.com$/
 
@@ -65,9 +67,10 @@ await context.route("**/*", async (route) => {
   const url = request.url()
   const endpoint = collectionEndpoints.find((candidate) => candidate.test.test(url))
   const host = new URL(url).hostname
-  const isScript = request.resourceType() === "script" || request.resourceType() === "stylesheet"
-  // Anything else aimed at a vendor host (pixel images, XHR) is also answered locally.
-  const stray = !endpoint && !isScript && vendorHosts.test(host)
+  // Only the SDK files themselves load from vendors. gtag also sends collection pings as
+  // script requests, so "any script" would let those through.
+  const isSdk = ["script", "stylesheet"].includes(request.resourceType()) && sdkFiles.test(url)
+  const stray = !endpoint && !isSdk && vendorHosts.test(host)
   if (!endpoint && !stray) return route.continue()
 
   const requestOrigin = request.headers().origin ?? "*"
