@@ -59,7 +59,9 @@ patched install that `pnpm install` performs (`prepare` script); re-run it if th
 `routeTree.gen.ts` is not committed: `pnpm install` generates it (`postinstall` in `apps/web`),
 `pnpm dev` and `pnpm build` keep it current, and `pnpm typecheck` regenerates it first, so a fresh
 clone works after `pnpm install`. Run `pnpm --filter web routes` after adding a route file if
-your editor reports a stale route tree.
+your editor reports a stale route tree. These scripts run the ESM entry of `@tanstack/router-cli`
+instead of the `tsr` bin: the bin loads router-core's CommonJS build, which prints a circular-dependency
+warning (https://github.com/TanStack/router/issues/8585). Go back to `tsr generate` once that is fixed.
 
 ## Current phase: prove it works, write the vision
 

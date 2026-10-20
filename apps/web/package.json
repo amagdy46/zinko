@@ -6,9 +6,9 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "routes": "tsr generate",
-    "postinstall": "tsr generate",
-    "typecheck": "tsr generate && tsc --noEmit",
+    "routes": "node node_modules/@tanstack/router-cli/dist/esm/index.js generate",
+    "postinstall": "node node_modules/@tanstack/router-cli/dist/esm/index.js generate",
+    "typecheck": "node node_modules/@tanstack/router-cli/dist/esm/index.js generate && tsc --noEmit",
     "deploy": "pnpm --workspace-root run deploy"
   },
   "dependencies": {

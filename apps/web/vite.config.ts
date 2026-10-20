@@ -11,6 +11,21 @@ const injectedByAlchemy = process.env.ALCHEMY_CLOUDFLARE_VITE_INJECTED === "1"
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
+  environments: {
+    ssr: {
+      build: {
+        rolldownOptions: {
+          // vite:css-post replaces CSS with an empty module in the server build and returns no
+          // sourcemap, so Rolldown warns although there is nothing to map. Upstream bug, harmless:
+          // https://github.com/vitejs/vite/issues/23809. Only that plugin's warning is dropped.
+          onLog(level, log, defaultHandler) {
+            if (log.code === "SOURCEMAP_BROKEN" && log.plugin === "vite:css-post") return
+            defaultHandler(level, log)
+          },
+        },
+      },
+    },
+  },
   plugins: [
     injectedByAlchemy
       ? null
