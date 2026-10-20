@@ -5,10 +5,11 @@ import { Container } from "@cloudflare/containers"
  * and stops it after `sleepAfter` without traffic. Bound as BROWSER (wrangler.jsonc or infra/alchemy.run.ts) and exported
  * from `src/server.ts`.
  *
- * `pnpm dev` doesn't start containers (`dev.enable_containers` is false in wrangler.jsonc), so it
- * works without Docker and Browser calls fail locally. Set it to true to run the image locally.
+ * Instances are per audit, so a short `sleepAfter` releases them for the next one. `pnpm dev`
+ * doesn't run this class: with `BROWSER_URL` set, infra/alchemy.run.ts skips the container and
+ * the Worker talks to an engine started by hand (see CONTRIBUTING.md).
  */
 export class BrowserContainer extends Container {
   defaultPort = 8080
-  sleepAfter = "5m"
+  sleepAfter = "2m"
 }

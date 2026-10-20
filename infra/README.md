@@ -12,7 +12,7 @@
 
 Use `pnpm run deploy`: plain `pnpm deploy` is pnpm's own workspace command.
 
-Copy `.env.example` to `.env` for local values. Deploying needs `CLOUDFLARE_API_TOKEN` and
+Copy `.env.example` to `.env` for local values (setup in [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-web-app-locally); `BROWSER_URL` replaces the container on `dev` stages only). Deploying needs `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` (and `DATABASE_URL` for Postgres) in the environment.
 
 ## CI

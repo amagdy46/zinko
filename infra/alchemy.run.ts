@@ -24,14 +24,20 @@ export default Alchemy.Stack(
   },
   Effect.gen(function* () {
     const databaseUrl = new URL(Redacted.value(yield* Config.Redacted("DATABASE_URL")))
+    const origin = {
+      scheme: "postgres",
+      host: databaseUrl.hostname,
+      port: Number(databaseUrl.port || 5432),
+      database: databaseUrl.pathname.slice(1),
+      user: decodeURIComponent(databaseUrl.username),
+      password: Redacted.make(decodeURIComponent(databaseUrl.password)),
+    } as const
     const hyperdrive = yield* Cloudflare.Hyperdrive.Connection("Hyperdrive", {
-      origin: {
-        scheme: "postgres",
-        host: databaseUrl.hostname,
-        port: Number(databaseUrl.port || 5432),
-        database: databaseUrl.pathname.slice(1),
-        user: decodeURIComponent(databaseUrl.username),
-        password: Redacted.make(decodeURIComponent(databaseUrl.password)),
+      origin,
+      // `pnpm dev` only: the Docker Postgres has no TLS and the local Hyperdrive will not fall back
+      dev: {
+        ...origin,
+        sslmode: ["localhost", "127.0.0.1"].includes(origin.host) ? "disable" : "prefer",
       },
       // writes must be visible to the next read, so only pool connections, don't cache queries
       caching: { disabled: true },
@@ -42,25 +48,37 @@ export default Alchemy.Stack(
     const llmEncryptionKey = yield* Config.Redacted("LLM_ENCRYPTION_KEY")
     const exampleWorkflow = Cloudflare.Workflow("Example", { className: "Example" })
     const room = Cloudflare.DurableObject("Room")
-    const browser = Cloudflare.Container("Browser", {
-      className: "BrowserContainer",
-      context: "apps/browser",
-      // A capture (Node, Python and Chromium) peaked at 534–750 MiB on the `clean` fixture and at
-      // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
-      // leaves too little room. 4 GiB, 1/2 vCPU.
-      instanceType: "standard-1",
-      maxInstances: 2,
-    })
+    const stage = (yield* Alchemy.Stack).stage
+    // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
+    // named `dev` or `dev_<user>`; a deployed stage such as `devops` is never local.
+    const isDev =
+      (yield* Alchemy.AlchemyContext).dev && (stage === "dev" || stage.startsWith("dev_"))
+    // A capture engine started by hand (CONTRIBUTING.md). Only local runs honour it, so a
+    // deployed Worker never talks to a URL from someone's .env.
+    const browserUrl = isDev ? yield* Config.String("BROWSER_URL").pipe(Config.withDefault("")) : ""
+    // Local Containers need Docker, so `BROWSER_URL` replaces the container resource and binding.
+    const browser =
+      browserUrl === ""
+        ? Cloudflare.Container("Browser", {
+            className: "BrowserContainer",
+            context: "apps/browser",
+            // A capture (Node, Python and Chromium) peaked at 534–750 MiB on the `clean` fixture and at
+            // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
+            // leaves too little room. 4 GiB, 1/2 vCPU.
+            instanceType: "standard-1",
+            maxInstances: 2,
+          })
+        : undefined
     const storage = yield* Cloudflare.R2.Bucket("Storage", {
       // preview stages are destroyed with their PR, even when files were uploaded
-      forceDestroy: (yield* Alchemy.Stack).stage !== "prod",
+      forceDestroy: stage !== "prod",
     })
     const storageSigningSecret = yield* Config.Redacted("STORAGE_SIGNING_SECRET")
     const email = Cloudflare.Email.SendEmail("Email")
     const mailFrom = yield* Config.String("MAIL_FROM")
     // local stages print emails to the console; every other stage sends them
     const mailTransport = yield* Config.String("MAIL_TRANSPORT").pipe(
-      Config.withDefault((yield* Alchemy.Stack).stage.startsWith("dev") ? "console" : "cloudflare"),
+      Config.withDefault(isDev ? "console" : "cloudflare"),
     )
     // efforge:resources
 
@@ -76,7 +94,7 @@ export default Alchemy.Stack(
         LLM_ENCRYPTION_KEY: llmEncryptionKey,
         EXAMPLE_WORKFLOW: exampleWorkflow,
         ROOM: room,
-        BROWSER: browser,
+        ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),
         STORAGE: storage,
         STORAGE_SIGNING_SECRET: storageSigningSecret,
         EMAIL: email,

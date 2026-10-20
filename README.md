@@ -59,6 +59,8 @@ ALLOW_PRIVATE_NETWORKS=true pnpm --filter browser start     # engine on http://l
 pnpm --filter @repo/fixtures serve                          # fixtures on http://localhost:4400
 ```
 
+To run the web app against that engine, set `BROWSER_URL=http://localhost:8080` in `.env` ([CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#running-the-web-app-locally)).
+
 Then capture a fixture. `meta-before-consent` fires a Meta `PageView` before the visitor chooses, so it fires even when they reject:
 
 ```sh
