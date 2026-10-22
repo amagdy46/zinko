@@ -4,10 +4,25 @@ import type { DecodedHit, EvidenceRef, Rule } from "../../types.js"
 
 const id = "hygiene.pii-in-hits"
 
-// The domain is limited to host name characters, and image file names are left out, so a retina
-// asset such as logo@2x.png is not read as an address.
-const EMAIL =
-  /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.(?!(?:png|jpe?g|gif|svg|webp|avif)(?![A-Za-z0-9-]))[A-Za-z]{2,}(?![A-Za-z0-9-])/
+/** Anything shaped like `local@domain`; `hasEmail` decides whether it is an address. */
+const EMAIL_CANDIDATE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g
+const HOST_NAME = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.([A-Za-z]{2,})$/
+const ASSET_EXTENSION = /^(?:png|jpe?g|gif|webp|svg|avif|ico)$/i
+
+/**
+ * An email address: a candidate whose whole domain is a host name ending in a letter TLD. A file
+ * name whose last extension is an asset's is not one, so retina assets such as `logo@2x.png` or
+ * `logo@2x.dark.PNG` are left out.
+ */
+function hasEmail(text: string): boolean {
+  for (const [candidate] of text.matchAll(EMAIL_CANDIDATE)) {
+    const domain = candidate.slice(candidate.indexOf("@") + 1).replace(/[.-]+$/, "")
+    const tld = HOST_NAME.exec(domain)?.[1]
+    if (tld !== undefined && !ASSET_EXTENSION.test(tld)) return true
+  }
+  return false
+}
+
 /** `+` and 8 to 15 digits, single spaces or dashes allowed between them. */
 const INTERNATIONAL_PHONE = /(?<![\w+])\+\d(?:[ -]?\d){7,14}(?!\d)/
 /** A value that is only a phone number's characters, with 6 to 15 digits. */
@@ -51,7 +66,7 @@ function queryEntries(url: string): [string, string][] {
 }
 
 function emailIn(text: string): boolean {
-  return EMAIL.test(decoded(text))
+  return hasEmail(decoded(text))
 }
 
 /** A phone number in a value, or in the query of a URL the value holds. */
@@ -69,7 +84,7 @@ function findingsIn(hit: DecodedHit): string[] {
   const found: string[] = []
   for (const [key, raw] of Object.entries(hit.params)) {
     const value = decoded(String(raw))
-    if (EMAIL.test(value)) found.push(`an email address in ${vendor} ${key}`)
+    if (hasEmail(value)) found.push(`an email address in ${vendor} ${key}`)
     if (phoneIn(key, value)) found.push(`a phone number in ${vendor} ${key}`)
   }
   if (found.length > 0) return found

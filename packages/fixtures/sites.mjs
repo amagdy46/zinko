@@ -18,7 +18,7 @@ export const defaults = {
   ga4PageView: true, // false: gtag config sends no page_view
   secondGa4: false, // a second GA4 measurement ID configured on every page
   metaInit: "once", // "once" | "twice"
-  metaEventId: "unique", // "unique" | "none" | "shared" (one id on every Meta hit of the page)
+  metaEventId: "unique", // "unique" | "none" | "shared" (one id on every Meta hit of the page, and /product adds two AddToCart under it)
   piiInUrl: false, // an email appears in the page's query string
   sgtm: false, // GA4 hits go to this host's /g/collect, which answers 500
   locationOverride: false, // GA4 page_location points at another host

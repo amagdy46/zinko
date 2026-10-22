@@ -1,4 +1,4 @@
-import { count, distinct, groupBy, hitRef } from "../../documents.js"
+import { count, groupBy, hitRef } from "../../documents.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
@@ -8,8 +8,8 @@ export const metaEventIdReused: Rule = {
   id,
   area: "dedup",
   severity: "warning",
-  title: "Meta event ID reused across events",
-  why: "Meta treats events with the same event ID as copies of one event and keeps only one. When a fixed or shared ID is sent with different events, Meta drops all but one of them, so page views, add-to-carts or purchases silently disappear from reporting and optimization.",
+  title: "Meta event ID reused for the same event",
+  why: "Meta deduplicates by pixel, event name and event ID: a second event with the same name and ID is taken for a copy of the first and dropped. When a fixed or shared ID is sent with two real events of one kind (two add-to-carts, two leads), every one after the first silently disappears from reporting and optimization.",
   fix: [
     "Generate a new event ID for every event: the order ID for a purchase, a random or sequential ID for the others, never a constant.",
     "In the tag manager, check that the Event ID variable is not a fixed value or a variable that only changes on page load.",
@@ -19,17 +19,21 @@ export const metaEventIdReused: Rule = {
     if (meta.length === 0) return notApplicable(id, "no Meta hit was sent")
     const withId = meta.filter((hit) => hit.ids.eventId)
     const reused = [
-      ...groupBy(withId, (hit) => `${hit.destinationId} ${hit.ids.eventId}`).values(),
+      ...groupBy(withId, (hit) => `${hit.destinationId} ${hit.event} ${hit.ids.eventId}`).values(),
     ].filter((group) => group.length > 1)
     const evidence = nonEmpty(reused.flat().map(hitRef))
     if (evidence === null)
-      return pass(id, `${count(withId.length, "Meta hit")} with an event ID, none repeated`)
-    const what = reused
-      .map(
-        (group) =>
-          `"${group[0].ids.eventId}" on ${count(group.length, "hit")} (${distinct(group.map((hit) => hit.event)).join(", ")})`,
+      return pass(
+        id,
+        `${count(withId.length, "Meta hit")} with an event ID, none repeated for the same event`,
       )
+    const what = reused
+      .map((group) => `${group[0].event} "${group[0].ids.eventId}" ${group.length} times`)
       .join("; ")
-    return fail(id, `an event ID was sent more than once: ${what}`, evidence)
+    return fail(
+      id,
+      `the same event and event ID were sent more than once, so Meta keeps only the first: ${what}`,
+      evidence,
+    )
   },
 }

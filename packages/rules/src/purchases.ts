@@ -24,11 +24,19 @@ const REQUIRED: Record<DecodedHit["vendor"], readonly string[]> = {
   tiktok: ["value", "currency"],
 }
 
-/** The required fields a purchase hit lacks; a non-numeric `value` counts as missing. */
+/** A finite number, or a string that is one (`"49.9"`); `0` counts. */
+function isNumeric(value: string | number): boolean {
+  return typeof value === "number"
+    ? Number.isFinite(value)
+    : value.trim() !== "" && Number.isFinite(Number(value))
+}
+
+/** The required fields a purchase hit lacks; a `value` that is not a number counts as missing. */
 export function missingFields(hit: DecodedHit): string[] {
   return REQUIRED[hit.vendor].filter((field) => {
     const value = hit.params[field]
-    return value === undefined || value === "" || (typeof value === "number" && Number.isNaN(value))
+    if (value === undefined) return true
+    return field === "value" ? !isNumeric(value) : value === ""
   })
 }
 

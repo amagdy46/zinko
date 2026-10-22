@@ -121,6 +121,11 @@
       track("PageView")
     }
     if (cfg.page === "product") track("ViewContent", { currency: "EUR", value: 49.9 })
+    if (cfg.page === "product" && cfg.metaEventId === "shared") {
+      // two different add-to-carts under one id: Meta keeps the first and drops the second
+      track("AddToCart", { content_ids: ["SKU-1"], currency: "EUR", value: 49.9 })
+      track("AddToCart", { content_ids: ["SKU-2"], currency: "EUR", value: 19.9 })
+    }
     if (cfg.page === "thank-you") {
       track("Purchase", { value: purchase.value, currency: purchase.currency })
     }

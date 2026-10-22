@@ -1,12 +1,29 @@
-import { isSdkFile, isVendorHost } from "@repo/capture-contract"
 import { count, distinct, requestRef } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
 const id = "hygiene.tag-errors"
 
-/** Playwright's resource types for beacons and pixels; scripts, documents and styles are not hits. */
-const TRACKING_TYPES = new Set(["fetch", "xhr", "ping", "image"])
+/**
+ * Vendor collection endpoints the decoders leave undecoded (Consent Mode pings, audience syncs,
+ * TikTok's page metadata). Listed by path, so other resources on vendor hosts, such as a favicon,
+ * are not tracking requests.
+ */
+const COLLECTION_ENDPOINTS: readonly { host: RegExp; path: RegExp }[] = [
+  {
+    host: /(^|\.)(google\.com|googlesyndication\.com)$/,
+    path: /^\/(ccm\/collect|pagead\/1p-user-list\/)/,
+  },
+  { host: /(^|\.)googleadservices\.com$/, path: /^\/pagead\/set_partitioned_cookie$/ },
+  { host: /(^|\.)doubleclick\.net$/, path: /^\/ccm\/s\/collect$/ },
+  { host: /^analytics\.tiktok\.com$/, path: /^\/api\/v2\/pixel\/act\/?$/ },
+]
+
+function isCollectionEndpoint(url: string): boolean {
+  if (!URL.canParse(url)) return false
+  const { hostname, pathname } = new URL(url)
+  return COLLECTION_ENDPOINTS.some(({ host, path }) => host.test(hostname) && path.test(pathname))
+}
 
 export const tagErrors: Rule = {
   id,
@@ -20,15 +37,12 @@ export const tagErrors: Rule = {
   ],
   evaluate(input) {
     // Every request a decoder read as a hit, wherever it was sent (a first-party /g/collect is a
-    // server-side container), and the other beacons sent to vendor hosts.
+    // server-side container), and the known collection endpoints the decoders skip.
     const hitRequests = new Set(input.hits.map((hit) => hit.requestId))
     const tracking = input.capture.requests.filter(
       (request) =>
-        hitRequests.has(request.id) ||
-        (request.method.toUpperCase() !== "OPTIONS" &&
-          TRACKING_TYPES.has(request.resourceType) &&
-          isVendorHost(request.url) &&
-          !isSdkFile(request.url)),
+        request.method.toUpperCase() !== "OPTIONS" &&
+        (hitRequests.has(request.id) || isCollectionEndpoint(request.url)),
     )
     if (tracking.length === 0) return notApplicable(id, "no tracking request was sent")
     const answered = tracking.filter((request) => !request.blocked && request.status !== null)
