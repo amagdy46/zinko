@@ -1,5 +1,6 @@
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
+import { HitSummary, Pre, RawRequest, Section } from "@/components/evidence"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -16,12 +17,27 @@ type Search = {
   vendor?: string
   event?: string
   scenario?: string
+  /** With `hit`: the run of the hit to open, whatever page of the timeline it falls on. */
+  run?: string
+  /** `<requestId>:<batchIndex>` of the hit to open. */
+  hit?: string
 }
 
 const SOURCES = ["network", "dataLayer"] as const
 type Source = (typeof SOURCES)[number]
 
 const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined)
+
+type HitRef = { runId: string; requestId: string; batchIndex: number }
+
+/** Request ids may hold colons, so the batch index is what follows the last one. */
+const parseHit = (run: string | undefined, hit: string | undefined): HitRef | undefined => {
+  if (run === undefined || hit === undefined) return undefined
+  const colon = hit.lastIndexOf(":")
+  const batchIndex = Number(hit.slice(colon + 1))
+  if (colon < 1 || !Number.isInteger(batchIndex) || batchIndex < 0) return undefined
+  return { runId: run, requestId: hit.slice(0, colon), batchIndex }
+}
 
 export const Route = createFileRoute("/app/audits/$auditId/hits")({
   validateSearch: (search: Record<string, unknown>): Search => ({
@@ -30,8 +46,17 @@ export const Route = createFileRoute("/app/audits/$auditId/hits")({
     vendor: text(search.vendor),
     event: text(search.event),
     scenario: text(search.scenario),
+    run: text(search.run),
+    hit: text(search.hit),
   }),
-  loaderDeps: ({ search }) => search,
+  // opening a hit changes no filter, so it does not reload the timeline
+  loaderDeps: ({ search }) => ({
+    source: search.source,
+    runId: search.runId,
+    vendor: search.vendor,
+    event: search.event,
+    scenario: search.scenario,
+  }),
   loader: async ({ params, deps }) => {
     const [timeline, filters] = await Promise.all([
       listTimeline({ data: { auditId: params.auditId, ...deps } }),
@@ -49,10 +74,9 @@ type HitItem = Extract<Item, { kind: "hit" }>
 const selectClass =
   "h-8 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
-const itemKey = (item: Item) =>
-  item.kind === "hit"
-    ? `h:${item.runId}:${item.requestId}:${item.batchIndex}`
-    : `p:${item.runId}:${item.seq}`
+const itemKey = (item: Item) => (item.kind === "hit" ? hitKey(item) : `p:${item.runId}:${item.seq}`)
+
+const hitKey = (hit: HitRef) => `h:${hit.runId}:${hit.requestId}:${hit.batchIndex}`
 
 const preview = (item: Item) => {
   if (item.kind === "push") return JSON.stringify(item.value)
@@ -65,12 +89,19 @@ const preview = (item: Item) => {
 function HitsExplorer() {
   const { audit, runs } = auditRoute.useLoaderData()
   const { timeline, filters } = Route.useLoaderData()
-  const search = Route.useSearch()
+  const { run, hit, ...search } = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
   const scenarios = [...new Set(runs.map((r) => r.scenario))]
 
   const change = (key: keyof Search, value: string) =>
-    void navigate({ search: (prev) => ({ ...prev, [key]: value === "" ? undefined : value }) })
+    void navigate({
+      search: (prev) => ({
+        ...prev,
+        run: undefined,
+        hit: undefined,
+        [key]: value === "" ? undefined : value,
+      }),
+    })
 
   return (
     <div className="space-y-3">
@@ -118,9 +149,10 @@ function HitsExplorer() {
         />
       </div>
       <Timeline
-        key={JSON.stringify(search)}
+        key={JSON.stringify({ search, run, hit })}
         auditId={audit.id}
         search={search}
+        pinned={parseHit(run, hit)}
         first={timeline}
         runLabels={new Map(runs.map((r) => [r.id, r]))}
       />
@@ -169,11 +201,13 @@ type RunInfo = Awaited<ReturnType<typeof getAudit>>["runs"][number]
 function Timeline({
   auditId,
   search,
+  pinned,
   first,
   runLabels,
 }: {
   auditId: string
-  search: Search
+  search: Omit<Search, "run" | "hit">
+  pinned: HitRef | undefined
   first: Awaited<ReturnType<typeof listTimeline>>
   runLabels: ReadonlyMap<string, RunInfo>
 }) {
@@ -181,7 +215,11 @@ function Timeline({
   const [cursor, setCursor] = useState(first.nextCursor)
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<string | null>(null)
-  const active = items.find((item) => itemKey(item) === selected)
+  const shown = selected ?? (pinned && hitKey(pinned)) ?? null
+  const active = items.find((item) => itemKey(item) === shown)
+  // a hit opened from a link may be on a page that is not loaded
+  const target =
+    active ?? (selected === null && pinned ? { kind: "hit" as const, ...pinned } : undefined)
 
   async function more() {
     if (cursor === null) return
@@ -195,7 +233,7 @@ function Timeline({
     }
   }
 
-  if (items.length === 0)
+  if (items.length === 0 && pinned === undefined)
     return <p className="text-sm text-muted-foreground">No hits match these filters.</p>
 
   return (
@@ -224,11 +262,11 @@ function Timeline({
                     key={key}
                     data-testid="timeline-row"
                     data-kind={item.kind}
-                    data-selected={key === selected}
+                    data-selected={key === shown}
                     onClick={() => setSelected(key)}
                     className={cn(
                       "cursor-pointer border-t align-top hover:bg-muted/50",
-                      key === selected && "bg-accent",
+                      key === shown && "bg-accent",
                     )}
                   >
                     {search.runId === undefined ? (
@@ -277,10 +315,10 @@ function Timeline({
         </div>
       </div>
       <aside aria-label="Hit detail" className="sticky top-4 rounded-lg border bg-card p-3 text-sm">
-        {active === undefined ? (
+        {target === undefined ? (
           <p className="text-muted-foreground">Select a hit or a push to see it in full.</p>
         ) : (
-          <Detail auditId={auditId} item={active} run={runLabels.get(active.runId)} />
+          <Detail auditId={auditId} item={target} run={runLabels.get(target.runId)} />
         )}
       </aside>
     </div>
@@ -304,7 +342,15 @@ function HitFlags({ hit }: { hit: HitItem }) {
   )
 }
 
-function Detail({ auditId, item, run }: { auditId: string; item: Item; run: RunInfo | undefined }) {
+function Detail({
+  auditId,
+  item,
+  run,
+}: {
+  auditId: string
+  item: Item | (HitRef & { kind: "hit" })
+  run: RunInfo | undefined
+}) {
   return (
     <div className="space-y-3">
       {run === undefined ? null : (
@@ -318,13 +364,13 @@ function Detail({ auditId, item, run }: { auditId: string; item: Item; run: RunI
           <Pre>{JSON.stringify(item.value, null, 2)}</Pre>
         </>
       ) : (
-        <HitDetail key={itemKey(item)} auditId={auditId} hit={item} />
+        <HitDetail key={hitKey(item)} auditId={auditId} hit={item} />
       )}
     </div>
   )
 }
 
-function HitDetail({ auditId, hit }: { auditId: string; hit: HitItem }) {
+function HitDetail({ auditId, hit }: { auditId: string; hit: HitRef }) {
   const [detail, setDetail] = useState<
     | { state: "loading" }
     | { state: "failed" }
@@ -345,104 +391,22 @@ function HitDetail({ auditId, hit }: { auditId: string; hit: HitItem }) {
 
   return (
     <>
-      <div className="space-y-1">
-        <h2 className="font-medium">
-          {hit.vendor} · {hit.event}
-        </h2>
-        <p className="text-xs text-muted-foreground">
-          {hit.destinationId} · {hit.at} ms · {hit.host}
-        </p>
-        <p className="flex flex-wrap gap-1 text-xs">
-          {hit.afterConsentAction ? (
-            <Badge variant="secondary" className="bg-warning/15 text-warning">
-              sent at or after the consent action
-            </Badge>
-          ) : null}
-          {hit.blocked ? <Badge variant="outline">attempt, not sent to the vendor</Badge> : null}
-          {!hit.blocked && hit.status !== null ? (
-            <Badge variant="outline">status {hit.status}</Badge>
-          ) : null}
-        </p>
-      </div>
-      <Section title="Consent">
-        <Pairs
-          rows={[
-            ["ad storage", hit.consent.adStorage],
-            ["analytics storage", hit.consent.analyticsStorage],
-            ...(hit.consent.raw === undefined ? [] : [["raw", hit.consent.raw] as const]),
-          ]}
-        />
-      </Section>
-      <Section title="Ids">
-        <Pairs rows={Object.entries(hit.ids)} empty="No ids." />
-      </Section>
-      <Section title="Parameters">
-        <Pairs rows={Object.entries(hit.params)} empty="No parameters." />
-      </Section>
-      <Section title="Raw request">
-        <div aria-live="polite">
-          {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
-          {detail.state === "failed" ? (
-            <p role="alert" className="text-destructive">
-              The raw request could not be loaded.
-            </p>
-          ) : null}
-        </div>
-        {detail.state === "ready" ? (
-          <div className="space-y-2" data-testid="raw-request">
-            <p className="font-mono text-xs">
-              <span className="font-semibold">{detail.value.request.method}</span>{" "}
-              <span className="break-all">{detail.value.request.url}</span>
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {detail.value.request.resourceType} · {detail.value.request.id}
-              {detail.value.request.bodyTruncated ? " · body cut at the engine's limit" : ""}
-            </p>
-            {detail.value.request.body === null ? (
-              <p className="text-xs text-muted-foreground">No body.</p>
-            ) : (
-              <Pre>{detail.value.request.body}</Pre>
-            )}
-          </div>
+      <div aria-live="polite">
+        {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
+        {detail.state === "failed" ? (
+          <p role="alert" className="text-destructive">
+            This hit could not be loaded.
+          </p>
         ) : null}
-      </Section>
+      </div>
+      {detail.state === "ready" ? (
+        <>
+          <HitSummary hit={detail.value.hit} />
+          <Section title="Raw request">
+            <RawRequest request={detail.value.request} />
+          </Section>
+        </>
+      ) : null}
     </>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-1">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-function Pairs({
-  rows,
-  empty,
-}: {
-  rows: ReadonlyArray<readonly [string, string | number]>
-  empty?: string
-}) {
-  if (rows.length === 0) return <p className="text-xs text-muted-foreground">{empty}</p>
-  return (
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 font-mono text-xs">
-      {rows.map(([name, value]) => (
-        <div key={name} className="contents">
-          <dt className="text-muted-foreground">{name}</dt>
-          <dd className="break-all">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  )
-}
-
-function Pre({ children }: { children: string }) {
-  return (
-    <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 font-mono text-xs break-all whitespace-pre-wrap">
-      {children}
-    </pre>
   )
 }

@@ -45,7 +45,9 @@ Workspace switcher
 | Left: the list | Severity, title, area, affected page and scenario count, status |
 | Right: the selected finding | Explanation, why it matters, fix steps, and evidence tabs: **Hit** (decoded params table), **Request** (raw URL and body), **Screenshot**, **Cookies**, **dataLayer** |
 
-Each finding has three actions: mark as accepted risk, copy the fix steps, and open in Hits.
+Above the two panes sits the evaluation coverage ("9 of 9 runs evaluated"). Checks that could not run (the page or the banner did not load) are a separate "Could not check" group under the failing list, never counted as passes; an audit with no check results says "Not evaluated" instead of "no findings". The `j`/`k` and `e` shortcuts are not built yet.
+
+Each finding has these actions: mark as accepted risk or fixed (and reopen), copy the fix steps, and open in Hits with the hit selected.
 
 **5. Tag matrix.**
 - Rows: each destination (GA4 G-XXXX, Meta pixel 123…, Ads AW-…, TikTok).

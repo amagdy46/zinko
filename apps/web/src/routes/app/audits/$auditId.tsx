@@ -73,6 +73,13 @@ function AuditPage() {
           Runs
         </Link>
         <Link
+          to="/app/audits/$auditId/findings"
+          params={{ auditId: audit.id }}
+          className="-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+        >
+          Findings
+        </Link>
+        <Link
           to="/app/audits/$auditId/hits"
           params={{ auditId: audit.id }}
           className="-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
