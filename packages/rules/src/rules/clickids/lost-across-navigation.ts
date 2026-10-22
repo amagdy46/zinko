@@ -1,4 +1,5 @@
-import type { CapturedDocument, Cookie, CookieSnapshot } from "@repo/capture-contract"
+import type { CapturedDocument, CookieSnapshot } from "@repo/capture-contract"
+import { readableByScriptOn } from "../../cookies.js"
 import { consentTimeline } from "../../consent-state.js"
 import { count, documentRef, hitRef } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
@@ -49,14 +50,6 @@ function snapshotLeaving(
   )
 }
 
-/** The browser sends the cookie to the document's host: its own domain or a parent one. */
-function readableOn(cookie: Cookie, url: string): boolean {
-  if (!URL.canParse(url)) return false
-  const host = new URL(url).hostname
-  const domain = cookie.domain.replace(/^\./, "")
-  return host === domain || host.endsWith(`.${domain}`)
-}
-
 function pathOf(url: string): string {
   if (!URL.canParse(url)) return url
   const { pathname, search } = new URL(url)
@@ -104,11 +97,11 @@ export const lostAcrossNavigation: Rule = {
           continue
         }
         const carried = snapshot.cookies.some(
-          (cookie) => cookie.name === vendor.cookie && readableOn(cookie, document.url),
+          (cookie) => cookie.name === vendor.cookie && readableByScriptOn(cookie, document.url),
         )
         if (carried) continue
         lost.push({
-          message: `${count(without.length, vendor.what)} on ${pathOf(document.url)} without ${vendor.idKey} and no ${vendor.cookie} cookie`,
+          message: `${count(without.length, vendor.what)} on ${pathOf(document.url)} without ${vendor.idKey} and no ${vendor.cookie} cookie the page can read`,
           evidence: [...without.map(hitRef), documentRef(document.id)],
         })
       }
