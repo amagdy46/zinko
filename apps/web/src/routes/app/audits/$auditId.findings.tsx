@@ -66,7 +66,9 @@ function FindingsScreen() {
   const { audit } = auditRoute.useLoaderData()
   const { coverage, findings } = Route.useLoaderData()
   const { finding: ruleId } = Route.useSearch()
-  const active = audit.status === "queued" || audit.status === "running"
+  // findings are written when the audit finishes, check results as each run is saved
+  const finished = ["complete", "partial", "failed"].includes(audit.status)
+  const active = !finished
 
   if (coverage.evaluatedRuns === 0)
     return (
@@ -121,6 +123,7 @@ function FindingsScreen() {
             auditId={audit.id}
             empty={
               <EmptyFindings
+                finished={finished}
                 full={full}
                 evaluated={coverage.evaluatedRuns}
                 missing={missing}
@@ -154,16 +157,25 @@ function FindingsScreen() {
 }
 
 function EmptyFindings({
+  finished,
   full,
   evaluated,
   missing,
   couldNotCheck,
 }: {
+  finished: boolean
   full: boolean
   evaluated: number
   missing: number
   couldNotCheck: number
 }) {
+  if (!finished)
+    return (
+      <p className="text-sm" data-testid="collecting">
+        Checks are being collected. Findings are written when the audit finishes, so none are known
+        yet.
+      </p>
+    )
   if (couldNotCheck > 0)
     return (
       <p className="text-sm" data-testid="only-inconclusive">
@@ -174,8 +186,8 @@ function EmptyFindings({
   if (!full)
     return (
       <p className="text-sm" data-testid="partial-clean">
-        No check failed in the {plural(evaluated, "evaluated run")}. {plural(missing, "run")} could
-        not be evaluated, so this audit is not confirmed clean.
+        No findings were recorded for the {plural(evaluated, "evaluated run")}, but{" "}
+        {plural(missing, "run")} could not be evaluated, so this audit is not confirmed clean.
       </p>
     )
   return (
@@ -276,6 +288,7 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<keyof typeof COPY_LABEL>("idle")
   const [pickedRun, setPickedRun] = useState<string | null>(null)
+  const [pickedRef, setPickedRef] = useState<Ref | null>(null)
 
   useEffect(() => {
     let current = true
@@ -345,7 +358,8 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
     checks.find((c) => c.runId === pickedRun) ??
     checks.find((c) => c.status === "fail") ??
     checks[0]
-  const hitRef = check?.evidence.find((e) => e.kind === "hit")
+  const hitRef =
+    pickedRef?.kind === "hit" ? pickedRef : check?.evidence.find((e) => e.kind === "hit")
   const actions: ReadonlyArray<{ status: Triage; label: string }> = [
     { status: "accepted_risk", label: "Accept risk" },
     { status: "fixed", label: "Mark fixed" },
@@ -426,7 +440,10 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
                 type="button"
                 data-testid="check"
                 aria-pressed={c.runId === check?.runId}
-                onClick={() => setPickedRun(c.runId)}
+                onClick={() => {
+                  setPickedRun(c.runId)
+                  setPickedRef(null)
+                }}
                 className={cn(
                   "w-full space-y-0.5 rounded-md border p-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
                   c.runId === check?.runId && "border-primary bg-accent",
@@ -459,6 +476,8 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
           key={check.runId}
           auditId={auditId}
           check={check}
+          picked={pickedRef}
+          onPick={setPickedRef}
           screenshotUrl={runs.find((r) => r.id === check.runId)?.screenshotUrl ?? null}
         />
       )}
@@ -505,15 +524,18 @@ const refKey = (ref: Ref) => JSON.stringify(ref)
 function Evidence({
   auditId,
   check,
+  picked,
+  onPick,
   screenshotUrl,
 }: {
   auditId: string
   check: Check
+  picked: Ref | null
+  onPick: (ref: Ref) => void
   screenshotUrl: string | null
 }) {
   const first = check.evidence[0]
   const [tab, setTab] = useState<Tab>(first === undefined ? "screenshot" : FIRST_TAB[first.kind])
-  const [index, setIndex] = useState(0)
   const refsOf = (t: Tab) =>
     t === "screenshot" ? [] : check.evidence.filter((e) => TAB_REFS[t].includes(e.kind))
 
@@ -523,7 +545,6 @@ function Evidence({
         value={tab}
         onValueChange={(value) => {
           setTab(TABS.find((t) => t === value) ?? "hit")
-          setIndex(0)
         }}
       >
         <TabsList>
@@ -542,8 +563,9 @@ function Evidence({
             runId={check.runId}
             tab={tab}
             refs={refsOf(tab)}
-            index={index}
-            onPick={setIndex}
+            firstRef={check.evidence[0]}
+            picked={picked}
+            onPick={onPick}
             screenshotUrl={screenshotUrl}
           />
         </TabsContent>
@@ -557,7 +579,8 @@ function TabBody({
   runId,
   tab,
   refs,
-  index,
+  firstRef,
+  picked,
   onPick,
   screenshotUrl,
 }: {
@@ -565,12 +588,16 @@ function TabBody({
   runId: string
   tab: Tab
   refs: ReadonlyArray<Ref>
-  index: number
-  onPick: (index: number) => void
+  firstRef: Ref | undefined
+  picked: Ref | null
+  onPick: (ref: Ref) => void
   screenshotUrl: string | null
 }) {
-  if (tab === "screenshot") return <Screenshot url={screenshotUrl} />
-  const ref = refs[index] ?? refs[0]
+  if (tab === "screenshot")
+    return (
+      <Screenshot auditId={auditId} runId={runId} reference={firstRef} loaderUrl={screenshotUrl} />
+    )
+  const ref = refs.find((r) => picked !== null && refKey(r) === refKey(picked)) ?? refs[0]
   if (ref === undefined)
     return (
       <p className="text-xs text-muted-foreground">
@@ -581,12 +608,13 @@ function TabBody({
     <>
       {refs.length > 1 ? (
         <div className="flex flex-wrap gap-1">
-          {refs.map((r, i) => (
+          {refs.map((r) => (
             <Button
               key={refKey(r)}
               variant={r === ref ? "secondary" : "outline"}
               size="xs"
-              onClick={() => onPick(i)}
+              aria-pressed={r === ref}
+              onClick={() => onPick(r)}
             >
               {refLabel(r)}
             </Button>
@@ -598,7 +626,59 @@ function TabBody({
   )
 }
 
-function Screenshot({ url }: { url: string | null }) {
+/**
+ * The run's final screenshot. A signed URL lasts 5 minutes, so opening the tab asks for a fresh
+ * one through any of the check's evidence (the audit loader's URL when it has none), and an image
+ * that fails to load is asked for once more.
+ */
+function Screenshot({
+  auditId,
+  runId,
+  reference,
+  loaderUrl,
+}: {
+  auditId: string
+  runId: string
+  reference: Ref | undefined
+  loaderUrl: string | null
+}) {
+  const router = useRouter()
+  const [fresh, setFresh] = useState<string | null | undefined>(undefined)
+  const url = reference === undefined ? loaderUrl : fresh
+  const [retried, setRetried] = useState(false)
+  const [broken, setBroken] = useState(false)
+
+  useEffect(() => {
+    let current = true
+    if (reference !== undefined)
+      getEvidence({ data: { auditId, runId, ref: reference } })
+        .then((value) => current && setFresh(value.screenshotUrl))
+        .catch(() => current && setBroken(true))
+    return () => {
+      current = false
+    }
+  }, [auditId, runId, reference])
+
+  function failed() {
+    if (retried) {
+      setBroken(true)
+      return
+    }
+    setRetried(true)
+    if (reference === undefined) void router.invalidate()
+    else
+      getEvidence({ data: { auditId, runId, ref: reference } })
+        .then((value) => setFresh(value.screenshotUrl))
+        .catch(() => setBroken(true))
+  }
+
+  if (broken)
+    return (
+      <p role="alert" className="text-xs text-destructive">
+        The screenshot could not be loaded.
+      </p>
+    )
+  if (url === undefined) return <p className="text-xs text-muted-foreground">Loading</p>
   if (url === null)
     return <p className="text-xs text-muted-foreground">This run has no screenshot.</p>
   return (
@@ -606,7 +686,7 @@ function Screenshot({ url }: { url: string | null }) {
       <img
         src={url}
         alt="The page at the end of the run"
-        loading="lazy"
+        onError={failed}
         className="w-full rounded-md border object-cover object-top"
       />
       <figcaption className="text-xs text-muted-foreground">
