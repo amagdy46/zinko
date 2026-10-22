@@ -10,7 +10,13 @@ import {
   isVendorHost,
   type JourneyStep,
 } from "@repo/capture-contract"
-import { RULES_VERSION, evaluateRun, type CheckResult, type DecodedHit } from "@repo/rules"
+import {
+  RULES_VERSION,
+  decodeHits,
+  evaluateRun,
+  type CheckResult,
+  type DecodedHit,
+} from "@repo/rules"
 import { Schema } from "effect"
 
 const USAGE = `zinko — open-source tracking auditor
@@ -60,29 +66,23 @@ const out = (text: string) => process.stdout.write(`${text}\n`)
 const fail = (text: string) => process.stderr.write(`${text}\n`)
 
 function decodeAll(result: Result): { hits: DecodedHit[]; undecoded: Undecoded[] } {
-  const hits: DecodedHit[] = []
-  const undecoded: Undecoded[] = []
-  for (const r of result.requests) {
-    const found = decode({ url: r.url, method: r.method, body: r.body })
-    for (const hit of found) {
-      hits.push({ ...hit, requestId: r.id, documentId: r.documentId, startedAt: r.startedAt })
-    }
-    if (
-      found.length === 0 &&
-      r.method.toUpperCase() !== "OPTIONS" &&
-      isVendorHost(r.url) &&
-      !isSdkFile(r.url)
-    ) {
-      undecoded.push({
-        id: r.id,
-        documentId: r.documentId,
-        method: r.method,
-        url: r.url,
-        startedAt: r.startedAt,
-      })
-    }
-  }
-  hits.sort((a, b) => a.startedAt - b.startedAt)
+  const hits = decodeHits(result)
+  const decoded = new Set(hits.map((hit) => hit.requestId))
+  const undecoded = result.requests
+    .filter(
+      (r) =>
+        !decoded.has(r.id) &&
+        r.method.toUpperCase() !== "OPTIONS" &&
+        isVendorHost(r.url) &&
+        !isSdkFile(r.url),
+    )
+    .map((r) => ({
+      id: r.id,
+      documentId: r.documentId,
+      method: r.method,
+      url: r.url,
+      startedAt: r.startedAt,
+    }))
   return { hits, undecoded }
 }
 

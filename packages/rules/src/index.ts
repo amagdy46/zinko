@@ -24,6 +24,7 @@ import type { CheckResult, Rule, RunInput } from "./types.js"
 export type { CheckResult, CheckStatus, DecodedHit, EvidenceRef, Rule, RunInput } from "./types.js"
 export { googleConsentFromCcm, isNonGoogle, withoutConsent } from "./consent-state.js"
 export { isAdOrAnalyticsCookie } from "./cookies.js"
+export { decodeHits } from "./decode.js"
 export { pushesByDocument } from "./documents.js"
 
 /**

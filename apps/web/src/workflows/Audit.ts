@@ -1,4 +1,4 @@
-import { DECODER_VERSION, decode } from "@ovriq/zinko-decoders"
+import { DECODER_VERSION } from "@ovriq/zinko-decoders"
 import { type CaptureRejected, CaptureResult, Scenario } from "@repo/capture-contract"
 import {
   AuditConfig,
@@ -11,7 +11,8 @@ import {
   StorageError,
 } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, datalayerPush, hit, run, site } from "@repo/db"
+import { audit, checkResult, datalayerPush, finding, hit, run, site } from "@repo/db"
+import { decodeHits, evaluateRun, RULES_VERSION, ruleById } from "@repo/rules"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Data, Effect, Layer, Option, Schema } from "effect"
 import { Workflow } from "effect-cf"
@@ -235,43 +236,69 @@ const capture = (auditId: string, runId: string) =>
   }).pipe(Effect.catchTags({ AuditStateError: failFast, SchemaError: failFast }))
 
 /**
- * Derives the run's hits and `dataLayer` pushes from its stored capture. One transaction deletes
- * what an earlier attempt wrote and inserts again; keys and `created_at` (the run's
- * `finished_at`) come from the capture, so every attempt writes identical rows.
+ * Derives the run's hits, `dataLayer` pushes and check results from its stored capture. One
+ * transaction deletes what an earlier attempt wrote and inserts again; keys and `created_at` (the
+ * run's `finished_at`) come from the capture and the rules are pure, so every attempt writes
+ * identical rows.
  */
 const persist = (auditId: string, runId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const { run: current } = yield* loadRun(auditId, runId)
+    const { run: current, host } = yield* loadRun(auditId, runId)
     if (current.captureKey === null || current.finishedAt === null)
       return yield* new AuditStateError({ message: `run ${runId} has no stored capture` })
     const result = yield* decodeStoredCapture(yield* readText(current.captureKey))
+    const { scenario, viewport } = yield* decodeRunShape(current)
     const createdAt = current.finishedAt
     const { actionAt } = result.consent
-    const hits = result.requests.flatMap((request) =>
-      decode({ url: request.url, method: request.method, body: request.body }).map((found) => ({
-        orgId: current.orgId,
-        createdAt,
-        runId,
-        requestId: request.id,
-        batchIndex: found.batchIndex,
-        documentId: request.documentId,
-        at: Math.round(request.startedAt),
-        vendor: found.vendor,
-        destinationId: found.destinationId,
-        event: found.event,
-        params: found.params,
-        ids: found.ids,
-        consent: found.consent,
-        host: found.host,
-        url: found.url,
-        blocked: request.blocked,
-        status: request.status === null ? null : Math.round(request.status),
-        // gtag sends what Consent Mode held within milliseconds of the click, before autoconsent
-        // reports completion, so the action's start (accept or reject) is the line, not completedAt
-        afterConsentAction: actionAt !== null && request.startedAt >= actionAt,
-      })),
-    )
+    const requests = new Map(result.requests.map((request) => [request.id, request]))
+    const decoded = decodeHits(result)
+    const hits = decoded.flatMap((found) => {
+      const request = requests.get(found.requestId)
+      if (request === undefined) return []
+      return [
+        {
+          orgId: current.orgId,
+          createdAt,
+          runId,
+          requestId: found.requestId,
+          batchIndex: found.batchIndex,
+          documentId: found.documentId,
+          at: Math.round(found.startedAt),
+          vendor: found.vendor,
+          destinationId: found.destinationId,
+          event: found.event,
+          params: found.params,
+          ids: found.ids,
+          consent: found.consent,
+          host: found.host,
+          url: found.url,
+          blocked: request.blocked,
+          status: request.status === null ? null : Math.round(request.status),
+          // gtag sends what Consent Mode held within milliseconds of the click, before autoconsent
+          // reports completion, so the action's start (accept or reject) is the line, not completedAt
+          afterConsentAction: actionAt !== null && found.startedAt >= actionAt,
+        },
+      ]
+    })
+    const checks = evaluateRun({
+      scenario,
+      viewport,
+      pageUrl: current.pageUrl,
+      siteHost: host,
+      journey: current.journey,
+      capture: result,
+      hits: decoded,
+    }).map((check) => ({
+      runId,
+      orgId: current.orgId,
+      ruleId: check.ruleId,
+      rulesVersion: RULES_VERSION,
+      status: check.status,
+      message: check.message,
+      evidence: check.evidence,
+      createdAt,
+    }))
     const pushes = result.dataLayer.map((push, seq) => ({
       orgId: current.orgId,
       createdAt,
@@ -286,10 +313,12 @@ const persist = (auditId: string, runId: string) =>
       Effect.gen(function* () {
         yield* db.delete(hit).where(eq(hit.runId, runId))
         yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
+        yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
         for (let i = 0; i < hits.length; i += INSERT_BATCH)
           yield* db.insert(hit).values(hits.slice(i, i + INSERT_BATCH))
         for (let i = 0; i < pushes.length; i += INSERT_BATCH)
           yield* db.insert(datalayerPush).values(pushes.slice(i, i + INSERT_BATCH))
+        yield* db.insert(checkResult).values(checks)
         yield* db
           .update(run)
           .set({
@@ -318,7 +347,10 @@ const persist = (auditId: string, runId: string) =>
     })
   }).pipe(Effect.catchTags({ AuditStateError: failFast, SchemaError: failFast }))
 
-/** Records a run that has no persisted capture. A stored capture (`PersistFailure`) is kept. */
+/**
+ * Records a run that has no persisted capture, and removes anything a `persist` attempt left. A
+ * stored capture (`PersistFailure`) is kept.
+ */
 const fail = (auditId: string, runId: string, reason: RunFailure) =>
   Effect.gen(function* () {
     const { db } = yield* Database
@@ -327,6 +359,7 @@ const fail = (auditId: string, runId: string, reason: RunFailure) =>
       Effect.gen(function* () {
         yield* db.delete(hit).where(eq(hit.runId, runId))
         yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
+        yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
         return yield* db
           .update(run)
           .set({
@@ -360,20 +393,101 @@ const auditStatus = (runs: ReadonlyArray<{ status: string; captureKey: string | 
   return "partial"
 }
 
+interface StoredCheck {
+  readonly runId: string
+  readonly orgId: string
+  readonly ruleId: string
+  readonly rulesVersion: string
+  readonly status: string
+}
+
+/**
+ * One finding per rule that failed on at least one run (`fail`), or failed on none and was
+ * inconclusive on at least one (`inconclusive`). `checks` are in run order, so `run_ids` are too.
+ * The text is the rule's as it reads now. A rule no longer in `@repo/rules` has no text to show
+ * and is returned in `unknown` instead.
+ */
+const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
+  const byRule = new Map<string, StoredCheck[]>()
+  for (const check of checks) {
+    const group = byRule.get(check.ruleId) ?? []
+    group.push(check)
+    byRule.set(check.ruleId, group)
+  }
+  const findings: Array<typeof finding.$inferInsert> = []
+  const unknown: string[] = []
+  for (const [ruleId, group] of byRule) {
+    const flagged = group.filter((c) => c.status === "fail" || c.status === "inconclusive")
+    const [first] = flagged
+    if (first === undefined) continue
+    const rule = ruleById(ruleId)
+    if (rule === undefined) {
+      unknown.push(ruleId)
+      continue
+    }
+    const failingRuns = flagged.filter((c) => c.status === "fail").length
+    findings.push({
+      auditId,
+      orgId: first.orgId,
+      ruleId,
+      kind: failingRuns > 0 ? "fail" : "inconclusive",
+      rulesVersions: [...new Set(group.map((c) => c.rulesVersion))].toSorted(),
+      area: rule.area,
+      severity: rule.severity,
+      title: rule.title,
+      why: rule.why,
+      fix: rule.fix,
+      failingRuns,
+      inconclusiveRuns: flagged.length - failingRuns,
+      runIds: flagged.map((c) => c.runId),
+    })
+  }
+  return { findings, unknown }
+}
+
+/**
+ * Settles the audit's status and recomputes its findings from its runs' check results, in one
+ * transaction: a retry replaces them with the same rows. Triage is never touched.
+ */
 const finish = (auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const runs = yield* db
-      .select({ status: run.status, captureKey: run.captureKey })
-      .from(run)
-      .where(eq(run.auditId, auditId))
-    const status = auditStatus(runs)
-    yield* db
-      .update(audit)
-      .set({ status, finishedAt: sql`coalesce(${audit.finishedAt}, now())` })
-      .where(eq(audit.id, auditId))
-    yield* publish(auditId, { type: "audit", status })
-    return status
+    const settled = yield* db.$client.withTransaction(
+      Effect.gen(function* () {
+        const runs = yield* db
+          .select({ status: run.status, captureKey: run.captureKey })
+          .from(run)
+          .where(eq(run.auditId, auditId))
+        const status = auditStatus(runs)
+        const checks = yield* db
+          .select({
+            runId: checkResult.runId,
+            orgId: checkResult.orgId,
+            ruleId: checkResult.ruleId,
+            rulesVersion: checkResult.rulesVersion,
+            status: checkResult.status,
+          })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(eq(run.auditId, auditId))
+          .orderBy(asc(run.ordinal), asc(checkResult.ruleId))
+        const { findings, unknown } = findingsFrom(auditId, checks)
+        yield* db.delete(finding).where(eq(finding.auditId, auditId))
+        if (findings.length > 0) yield* db.insert(finding).values(findings)
+        yield* db
+          .update(audit)
+          .set({ status, finishedAt: sql`coalesce(${audit.finishedAt}, now())` })
+          .where(eq(audit.id, auditId))
+        return { status, unknown }
+      }),
+    )
+    if (settled.unknown.length > 0)
+      yield* Effect.logWarning("Check results of unknown rules have no finding", {
+        auditId,
+        ruleIds: settled.unknown,
+      })
+    yield* publish(auditId, { type: "audit", status: settled.status })
+    return settled.status
   })
 
 /**

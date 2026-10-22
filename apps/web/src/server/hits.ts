@@ -1,10 +1,18 @@
-import { CaptureResult } from "@repo/capture-contract"
-import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, datalayerPush, hit, run } from "@repo/db"
+import { datalayerPush, hit, run } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq, type SQL, sql } from "drizzle-orm"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Schema } from "effect"
+import {
+  auditInOrg,
+  decodeHitColumns,
+  type HitConsent,
+  hitWithRequest,
+  type Ids,
+  type Params,
+  readCapture,
+  runInAudit,
+} from "./audit-data"
 import { requireSession } from "./require-session"
 import { isUuid, membership, NotFound, read } from "./server-fn"
 
@@ -13,17 +21,6 @@ const PAGE_SIZE = 200
 const HIT = 0
 const PUSH = 1
 
-const Params = Schema.Record(Schema.String, Schema.Union([Schema.String, Schema.Finite]))
-const Ids = Schema.Record(Schema.String, Schema.String)
-const ConsentState = Schema.Literals(["granted", "denied", "unknown"])
-const HitConsent = Schema.Struct({
-  adStorage: ConsentState,
-  analyticsStorage: ConsentState,
-  raw: Schema.optionalKey(Schema.String),
-})
-const decodeHitColumns = Schema.decodeUnknownEffect(
-  Schema.Struct({ params: Params, ids: Ids, consent: HitConsent }),
-)
 const decodePushValue = Schema.decodeUnknownEffect(Schema.Json)
 
 /**
@@ -49,20 +46,6 @@ const openCursor = (cursor: string | undefined) =>
         Effect.flatMap((json) => decodeCursor(json)),
         Effect.mapError(() => new NotFound({ message: "Not found" })),
       )
-
-/** The audit's id when it belongs to the organization; another organization's is a 404. */
-const auditInOrg = (orgId: string, id: string) =>
-  Effect.gen(function* () {
-    if (!isUuid(id)) return yield* new NotFound({ message: "Not found" })
-    const { db } = yield* Database
-    const [found] = yield* db
-      .select({ id: audit.id })
-      .from(audit)
-      .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
-      .limit(1)
-    if (found === undefined) return yield* new NotFound({ message: "Not found" })
-    return found.id
-  })
 
 type TimelineItem =
   | {
@@ -252,8 +235,6 @@ export const listHitFilters = createServerFn({ method: "GET" })
     ),
   )
 
-const decodeStoredCapture = Schema.decodeUnknownEffect(Schema.fromJsonString(CaptureResult))
-
 const DetailInput = Schema.Struct({
   auditId: Schema.String,
   runId: Schema.String,
@@ -274,52 +255,9 @@ export const getHitDetail = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
-        if (!isUuid(data.runId)) return yield* new NotFound({ message: "Not found" })
-        const { db } = yield* Database
-        const [found] = yield* db
-          .select({ hit, captureKey: run.captureKey })
-          .from(hit)
-          .innerJoin(run, eq(run.id, hit.runId))
-          .where(
-            and(
-              eq(run.id, data.runId),
-              eq(run.auditId, auditId),
-              eq(run.orgId, orgId),
-              eq(hit.orgId, orgId),
-              eq(hit.requestId, data.requestId),
-              eq(hit.batchIndex, data.batchIndex),
-            ),
-          )
-          .limit(1)
-        if (found === undefined || found.captureKey === null)
-          return yield* new NotFound({ message: "Not found" })
-        const storage = yield* Storage
-        const stored = yield* storage.get(found.captureKey).pipe(Effect.orDie)
-        if (Option.isNone(stored)) return yield* new NotFound({ message: "Not found" })
-        const text = yield* Effect.promise(() => new Response(stored.value.body).text())
-        const capture = yield* decodeStoredCapture(text).pipe(Effect.orDie)
-        const request = capture.requests.find((r) => r.id === data.requestId)
-        if (request === undefined) return yield* new NotFound({ message: "Not found" })
-        const columns = yield* decodeHitColumns(found.hit).pipe(Effect.orDie)
-        const { hit: row } = found
-        return {
-          hit: {
-            requestId: row.requestId,
-            batchIndex: row.batchIndex,
-            documentId: row.documentId,
-            at: row.at,
-            vendor: row.vendor,
-            destinationId: row.destinationId,
-            event: row.event,
-            host: row.host,
-            url: row.url,
-            blocked: row.blocked,
-            status: row.status,
-            afterConsentAction: row.afterConsentAction,
-            ...columns,
-          },
-          request,
-        }
+        const found = yield* runInAudit(orgId, auditId, data.runId)
+        const capture = yield* readCapture(found.captureKey)
+        return yield* hitWithRequest(orgId, found.id, capture, data.requestId, data.batchIndex)
       }),
     ),
   )

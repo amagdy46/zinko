@@ -396,6 +396,9 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@repo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       '@tanstack/react-router':
         specifier: 'catalog:'
         version: 1.170.45(react-dom@19.3.1(react@19.3.1))(react@19.3.1)

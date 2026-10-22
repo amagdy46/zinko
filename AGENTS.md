@@ -81,10 +81,12 @@ Zero errors and zero warnings are the bar.
 
 ## Database (Postgres, Drizzle)
 
-- Tables live in `packages/db/src/auth-schema.ts` (Better Auth), `ai-schema.ts` (`llm_credential`) and `audit-schema.ts` (`client`, `site`, `audit`, `run`, `hit`, `datalayer_push`); queries go through the `Database` service from `@repo/core`.
-- Every audit table carries `org_id`; filter by `activeMembership(session).organizationId` and reach runs, hits and pushes only through their audit, checked against the organization. An id from another organization is a 404, never a 403.
+- Tables live in `packages/db/src/auth-schema.ts` (Better Auth), `ai-schema.ts` (`llm_credential`) `audit-schema.ts` (`client`, `site`, `audit`, `run`, `hit`, `datalayer_push`) and `rules-schema.ts` (`check_result`, `finding`, `finding_triage`); queries go through the `Database` service from `@repo/core`.
+- Every audit table carries `org_id`; filter by `activeMembership(session).organizationId` and reach runs, hits, pushes, check results, findings and triage only through their audit, checked against the organization. An id from another organization is a 404, never a 403.
 - Foreign keys from audits upward are `on delete restrict`: clients and sites with audits are archived (`archived_at`), never deleted; deleting is allowed only without audits.
 - `hit` and `datalayer_push` have natural primary keys, `(run_id, request_id, batch_index)` and `(run_id, seq)`, and no `id`. Persisting a run deletes and reinserts its rows in one transaction with `created_at` taken from the run's `finished_at`, so a retry reproduces identical rows. Keep it that way: no `defaultNow()` or random ids in derived rows.
+- `check_result` (`(run_id, rule_id)`) is derived the same way: `persist-<n>` writes it in the hits' transaction, `fail-<n>` deletes it. `finish` recomputes `finding` (`(audit_id, rule_id)`) from the check results in one transaction. A finding stores its title, why and fix as the rule read when it was computed, so old audits keep their wording; do not join findings back to `@repo/rules` for display.
+- Triage lives in `finding_triage` (`(audit_id, rule_id)`, no foreign key to `finding`) and is written only by `setTriage`. Never delete or rewrite it from the workflow: recomputing findings must keep it.
 - Change the schema, then run `pnpm --filter @repo/db db:generate` to write a migration to `packages/db/drizzle/`, then `pnpm db:migrate`.
 - Never edit files under `packages/db/drizzle/` by hand; they are generated.
 - Start the local database with `docker compose up -d`.

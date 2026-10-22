@@ -20,6 +20,7 @@
     "@repo/capture-contract": "workspace:*",
     "@repo/core": "workspace:*",
     "@repo/db": "workspace:*",
+    "@repo/rules": "workspace:*",
     "@tanstack/react-router": "catalog:",
     "@tanstack/react-start": "catalog:",
     "better-auth": "catalog:",
