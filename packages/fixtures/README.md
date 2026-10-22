@@ -8,7 +8,10 @@ pnpm --filter @repo/fixtures inspect <site>[/page] [accept|reject]
 ```
 
 Every site has `/` (home), `/product` and `/thank-you`. The thank-you page fires `purchase` with
-`transaction_id: T-1001`, `value: 49.9`, `currency: EUR`. The SDK scripts (gtag.js, fbevents.js,
+`transaction_id: T-1001`, `value: 49.9`, `currency: EUR` (GA4 `purchase`, the Ads conversion `ZinkoConv01`,
+Meta `Purchase` with `value` and `currency`, TikTok `CompletePayment`). Every Meta event carries an
+`eventID` (`<page>-<Event>-<n>`, unique per page load), there is one GA4 ID, and GA4 `page_location`
+is the site's own URL (gtag drops the port: `http://localhost/clean/`, so compare host names, not `host`). The SDK scripts (gtag.js, fbevents.js,
 the TikTok pixel) load from the real CDNs.
 
 Test IDs: GA4 `G-ZINKO00001`, Google Ads `AW-100000001` (conversion label `ZinkoConv01`),
@@ -29,21 +32,33 @@ on the visitor's choice; Meta and TikTok load only when marketing is accepted.
 
 ## Sites
 
-| Site                   | Known bug                                                                                                                                                               |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `clean`                | None; the correct baseline.                                                                                                                                             |
-| `meta-before-consent`  | Meta `PageView` fires on load, before the visitor chooses, so it fires even when they reject.                                                                           |
-| `tiktok-after-reject`  | TikTok loads and fires after any choice, including reject.                                                                                                              |
-| `duplicate-purchase`   | `/thank-you` sends `purchase` twice with the same `transaction_id` (the second 1 s later in code; gtag may batch both into one POST while consent is pending).          |
-| `ga4-batch`            | Home fires `view_promotion`, `view_item_list`, `select_promotion` in one tick; GA4 sends them as one POST with three lines. Not a bug as such: it tests batch decoding. |
-| `consent-default-late` | `consent default` is pushed after `config`, so the first `page_view` carries no `gcs`.                                                                                  |
-| `lost-gclid`           | Links drop the query string, so `?gclid=` is lost on `/product`; the `conversion_linker` is off, so `_gcl_aw` is never set.                                             |
-| `redirect-gclid`       | `/redirect-gclid/go?gclid=TEST` redirects through `/r` to `/redirect-gclid/` and drops `gclid`.                                                                         |
-| `delayed-pixel`        | Meta loads and sends `PageView` 3 s after the visitor's consent choice, whatever the choice.                                                                            |
-| `gpc-echo`             | Home shows the `Sec-GPC` header the server received and `navigator.globalPrivacyControl`; the response also carries `X-Sec-GPC-Received`. The site ignores the signal.  |
-| `no-cmp`               | Pixels and Google tag fire with no banner and no consent default.                                                                                                       |
+| Site                      | Known bug                                                                                                                                                               |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `clean`                   | None; the correct baseline.                                                                                                                                             |
+| `meta-before-consent`     | Meta `PageView` fires on load, before the visitor chooses, so it fires even when they reject.                                                                           |
+| `tiktok-after-reject`     | TikTok loads and fires after any choice, including reject.                                                                                                              |
+| `duplicate-purchase`      | `/thank-you` sends `purchase` twice with the same `transaction_id` (the second 1 s later in code; gtag may batch both into one POST while consent is pending).          |
+| `ga4-batch`               | Home fires `view_promotion`, `view_item_list`, `select_promotion` in one tick; GA4 sends them as one POST with three lines. Not a bug as such: it tests batch decoding. |
+| `consent-default-late`    | `consent default` is pushed after `config`, so the first `page_view` carries no `gcs`.                                                                                  |
+| `lost-gclid`              | Links drop the query string, so `?gclid=` is lost on `/product`; the `conversion_linker` is off, so `_gcl_aw` is never set.                                             |
+| `redirect-gclid`          | `/redirect-gclid/go?gclid=TEST` redirects through `/r` to `/redirect-gclid/` and drops `gclid`.                                                                         |
+| `delayed-pixel`           | Meta loads and sends `PageView` 3 s after the visitor's consent choice, whatever the choice.                                                                            |
+| `gpc-echo`                | Home shows the `Sec-GPC` header the server received and `navigator.globalPrivacyControl`; the response also carries `X-Sec-GPC-Received`. The site ignores the signal.  |
+| `no-cmp`                  | Pixels and Google tag fire with no banner and no consent default.                                                                                                       |
+| `purchase-missing-fields` | The GA4 `purchase` and the Ads conversion carry no `transaction_id` (`value` and `currency` are there).                                                                 |
+| `bad-currency`            | Every purchase sends `currency: "eur"` (lowercase).                                                                                                                     |
+| `no-page-view`            | The GA4 config has `send_page_view: false`, so no `page_view` is ever sent; other GA4 events (`view_item`, `purchase`) still are.                                       |
+| `multiple-ga4`            | A second GA4 ID (`G-ZINKO00002`) is configured on every page, so each page sends a `page_view` to two measurement IDs.                                                  |
+| `meta-init-twice`         | The Meta snippet is installed twice (a plugin plus a tag manager): the second copy re-fetches `fbevents.js` and sends a second `PageView` about 1.2 s after the first.  |
+| `meta-no-eventid`         | No Meta event carries an `eventID`.                                                                                                                                     |
+| `meta-eventid-reused`     | Every Meta event of a page carries the same `eventID` (`evt-1`).                                                                                                        |
+| `pii-in-url`              | The page URL gets `?email=jane.doe@example.com` (`history.replaceState` before the tags run), so it reaches GA4 `page_location` and Meta `dl`.                          |
+| `sgtm-errors`             | GA4 is configured with `transport_url` set to the fixture host, so its hits are `POST /g/collect?v=2&tid=…&en=…` to the fixture server, which answers `500`.            |
+| `location-mismatch`       | The GA4 config overrides `page_location` to `https://staging.shop.example/<path>`; nothing navigates there. Meta `dl` stays on the real host.                           |
 
 Other sites keep the query string on internal links (`keepQuery`), so only `lost-gclid` drops it.
+
+`/g/collect` (any method) answers `500`; only `sgtm-errors` sends there.
 
 `/r?to=<url>` answers `302` to any URL; it exists to test the capture engine's SSRF policy.
 
@@ -52,7 +67,9 @@ Other sites keep the query string on internal links (`keepQuery`), so only `lost
 Starts its own server on a free port, opens `<site>` in Chromium, waits 3.5 s, clicks the banner
 (`accept` or `reject`; omit for no click), waits 4.5 s and prints every vendor request with its time
 (ms since start) and the cookie names. Collection requests (the Task 4 `blockVendorRequests` list)
-are answered `204` locally and never sent. Any other non-script request to a vendor host is also
+are answered `204` locally and never sent. First-party collection (`POST /g/collect` on the fixture host) goes to the
+fixture server and is shown with its status, `-> 500 (first-party)`. GA4, Ads and Meta lines show
+`transaction_id`, `value`, `currency`, `eventID` and the page location. Any other non-script request to a vendor host is also
 answered locally and shown as `(unlisted)`; gtag sends some, for example `google.com/rmkt/collect`,
 `google.com/ccm/collect` and `ad.doubleclick.net/ccm/s/collect`, which the Task 4 list does not cover.
 
@@ -64,3 +81,91 @@ answered locally and shown as `(unlisted)`; gtag sends some, for example `google
 | `clean reject`               | Only the GA4 `page_view` (`gcs=G100`); nothing after the click; cookies: `cc_cookie` only.                                |
 | `meta-before-consent accept` | Meta `PageView` at about 0.6 s, before the click; after the click the same as `clean accept` without a second Meta hit.   |
 | `meta-before-consent reject` | Meta `PageView` at about 0.6 s and the GA4 `page_view`; nothing after the click.                                          |
+
+## Expected result sets
+
+The rules are the 19 in `docs/plans/2026-10-20-m3-rules-and-findings/plan.md`. Every run uses
+`--block-vendors`, desktop and mobile alike, scenarios `none`, `accept`, `reject`, `gpc`. A rule not
+listed for a site is `pass` or `not_applicable` (n.a.). Facts below were observed with `inspect.mjs`
+and Chromium on `localhost`; where a rule's wording left a choice open, the choice is stated.
+
+### Baseline (`clean`)
+
+Every rule is `pass` or n.a. under all four scenarios, on `/`, `/product` and `/thank-you`, except:
+
+- `hygiene.tag-errors`: **inconclusive**, every scenario and page (every tracking request was answered locally).
+
+n.a. cases: `consent.pixel-after-reject` outside `reject`; `clickid.cookie-missing` outside `accept` or
+without a click ID in the run URL; `clickid.lost-on-redirect` without a click ID; `clickid.lost-across-navigation`
+outside journey runs; `coverage.no-page-view` outside `accept`; the purchase rules
+(`coverage.purchase-missing-fields`, `coverage.invalid-currency`, `duplicates.purchase-sent-twice`) on pages without a
+purchase; the Meta rules when no Meta hit is sent (Meta loads only after marketing consent, so under `none`, `gpc`
+and `reject` there are none).
+
+Behaviour the rules must cope with, all on `clean`:
+
+- **Held GA4 purchase.** Under `none` and `gpc` gtag never sends the GA4 `purchase` (only `page_view`, `gcs=G100`). Under
+  `reject` and `accept` it sends it after the click (`gcs=G100`). The Ads conversion is sent under every scenario: the
+  denied one (`npa=1`, googlesyndication) at load, the granted one (`npa=0`, googleadservices) after `accept` only.
+  That is the Ads denied/granted pair, and it passes `duplicates.purchase-sent-twice`.
+- **Ads hits with `value` that are not conversions.** On `/product` the Ads remarketing hit carries `value=49.9`
+  and `currency` but no `transaction_id`. `coverage.purchase-missing-fields` must treat only Ads hits with a conversion
+  label (decoded event `conversion`) as purchases, or `clean/product` fails.
+- **Cookies.** `clean` sets no ad or analytics cookie before the choice (`cc_cookie` is not one). After `accept`: `_ga`,
+  `_ga_ZINKO00001`, `_gcl_au`, `_ttp` (on `.tiktok.com`), plus `_gcl_aw` when the URL has `gclid` and `_fbc` when it has
+  `fbclid`. The real pixel never writes `_fbp` or `_fbc` for these fake pixel IDs (its requests carry `coo=false`), so
+  `tags.js` writes `_fbc` itself when the landing URL has an `fbclid`; `_fbp` is never set anywhere.
+- **Click IDs on `clean`** (run URL `/clean/?gclid=…&fbclid=…&ttclid=…`, as `clickIds` sends): under `accept`,
+  `clickid.cookie-missing` passes for all three vendors (`_gcl_aw`, `_fbc`, `_ttp` all present).
+
+### Existing sites (differences from the baseline)
+
+| Site                   | Rule                                                                                                      | Status       | Where                                                                                                                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `meta-before-consent`  | `consent.pixel-without-consent`                                                                           | fail         | none, accept, reject, gpc (Meta `PageView` at about 0.6 s; under `gpc` the title says the GPC signal was ignored)                                                                          |
+|                        | `consent.cookies-without-consent`                                                                         | pass         | no `_fbp` is set (see above). With an `fbclid` in the run URL the written `_fbc` exists before the click, so it fails in all four scenarios then                                           |
+|                        | `consent.pixel-after-reject`                                                                              | pass         | reject: the only Meta hit is before the click                                                                                                                                              |
+| `tiktok-after-reject`  | `consent.pixel-after-reject`                                                                              | fail         | reject (TikTok loads about 2 s after the click)                                                                                                                                            |
+|                        | `consent.pixel-without-consent`                                                                           | pass         | reject: the hit is after the action; accept: allowed; none, gpc: TikTok never loads                                                                                                        |
+| `duplicate-purchase`   | `duplicates.purchase-sent-twice`                                                                          | fail         | `/thank-you` under accept and reject (two GA4 purchases, same `transaction_id`, often one POST). Under none and gpc **pass**: the GA4 purchase is held and the Ads conversion is sent once |
+| `ga4-batch`            | none                                                                                                      |              | baseline (the batch is only a decoder test)                                                                                                                                                |
+| `consent-default-late` | `consent.default-after-tag`                                                                               | fail         | none, accept, reject, gpc, every page                                                                                                                                                      |
+|                        | `consent.google-without-denied-state`                                                                     | fail         | none, accept, reject, gpc (the first `page_view` has no `gcs`)                                                                                                                             |
+|                        | `consent.cookies-without-consent`                                                                         | fail         | none, accept, reject, gpc (`_ga`, `_ga_ZINKO00001` set before consent)                                                                                                                     |
+| `lost-gclid`           | `clickid.cookie-missing`                                                                                  | fail         | accept, run URL with `gclid` (conversion linker off, `_gcl_aw` never set); the Meta and TikTok checks pass. Without click IDs: n.a.                                                        |
+|                        | `clickid.lost-across-navigation`                                                                          | fail         | journey, accept, `/lost-gclid/?gclid=…` then `/lost-gclid/thank-you`: the thank-you Ads conversion has no `gclid` and `_gcl_aw` is missing. `fbclid`: pass (the `_fbc` cookie survives)    |
+| `redirect-gclid`       | `clickid.lost-on-redirect`                                                                                | fail         | run URL `/redirect-gclid/go?gclid=…` (`/go` -> `/r` -> `/redirect-gclid/`), every scenario. Without a click ID: n.a.                                                                       |
+|                        | `clickid.cookie-missing`                                                                                  | n.a.         | the landing document's URL has no click ID (choice: the rule reads the final URL, not the requested one; otherwise it would fail too)                                                      |
+| `delayed-pixel`        | `consent.pixel-after-reject`                                                                              | fail         | reject (Meta `PageView` 3 s after the click)                                                                                                                                               |
+|                        | `consent.pixel-without-consent`                                                                           | pass         | accept and reject: the hit is after the action; none, gpc: Meta never loads                                                                                                                |
+| `gpc-echo`             | none                                                                                                      |              | baseline: the site ignores `Sec-GPC`, but nothing fires without a choice, so no rule can see it                                                                                            |
+| `no-cmp`               | `consent.cookies-without-consent`                                                                         | fail         | none, gpc (`_ga`, `_ga_ZINKO00001`, `_gcl_au`, `_ttp`)                                                                                                                                     |
+|                        | `consent.pixel-without-consent`                                                                           | fail         | none, gpc (Meta and TikTok at load; under `gpc` the title says the signal was ignored)                                                                                                     |
+|                        | `consent.google-without-denied-state`                                                                     | fail         | none, gpc (no consent state)                                                                                                                                                               |
+|                        | `consent.default-after-tag`                                                                               | fail         | none, accept, reject, gpc (no default push at all; it needs no banner, so it is evaluated)                                                                                                 |
+|                        | `consent.cookies-without-consent`, `consent.pixel-without-consent`, `consent.google-without-denied-state` | inconclusive | accept, reject: "the banner was not found"                                                                                                                                                 |
+|                        | `consent.pixel-after-reject`                                                                              | inconclusive | reject: "the banner was not found"; n.a. elsewhere                                                                                                                                         |
+
+### New sites
+
+| Site                      | Rule                               | Status | Where                                                                                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `purchase-missing-fields` | `coverage.purchase-missing-fields` | fail   | `/thank-you`, all four scenarios (the Ads conversion lacks `transaction_id` in every one; the GA4 purchase too under accept and reject). Meta and TikTok are unaffected                                                                                      |
+| `bad-currency`            | `coverage.invalid-currency`        | fail   | `/thank-you`, all four scenarios (the Ads conversion `currency_code=eur`; GA4, Meta, TikTok too wherever they are sent)                                                                                                                                      |
+| `no-page-view`            | `coverage.no-page-view`            | fail   | accept, `/product` (`view_item`) and `/thank-you` (`purchase`). `/` sends no GA4 hit at all: n.a. Other scenarios: n.a.                                                                                                                                      |
+| `multiple-ga4`            | `duplicates.multiple-ga4-ids`      | fail   | every page, all four scenarios (both `page_view`s are sent before any choice)                                                                                                                                                                                |
+| `meta-init-twice`         | `duplicates.meta-loaded-twice`     | fail   | every page, accept only (Meta loads after marketing consent): two `PageView`s with different `eventID`s; the second `signals/config` request may be served from cache, so the rule must accept two `PageView`s alone. none, gpc, reject: n.a.                |
+| `meta-no-eventid`         | `dedup.meta-eventid-missing`       | fail   | accept, `/product` (`ViewContent`) and `/thank-you` (`Purchase`). `/` has only `PageView` (exempt): pass. Other scenarios: n.a.                                                                                                                              |
+| `meta-eventid-reused`     | `dedup.meta-eventid-reused`        | fail   | accept, `/product` (`PageView` and `ViewContent`) and `/thank-you` (`PageView` and `Purchase`) share `evt-1`. `/` has one hit: pass. Other scenarios: n.a.                                                                                                   |
+| `pii-in-url`              | `hygiene.pii-in-hits`              | fail   | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`, the Ads `url` and the TikTok payload). The document URL gains the email by `replaceState`, so the rule must read hit URLs and params, not only the navigation URL |
+| `sgtm-errors`             | `hygiene.tag-errors`               | fail   | every page, all four scenarios: `POST /g/collect` on the fixture host got `500`. The GA4 decoder already matches first-party `/g/collect` by path; the other tracking requests are answered locally and stay uncounted                                       |
+| `location-mismatch`       | `hygiene.location-mismatch`        | fail   | every page, all four scenarios (GA4 `page_location` host `staging.shop.example`, document host `localhost`). Meta `dl` matches: pass                                                                                                                         |
+
+Every other rule for the new sites is as in the baseline, including `hygiene.tag-errors` inconclusive (except on `sgtm-errors`).
+
+### Ambiguities the rules must settle
+
+- GA4 sends `page_location` without the port, Meta's `dl` keeps it: compare host names.
+- "Landing URL" for `clickid.cookie-missing` on a redirect: the final document URL (above).
+- An Ads "conversion" is a hit with a conversion label, not any Ads hit carrying `value`.
+- `consent.default-after-tag` is evaluated even when the banner is not found.

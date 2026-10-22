@@ -3,11 +3,15 @@
   const cfg = window.zinkoConfig
   const ID = {
     ga4: "G-ZINKO00001",
+    ga4Second: "G-ZINKO00002",
     meta: "100000000000001",
     ads: "AW-100000001",
     tiktok: "ZINKOTT0001",
   }
-  const purchase = { transaction_id: "T-1001", value: 49.9, currency: "EUR" }
+  const purchase = { transaction_id: "T-1001", value: 49.9, currency: cfg.currency }
+  const trackedPurchase = cfg.purchaseOrderId
+    ? purchase
+    : { value: purchase.value, currency: purchase.currency }
   const denied = {
     ad_storage: "denied",
     analytics_storage: "denied",
@@ -28,7 +32,16 @@
   gtagScript.src = "https://www.googletagmanager.com/gtag/js?id=" + ID.ga4
   document.head.appendChild(gtagScript)
   gtag("js", new Date())
-  gtag("config", ID.ga4)
+  if (cfg.piiInUrl) {
+    history.replaceState(null, "", "?email=" + encodeURIComponent("jane.doe@example.com"))
+  }
+  const ga4Config = {}
+  if (!cfg.ga4PageView) ga4Config.send_page_view = false
+  if (cfg.sgtm) ga4Config.transport_url = location.origin
+  if (cfg.locationOverride)
+    ga4Config.page_location = "https://staging.shop.example" + location.pathname
+  gtag("config", ID.ga4, ga4Config)
+  if (cfg.secondGa4) gtag("config", ID.ga4Second)
   gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
   if (cfg.consentDefault === "late") gtag("consent", "default", denied)
 
@@ -45,9 +58,9 @@
     gtag("event", "select_promotion", { promotion_id: "P1" })
   }
   if (cfg.page === "thank-you") {
-    gtag("event", "purchase", purchase)
-    gtag("event", "conversion", { send_to: ID.ads + "/ZinkoConv01", ...purchase })
-    if (cfg.purchase === "twice") setTimeout(() => gtag("event", "purchase", purchase), 1000)
+    gtag("event", "purchase", trackedPurchase)
+    gtag("event", "conversion", { send_to: ID.ads + "/ZinkoConv01", ...trackedPurchase })
+    if (cfg.purchase === "twice") setTimeout(() => gtag("event", "purchase", trackedPurchase), 1000)
   }
 
   function runSnippet(src) {
@@ -59,16 +72,52 @@
     })
   }
 
+  async function installMeta(query = "") {
+    await runSnippet("/_vendor/meta-pixel/snippet.js" + query)
+    window.fbq("init", ID.meta)
+  }
+
+  function metaEventId(event, sequence) {
+    if (cfg.metaEventId === "none") return undefined
+    if (cfg.metaEventId === "shared") return "evt-1"
+    return cfg.page + "-" + event + "-" + sequence
+  }
+
   let metaLoaded = false
   async function loadMeta() {
     if (metaLoaded) return
     metaLoaded = true
-    await runSnippet("/_vendor/meta-pixel/snippet.js")
-    window.fbq("init", ID.meta)
-    window.fbq("track", "PageView")
-    if (cfg.page === "product") window.fbq("track", "ViewContent", { currency: "EUR", value: 49.9 })
+    // The real pixel never writes _fbc for this unregistered pixel id (its requests carry coo=false),
+    // so a landing with an fbclid would always look like a lost click ID; write what it would.
+    const fbclid = new URLSearchParams(location.search).get("fbclid")
+    if (fbclid) document.cookie = "_fbc=fb.1.1700000000000." + fbclid + "; path=/; max-age=7776000"
+    await installMeta()
+    let sequence = 0
+    const track = (event, params) => {
+      sequence += 1
+      const eventId = metaEventId(event, sequence)
+      window.fbq("track", event, params, eventId ? { eventID: eventId } : undefined)
+    }
+    track("PageView")
+    if (cfg.metaInit === "twice") {
+      // a second install (for example a plugin plus a tag manager) starts the pixel again
+      await new Promise((resolve) => {
+        const timer = setInterval(() => {
+          if (window.fbq.callMethod) {
+            clearInterval(timer)
+            resolve()
+          }
+        }, 50)
+      })
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      delete window.fbq
+      delete window["_fbq"]
+      await installMeta("?copy=2")
+      track("PageView")
+    }
+    if (cfg.page === "product") track("ViewContent", { currency: "EUR", value: 49.9 })
     if (cfg.page === "thank-you") {
-      window.fbq("track", "Purchase", { value: purchase.value, currency: purchase.currency })
+      track("Purchase", { value: purchase.value, currency: purchase.currency })
     }
   }
 

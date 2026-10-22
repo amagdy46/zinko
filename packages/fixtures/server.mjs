@@ -51,10 +51,20 @@ function handle(req, res) {
     return send(res, 302, { location: to }, "")
   }
 
+  if (path === "/g/collect") {
+    return send(res, 500, { "content-type": "text/plain" }, "collection endpoint failed")
+  }
+
   const file = staticFiles[path]
   if (file) {
-    return readFile(join(root, file[0])).then((body) =>
-      send(res, 200, { "content-type": `${file[1]}; charset=utf-8` }, body),
+    return readFile(join(root, file[0]), "utf8").then((body) =>
+      send(
+        res,
+        200,
+        { "content-type": `${file[1]}; charset=utf-8` },
+        // a second copy of the Meta snippet must fetch fbevents.js again, not reuse the cached one
+        url.searchParams.has("copy") ? body.replace("fbevents.js", "fbevents.js?copy=2") : body,
+      ),
     )
   }
 
