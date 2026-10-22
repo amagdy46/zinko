@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util"
-import { decode, type Hit } from "@ovriq/zinko-decoders"
+import { decode } from "@ovriq/zinko-decoders"
 import {
   CaptureRejected,
   CaptureRequest,
@@ -10,6 +10,7 @@ import {
   isVendorHost,
   type JourneyStep,
 } from "@repo/capture-contract"
+import { RULES_VERSION, evaluateRun, type CheckResult, type DecodedHit } from "@repo/rules"
 import { Schema } from "effect"
 
 const USAGE = `zinko — open-source tracking auditor
@@ -26,7 +27,8 @@ capture options:
   --goto <url>                                 Navigate to another URL (repeatable)
   --engine <url>                               Capture engine (default: http://localhost:8080)
   --block-vendors                              Answer vendor collection requests locally
-  --json                                       Print JSON instead of tables
+  --rules                                      Run the checks on each scenario and list their results
+  --json                                       Print JSON instead of tables (with --rules, adds checks)
 
 --click and --goto run in the order given, at most 5 steps in total.
 `
@@ -43,12 +45,6 @@ const isScenario = Schema.is(Scenario)
 
 type Result = CaptureResult
 
-interface CapturedHit extends Hit {
-  requestId: string
-  documentId: string
-  startedAt: number
-}
-
 interface Undecoded {
   id: string
   documentId: string
@@ -63,8 +59,8 @@ class Unreachable extends CliError {}
 const out = (text: string) => process.stdout.write(`${text}\n`)
 const fail = (text: string) => process.stderr.write(`${text}\n`)
 
-function decodeAll(result: Result): { hits: CapturedHit[]; undecoded: Undecoded[] } {
-  const hits: CapturedHit[] = []
+function decodeAll(result: Result): { hits: DecodedHit[]; undecoded: Undecoded[] } {
+  const hits: DecodedHit[] = []
   const undecoded: Undecoded[] = []
   for (const r of result.requests) {
     const found = decode({ url: r.url, method: r.method, body: r.body })
@@ -167,7 +163,7 @@ function renderText(
   url: string,
   scenario: Scenario,
   result: Result,
-  hits: CapturedHit[],
+  hits: DecodedHit[],
   undecoded: Undecoded[],
 ) {
   const { engine, consent } = result
@@ -223,6 +219,13 @@ function renderText(
   out("")
 }
 
+function renderChecks(checks: readonly CheckResult[]) {
+  out(`checks (rules v${RULES_VERSION})`)
+  const rows = checks.map((c) => [c.status, c.ruleId, c.message, `evidence ${c.evidence.length}`])
+  for (const l of table(["status", "rule", "message", "evidence"], rows)) out(`  ${l}`)
+  out("")
+}
+
 function isHttpUrl(value: string): boolean {
   if (!URL.canParse(value)) return false
   const { protocol, hostname } = new URL(value)
@@ -242,6 +245,7 @@ function parseCapture(argv: string[]) {
       engine: { type: "string", default: DEFAULT_ENGINE },
       "block-vendors": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
+      rules: { type: "boolean", default: false },
     },
   })
   const [url] = positionals
@@ -290,6 +294,7 @@ function parseCapture(argv: string[]) {
     scenarios: scenario === "all" ? SCENARIOS : [scenario],
     engine: values.engine,
     json: values.json,
+    rules: values.rules,
   }
 }
 
@@ -311,6 +316,17 @@ async function runFrom(
     return cause instanceof Unreachable ? true : runFrom(opts, index + 1, true)
   }
   const { hits, undecoded } = decodeAll(result)
+  const checks = opts.rules
+    ? evaluateRun({
+        scenario,
+        viewport: opts.base.viewport,
+        pageUrl: opts.url,
+        siteHost: new URL(opts.url).hostname,
+        journey: opts.base.journey.length > 0,
+        capture: result,
+        hits,
+      })
+    : undefined
   if (opts.json) {
     const { engine, documents, consent, cookies, errors, complete, truncated } = result
     out(
@@ -326,6 +342,7 @@ async function runFrom(
           complete,
           truncated,
           undecoded,
+          ...(checks === undefined ? {} : { rulesVersion: RULES_VERSION, checks }),
         },
         null,
         2,
@@ -333,6 +350,7 @@ async function runFrom(
     )
   } else {
     renderText(opts.url, scenario, result, hits, undecoded)
+    if (checks !== undefined) renderChecks(checks)
   }
   return runFrom(opts, index + 1, failed || !result.complete)
 }

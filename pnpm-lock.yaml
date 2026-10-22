@@ -356,6 +356,9 @@ importers:
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../../packages/capture-contract
+      '@repo/rules':
+        specifier: workspace:*
+        version: link:../../packages/rules
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -563,6 +566,19 @@ importers:
       playwright:
         specifier: 1.64.1
         version: 1.64.1
+
+  packages/rules:
+    dependencies:
+      '@ovriq/zinko-decoders':
+        specifier: workspace:*
+        version: link:../decoders
+      '@repo/capture-contract':
+        specifier: workspace:*
+        version: link:../capture-contract
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
 packages:
 
