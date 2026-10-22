@@ -250,7 +250,9 @@ const persist = (auditId: string, runId: string) =>
     const result = yield* decodeStoredCapture(yield* readText(current.captureKey))
     const { scenario, viewport } = yield* decodeRunShape(current)
     const createdAt = current.finishedAt
-    const { actionAt } = result.consent
+    const { outcome, actionAt } = result.consent
+    // An action that did not take effect (`not-applied`) gave no consent, so it splits nothing.
+    const consentLine = outcome === "accepted" || outcome === "rejected" ? actionAt : null
     const requests = new Map(result.requests.map((request) => [request.id, request]))
     const decoded = decodeHits(result)
     const hits = decoded.flatMap((found) => {
@@ -277,7 +279,7 @@ const persist = (auditId: string, runId: string) =>
           status: request.status === null ? null : Math.round(request.status),
           // gtag sends what Consent Mode held within milliseconds of the click, before autoconsent
           // reports completion, so the action's start (accept or reject) is the line, not completedAt
-          afterConsentAction: actionAt !== null && found.startedAt >= actionAt,
+          afterConsentAction: consentLine !== null && found.startedAt >= consentLine,
         },
       ]
     })

@@ -131,8 +131,8 @@ export const hit = pgTable(
     status: integer(),
     /**
      * Sent at or after the consent action (`startedAt >= consent.actionAt`). Always false when there
-     * was no action (`none`, `gpc`, `not-found`), so `false` does not mean "before consent": rules
-     * must branch on the run's `consent.outcome` first.
+     * was no action (`none`, `gpc`, `not-found`) or it did not take effect (`not-applied`), so
+     * `false` does not mean "before consent": rules must branch on the run's `consent.outcome` first.
      */
     afterConsentAction: boolean("after_consent_action").notNull(),
   },

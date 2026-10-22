@@ -4,8 +4,10 @@ import type { RunInput } from "./types.js"
 
 /**
  * How a run's consent is read. Under accept and reject the action splits the run in two; when the
- * banner was not found there is no action to split at, so consent rules cannot judge the run.
- * `none` and `gpc` never act: everything they send is without consent.
+ * banner was not found there is no action to split at, and when the action did not take effect
+ * (`not-applied`: the banner stayed and no consent update followed) the visitor's choice is
+ * unknown, so in both cases consent rules cannot judge the run. `none` and `gpc` never act:
+ * everything they send is without consent.
  */
 export type ConsentTimeline =
   | { kind: "action"; outcome: "accepted" | "rejected"; actionAt: number }
@@ -18,6 +20,8 @@ export function consentTimeline(input: RunInput): ConsentTimeline {
   if ((outcome === "accepted" || outcome === "rejected") && actionAt !== null)
     return { kind: "action", outcome, actionAt }
   if (outcome === "not-found") return { kind: "inconclusive", reason: "the banner was not found" }
+  if (outcome === "not-applied")
+    return { kind: "inconclusive", reason: "the consent choice did not take effect" }
   return { kind: "inconclusive", reason: `the ${input.scenario} action did not run` }
 }
 

@@ -62,17 +62,24 @@ export function ruleById(id: string): Rule | undefined {
 }
 
 /**
+ * Errors about the banner alone: a banner autoconsent did not find (`CmpNotFound`) or an action that
+ * did not take effect (`ConsentNotApplied`). The page, its requests and its cookies were captured
+ * in full; only the visitor's choice is unknown.
+ */
+const CONSENT_ERRORS: ReadonlySet<string> = new Set(["CmpNotFound", "ConsentNotApplied"])
+
+/**
  * Why a run cannot be judged, or `null` when it can. The engine marks a run incomplete whenever it
- * records an error, and a banner autoconsent did not find is one (`CmpNotFound`), although the page,
- * its requests and its cookies were captured in full. Treating that as unusable would blank every
- * rule on any site whose banner autoconsent does not know, so such a run is evaluated and the
- * consent rules answer `inconclusive` ("the banner was not found") themselves.
+ * records an error, banner errors included. Treating those as unusable would blank every rule on
+ * any site whose banner autoconsent does not know or cannot operate, so such a run is evaluated and
+ * the consent rules answer `inconclusive` ("the banner was not found", "the consent choice did not
+ * take effect") themselves.
  */
 function unusableBecause(capture: CaptureResult): string | null {
   if (capture.complete) return null
   const { errors } = capture
-  if (errors.length > 0 && errors.every((error) => error.code === "CmpNotFound")) return null
-  const first = errors.find((error) => error.code !== "CmpNotFound")
+  if (errors.length > 0 && errors.every((error) => CONSENT_ERRORS.has(error.code))) return null
+  const first = errors.find((error) => !CONSENT_ERRORS.has(error.code))
   return first === undefined
     ? "the run did not complete"
     : `the run did not complete (${first.code}: ${first.message})`

@@ -60,6 +60,8 @@ const WINDOW_CAP_MS = 10_000
 const FLUSH_IDLE_CAP_MS = 2_000
 const CMP_DETECT_MS = 10_000
 const CONSENT_STEP_MS = 15_000
+const VERIFY_MS = 3_000
+const VERIFY_POLL_MS = 500
 const NAVIGATION_TIMEOUT_MS = 30_000
 const CLICK_TIMEOUT_MS = 5_000
 const MAX_URL = 8_192
@@ -101,7 +103,15 @@ const playwrightVersion = fromJson(
   Schema.Struct({ version: Schema.String }),
   readFileSync(createRequire(import.meta.url).resolve("playwright/package.json"), "utf8"),
 ).version
-const autoconsentScript = readFileSync(job.files.autoconsent, "utf8")
+// autoconsent's Playwright bundle keeps its instance in a local; this names it on `window` so the
+// shim's `bannerShown` can re-run the found CMP's popup check after the action. Mirrored in
+// capture.py.
+const AUTOCONSENT_INSTANCE = "const consent = new AutoConsent("
+const AUTOCONSENT_HANDLE = "const consent = window.__zinkoAutoconsent = new AutoConsent("
+const autoconsentBundle = readFileSync(job.files.autoconsent, "utf8")
+if (!autoconsentBundle.includes(AUTOCONSENT_INSTANCE))
+  throw new Error("the autoconsent bundle changed: no instance to name for the banner check")
+const autoconsentScript = autoconsentBundle.replace(AUTOCONSENT_INSTANCE, AUTOCONSENT_HANDLE)
 const initReply = `autoconsentReceiveMessage(${JSON.stringify({
   type: "initResp",
   config: AUTOCONSENT_CONFIG,
@@ -485,6 +495,41 @@ const nothingDetected = (message: Message) =>
   isRecord(message.state) &&
   message.state.lifecycle === "nothingDetected"
 
+const consentUpdateSince = (since: number) =>
+  dataLayer.some(
+    ({ at: pushedAt, value }) =>
+      Array.isArray(value) && value[0] === "consent" && value[1] === "update" && pushedAt >= since,
+  )
+
+const bannerShown = async (frame: Frame): Promise<boolean | null> => {
+  // A CMP in an iframe can remove its frame along with the banner.
+  if (frame.isDetached()) return false
+  const shown = await Promise.race([
+    frame.evaluate("window.__zinko ? window.__zinko.bannerShown() : null"),
+    sleep(VERIFY_MS),
+  ]).catch((cause: unknown) => log(`banner check: ${firstLine(cause)}`))
+  return typeof shown === "boolean" ? shown : null
+}
+
+/** Polls the banner until it closes or `deadline` passes; its last state. */
+const bannerAfterAction = async (frame: Frame, deadline: number): Promise<boolean | null> => {
+  const shown = await bannerShown(frame)
+  if (shown === false || Date.now() >= deadline) return shown
+  await sleep(VERIFY_POLL_MS)
+  return bannerAfterAction(frame, deadline)
+}
+
+/**
+ * Whether the banner is still shown, polled until it closes or `VERIFY_MS` pass, and whether a
+ * Google consent update followed the action. autoconsent's result only says its steps ran, not
+ * that they took: its Cookiebot opt-in reports success whether or not it found a button to click.
+ */
+const verifyChoice = async (frame: Frame, actionAt: number) => {
+  const shown = await bannerAfterAction(frame, Date.now() + VERIFY_MS)
+  await drainPage()
+  return { shown, consentUpdate: consentUpdateSince(actionAt) }
+}
+
 const runConsent = async (loadedAt: number) => {
   const action = scenario === "accept" ? "optIn" : "optOut"
   const found = await waitMessage(
@@ -502,24 +547,41 @@ const runConsent = async (loadedAt: number) => {
   consent.cmp = cmp
   consent.observations.push({ at: found.at, source: "cmp", state: { event: "popupFound", cmp } })
   emit({ type: "cookies", snapshot: await snapshot("before-consent") })
-  consent.outcome = action === "optIn" ? "accepted" : "rejected"
-  consent.actionAt = at()
+  const actionAt = at()
+  consent.actionAt = actionAt
   await found.frame.evaluate(`autoconsentReceiveMessage({ type: "${action}" })`)
   const result = await waitMessage((message) => message.type === `${action}Result`, CONSENT_STEP_MS)
   const done = await waitMessage((message) => message.type === "autoconsentDone", CONSENT_STEP_MS)
   autoconsentActive = false
+  const reported = result === undefined ? null : result.result === true
+  const { shown, consentUpdate } = await verifyChoice(found.frame, actionAt)
   consent.observations.push({
     at: done?.at ?? at(),
     source: "cmp",
     state: {
       event: `${action}Result`,
       cmp,
-      result: result === undefined ? null : result.result === true,
+      result: reported,
       done: done !== undefined,
+      bannerShown: shown,
+      consentUpdate,
     },
   })
-  if (result?.result !== true || done === undefined)
-    error("EngineFailure", `autoconsent ${action} on ${cmp} did not complete`)
+  if (shown === false || consentUpdate) {
+    consent.outcome = action === "optIn" ? "accepted" : "rejected"
+    if (reported !== true || done === undefined)
+      error("EngineFailure", `autoconsent ${action} on ${cmp} did not complete`)
+    return
+  }
+  consent.outcome = "not-applied"
+  const said = { true: "reported success", false: "reported failure", null: "did not answer" }[
+    `${reported}`
+  ]
+  const banner = shown ? "the banner was still shown" : "the banner could not be checked"
+  error(
+    "ConsentNotApplied",
+    `autoconsent ${action} on ${cmp} ${said}, but ${banner} ${VERIFY_MS / 1000} s later and no consent update followed`,
+  )
 }
 
 // --- the capture --------------------------------------------------------------------------------

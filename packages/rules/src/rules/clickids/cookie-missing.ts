@@ -42,10 +42,13 @@ export const cookieMissing: Rule = {
     const what = missing
       .map(({ param, cookie, vendor }) => `${cookie} (${vendorName(vendor)}, from ${param})`)
       .join(", ")
-    // Without a found banner nothing shows the visitor consented, so a missing cookie may just be
-    // the site waiting for consent.
-    if (consentTimeline(input).kind !== "action")
-      return inconclusive(id, `${what} missing at the end, but the banner was not found`)
+    // Without an accept that took effect nothing shows the visitor consented, so a missing cookie
+    // may just be the site waiting for consent.
+    const timeline = consentTimeline(input)
+    if (timeline.kind === "inconclusive")
+      return inconclusive(id, `${what} missing at the end, but ${timeline.reason}`)
+    if (timeline.kind === "no-action")
+      return inconclusive(id, `${what} missing at the end, but the accept action did not run`)
     const evidence: [EvidenceRef, ...EvidenceRef[]] = [
       documentRef(landing.id),
       ...missing.flatMap(({ hits }) => hits.slice(0, 1).map(hitRef)),

@@ -84,7 +84,7 @@ const DataLayerPush = Schema.Struct({ at: Ms, documentId: Schema.String, value: 
 
 const Consent = Schema.Struct({
   cmp: Schema.NullOr(Schema.String),
-  outcome: Schema.Literals(["accepted", "rejected", "none", "not-found"]),
+  outcome: Schema.Literals(["accepted", "rejected", "none", "not-found", "not-applied"]),
   actionAt: Schema.NullOr(Ms),
   completedAt: Schema.NullOr(Ms),
   observations: Schema.Array(ConsentObservation),
@@ -96,6 +96,7 @@ export const CaptureError = Schema.Struct({
     "BotBlocked",
     "Timeout",
     "CmpNotFound",
+    "ConsentNotApplied",
     "Navigation",
     "JourneyStep",
     "EngineFailure",

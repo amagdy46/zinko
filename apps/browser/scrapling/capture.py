@@ -59,6 +59,8 @@ WINDOW_CAP_S = 10.0
 FLUSH_IDLE_CAP_S = 2.0
 CMP_DETECT_S = 10.0
 CONSENT_STEP_S = 15.0
+VERIFY_S = 3.0
+VERIFY_POLL_S = 0.5
 NAVIGATION_TIMEOUT_MS = 30_000
 CLICK_TIMEOUT_MS = 5_000
 CHALLENGE_TITLES = ("Just a moment...", "Attention Required! | Cloudflare")
@@ -67,6 +69,11 @@ CHUNK_BYTES = 1024 * 1024
 SDK_HEADERS = ("user-agent", "accept", "accept-language", "referer", "cookie")
 # Talks to Node's egress proxy directly, never through an environment proxy.
 DIRECT = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+# autoconsent's Playwright bundle keeps its instance in a local; this names it on `window` so the
+# shim's `bannerShown` can re-run the found CMP's popup check after the action. Mirrored in the
+# Playwright engine.
+AUTOCONSENT_INSTANCE = "const consent = new AutoConsent("
+AUTOCONSENT_HANDLE = "const consent = window.__zinkoAutoconsent = new AutoConsent("
 
 
 def log(message: str) -> None:
@@ -574,6 +581,36 @@ class Capture:
         state = message.get("state") or {}
         return message.get("type") == "report" and message.get("mainFrame") and state.get("lifecycle") == "nothingDetected"
 
+    def consent_update_since(self, at: int) -> bool:
+        return any(
+            isinstance(entry["value"], list) and entry["value"][:2] == ["consent", "update"] and entry["at"] >= at
+            for entry in self.data_layer
+        )
+
+    async def banner_shown(self, frame) -> bool | None:
+        # A CMP in an iframe can remove its frame along with the banner.
+        if frame.is_detached():
+            return False
+        try:
+            check = frame.evaluate("window.__zinko ? window.__zinko.bannerShown() : null", isolated_context=False)
+            shown = await asyncio.wait_for(check, VERIFY_S)
+        except Exception as exc:
+            log(f"banner check: {exc}")
+            return None
+        return shown if isinstance(shown, bool) else None
+
+    async def verify_choice(self, frame, action_at: int) -> tuple[bool | None, bool]:
+        """Whether the banner is still shown, polled until it closes or `VERIFY_S` pass, and whether a
+        Google consent update followed the action. autoconsent's result only says its steps ran, not
+        that they took: its Cookiebot opt-in reports success whether or not it found a button to click."""
+        deadline = time.monotonic() + VERIFY_S
+        shown = await self.banner_shown(frame)
+        while shown is not False and time.monotonic() < deadline:
+            await asyncio.sleep(VERIFY_POLL_S)
+            shown = await self.banner_shown(frame)
+        await self.drain_page()
+        return shown, self.consent_update_since(action_at)
+
     async def run_consent(self, loaded_at: float) -> None:
         action = "optIn" if self.scenario == "accept" else "optOut"
         detect_left = max(0.0, CMP_DETECT_S - (time.monotonic() - loaded_at))
@@ -591,12 +628,14 @@ class Capture:
             {"at": found["at"], "source": "cmp", "state": {"event": "popupFound", "cmp": found.get("cmp")}}
         )
         emit({"type": "cookies", "snapshot": await self.snapshot("before-consent")})
-        self.consent["outcome"] = "accepted" if action == "optIn" else "rejected"
-        self.consent["actionAt"] = self.at()
+        action_at = self.at()
+        self.consent["actionAt"] = action_at
         await found["frame"].evaluate(f"autoconsentReceiveMessage({{ type: '{action}' }})", isolated_context=False)
         result = await self.wait_message(lambda m: m.get("type") == f"{action}Result", CONSENT_STEP_S)
         done = await self.wait_message(lambda m: m.get("type") == "autoconsentDone", CONSENT_STEP_S)
         self.autoconsent_active = False
+        reported = None if result is None else bool(result.get("result"))
+        shown, update = await self.verify_choice(found["frame"], action_at)
         self.consent["observations"].append(
             {
                 "at": self.at() if done is None else done["at"],
@@ -604,13 +643,26 @@ class Capture:
                 "state": {
                     "event": f"{action}Result",
                     "cmp": found.get("cmp"),
-                    "result": None if result is None else bool(result.get("result")),
+                    "result": reported,
                     "done": done is not None,
+                    "bannerShown": shown,
+                    "consentUpdate": update,
                 },
             }
         )
-        if result is None or not result.get("result") or done is None:
-            self.error("EngineFailure", f"autoconsent {action} on {found.get('cmp')} did not complete")
+        if shown is False or update:
+            self.consent["outcome"] = "accepted" if action == "optIn" else "rejected"
+            if not reported or done is None:
+                self.error("EngineFailure", f"autoconsent {action} on {found.get('cmp')} did not complete")
+            return
+        self.consent["outcome"] = "not-applied"
+        said = {True: "reported success", False: "reported failure", None: "did not answer"}[reported]
+        banner = "the banner was still shown" if shown else "the banner could not be checked"
+        self.error(
+            "ConsentNotApplied",
+            f"autoconsent {action} on {found.get('cmp')} {said}, but {banner} {VERIFY_S:g} s later "
+            "and no consent update followed",
+        )
 
     # --- the capture ------------------------------------------------------------------------------
 
@@ -645,7 +697,10 @@ class Capture:
 
     async def run(self) -> None:
         files = self.job["files"]
-        self.autoconsent_script = open(files["autoconsent"], encoding="utf-8").read()
+        script = open(files["autoconsent"], encoding="utf-8").read()
+        if AUTOCONSENT_INSTANCE not in script:
+            raise RuntimeError("the autoconsent bundle changed: no instance to name for the banner check")
+        self.autoconsent_script = script.replace(AUTOCONSENT_INSTANCE, AUTOCONSENT_HANDLE, 1)
         rules = json.loads(open(files["rules"], encoding="utf-8").read())
         init = {"type": "initResp", "config": AUTOCONSENT_CONFIG, "rules": rules}
         self.init_reply = f"autoconsentReceiveMessage({json.dumps(init)})"
