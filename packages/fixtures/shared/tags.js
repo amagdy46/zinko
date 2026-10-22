@@ -33,7 +33,9 @@
   document.head.appendChild(gtagScript)
   gtag("js", new Date())
   if (cfg.piiInUrl) {
-    history.replaceState(null, "", "?email=" + encodeURIComponent("jane.doe@example.com"))
+    const url = new URL(location.href)
+    url.searchParams.set("email", "jane.doe@example.com")
+    history.replaceState(null, "", url.search)
   }
   const ga4Config = {}
   if (!cfg.ga4PageView) ga4Config.send_page_view = false
@@ -77,10 +79,13 @@
     window.fbq("init", ID.meta)
   }
 
+  // one per document load, so a journey that revisits a page does not repeat an event id
+  const documentNonce = Math.random().toString(36).slice(2, 8)
+
   function metaEventId(event, sequence) {
     if (cfg.metaEventId === "none") return undefined
     if (cfg.metaEventId === "shared") return "evt-1"
-    return cfg.page + "-" + event + "-" + sequence
+    return cfg.page + "-" + event + "-" + sequence + "-" + documentNonce
   }
 
   let metaLoaded = false

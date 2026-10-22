@@ -10,7 +10,7 @@ pnpm --filter @repo/fixtures inspect <site>[/page] [accept|reject]
 Every site has `/` (home), `/product` and `/thank-you`. The thank-you page fires `purchase` with
 `transaction_id: T-1001`, `value: 49.9`, `currency: EUR` (GA4 `purchase`, the Ads conversion `ZinkoConv01`,
 Meta `Purchase` with `value` and `currency`, TikTok `CompletePayment`). Every Meta event carries an
-`eventID` (`<page>-<Event>-<n>`, unique per page load), there is one GA4 ID, and GA4 `page_location`
+`eventID` (`<page>-<Event>-<n>-<nonce>`, the nonce a random base-36 string per document load), there is one GA4 ID, and GA4 `page_location`
 is the site's own URL (gtag drops the port: `http://localhost/clean/`, so compare host names, not `host`). The SDK scripts (gtag.js, fbevents.js,
 the TikTok pixel) load from the real CDNs.
 
@@ -142,7 +142,8 @@ Behaviour the rules must cope with, all on `clean`:
 | `no-cmp`               | `consent.cookies-without-consent`                                                                         | fail         | none, gpc (`_ga`, `_ga_ZINKO00001`, `_gcl_au`, `_ttp`)                                                                                                                                     |
 |                        | `consent.pixel-without-consent`                                                                           | fail         | none, gpc (Meta and TikTok at load; under `gpc` the title says the signal was ignored)                                                                                                     |
 |                        | `consent.google-without-denied-state`                                                                     | fail         | none, gpc (no consent state)                                                                                                                                                               |
-|                        | `consent.default-after-tag`                                                                               | fail         | none, accept, reject, gpc (no default push at all; it needs no banner, so it is evaluated)                                                                                                 |
+|                        | `consent.default-after-tag`                                                                               | fail         | none, gpc (no consent default was set)                                                                                                                                                     |
+|                        | `consent.default-after-tag`                                                                               | inconclusive | accept, reject: "the banner was not found"                                                                                                                                                 |
 |                        | `consent.cookies-without-consent`, `consent.pixel-without-consent`, `consent.google-without-denied-state` | inconclusive | accept, reject: "the banner was not found"                                                                                                                                                 |
 |                        | `consent.pixel-after-reject`                                                                              | inconclusive | reject: "the banner was not found"; n.a. elsewhere                                                                                                                                         |
 
@@ -168,4 +169,4 @@ Every other rule for the new sites is as in the baseline, including `hygiene.tag
 - GA4 sends `page_location` without the port, Meta's `dl` keeps it: compare host names.
 - "Landing URL" for `clickid.cookie-missing` on a redirect: the final document URL (above).
 - An Ads "conversion" is a hit with a conversion label, not any Ads hit carrying `value`.
-- `consent.default-after-tag` is evaluated even when the banner is not found.
+- `consent.default-after-tag` is `inconclusive` under accept and reject when the banner is not found (as every consent rule), and fails under none and gpc.
