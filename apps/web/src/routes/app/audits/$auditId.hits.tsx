@@ -329,7 +329,7 @@ function HitFlags({ hit }: { hit: HitItem }) {
   return (
     <span className="ml-2 inline-flex gap-1 align-middle">
       {hit.afterConsentAction ? (
-        <Badge variant="secondary" className="bg-warning/15 text-warning">
+        <Badge variant="secondary" className="bg-sev-warning-bg text-sev-warning">
           after consent action
         </Badge>
       ) : null}

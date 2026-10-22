@@ -65,7 +65,7 @@ export function HitSummary({ hit }: { hit: HitFields }) {
         </p>
         <p className="flex flex-wrap gap-1 text-xs">
           {hit.afterConsentAction ? (
-            <Badge variant="secondary" className="bg-warning/15 text-warning">
+            <Badge variant="secondary" className="bg-sev-warning-bg text-sev-warning">
               sent at or after the consent action
             </Badge>
           ) : null}

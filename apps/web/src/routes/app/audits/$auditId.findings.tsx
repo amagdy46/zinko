@@ -39,7 +39,7 @@ const AREAS: Record<string, string> = {
 
 const SEVERITIES: Record<FindingRow["severity"], { label: string; tone: string }> = {
   critical: { label: "Critical", tone: "bg-destructive/10 text-destructive" },
-  warning: { label: "Warning", tone: "bg-warning/15 text-warning" },
+  warning: { label: "Warning", tone: "bg-sev-warning-bg text-sev-warning" },
   info: { label: "Info", tone: "bg-muted text-muted-foreground" },
 }
 
@@ -94,7 +94,7 @@ function FindingsScreen() {
       <div
         className={cn(
           "rounded-lg border p-3 text-sm",
-          full ? "bg-card" : "border-warning/50 bg-warning/10",
+          full ? "bg-card" : "border-sev-warning-border bg-sev-warning-bg",
         )}
         data-testid="coverage"
       >
@@ -413,7 +413,7 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
         </p>
       )}
       {finding.kind === "inconclusive" ? (
-        <p className="rounded-md border border-warning/50 bg-warning/10 p-2 text-sm">
+        <p className="rounded-md border border-sev-warning-border bg-sev-warning-bg p-2 text-sm">
           This could not be checked, which is different from passing. Nothing here says the tracking
           is right or wrong.
         </p>
@@ -461,7 +461,7 @@ function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
                     className={
                       c.status === "fail"
                         ? "bg-destructive/10 text-destructive"
-                        : "bg-warning/15 text-warning"
+                        : "bg-sev-warning-bg text-sev-warning"
                     }
                   >
                     {c.status}

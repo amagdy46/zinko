@@ -9,26 +9,33 @@ export function LogoMark({ className }: { className?: string }) {
         width="63"
         height="63"
         rx="14"
-        fill="#17171d"
-        className="stroke-border"
+        className="fill-sidebar stroke-border"
         strokeWidth="2"
       />
       <g transform="translate(9 7.5625) scale(0.71875)">
         <path
           d="M32 47L13 40M32 47L18.5 26M32 47V20M32 47L45.5 26M32 47L51 40"
           fill="none"
-          stroke="#ececf1"
+          className="stroke-foreground"
           strokeWidth="4"
           strokeLinecap="round"
         />
-        <g fill="#ececf1">
+        <g className="fill-foreground">
           <circle cx="32" cy="48" r="7" />
           <ellipse cx="13" cy="40" rx="4" ry="6.5" transform="rotate(-70 13 40)" />
           <ellipse cx="18.5" cy="26" rx="4" ry="6.5" transform="rotate(-33 18.5 26)" />
           <ellipse cx="45.5" cy="26" rx="4" ry="6.5" transform="rotate(33 45.5 26)" />
           <ellipse cx="51" cy="40" rx="4" ry="6.5" transform="rotate(70 51 40)" />
         </g>
-        <ellipse cx="32" cy="19" rx="6.5" ry="5" fill="#17171d" stroke="#8b7cf6" strokeWidth="3" />
+        <ellipse
+          cx="32"
+          cy="19"
+          rx="6.5"
+          ry="5"
+          className="fill-sidebar"
+          stroke="#8b7cf6"
+          strokeWidth="3"
+        />
         <circle cx="32" cy="19" r="1.7" fill="#8b7cf6" />
       </g>
     </svg>

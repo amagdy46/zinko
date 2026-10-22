@@ -5,8 +5,9 @@
 Zinko should feel like a professional debugging tool: dense, calm and fast, in the spirit of Linear and Sentry, not a marketing dashboard. Consultants live in it, and their clients see only the polished report.
 
 - Dark and light themes, with light as the default for reports.
-- Neutral greys with one brand accent. Severity colors carry meaning: critical red, warning amber, info blue, pass green. Color is never decorative.
-- Monospace for IDs, parameters and URLs; Inter for everything else.
+- Logo-tinted neutrals (hue 285) with violet `primary` as the only brand accent; `sidebar` supplies the navigation surface. Severity uses `sev-critical` (red), `sev-warning` (amber), `sev-info` (blue); passes and complete runs use `status-pass` (green). Each set has plain text/glyph, `-bg`, `-border` and `-solid` tokens. Tints belong in badges, headers and detail views; rows stay neutral. `destructive` is for destructive actions and form errors.
+- System sans (`ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`); no Inter download or font dependency. System monospace for IDs, parameters, URLs and timestamps. The type scale is `text-2xs` 11/16, `text-xs` 12/16, `text-sm` 13/20, `text-base` 14/22, `text-lg` 16/24, `text-xl` 20/28 and `text-2xl` 28/34 (px size/line height). Base radius is 8px (sm 4, md 6, lg 8, xl 12).
+- Meaning uses a glyph and a word: Critical a filled diamond, Warning a filled triangle, Info a filled dot; Fail an x ring, Pass and Complete a check ring, Partial a half ring, Could not check a neutral dashed ring, Not applicable a dash ring, Queued a hollow ring, Running a violet spinning arc. Could not check is neutral, never amber or green. Reduced motion stops spinning and pulsing indicators.
 - Keyboard-first: `⌘K` command palette, `j`/`k` to move through findings, `e` to open the evidence panel.
 - Every number links to the evidence behind it.
 

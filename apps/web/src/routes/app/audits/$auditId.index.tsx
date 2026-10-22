@@ -61,7 +61,12 @@ function Tile({ run }: { run: RunTile }) {
         <span className="font-mono tabular-nums">{finished ? run.hitCount : "-"}</span>
       </div>
       {reason === null ? null : (
-        <p className={cn("text-xs", run.status === "failed" ? "text-destructive" : "text-warning")}>
+        <p
+          className={cn(
+            "text-xs",
+            run.status === "failed" ? "text-destructive" : "text-sev-warning",
+          )}
+        >
           {reason}
         </p>
       )}

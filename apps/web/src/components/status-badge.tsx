@@ -2,10 +2,10 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 const TONE: Record<string, string> = {
-  complete: "bg-success/10 text-success",
-  partial: "bg-warning/15 text-warning",
-  failed: "bg-destructive/10 text-destructive",
-  running: "bg-primary/10 text-foreground",
+  complete: "bg-status-pass-bg text-status-pass",
+  partial: "bg-sev-warning-bg text-sev-warning",
+  failed: "bg-sev-critical-bg text-sev-critical",
+  running: "bg-primary/10 text-primary",
 }
 
 /** A run or audit status: complete, partial, failed, running, queued or pending. */
