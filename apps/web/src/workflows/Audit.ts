@@ -7,6 +7,7 @@ import {
   Browser,
   type BrowserError,
   CaptureAdmission,
+  type Grant,
   ENGINE_FREE_EVENT,
   JOURNEY_STEPS,
   Storage,
@@ -37,14 +38,34 @@ class EngineBusy extends Data.TaggedError("EngineBusy")<{ readonly message: stri
 const failFast = (cause: AuditStateError | Schema.SchemaError) =>
   Effect.fail(new Workflow.WorkflowStepNonRetryableError({ cause }))
 
+interface RunError {
+  readonly code: string
+  readonly message: string
+}
+
+interface StoredKeys {
+  readonly captureKey: string
+  readonly screenshotKey: string | null
+}
+
 /**
- * How `capture-<n>` ended. Step results are stored by Cloudflare (1 MiB at most), so a capture
- * travels as its R2 keys. `Exhausted` is the step giving up (out of retries, or not retryable).
+ * How one attempt of `capture-<n>` ended. Step results are stored by Cloudflare (1 MiB at most),
+ * so a capture travels as its R2 keys. `Lost`: the grant no longer held the engine, so nothing was
+ * captured. `Retry`: the engine failed and was given back.
  */
+type Attempt = Data.TaggedEnum<{
+  Stored: StoredKeys
+  Refused: RunError
+  Lost: {}
+  Retry: RunError
+}>
+const Attempt = Data.taggedEnum<Attempt>()
+
+/** How a run's capture ended. `Exhausted`: out of turns or retries, or not retryable. */
 type CaptureOutcome = Data.TaggedEnum<{
-  Captured: { readonly captureKey: string; readonly screenshotKey: string | null }
-  Rejected: { readonly code: string; readonly message: string }
-  Exhausted: { readonly code: string; readonly message: string }
+  Captured: StoredKeys
+  Rejected: RunError
+  Exhausted: RunError
 }>
 const { Captured, Rejected, Exhausted, $match } = Data.taggedEnum<CaptureOutcome>()
 
@@ -56,13 +77,26 @@ interface RunFailure {
   readonly failure: string | null
 }
 
-// A busy engine (429) or a container that cannot start (503) clears up within minutes, so wait
-// 15 s, 30 s, 1 min, ... (about an hour in all) before giving the run up. The engine stops a
-// capture at 60 s plus 15 s per journey step, 135 s at JOURNEY_STEPS, well inside the timeout.
+// Database and storage failures clear up within minutes, so wait 15 s, 30 s, 1 min, ... (about
+// an hour in all) before giving the step up.
 const STEP = {
   retries: { limit: 8, delay: "15 seconds", backoff: "exponential" },
   timeout: "4 minutes",
 } as const
+
+// An attempt of `capture-<n>` always gives its engine back when it ends, so a retried attempt
+// finds its grant gone and the run joins the line again (`Lost`); retrying here only covers a
+// crash after the capture was stored. The engine stops a capture at 60 s plus 15 s per journey
+// step, 135 s at JOURNEY_STEPS, well inside the timeout.
+const CAPTURE_STEP = {
+  retries: { limit: 3, delay: "5 seconds", backoff: "constant" },
+  timeout: "4 minutes",
+} as const
+
+// Turns a run gets on an engine (each `Lost` or `Retry` uses one); after a `Retry` it waits
+// 15 s, 30 s, 1 min, 2 min before asking again, off the engine.
+const TURNS = 5
+const backoff = (turn: number) => 15_000 * 2 ** turn
 
 // The gate is a Durable Object call: retry briefly, and treat a gate that stays down like a busy
 // engine (the run records EngineBusy: Zinko was busy).
@@ -130,12 +164,16 @@ const readText = (key: string) =>
     })
   })
 
-/** Which engine errors are worth retrying. A refusal is an answer, not an error. */
+/**
+ * Which engine errors are worth another turn. A refusal is an answer, not an error; a retry gives
+ * the engine back and joins the line again after a backoff, instead of retrying on an engine the
+ * run may no longer hold.
+ */
 const classify = (
   error: BrowserError,
 ): Effect.Effect<
-  CaptureRejected,
-  BrowserError | EngineBusy | Workflow.WorkflowStepNonRetryableError
+  CaptureRejected | { readonly retry: RunError },
+  Workflow.WorkflowStepNonRetryableError
 > => {
   // a refused request captured nothing and would be refused again: no retry
   if (error.rejected !== undefined) return Effect.succeed(error.rejected)
@@ -143,10 +181,12 @@ const classify = (
   if (error.status === 400)
     return Effect.fail(new Workflow.WorkflowStepNonRetryableError({ cause: error }))
   if (error.status === 429 || error.status === 503)
-    return Effect.fail(
-      new EngineBusy({ message: `${ENGINE_BUSY}: the engine answered ${error.status}` }),
-    )
-  return Effect.fail(error)
+    return Effect.succeed({
+      retry: { code: ENGINE_BUSY, message: `${ENGINE_BUSY}: the engine answered ${error.status}` },
+    })
+  return Effect.succeed({
+    retry: { code: "EngineFailure", message: truncate(`EngineFailure: ${String(error.cause)}`) },
+  })
 }
 
 const fromBase64 = (data: string) => Uint8Array.from(atob(data), (c) => c.charCodeAt(0))
@@ -166,8 +206,7 @@ const start = (auditId: string) =>
   }).pipe(Effect.catchTag("AuditStateError", failFast))
 
 /**
- * Asks the gate for an engine. The first admission marks the audit running; an audit that holds
- * its engine keeps it.
+ * Asks the gate for an engine for one capture. The first grant marks the audit running.
  */
 const admit = (auditId: string) =>
   Effect.gen(function* () {
@@ -194,31 +233,24 @@ const admit = (auditId: string) =>
     ),
   )
 
-const release = (auditId: string) =>
-  Effect.gen(function* () {
-    const gate = yield* CaptureAdmission
-    yield* gate.release(auditId)
-  })
-
 /**
- * Waits its turn for an engine before run `ordinal`: `admit-<n>` asks; while the audit waits,
- * `queued-<n>-<k>` sleeps until the gate wakes it or a minute passes, and `admit-<n>-<k>` asks
- * again.
+ * Waits for a grant: `admit-<turn>` asks; while the audit waits, `queued-<turn>-<k>` sleeps until
+ * the gate wakes it or a minute passes, and `admit-<turn>-<k>` asks again.
  */
-const engineFor = (auditId: string, ordinal: number) =>
+const grantFor = (auditId: string, turn: string) =>
   Effect.gen(function* () {
     for (let attempt = 0; ; attempt++) {
       const admission = yield* Workflow.step(
-        attempt === 0 ? `admit-${ordinal}` : `admit-${ordinal}-${attempt}`,
+        attempt === 0 ? `admit-${turn}` : `admit-${turn}-${attempt}`,
         runtime.provide(admit(auditId)),
         ADMIT_STEP,
       )
-      if ("engine" in admission) return admission.engine
+      if ("engine" in admission) return admission
       yield* Effect.logInfo(
         `Audit ${auditId} waits for an engine at position ${admission.position}`,
       )
       // a timeout is the periodic re-ask, not a failure
-      yield* Workflow.waitForEvent(`queued-${ordinal}-${attempt + 1}`, {
+      yield* Workflow.waitForEvent(`queued-${turn}-${attempt + 1}`, {
         type: ENGINE_FREE_EVENT,
         timeout: "1 minute",
       }).pipe(Effect.catchTag("WorkflowStepError", () => Effect.void))
@@ -226,16 +258,23 @@ const engineFor = (auditId: string, ordinal: number) =>
   })
 
 /**
- * Captures one run and stores it in R2, at most once: a run that already has its keys, or whose
- * capture is already in R2 (written before a database failure), is not captured again.
+ * Captures one run on the engine `grant` holds and stores it in R2, at most once: a run that
+ * already has its keys, or whose capture is already in R2 (written before a database failure), is
+ * not captured again. The gate confirms the grant before the engine is called, so an attempt that
+ * runs after its grant lapsed (a retry, a resumed workflow) captures nothing; every attempt gives
+ * the engine back when it ends.
  */
-const capture = (auditId: string, runId: string, engine: string) =>
+const capture = (auditId: string, runId: string, grant: Grant) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const storage = yield* Storage
+    const gate = yield* CaptureAdmission
     const { run: current, config, host } = yield* loadRun(auditId, runId)
     if (current.captureKey !== null)
-      return Captured({ captureKey: current.captureKey, screenshotKey: current.screenshotKey })
+      return Attempt.Stored({
+        captureKey: current.captureKey,
+        screenshotKey: current.screenshotKey,
+      })
     const keys = keysFor(auditId, runId)
     const storeKeys = (screenshotKey: string | null) =>
       db
@@ -246,7 +285,7 @@ const capture = (auditId: string, runId: string, engine: string) =>
           finishedAt: sql`coalesce(${run.finishedAt}, now())`,
         })
         .where(eq(run.id, runId))
-        .pipe(Effect.as(Captured({ captureKey: keys.capture, screenshotKey })))
+        .pipe(Effect.as(Attempt.Stored({ captureKey: keys.capture, screenshotKey })))
     // the screenshot is written first, so a stored capture.json means its screenshot is stored too
     if (yield* exists(keys.capture))
       return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
@@ -266,6 +305,7 @@ const capture = (auditId: string, runId: string, engine: string) =>
       errors: [],
     })
     const browser = yield* Browser
+    if (!(yield* gate.confirm(auditId, grant))) return Attempt.Lost()
     const answer = yield* browser
       .capture(
         {
@@ -282,11 +322,12 @@ const capture = (auditId: string, runId: string, engine: string) =>
           blockVendorRequests,
           allowedHosts: [host],
         },
-        { instance: engine },
+        { instance: grant.engine },
       )
       .pipe(Effect.catchTag("BrowserError", classify))
+    if ("retry" in answer) return Attempt.Retry(answer.retry)
     if ("error" in answer)
-      return Rejected({ code: answer.error, message: truncate(answer.message) })
+      return Attempt.Refused({ code: answer.error, message: truncate(answer.message) })
 
     if (answer.screenshot !== null)
       yield* storage.put(keys.screenshot, fromBase64(answer.screenshot), {
@@ -296,7 +337,59 @@ const capture = (auditId: string, runId: string, engine: string) =>
       contentType: "application/json",
     })
     return yield* storeKeys(answer.screenshot === null ? null : keys.screenshot)
-  }).pipe(Effect.catchTags({ AuditStateError: failFast, SchemaError: failFast }))
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        const gate = yield* CaptureAdmission
+        yield* gate.release(auditId, grant)
+      }).pipe(
+        // the lease lapses on its own; this only frees the engine sooner
+        Effect.ignoreCause({ log: "Warn", message: "Engine not released" }),
+      ),
+    ),
+    Effect.catchTags({
+      AuditStateError: failFast,
+      SchemaError: failFast,
+      AdmissionError: () =>
+        Effect.fail(
+          new EngineBusy({ message: `${ENGINE_BUSY}: the capture queue did not answer` }),
+        ),
+    }),
+  )
+
+/**
+ * One run's turns on an engine: wait for a grant, capture on it. A turn that lost its grant asks
+ * again at once; one whose engine failed waits a backoff off the engine first. Turn 0's steps are
+ * `admit-<n>` and `capture-<n>`, turn t's `admit-<n>.<t>` and `capture-<n>.<t>`, so a new turn
+ * never replays an old grant.
+ */
+const captureRun = (auditId: string, runId: string, ordinal: number) =>
+  Effect.gen(function* () {
+    for (let turn = 0; ; turn++) {
+      const name = turn === 0 ? `${ordinal}` : `${ordinal}.${turn}`
+      const grant = yield* grantFor(auditId, name)
+      const outcome = yield* Workflow.step(
+        `capture-${name}`,
+        runtime.provide(capture(auditId, runId, grant)),
+        CAPTURE_STEP,
+      )
+      if (Attempt.$is("Stored")(outcome))
+        return Captured({ captureKey: outcome.captureKey, screenshotKey: outcome.screenshotKey })
+      if (Attempt.$is("Refused")(outcome))
+        return Rejected({ code: outcome.code, message: outcome.message })
+      const retry = Attempt.$is("Retry")(outcome)
+      if (turn + 1 >= TURNS)
+        return Exhausted(
+          retry
+            ? { code: outcome.code, message: outcome.message }
+            : {
+                code: ENGINE_BUSY,
+                message: `${ENGINE_BUSY}: the engine was handed on before the capture started`,
+              },
+        )
+      if (retry) yield* Workflow.sleep(`backoff-${name}`, backoff(turn))
+    }
+  })
 
 /**
  * Derives the run's hits, `dataLayer` pushes and check results from its stored capture. One
@@ -573,10 +666,11 @@ const finish = (auditId: string) =>
   })
 
 /**
- * One audit: `start`, then for each run `admit-<n>` (its turn for an engine), `capture-<n>` and
- * either `persist-<n>` or `fail-<n>`, then `release` and `finish`. Every step is durable: once it
- * succeeds, a replay returns its stored result instead of running it again. A run that fails does not stop the audit. Bound as AUDIT_WORKFLOW, exported
- * from `src/server.ts`.
+ * One audit: `start`, then for each run `admit-<n>` and `capture-<n>` (repeated as
+ * `admit-<n>.<t>`, `capture-<n>.<t>` when a turn was lost or failed), then `persist-<n>` or
+ * `fail-<n>`, then `finish`. Every step is durable: once it succeeds, a replay returns its stored
+ * result instead of running it again. A run that fails does not stop the audit. Bound as
+ * AUDIT_WORKFLOW, exported from `src/server.ts`.
  */
 export class Audit extends AuditWorkflow.make(Layer.empty, {
   run: ({ auditId }) =>
@@ -584,14 +678,7 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
       const runs = yield* Workflow.step("start", runtime.provide(start(auditId)), STEP)
       for (const { id, ordinal } of runs) {
         // effect-cf fails the step with WorkflowStepError once Cloudflare gives up retrying
-        const outcome = yield* engineFor(auditId, ordinal).pipe(
-          Effect.flatMap((engine) =>
-            Workflow.step(
-              `capture-${ordinal}`,
-              runtime.provide(capture(auditId, id, engine)),
-              STEP,
-            ),
-          ),
+        const outcome = yield* captureRun(auditId, id, ordinal).pipe(
           Effect.catchTag("WorkflowStepError", (error) =>
             Effect.succeed(
               Exhausted({
@@ -621,10 +708,6 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
         if (reason !== null)
           yield* Workflow.step(`fail-${ordinal}`, runtime.provide(fail(auditId, id, reason)), STEP)
       }
-      // a failed release only holds the next audit back until this one's lease lapses
-      yield* Workflow.step("release", runtime.provide(release(auditId)), ADMIT_STEP).pipe(
-        Effect.catchTag("WorkflowStepError", () => Effect.void),
-      )
       const status = yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP)
       return { status }
     }),

@@ -12,55 +12,88 @@ export class AdmissionGateNamespace extends DurableObject.Tag<AdmissionGateNames
       args: [Schema.String, Engines],
       success: Schema.Struct({ admission: Admission, promoted: Promoted }),
     }),
-    release: DurableObject.method({ args: [Schema.String, Engines], success: Promoted }),
+    confirm: DurableObject.method({
+      args: [Schema.String, Schema.String, Engines],
+      success: Schema.Struct({ held: Schema.Boolean, promoted: Promoted }),
+    }),
+    release: DurableObject.method({
+      args: [Schema.String, Schema.String, Engines],
+      success: Promoted,
+    }),
   },
 ) {}
 
+const Holder = Schema.Struct({
+  holder: Schema.String,
+  token: Schema.String,
+  engine: Schema.String,
+  until: Schema.Finite,
+})
+type Holder = typeof Holder.Type
+
 const State = Schema.Struct({
-  holders: Schema.Array(
-    Schema.Struct({ holder: Schema.String, engine: Schema.String, until: Schema.Number }),
-  ),
-  waiting: Schema.Array(Schema.Struct({ holder: Schema.String, seen: Schema.Number })),
+  holders: Schema.Array(Holder),
+  waiting: Schema.Array(Schema.Struct({ holder: Schema.String, seen: Schema.Finite })),
 })
 type State = typeof State.Type
 
-// A holder asks again before each capture, and a capture step gives up an attempt after 4
-// minutes; a holder that stops asking for longer has crashed or is stuck retrying, and loses its
-// engine.
-const LEASE_MS = 5 * 60_000
-// A waiter handed an engine is woken by an event and re-asks within a minute even without it.
+// A grant must be confirmed by its capture step within this long; a workflow that dies between
+// `admit-<n>` and `capture-<n>` gives its engine back quickly.
 const CLAIM_MS = 90_000
+// A confirmed grant lasts one capture attempt: the step gives up an attempt after 4 minutes and
+// releases the engine when it ends, so the lease only matters when the attempt crashed.
+const LEASE_MS = 5 * 60_000
 // Waiters re-ask every minute; one that stopped (a deleted workflow) leaves the line.
 const WAITER_MS = 3 * 60_000
 
 const KEY = "state"
-const decodeState = Schema.decodeUnknownEffect(State)
+// Keep pre-token holders until their lease ends; an upgrade must not free a running engine.
+const decodeState = Schema.decodeUnknownEffect(
+  Schema.Struct({
+    holders: Schema.Array(
+      Schema.Struct({ ...Holder.fields, token: Schema.optionalKey(Schema.String) }),
+    ),
+    waiting: State.fields.waiting,
+  }),
+)
 
 const load = Effect.gen(function* () {
   const { storage } = yield* DurableObjectState.DurableObjectState
   const stored = yield* storage.get(KEY)
-  return stored === undefined ? { holders: [], waiting: [] } : yield* decodeState(stored)
+  if (stored === undefined) return { holders: [], waiting: [] }
+  const state = yield* decodeState(stored)
+  return {
+    ...state,
+    holders: state.holders.map((h) => ({
+      holder: h.holder,
+      engine: h.engine,
+      until: h.until,
+      token: h.token ?? crypto.randomUUID(),
+    })),
+  }
 })
 
 const save = (state: State) =>
   Effect.flatMap(DurableObjectState.DurableObjectState, ({ storage }) => storage.put(KEY, state))
 
-const holds = (h: State["holders"][number], engines: ReadonlyArray<string>, now: number) =>
+const live = (h: Holder, engines: ReadonlyArray<string>, now: number) =>
   h.until > now && engines.includes(h.engine)
 
 /**
- * Drops lapsed holders and silent waiters, then hands every free engine to the head of the line.
+ * Drops lapsed grants and silent waiters, then hands every free engine to the head of the line.
  * Returns the new state and who was handed an engine.
  */
 const settle = (state: State, engines: ReadonlyArray<string>, now: number) => {
-  const holders = state.holders.filter((h) => holds(h, engines, now))
+  const holders = state.holders.filter((h) => live(h, engines, now))
   const waiting = state.waiting.filter(
     (w) => w.seen > now - WAITER_MS && !holders.some((h) => h.holder === w.holder),
   )
   const free = engines.filter((engine) => !holders.some((h) => h.engine === engine))
   const handed = free.flatMap((engine, i) => {
     const next = waiting[i]
-    return next === undefined ? [] : [{ holder: next.holder, engine, until: now + CLAIM_MS }]
+    return next === undefined
+      ? []
+      : [{ holder: next.holder, token: crypto.randomUUID(), engine, until: now + CLAIM_MS }]
   })
   return {
     state: { holders: [...holders, ...handed], waiting: waiting.slice(handed.length) },
@@ -68,61 +101,78 @@ const settle = (state: State, engines: ReadonlyArray<string>, now: number) => {
   }
 }
 
+/** Runs `change` on the stored state at `now` and writes the result back. */
+const update = <A>(change: (state: State, now: number) => { state: State; result: A }) =>
+  Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis
+    const { state, result } = change(yield* load, now)
+    yield* save(state)
+    return result
+  })
+
 /**
- * The line for the capture engines, one per deployment (named `engines`). Each audit holds one
- * engine from its first capture to its last, and audits get engines in the order they first
- * asked. State is kept in storage, so it survives eviction; every change happens between one read
- * and one write with no other I/O, so concurrent calls cannot interleave. Bound as ADMISSION_GATE,
- * exported from `src/server.ts`.
+ * The line for the capture engines, one per deployment (named `engines`). Every capture asks
+ * for an engine and gives it back when it ends, so audits take turns capture by capture, in the
+ * order they asked. A grant carries a token, and a capture runs only after `confirm` finds its
+ * token still holding the engine. State is kept in storage, so it survives eviction; every change
+ * happens between one read and one write with no other I/O, so concurrent calls cannot interleave.
+ * Bound as ADMISSION_GATE, exported from `src/server.ts`.
  */
 export class AdmissionGate extends AdmissionGateNamespace.make(Layer.empty, {
   rpc: {
+    // an audit asks for one capture at a time, so a second ask (a retried step) gets the same grant
     admit: (holder, engines) =>
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis
-        const current = yield* load
-        const holding = current.holders.some((h) => h.holder === holder && holds(h, engines, now))
-        const asked: State = holding
-          ? current
-          : {
-              holders: current.holders,
-              waiting: current.waiting.some((w) => w.holder === holder)
-                ? current.waiting.map((w) => (w.holder === holder ? { holder, seen: now } : w))
-                : [...current.waiting, { holder, seen: now }],
-            }
-        const settled = settle(asked, engines, now)
+      update((current, now) => {
+        const holding = current.holders.some((h) => h.holder === holder && live(h, engines, now))
+        const settled = settle(
+          holding
+            ? current
+            : {
+                holders: current.holders,
+                waiting: current.waiting.some((w) => w.holder === holder)
+                  ? current.waiting.map((w) => (w.holder === holder ? { holder, seen: now } : w))
+                  : [...current.waiting, { holder, seen: now }],
+              },
+          engines,
+          now,
+        )
         const held = settled.state.holders.find((h) => h.holder === holder)
-        const state: State = {
-          holders: settled.state.holders.map((h) =>
-            h.holder === holder ? { ...h, until: now + LEASE_MS } : h,
-          ),
-          waiting: settled.state.waiting,
-        }
-        yield* save(state)
         return {
-          admission:
-            held === undefined
-              ? {
-                  position: state.waiting.findIndex((w) => w.holder === holder) + 1,
-                }
-              : { engine: held.engine },
-          promoted: settled.promoted.filter((h) => h !== holder),
+          state: settled.state,
+          result: {
+            admission:
+              held === undefined
+                ? { position: settled.state.waiting.findIndex((w) => w.holder === holder) + 1 }
+                : { engine: held.engine, token: held.token },
+            promoted: settled.promoted.filter((h) => h !== holder),
+          },
         }
       }),
-    release: (holder, engines) =>
-      Effect.gen(function* () {
-        const now = yield* Clock.currentTimeMillis
-        const current = yield* load
+    confirm: (holder, token, engines) =>
+      update((current, now) => {
+        const settled = settle(current, engines, now)
+        const held = settled.state.holders.some((h) => h.holder === holder && h.token === token)
+        return {
+          state: {
+            holders: settled.state.holders.map((h) =>
+              h.holder === holder && h.token === token ? { ...h, until: now + LEASE_MS } : h,
+            ),
+            waiting: settled.state.waiting,
+          },
+          result: { held, promoted: settled.promoted },
+        }
+      }),
+    release: (holder, token, engines) =>
+      update((current, now) => {
         const settled = settle(
           {
-            holders: current.holders.filter((h) => h.holder !== holder),
-            waiting: current.waiting.filter((w) => w.holder !== holder),
+            holders: current.holders.filter((h) => !(h.holder === holder && h.token === token)),
+            waiting: current.waiting,
           },
           engines,
           now,
         )
-        yield* save(settled.state)
-        return settled.promoted
+        return { state: settled.state, result: settled.promoted }
       }),
   },
 }) {}

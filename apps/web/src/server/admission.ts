@@ -28,8 +28,16 @@ const make = Effect.gen(function* () {
         Effect.tap(({ promoted }) => wake(promoted)),
         Effect.map(({ admission }) => admission),
       ),
-    release: (auditId) =>
-      gate.release(auditId, engines).pipe(Effect.mapError(fail("release")), Effect.flatMap(wake)),
+    confirm: (auditId, { token }) =>
+      gate.confirm(auditId, token, engines).pipe(
+        Effect.mapError(fail("confirm")),
+        Effect.tap(({ promoted }) => wake(promoted)),
+        Effect.map(({ held }) => held),
+      ),
+    release: (auditId, { token }) =>
+      gate
+        .release(auditId, token, engines)
+        .pipe(Effect.mapError(fail("release")), Effect.flatMap(wake)),
   })
 })
 

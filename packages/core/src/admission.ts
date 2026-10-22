@@ -5,28 +5,28 @@ export class AdmissionError extends Data.TaggedError("AdmissionError")<{
   readonly cause: unknown
 }> {}
 
-/**
- * With `engine` (a `Browser.capture` instance name) the audit holds that engine until it releases it
- * or stops asking; with `position` it waits in line (1 is next).
- */
-export const Admission = Schema.Union([
-  Schema.Struct({ engine: Schema.String }),
-  Schema.Struct({ position: Schema.Number }),
-])
+/** One capture's turn on `engine` (a `Browser.capture` instance name), identified by `token`. */
+export const Grant = Schema.Struct({ engine: Schema.String, token: Schema.String })
+export type Grant = typeof Grant.Type
+
+/** A grant, or the audit's place in line (1 is next). */
+export const Admission = Schema.Union([Grant, Schema.Struct({ position: Schema.Finite })])
 export type Admission = typeof Admission.Type
 
 /** The workflow event that tells a waiting audit an engine was handed to it. */
 export const ENGINE_FREE_EVENT = "engine-free"
 
 /**
- * Hands the capture engines to audits one audit per engine, first come first served. An audit
- * asks before each capture; while it keeps asking it keeps its engine, and it releases it when its
- * last run is done.
+ * Hands the capture engines out one capture at a time, first come first served. An audit asks
+ * before each capture and joins the back of the line; the capture confirms its grant before it
+ * touches the engine, and releases it as soon as the capture is stored or has failed.
  */
 export class CaptureAdmission extends Context.Service<
   CaptureAdmission,
   {
     readonly admit: (auditId: string) => Effect.Effect<Admission, AdmissionError>
-    readonly release: (auditId: string) => Effect.Effect<void, AdmissionError>
+    /** Whether `grant` still holds its engine; renews it when it does. */
+    readonly confirm: (auditId: string, grant: Grant) => Effect.Effect<boolean, AdmissionError>
+    readonly release: (auditId: string, grant: Grant) => Effect.Effect<void, AdmissionError>
   }
 >()("@repo/core/CaptureAdmission") {}
