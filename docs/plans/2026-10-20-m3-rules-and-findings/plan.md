@@ -1,6 +1,6 @@
 ---
 type: plan
-status: draft
+status: approved
 design: ../../vision.md
 ---
 
