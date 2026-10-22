@@ -1,7 +1,7 @@
 import { CookieSnapshot } from "@repo/capture-contract"
 import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { checkResult, finding, findingTriage, run } from "@repo/db"
+import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, countDistinct, eq, inArray } from "drizzle-orm"
 import { Effect, Schema } from "effect"
@@ -68,6 +68,14 @@ export const listFindings = createServerFn({ method: "GET" })
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { db } = yield* Database
+        // Read first: `finish` writes the findings and settles the status in one transaction, so
+        // a finished status here means the reads below see the findings (a later read could not).
+        const [current] = yield* db
+          .select({ status: audit.status })
+          .from(audit)
+          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+          .limit(1)
+        if (current === undefined) return yield* new NotFound({ message: "Not found" })
         const runs = yield* db
           .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario })
           .from(run)
@@ -110,6 +118,7 @@ export const listFindings = createServerFn({ method: "GET" })
           }),
         )
         return {
+          status: current.status,
           coverage: {
             totalRuns: runs.length,
             // a run's check results are written together, with one version

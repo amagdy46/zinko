@@ -64,10 +64,11 @@ function SeverityBadge({ severity }: { severity: FindingRow["severity"] }) {
 
 function FindingsScreen() {
   const { audit } = auditRoute.useLoaderData()
-  const { coverage, findings } = Route.useLoaderData()
+  const { status, coverage, findings } = Route.useLoaderData()
   const { finding: ruleId } = Route.useSearch()
-  // findings are written when the audit finishes, check results as each run is saved
-  const finished = ["complete", "partial", "failed"].includes(audit.status)
+  // findings are written when the audit finishes, check results as each run is saved; the status
+  // comes with the findings, not from the audit loader, which may be a moment ahead of them
+  const finished = ["complete", "partial", "failed"].includes(status)
   const active = !finished
 
   if (coverage.evaluatedRuns === 0)
