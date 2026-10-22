@@ -58,9 +58,10 @@ const captureUrls = (pages: ReadonlyArray<string>, clickIds: boolean) =>
 
 /**
  * Creates an audit of a site and starts its workflow. The audit and its runs (page × scenario ×
- * viewport, in that order) are inserted together; the workflow instance is named by the audit id,
- * so the audit cannot be started twice. If the start fails, the audit is saved `failed` with the
- * reason and its id is still returned.
+ * viewport, in that order, then with `journey` one journey run per scenario × viewport, when there
+ * is a key page to walk to) are inserted together; the workflow instance is named by the audit
+ * id, so the audit cannot be started twice. If the start fails, the audit is saved `failed` with
+ * the reason and its id is still returned.
  */
 export const startAudit = createServerFn({ method: "POST" })
   .middleware([requireSession])
@@ -86,13 +87,22 @@ export const startAudit = createServerFn({ method: "POST" })
               .returning({ id: audit.id })
             if (created === undefined) return yield* new NotFound({ message: "Not found" })
             const { scenarios, viewports } = config
-            const runs = urls.flatMap((pageUrl, p) =>
+            // a journey run captures at the start URL and walks the key pages from there
+            const [startUrl] = urls
+            const runPages = [
+              ...urls.map((pageUrl) => ({ pageUrl, journey: false })),
+              ...(config.journey === true && urls.length > 1 && startUrl !== undefined
+                ? [{ pageUrl: startUrl, journey: true }]
+                : []),
+            ]
+            const runs = runPages.flatMap(({ pageUrl, journey }, p) =>
               scenarios.flatMap((scenario, s) =>
                 viewports.map((viewport, v) => ({
                   orgId,
                   auditId: created.id,
                   ordinal: (p * scenarios.length + s) * viewports.length + v,
                   pageUrl,
+                  journey,
                   scenario,
                   viewport,
                   status: "pending",
@@ -177,6 +187,7 @@ export const getAudit = createServerFn({ method: "GET" })
               pageUrl: r.pageUrl,
               scenario: r.scenario,
               viewport: r.viewport,
+              journey: r.journey,
               status: r.status,
               failure: r.failure,
               errors: Option.getOrElse(decodeRunErrors(r.errors), () => []),

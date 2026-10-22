@@ -1,5 +1,6 @@
 import type { CaptureResult } from "@repo/capture-contract"
 import { inconclusive } from "./results.js"
+import { lostAcrossNavigation } from "./rules/clickids/lost-across-navigation.js"
 import { cookiesWithoutConsent } from "./rules/consent/cookies-without-consent.js"
 import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
@@ -24,6 +25,7 @@ export const rules: readonly Rule[] = [
   pixelAfterReject,
   googleWithoutDeniedState,
   defaultAfterTag,
+  lostAcrossNavigation,
 ]
 
 const byId = new Map(rules.map((rule) => [rule.id, rule]))

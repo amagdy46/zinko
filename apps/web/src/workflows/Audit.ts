@@ -6,6 +6,7 @@ import {
   AuditProgress,
   Browser,
   type BrowserError,
+  JOURNEY_STEPS,
   Storage,
   StorageError,
 } from "@repo/core"
@@ -53,7 +54,8 @@ interface RunFailure {
 }
 
 // A busy engine (429) or a container that cannot start (503) clears up within minutes, so wait
-// 15 s, 30 s, 1 min, ... (about an hour in all) before giving the run up.
+// 15 s, 30 s, 1 min, ... (about an hour in all) before giving the run up. The engine stops a
+// capture at 60 s plus 15 s per journey step, 135 s at JOURNEY_STEPS, well inside the timeout.
 const STEP = {
   retries: { limit: 8, delay: "15 seconds", backoff: "exponential" },
   timeout: "4 minutes",
@@ -185,7 +187,7 @@ const capture = (auditId: string, runId: string) =>
     if (yield* exists(keys.capture))
       return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
 
-    const { blockVendorRequests } = yield* decodeConfig(config)
+    const { blockVendorRequests, pages } = yield* decodeConfig(config)
     const { scenario, viewport } = yield* decodeRunShape(current)
     yield* db
       .update(run)
@@ -206,6 +208,13 @@ const capture = (auditId: string, runId: string) =>
           url: current.pageUrl,
           scenario,
           viewport,
+          ...(current.journey
+            ? {
+                journey: pages
+                  .slice(1, 1 + JOURNEY_STEPS)
+                  .map((url) => ({ action: "goto" as const, url })),
+              }
+            : {}),
           blockVendorRequests,
           allowedHosts: [host],
         },

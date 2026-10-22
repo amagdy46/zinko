@@ -1,6 +1,6 @@
 import { createFileRoute, getRouteApi } from "@tanstack/react-router"
 import { StatusBadge } from "@/components/status-badge"
-import { pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
+import { runPage, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { cn } from "@/lib/utils"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
@@ -34,7 +34,7 @@ function Tile({ run }: { run: RunTile }) {
     >
       <div className="flex items-start justify-between gap-2">
         <code className="truncate text-xs" title={run.pageUrl}>
-          {pagePath(run.pageUrl)}
+          {runPage(run)}
         </code>
         <StatusBadge status={run.status} />
       </div>
@@ -50,7 +50,7 @@ function Tile({ run }: { run: RunTile }) {
         {run.screenshotUrl === null ? null : (
           <img
             src={run.screenshotUrl}
-            alt={`${pagePath(run.pageUrl)} under ${scenarioLabel(run.scenario)}, ${run.viewport}`}
+            alt={`${runPage(run)} under ${scenarioLabel(run.scenario)}, ${run.viewport}`}
             loading="lazy"
             className="size-full object-cover object-top"
           />

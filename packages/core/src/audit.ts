@@ -26,12 +26,20 @@ export const AuditConfig = Schema.Struct({
   clickIds: Schema.Boolean,
   /** Vendor collection requests are answered locally and never reach the vendor. */
   blockVendorRequests: Schema.Boolean,
+  /**
+   * Adds journey runs: the start URL, then the first `JOURNEY_STEPS` key pages in order, in one
+   * browser context. Optional, so configs stored before M3 still decode.
+   */
+  journey: Schema.optionalKey(Schema.Boolean),
 })
 export type AuditConfig = typeof AuditConfig.Type
 
+/** How many key pages a journey run walks through: the engine takes at most 5 steps. */
+export const JOURNEY_STEPS = 5
+
 /**
- * Appended to the start URL only, when `clickIds` is on: a landing from an ad. Whether they
- * survive into other pages needs journeys (M3).
+ * Appended to the start URL only, when `clickIds` is on: a landing from an ad. Journey runs show
+ * whether they survive into the key pages.
  */
 export const TEST_CLICK_IDS = {
   gclid: "ZINKO-TEST-GCLID",

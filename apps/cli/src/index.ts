@@ -322,7 +322,8 @@ async function runFrom(
         viewport: opts.base.viewport,
         pageUrl: opts.url,
         siteHost: new URL(opts.url).hostname,
-        journey: opts.base.journey.length > 0,
+        // as in an audit's journey runs, a journey navigates to other pages; clicks alone do not
+        journey: opts.base.journey.some((step) => step.action === "goto"),
         capture: result,
         hits,
       })

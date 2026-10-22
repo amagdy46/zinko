@@ -1,0 +1,1 @@
+ALTER TABLE "run" ADD COLUMN "journey" boolean DEFAULT false NOT NULL;

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { pagePath, scenarioLabel } from "@/lib/audit-labels"
+import { runPage, scenarioLabel } from "@/lib/audit-labels"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
 import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
@@ -82,7 +82,7 @@ function HitsExplorer() {
           onChange={(value) => change("runId", value)}
           options={runs.map((r) => ({
             value: r.id,
-            label: `${pagePath(r.pageUrl)} · ${scenarioLabel(r.scenario)} · ${r.viewport}`,
+            label: `${runPage(r)} · ${scenarioLabel(r.scenario)} · ${r.viewport}`,
           }))}
         />
         <FilterSelect
@@ -309,7 +309,7 @@ function Detail({ auditId, item, run }: { auditId: string; item: Item; run: RunI
     <div className="space-y-3">
       {run === undefined ? null : (
         <p className="text-xs text-muted-foreground">
-          {pagePath(run.pageUrl)} · {scenarioLabel(run.scenario)} · {run.viewport}
+          {runPage(run)} · {scenarioLabel(run.scenario)} · {run.viewport}
         </p>
       )}
       {item.kind === "push" ? (

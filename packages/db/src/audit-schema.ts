@@ -87,6 +87,8 @@ export const run = pgTable(
     pageUrl: text("page_url").notNull(),
     scenario: text().notNull(),
     viewport: text().notNull(),
+    /** Walks from the page URL (the start URL) through the key pages in one browser context. */
+    journey: boolean().notNull().default(false),
     status: text().notNull(),
     engine: jsonb(),
     decoderVersion: text("decoder_version"),

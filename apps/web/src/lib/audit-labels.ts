@@ -13,6 +13,19 @@ export const SCENARIOS: ReadonlyArray<{ value: Scenario; label: string; hint: st
 export const scenarioLabel = (scenario: string) =>
   SCENARIOS.find((s) => s.value === scenario)?.label ?? scenario
 
+/** A journey run loads its start URL, then one page per step: it takes as long as that many runs. */
+export const runCount = ({
+  pages,
+  scenarios,
+  viewports,
+  journeySteps,
+}: {
+  pages: number
+  scenarios: number
+  viewports: number
+  journeySteps: number
+}) => (pages + (journeySteps > 0 ? 1 + journeySteps : 0)) * scenarios * viewports
+
 export const estimateDuration = (runs: number) => {
   const minutes = Math.ceil((runs * SECONDS_PER_RUN) / 60)
   return minutes <= 1 ? "about 1 minute" : `about ${minutes} minutes`
@@ -23,11 +36,16 @@ export const pagePath = (pageUrl: string) => {
   return pathname + search
 }
 
+/** The page a run captures; a journey run starts there and walks on through the key pages. */
+export const runPage = (run: { pageUrl: string; journey: boolean }) =>
+  run.journey ? `Journey from ${pagePath(run.pageUrl)}` : pagePath(run.pageUrl)
+
 const ERROR_TEXT: Record<string, string> = {
   BotBlocked: "Blocked as a bot",
   Timeout: "The page timed out",
   CmpNotFound: "Consent banner not found",
   Navigation: "Left the site",
+  JourneyStep: "A journey step failed",
   PolicyDenied: "Page refused",
   InvalidRequest: "Page refused",
   EngineFailure: "The browser engine failed",

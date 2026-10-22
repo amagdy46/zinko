@@ -1,5 +1,5 @@
 import type { Scenario } from "@repo/capture-contract"
-import { AuditConfig } from "@repo/core/audit"
+import { AuditConfig, JOURNEY_STEPS } from "@repo/core/audit"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { type FormEvent, useState } from "react"
@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
-import { estimateDuration, SCENARIOS } from "@/lib/audit-labels"
+import { estimateDuration, runCount, SCENARIOS } from "@/lib/audit-labels"
 import { withoutCredentials } from "@/lib/site-url"
 import { startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
@@ -62,6 +62,7 @@ function NewAudit() {
   )
   const [viewport, setViewport] = useState<ViewportChoice>(choiceOf(last?.viewports ?? ["desktop"]))
   const [clickIds, setClickIds] = useState(last?.clickIds ?? false)
+  const [journey, setJourney] = useState(last?.journey ?? false)
   const [blockVendorRequests, setBlockVendorRequests] = useState(last?.blockVendorRequests ?? true)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
@@ -71,7 +72,14 @@ function NewAudit() {
     (line) => line !== "" && line !== start,
   )
   const runs =
-    (start === "" ? 0 : 1 + keyPages.length) * scenarios.length * viewportsOf(viewport).length
+    start === ""
+      ? 0
+      : runCount({
+          pages: 1 + keyPages.length,
+          scenarios: scenarios.length,
+          viewports: viewportsOf(viewport).length,
+          journeySteps: journey ? Math.min(keyPages.length, JOURNEY_STEPS) : 0,
+        })
 
   function toggleScenario(scenario: Scenario, checked: boolean) {
     setScenarios(
@@ -101,6 +109,7 @@ function NewAudit() {
           viewports: viewportsOf(viewport),
           clickIds,
           blockVendorRequests,
+          journey,
         },
       },
     })
@@ -220,6 +229,12 @@ function NewAudit() {
             help="Adds test click IDs (gclid, fbclid, ttclid) and UTMs to the start URL."
             checked={clickIds}
             onChange={setClickIds}
+          />
+          <Toggle
+            label="Also walk through the key pages in one session"
+            help={`Adds a run per scenario and viewport that opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session so cookies carry over. Only the first ${JOURNEY_STEPS} are walked; needs at least one key page.`}
+            checked={journey}
+            onChange={setJourney}
           />
           <Toggle
             label="Answer tracking requests locally"
