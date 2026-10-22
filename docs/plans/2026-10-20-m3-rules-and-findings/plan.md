@@ -156,7 +156,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 
 - [ ] Run an audit of every fixture site × none/accept/reject/gpc with `clickIds` and `journey` on; save the Findings screen to `mockups/m3-demo/` (untracked); paste the finding list against the expected result sets
 - [ ] `vision.md`: M3 rows working with how each was verified; the proposed rows decided (three outcomes, Google's wording and click IDs through redirects done; the approved vendor list moved to a later milestone)
-- [ ] The roadmap's M3 demo, "audit a real client site", needs a site the user is allowed to audit: leave it unticked with a note until the user names one
+- [ ] The roadmap's M3 demo, "audit a real client site": the user asked us to pick one. `https://www.happysocks.com/eu/` (GTM, GA4, Cookiebot; autoconsent accepts it, checked 2026-10-22) is the main one, and `https://www.allbirds.com/` (GA4, Meta, TikTok; no banner from our region) the second. Always with `blockVendorRequests: true`, so nothing reaches their vendors; one audit each, no crawling beyond the key pages
 
 ## Execution order
 
