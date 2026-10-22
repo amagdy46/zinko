@@ -151,5 +151,8 @@
     if (cfg.meta === "delayed") setTimeout(() => void loadMeta(), 3000)
     if (cfg.tiktok === "consent" && marketing) void loadTikTok()
     if (cfg.tiktok === "after-choice") void loadTikTok()
+    // An SPA "clean URL": once the tags have read the click IDs, the query string goes, so the
+    // tab's history (which gtag reads the gclid back from) no longer holds it either.
+    if (cfg.cleanUrl) setTimeout(() => history.replaceState(null, "", location.pathname), 2500)
   }
 })()

@@ -10,6 +10,7 @@ export const defaults = {
   homeBatch: false,
   conversionLinker: true,
   keepQuery: true, // internal links carry the query string (gclid) along
+  cleanUrl: false, // true: the query string is removed from the address bar after the consent choice
   adEntry: false,
   gpcEcho: false,
   purchaseOrderId: true, // false: the GA4 purchase and the Ads conversion carry no transaction_id
@@ -30,7 +31,7 @@ export const sites = {
   "duplicate-purchase": { purchase: "twice" },
   "ga4-batch": { homeBatch: true },
   "consent-default-late": { consentDefault: "late" },
-  "lost-gclid": { conversionLinker: false, keepQuery: false },
+  "lost-gclid": { conversionLinker: false, keepQuery: false, cleanUrl: true },
   "redirect-gclid": { adEntry: true },
   "delayed-pixel": { meta: "delayed" },
   "gpc-echo": { gpcEcho: true },
