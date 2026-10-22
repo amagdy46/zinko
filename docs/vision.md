@@ -2,7 +2,7 @@
 
 Every feature we plan to build, how we will build it, what we take from other products, and what is still open. `docs/product.md` is the v0.1 scope, `docs/architecture.md` the stack, `docs/roadmap.md` the milestones; this file ties them together and is updated whenever a spike or a working feature changes the plan.
 
-Last updated 2026-10-20 (M2 audit pipeline working locally).
+Last updated 2026-10-22 (UI refresh approved; semantic palette and typography integrated locally).
 
 ## What Zinko is
 
@@ -114,6 +114,18 @@ The M2 demo, run locally on 2026-10-20 in a browser (Playwright) against the eng
 | **Google's names where we overlap** | Reuse Tag Diagnostics wording and severity (Urgent, Needs attention) for overlapping rules, so findings read the way users already know them | working (M3): the overlapping rules reuse Tag Diagnostics wording ("Tag fired before consent default", "Missing conversion linker", "Redirects dropping click IDs", "Likely overcounting", "Purchase missing transaction ID, value or currency"). The severities stay `critical`, `warning` and `info`, not Google's Urgent and Needs attention |
 | **Click ID survives redirects** | A rule that follows redirects on the landing URL and checks the ID reaches the final page and its cookie (a Tag Diagnostics check) | working (M3): `clickid.lost-on-redirect` compares the run URL with the landing document's final URL; `clickid.cookie-missing` and `clickid.lost-across-navigation` follow it into the cookie and later pages. Verified on `redirect-gclid` (fails under all four scenarios; the Happy Socks and Allbirds landing URLs were not redirected, so the rule passed) |
 | **Approved vendor list per client** | Each client lists allowed, required and forbidden vendors or domains per consent category; a rule flags anything outside it (ObservePoint Consent Categories, DataTrue policies) | later (needs client settings, which do not exist yet): moved out of v0.1 by the M3 plan |
+
+### UI refresh (approved, 2026-10-22)
+
+The implementation plan is `docs/plans/2026-10-22-ui-refresh/plan.md`. It keeps the existing capture and findings model, with shared components first and browser verification against real audits at desktop/mobile widths in both themes. No tests are added during this phase.
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Semantic visual system | `styles.css` defines tinted neutrals, violet primary, severity and pass tokens, a compact system-font scale and reduced-motion rules. Existing color utilities consume these tokens; shared glyphs distinguish statuses by shape | Task 1 integrated locally; 12 screens verified at both widths/themes, including a running and finished fixture audit. OS reduced-motion emulation remains unverified |
+| Shared UI and navigation | Existing Radix umbrella package supplies shadcn tables, sheets, breadcrumbs and controls; shared page headers, empty states, status glyphs, severity badges and formatting support every screen. Sidebar owns organization/account navigation; approved `cmdk` palette searches organization-scoped clients and sites | shared components implemented; combined theme verification pending; shell and palette planned |
+| Client and audit workflow screens | Organization-scoped aggregates use each site's latest settled evaluated audit, with running state and incomplete coverage shown separately. The new audit form separates actual run count from weighted duration. Audit pages gain live progress, a page-by-scenario matrix and run sheets | planned |
+| Findings and evidence | Dense findings, Open/Accepted risk/Fixed views, severity/area filters, neutral could-not-check titles, evidence sheets and shared structured evidence rendering. Generate migrations for nullable `finding_triage.reason` (required on new risk acceptance) and stored `check_title` on check results/findings; workflow copies captured wording through persistence and aggregation | approved; planned. Older accepted risks can lack a reason; old results fall back to a live neutral title, then the area |
+| Hits, settings and final sweep | Organization-scoped timeline accepts multi-value filters and search while retaining old single-value links; explicit matched/total counts and a per-run consent divider work across pagination. Auth/settings use the shared frame, followed by a responsive/theme sweep and documentation | approved; planned. Sales-page refresh remains optional |
 
 ### Matrix, overview and LLM (M4)
 

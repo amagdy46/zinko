@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in review
+status: in progress
 design: ../../ui.md
 ---
 
@@ -13,9 +13,17 @@ Reviewed by GPT-6.1-Sol on 2026-10-22; findings folded in.
 
 Design sources: `mockups/ui-research/{shell-and-clients,audits-and-runs,findings-and-hits,visual-system}.md` (and their `.html` boards), `docs/ui.md`, `docs/vision.md`, `AGENTS.md` (UI rules, current phase), the current routes and components. Where boards disagree, `visual-system.md` wins on color and shape, and `docs/ui.md` on vocabulary ("Could not check").
 
-## Decisions for the user
+## Approved decisions
 
-Everything else in this plan is decided; these need you.
+The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-risk reason, stored neutral check titles (option 3a), and all three behavior changes below. The original options are retained here to document the choices.
+
+## Execution status
+
+- Task 1 integrated locally at `21e17e3`; independent specification and standards reviews found no blockers. The required checks passed again during integration. Browser evidence: 48 screenshots across 12 screens, desktop/mobile and light/dark, plus a running and finished fixture audit (`$TMPDIR/ui-t1-verification.md`). Reduced motion was source-checked only.
+- Task 2 implemented and reviewed; the Sheet backdrop token correction is applied. Combined token/component browser verification is in progress before integration.
+- Claude and then Codex usage limits interrupted earlier tasks; the unfinished queue and request-blocking changes were preserved and resumed in their existing worktrees. The consent revision passed both review axes; stale ADR/roadmap wording is being corrected before integration.
+
+### Decision details
 
 1. **`cmdk` for a ⌘K command palette** (shell board item 12; `docs/ui.md` promises ⌘K). Without it: no palette in this refresh (the sidebar and breadcrumbs cover navigation at today's scale), or a hand-built Dialog with an Input and a filtered list (no fuzzy match, own keyboard handling). Recommendation: approve `cmdk`; Task 13 runs only if you do.
 2. **Triage reason (migration).** Accepting a risk today records who and when (`finding_triage.updated_by`, `updated_at`) but not why. Proposed: a nullable `reason text` column on `finding_triage` (generated migration), required by `setTriage` for `accepted_risk`, shown as "Accepted by Sam, 3 Oct: …". An **expiry** (boards: Snyk-style) is not proposed: it needs a behaviour (reopen on expiry) nobody has specified. Without the migration: Task 8 ships the status menu and the actor line, no reason.
