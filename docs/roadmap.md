@@ -29,7 +29,6 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 - **Admission control:** nothing limits how many audits start at once or orders them when the engine or the containers are busy (`docs/vision.md`, open questions).
 - **Cloudflare:** the Workflow, Durable Objects, R2 and the container have run only under `pnpm dev`; the container image and a deploy are still untried.
 - **A flaky navigation timeout:** one demo run hit `Page.goto` 30 s on a fixture page and passed on the next audit; the cause is not isolated.
-- The dashboard at `/app` is still the scaffold's example page.
 
 ## After v0.1
 

@@ -7,7 +7,6 @@ export class JobError extends Data.TaggedError("JobError")<{
 
 /** Payload per job name. Add an entry here when you add a workflow. */
 export interface JobPayloads {
-  readonly example: { readonly name: string }
   readonly audit: { readonly auditId: string }
 }
 

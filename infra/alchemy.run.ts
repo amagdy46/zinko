@@ -46,7 +46,6 @@ export default Alchemy.Stack(
     // the public origin; empty lets Better Auth infer it from each request (right for PR previews)
     const betterAuthUrl = yield* Config.String("BETTER_AUTH_URL").pipe(Config.withDefault(""))
     const llmEncryptionKey = yield* Config.Redacted("LLM_ENCRYPTION_KEY")
-    const exampleWorkflow = Cloudflare.Workflow("Example", { className: "Example" })
     const auditWorkflow = Cloudflare.Workflow("Audit", { className: "Audit" })
     const auditRoom = Cloudflare.DurableObject("AuditRoom")
     const stage = (yield* Alchemy.Stack).stage
@@ -95,7 +94,6 @@ export default Alchemy.Stack(
         BETTER_AUTH_SECRET: betterAuthSecret,
         BETTER_AUTH_URL: betterAuthUrl,
         LLM_ENCRYPTION_KEY: llmEncryptionKey,
-        EXAMPLE_WORKFLOW: exampleWorkflow,
         AUDIT_WORKFLOW: auditWorkflow,
         AUDIT_ROOM: auditRoom,
         ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),

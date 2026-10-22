@@ -2,14 +2,12 @@ import { JobError, type JobName, type JobPayloads, Jobs } from "@repo/core"
 import { Effect, Layer, Option, type Schema } from "effect"
 import type { Workflow } from "effect-cf"
 import { AuditWorkflow } from "../workflows/AuditWorkflow"
-import { ExampleWorkflow } from "../workflows/Example"
 import { WorkerEnvLive } from "./cloudflare"
 
 const fail = (operation: string) => (cause: unknown) => new JobError({ operation, cause })
 
 const make = Effect.gen(function* () {
   // one entry per workflow; keys match `JobPayloads` in @repo/core
-  const example = yield* ExampleWorkflow
   const audit = yield* AuditWorkflow
   const workflows: {
     readonly [N in JobName]: {
@@ -24,7 +22,7 @@ const make = Effect.gen(function* () {
         id: string,
       ) => Effect.Effect<Workflow.WorkflowInstance<unknown>, Workflow.WorkflowOperationError>
     }
-  } = { example, audit }
+  } = { audit }
   return Jobs.of({
     start: (job, payload, options) =>
       workflows[job]
@@ -46,9 +44,8 @@ const make = Effect.gen(function* () {
   })
 })
 
-/** `Jobs` on Cloudflare Workflows, through the EXAMPLE_WORKFLOW and AUDIT_WORKFLOW bindings. */
+/** `Jobs` on Cloudflare Workflows, through the AUDIT_WORKFLOW binding. */
 export const JobsLive = Layer.effect(Jobs, make).pipe(
-  Layer.provide(ExampleWorkflow.layer({ binding: "EXAMPLE_WORKFLOW" })),
   Layer.provide(AuditWorkflow.layer({ binding: "AUDIT_WORKFLOW" })),
   Layer.provide(WorkerEnvLive),
 )

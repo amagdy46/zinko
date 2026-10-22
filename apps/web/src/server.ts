@@ -20,7 +20,6 @@ const tryRoutes = (routes: ReadonlyArray<WorkerRoute>, request: Request): Promis
   if (head === undefined) return Promise.resolve(handler.fetch(request))
   return head(request).then((response) => response ?? tryRoutes(tail, request))
 }
-export { Example } from "./workflows/Example"
 export { Audit } from "./workflows/Audit"
 export { AuditRoom } from "./realtime/AuditRoom"
 export { BrowserContainer } from "./browser/BrowserContainer"

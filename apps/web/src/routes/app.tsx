@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
-import { LayoutDashboard, Menu, Settings, Users } from "lucide-react"
+import { Menu, Settings, Users } from "lucide-react"
 import { useState } from "react"
 import { Brand } from "@/components/logo"
 import { OrgSwitcher } from "@/components/org-switcher"
@@ -27,7 +27,6 @@ export const Route = createFileRoute("/app")({
 })
 
 const nav = [
-  { to: "/app", label: "Dashboard", icon: LayoutDashboard },
   { to: "/app/clients", label: "Clients", icon: Users },
   { to: "/app/settings", label: "Settings", icon: Settings },
 ] as const
@@ -46,7 +45,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             key={to}
             to={to}
             onClick={onNavigate}
-            activeOptions={{ exact: to === "/app" }}
             className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground [&.active]:bg-accent [&.active]:text-accent-foreground"
           >
             <Icon className="size-4" />
