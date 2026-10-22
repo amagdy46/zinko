@@ -6,6 +6,11 @@ CREATE TABLE "check_result" (
 	"status" text NOT NULL,
 	"message" text NOT NULL,
 	"evidence" jsonb NOT NULL,
+	"area" text NOT NULL,
+	"severity" text NOT NULL,
+	"title" text NOT NULL,
+	"why" text NOT NULL,
+	"fix" jsonb NOT NULL,
 	"created_at" timestamp with time zone NOT NULL,
 	CONSTRAINT "check_result_pkey" PRIMARY KEY("run_id","rule_id")
 );

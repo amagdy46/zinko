@@ -24,6 +24,15 @@ export const checkResult = pgTable(
     message: text().notNull(),
     /** The `EvidenceRef`s the rule cited, into the run's capture and hits. */
     evidence: jsonb().notNull(),
+    /*
+     * The rule as it read when it judged the run (static per rule and `rules_version`), so `finish`
+     * builds findings from stored rows even after a rule is renamed or removed.
+     */
+    area: text().notNull(),
+    severity: text().notNull(),
+    title: text().notNull(),
+    why: text().notNull(),
+    fix: jsonb().notNull(),
     /** The run's `finished_at`, so a retry reproduces the row. */
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   },

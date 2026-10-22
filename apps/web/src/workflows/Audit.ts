@@ -281,7 +281,7 @@ const persist = (auditId: string, runId: string) =>
         },
       ]
     })
-    const checks = evaluateRun({
+    const results = evaluateRun({
       scenario,
       viewport,
       pageUrl: current.pageUrl,
@@ -289,16 +289,27 @@ const persist = (auditId: string, runId: string) =>
       journey: current.journey,
       capture: result,
       hits: decoded,
-    }).map((check) => ({
-      runId,
-      orgId: current.orgId,
-      ruleId: check.ruleId,
-      rulesVersion: RULES_VERSION,
-      status: check.status,
-      message: check.message,
-      evidence: check.evidence,
-      createdAt,
-    }))
+    })
+    const checks = yield* Effect.forEach(results, (check) => {
+      const rule = ruleById(check.ruleId)
+      if (rule === undefined)
+        return Effect.fail(new AuditStateError({ message: `rule ${check.ruleId} is not listed` }))
+      return Effect.succeed({
+        runId,
+        orgId: current.orgId,
+        ruleId: check.ruleId,
+        rulesVersion: RULES_VERSION,
+        status: check.status,
+        message: check.message,
+        evidence: check.evidence,
+        area: rule.area,
+        severity: rule.severity,
+        title: rule.title,
+        why: rule.why,
+        fix: rule.fix,
+        createdAt,
+      })
+    })
     const pushes = result.dataLayer.map((push, seq) => ({
       orgId: current.orgId,
       createdAt,
@@ -393,19 +404,28 @@ const auditStatus = (runs: ReadonlyArray<{ status: string; captureKey: string | 
   return "partial"
 }
 
-interface StoredCheck {
-  readonly runId: string
-  readonly orgId: string
-  readonly ruleId: string
-  readonly rulesVersion: string
-  readonly status: string
-}
+type StoredCheck = Pick<
+  typeof checkResult.$inferSelect,
+  | "runId"
+  | "orgId"
+  | "ruleId"
+  | "rulesVersion"
+  | "status"
+  | "area"
+  | "severity"
+  | "title"
+  | "why"
+  | "fix"
+>
+
+const byVersion = (a: string, b: string) => a.localeCompare(b, "en", { numeric: true })
 
 /**
  * One finding per rule that failed on at least one run (`fail`), or failed on none and was
  * inconclusive on at least one (`inconclusive`). `checks` are in run order, so `run_ids` are too.
- * The text is the rule's as it reads now. A rule no longer in `@repo/rules` has no text to show
- * and is returned in `unknown` instead.
+ * The text comes from the stored check results, not from `@repo/rules`, so a rule renamed or
+ * removed since `persist` still has its finding; when runs were judged by different rules
+ * versions, the newest version's text wins.
  */
 const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
   const byRule = new Map<string, StoredCheck[]>()
@@ -415,34 +435,31 @@ const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
     byRule.set(check.ruleId, group)
   }
   const findings: Array<typeof finding.$inferInsert> = []
-  const unknown: string[] = []
   for (const [ruleId, group] of byRule) {
     const flagged = group.filter((c) => c.status === "fail" || c.status === "inconclusive")
-    const [first] = flagged
-    if (first === undefined) continue
-    const rule = ruleById(ruleId)
-    if (rule === undefined) {
-      unknown.push(ruleId)
-      continue
-    }
+    if (flagged.length === 0) continue
+    const versions = [...new Set(group.map((c) => c.rulesVersion))].toSorted(byVersion)
+    const newest = versions.at(-1)
+    const text = group.find((c) => c.rulesVersion === newest)
+    if (text === undefined) continue
     const failingRuns = flagged.filter((c) => c.status === "fail").length
     findings.push({
       auditId,
-      orgId: first.orgId,
+      orgId: text.orgId,
       ruleId,
       kind: failingRuns > 0 ? "fail" : "inconclusive",
-      rulesVersions: [...new Set(group.map((c) => c.rulesVersion))].toSorted(),
-      area: rule.area,
-      severity: rule.severity,
-      title: rule.title,
-      why: rule.why,
-      fix: rule.fix,
+      rulesVersions: versions,
+      area: text.area,
+      severity: text.severity,
+      title: text.title,
+      why: text.why,
+      fix: text.fix,
       failingRuns,
       inconclusiveRuns: flagged.length - failingRuns,
       runIds: flagged.map((c) => c.runId),
     })
   }
-  return { findings, unknown }
+  return findings
 }
 
 /**
@@ -466,28 +483,28 @@ const finish = (auditId: string) =>
             ruleId: checkResult.ruleId,
             rulesVersion: checkResult.rulesVersion,
             status: checkResult.status,
+            area: checkResult.area,
+            severity: checkResult.severity,
+            title: checkResult.title,
+            why: checkResult.why,
+            fix: checkResult.fix,
           })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
           .where(eq(run.auditId, auditId))
           .orderBy(asc(run.ordinal), asc(checkResult.ruleId))
-        const { findings, unknown } = findingsFrom(auditId, checks)
+        const findings = findingsFrom(auditId, checks)
         yield* db.delete(finding).where(eq(finding.auditId, auditId))
         if (findings.length > 0) yield* db.insert(finding).values(findings)
         yield* db
           .update(audit)
           .set({ status, finishedAt: sql`coalesce(${audit.finishedAt}, now())` })
           .where(eq(audit.id, auditId))
-        return { status, unknown }
+        return status
       }),
     )
-    if (settled.unknown.length > 0)
-      yield* Effect.logWarning("Check results of unknown rules have no finding", {
-        auditId,
-        ruleIds: settled.unknown,
-      })
-    yield* publish(auditId, { type: "audit", status: settled.status })
-    return settled.status
+    yield* publish(auditId, { type: "audit", status: settled })
+    return settled
   })
 
 /**

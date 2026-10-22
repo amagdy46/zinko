@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c5e61478-968f-439a-9022-bb9774d9d253",
+  "id": "2b4f35b6-0310-4b84-8c44-502391f7d79b",
   "prevIds": ["8f19fb9b-73c0-4646-b82e-1271916cebb7"],
   "ddl": [
     {
@@ -1922,6 +1922,71 @@
       "generated": null,
       "identity": null,
       "name": "evidence",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_result"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "area",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_result"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "severity",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_result"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "title",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_result"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "why",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "check_result"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "fix",
       "entityType": "columns",
       "schema": "public",
       "table": "check_result"
