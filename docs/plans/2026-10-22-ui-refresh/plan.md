@@ -20,8 +20,9 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 ## Execution status
 
 - Task 1 integrated locally at `21e17e3`; independent specification and standards reviews found no blockers. The required checks passed again during integration. Browser evidence: 48 screenshots across 12 screens, desktop/mobile and light/dark, plus a running and finished fixture audit (`$TMPDIR/ui-t1-verification.md`). Reduced motion was source-checked only.
-- Task 2 implemented and reviewed; the Sheet backdrop token correction is applied. Combined token/component browser verification is in progress before integration.
-- Claude and then Codex usage limits interrupted earlier tasks; the unfinished queue and request-blocking changes were preserved and resumed in their existing worktrees. The consent revision passed both review axes; stale ADR/roadmap wording is being corrected before integration.
+- Task 2 integrated locally after specification/standards review and the Sheet backdrop token correction. Combined gallery verification at 1440px/390px, light/dark/grayscale found no overflow or interface regressions; Sheet focus containment, dismissal and restoration worked. Screenshots: `/tmp/ui-t2-gallery-review-*`. The full check/typecheck/build chain passed after rebasing onto the consent revision.
+- Claude and then Codex usage limits interrupted earlier tasks; the unfinished queue and request-blocking changes were preserved and resumed in their existing worktrees. The consent revision and corrected ADR/roadmap are integrated locally; six fresh captures reproduced the three original failure cases on both engines and all passed.
+- Wave 2 (Tasks 3, 4, 5, 6, 7 and 10) is ready to start from the integrated foundation. Task 5's `lib/audit-labels.ts` changes integrate before Task 6's.
 
 ### Decision details
 
