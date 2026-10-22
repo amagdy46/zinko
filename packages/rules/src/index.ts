@@ -33,9 +33,11 @@ export function ruleById(id: string): Rule | undefined {
 }
 
 /**
- * Why a run cannot be judged, or `null` when it can. A banner that was not found leaves the run
- * incomplete in the engine's terms, but everything else it captured is sound; the consent rules
- * answer that case themselves.
+ * Why a run cannot be judged, or `null` when it can. The engine marks a run incomplete whenever it
+ * records an error, and a banner autoconsent did not find is one (`CmpNotFound`), although the page,
+ * its requests and its cookies were captured in full. Treating that as unusable would blank every
+ * rule on any site whose banner autoconsent does not know, so such a run is evaluated and the
+ * consent rules answer `inconclusive` ("the banner was not found") themselves.
  */
 function unusableBecause(capture: CaptureResult): string | null {
   if (capture.complete) return null

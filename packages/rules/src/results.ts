@@ -14,12 +14,12 @@ export const fail = (
   evidence: readonly [EvidenceRef, ...EvidenceRef[]],
 ): CheckResult => ({ ruleId, status: "fail", message, evidence })
 
-export const inconclusive = (ruleId: string, message: string): CheckResult => ({
-  ruleId,
-  status: "inconclusive",
-  message,
-  evidence: [],
-})
+/** Evidence, when given, shows what the rule saw but could not judge. */
+export const inconclusive = (
+  ruleId: string,
+  message: string,
+  evidence: readonly EvidenceRef[] = [],
+): CheckResult => ({ ruleId, status: "inconclusive", message, evidence })
 
 export const notApplicable = (ruleId: string, message: string): CheckResult => ({
   ruleId,
