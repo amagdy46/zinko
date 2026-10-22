@@ -185,13 +185,24 @@
       for (const prop of hiddenProps) delete document[prop]
       document.dispatchEvent(new Event("visibilitychange"))
     },
-    // After the consent action: true while the banner autoconsent acted on is still shown, false
-    // once it is gone, null when that cannot be checked. Re-runs the found CMP's own popup check on
-    // the instance the engines name when they inject autoconsent.
-    bannerShown: async () => {
+    // After the consent action: true while the banner of CMP `name` is still shown, false once it
+    // is gone, null when that cannot be checked. Re-runs the CMP's own popup check on the instance
+    // the engines name when they inject autoconsent: the one that acted, or in a document loaded
+    // since (a CMP that saves the choice and reloads) a fresh one, once the page has loaded and the
+    // CMP is detected in it.
+    bannerShown: async (name) => {
       const instance = window[AUTOCONSENT]
-      const cmp = instance && instance.foundCmp
-      if (!cmp) return null
+      if (!instance) return null
+      let cmp = instance.foundCmp?.name === name ? instance.foundCmp : null
+      try {
+        if (!cmp) {
+          if (document.readyState !== "complete") return null
+          cmp = instance.rules.find((rule) => rule.name === name)
+          if (!cmp || !(await cmp.detectCmp())) return null
+        }
+      } catch {
+        return null
+      }
       const dom = instance.domActions
       const loose = dom.elementVisible
       dom.elementVisible = strictlyVisible

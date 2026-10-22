@@ -149,9 +149,11 @@ export const CaptureResult = Schema.Struct({
     cmp: Schema.NullOr(Schema.String),
     /**
      * `accepted` and `rejected` only once the engine saw the choice take effect: the banner closed
-     * or a Google consent `update` followed the action. `not-applied`: the banner was found and the
-     * action ran (`actionAt` is set), but neither happened, so the visitor's choice is unknown; it
-     * comes with a `ConsentNotApplied` error. `not-found`: no banner to act on (`CmpNotFound`).
+     * (also after a reload) or a Google consent `update` matching the choice followed the action.
+     * `not-applied`: the banner was found and the action ran (`actionAt` is set), but no such
+     * evidence appeared, either because the banner stayed or because it could not be checked; the
+     * visitor's choice is unknown and a `ConsentNotApplied` error says which. `not-found`: no
+     * banner to act on (`CmpNotFound`).
      */
     outcome: Schema.Literals(["accepted", "rejected", "none", "not-found", "not-applied"]),
     actionAt: Schema.NullOr(Ms),

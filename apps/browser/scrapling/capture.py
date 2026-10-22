@@ -59,8 +59,10 @@ WINDOW_CAP_S = 10.0
 FLUSH_IDLE_CAP_S = 2.0
 CMP_DETECT_S = 10.0
 CONSENT_STEP_S = 15.0
-VERIFY_S = 3.0
+# Verifying the consent choice lasts as long as the longest post-action window.
+VERIFY_S = 10.0
 VERIFY_POLL_S = 0.5
+BANNER_CHECK_S = 2.0
 NAVIGATION_TIMEOUT_MS = 30_000
 CLICK_TIMEOUT_MS = 5_000
 CHALLENGE_TITLES = ("Just a moment...", "Attention Required! | Cloudflare")
@@ -96,6 +98,17 @@ def chunks(items: list) -> list[list]:
         current.append(item)
         size += n
     return [*out, current] if current else out
+
+
+def choice_matches(action: str, params) -> bool:
+    """A Google consent update that says the choice was made: accept grants ad or analytics
+    storage; reject grants nothing and denies storage."""
+    if not isinstance(params, dict):
+        return False
+    storage = (params.get("ad_storage"), params.get("analytics_storage"))
+    if action == "optIn":
+        return "granted" in storage
+    return "granted" not in params.values() and "denied" in storage
 
 
 def to_cookie(raw: dict) -> dict:
@@ -159,6 +172,9 @@ class Capture:
         self.arrived = asyncio.Event()
         self.autoconsent_active = self.scenario in ("accept", "reject")
         self.after_consent_taken = False
+        # What verification of the consent action has seen, until `settle_consent` turns it into the outcome.
+        self.verification: dict | None = None
+        self.verify_task: asyncio.Future | None = None
         self.allowed_hosts: list[str] | None = self.request.get("allowedHosts")
         # The host of the first top-level navigation refused for leaving the site.
         self.left_site: str | None = None
@@ -581,35 +597,107 @@ class Capture:
         state = message.get("state") or {}
         return message.get("type") == "report" and message.get("mainFrame") and state.get("lifecycle") == "nothingDetected"
 
-    def consent_update_since(self, at: int) -> bool:
-        return any(
-            isinstance(entry["value"], list) and entry["value"][:2] == ["consent", "update"] and entry["at"] >= at
+    def consent_update(self, action: str, since: int) -> str | None:
+        """`matching` when a Google consent update pushed at or after `since` says what the choice
+        means, `contradicting` when updates came but none says so, None when none came."""
+        updates = [
+            entry["value"][2] if len(entry["value"]) > 2 else None
             for entry in self.data_layer
-        )
+            if isinstance(entry["value"], list) and entry["value"][:2] == ["consent", "update"] and entry["at"] >= since
+        ]
+        if not updates:
+            return None
+        return "matching" if any(choice_matches(action, params) for params in updates) else "contradicting"
 
-    async def banner_shown(self, frame) -> bool | None:
+    async def banner_shown(self, frame, cmp: str) -> bool | None:
         # A CMP in an iframe can remove its frame along with the banner.
         if frame.is_detached():
             return False
         try:
-            check = frame.evaluate("window.__zinko ? window.__zinko.bannerShown() : null", isolated_context=False)
-            shown = await asyncio.wait_for(check, VERIFY_S)
+            check = frame.evaluate(
+                f"window.__zinko ? window.__zinko.bannerShown({json.dumps(cmp)}) : null", isolated_context=False
+            )
+            shown = await asyncio.wait_for(check, BANNER_CHECK_S)
         except Exception as exc:
             log(f"banner check: {exc}")
             return None
         return shown if isinstance(shown, bool) else None
 
-    async def verify_choice(self, frame, action_at: int) -> tuple[bool | None, bool]:
-        """Whether the banner is still shown, polled until it closes or `VERIFY_S` pass, and whether a
-        Google consent update followed the action. autoconsent's result only says its steps ran, not
-        that they took: its Cookiebot opt-in reports success whether or not it found a button to click."""
-        deadline = time.monotonic() + VERIFY_S
-        shown = await self.banner_shown(frame)
-        while shown is not False and time.monotonic() < deadline:
+    async def banner_now(self, frame, cmp: str, new_document: bool) -> bool | None:
+        """The banner in the frame the action ran in or, once the page has loaded a new document (a
+        CMP that saves the choice and reloads), in any frame of the new one: shown anywhere is shown."""
+        if not new_document:
+            return await self.banner_shown(frame, cmp)
+        states = [await self.banner_shown(f, cmp) for f in self.page.frames if not f.is_detached()]
+        if True in states:
+            return True
+        return False if False in states else None
+
+    async def verify_choice(self, frame, document: str | None, deadline: float) -> None:
+        """Watches for evidence that the choice took effect, the banner gone or a matching consent
+        update, until one appears or `deadline` passes; it runs alongside the post-action window.
+        autoconsent's result only says its steps ran: its Cookiebot opt-in reports success whether
+        or not it found a button to click."""
+        state = self.verification
+        while state is self.verification:
+            await self.drain_page()
+            state["newDocument"] = self.current_document != document
+            state["bannerShown"] = await self.banner_now(frame, state["cmp"], state["newDocument"])
+            state["consentUpdate"] = self.consent_update(state["action"], state["actionAt"])
+            state["checkedAt"] = self.at()
+            if state["bannerShown"] is False or state["consentUpdate"] == "matching" or time.monotonic() >= deadline:
+                return
             await asyncio.sleep(VERIFY_POLL_S)
-            shown = await self.banner_shown(frame)
-        await self.drain_page()
-        return shown, self.consent_update_since(action_at)
+
+    def settle_consent(self) -> None:
+        """Turns what verification saw into the outcome, also when Node asks to finalize before it ended.
+        Without evidence the outcome is `not-applied`, whether the banner was seen to stay or could
+        not be checked: consent rules judged on a choice nobody saw take effect are the bug this fixes."""
+        state, self.verification = self.verification, None
+        if state is None:
+            return
+        self.autoconsent_active = False
+        action, cmp, shown, update = state["action"], state["cmp"], state["bannerShown"], state["consentUpdate"]
+        evidence = [
+            name
+            for name, seen in (("banner-closed", shown is False), ("consent-update", update == "matching"))
+            if seen
+        ]
+        verdict = "applied" if evidence else "not-applied" if shown else "unverified"
+        self.consent["observations"].append(
+            {
+                "at": state["at"],
+                "source": "cmp",
+                "state": {
+                    "event": f"{action}Result",
+                    "cmp": cmp,
+                    "result": state["reported"],
+                    "done": state["done"],
+                    "bannerShown": shown,
+                    "consentUpdate": update,
+                    "newDocument": state["newDocument"],
+                    "evidence": evidence,
+                    "verdict": verdict,
+                },
+            }
+        )
+        if evidence:
+            self.consent["outcome"] = "accepted" if action == "optIn" else "rejected"
+            if not state["reported"] or not state["done"]:
+                self.error("EngineFailure", f"autoconsent {action} on {cmp} did not complete")
+            return
+        self.consent["outcome"] = "not-applied"
+        said = {True: "reported success", False: "reported failure", None: "did not answer"}[state["reported"]]
+        followed = {
+            None: "no consent update followed",
+            "contradicting": "the consent update that followed did not match the choice",
+        }[update]
+        seconds = max(0, round((state["checkedAt"] - state["actionAt"]) / 1000))
+        if verdict == "not-applied":
+            why = f"the banner was still shown {seconds} s later and {followed}"
+        else:
+            why = f"it could not be checked: the banner check gave no answer for {seconds} s and {followed}"
+        self.error("ConsentNotApplied", f"autoconsent {action} on {cmp} {said}, but {why}")
 
     async def run_consent(self, loaded_at: float) -> None:
         action = "optIn" if self.scenario == "accept" else "optOut"
@@ -629,40 +717,26 @@ class Capture:
         )
         emit({"type": "cookies", "snapshot": await self.snapshot("before-consent")})
         action_at = self.at()
+        document = self.current_document
         self.consent["actionAt"] = action_at
         await found["frame"].evaluate(f"autoconsentReceiveMessage({{ type: '{action}' }})", isolated_context=False)
         result = await self.wait_message(lambda m: m.get("type") == f"{action}Result", CONSENT_STEP_S)
         done = await self.wait_message(lambda m: m.get("type") == "autoconsentDone", CONSENT_STEP_S)
-        self.autoconsent_active = False
-        reported = None if result is None else bool(result.get("result"))
-        shown, update = await self.verify_choice(found["frame"], action_at)
-        self.consent["observations"].append(
-            {
-                "at": self.at() if done is None else done["at"],
-                "source": "cmp",
-                "state": {
-                    "event": f"{action}Result",
-                    "cmp": found.get("cmp"),
-                    "result": reported,
-                    "done": done is not None,
-                    "bannerShown": shown,
-                    "consentUpdate": update,
-                },
-            }
-        )
-        if shown is False or update:
-            self.consent["outcome"] = "accepted" if action == "optIn" else "rejected"
-            if not reported or done is None:
-                self.error("EngineFailure", f"autoconsent {action} on {found.get('cmp')} did not complete")
-            return
-        self.consent["outcome"] = "not-applied"
-        said = {True: "reported success", False: "reported failure", None: "did not answer"}[reported]
-        banner = "the banner was still shown" if shown else "the banner could not be checked"
-        self.error(
-            "ConsentNotApplied",
-            f"autoconsent {action} on {found.get('cmp')} {said}, but {banner} {VERIFY_S:g} s later "
-            "and no consent update followed",
-        )
+        # autoconsent stays injected until the outcome is settled, so a reloaded page gets an instance
+        # that can look for the banner again.
+        self.verification = {
+            "action": action,
+            "cmp": found.get("cmp"),
+            "actionAt": action_at,
+            "at": self.at() if done is None else done["at"],
+            "reported": None if result is None else bool(result.get("result")),
+            "done": done is not None,
+            "bannerShown": None,
+            "consentUpdate": None,
+            "newDocument": False,
+            "checkedAt": action_at,
+        }
+        self.verify_task = asyncio.ensure_future(self.verify_choice(found["frame"], document, time.monotonic() + VERIFY_S))
 
     # --- the capture ------------------------------------------------------------------------------
 
@@ -740,8 +814,12 @@ class Capture:
             await self.checkpoint()
             if self.consent["completedAt"] is not None:
                 await self.observe_window()
+            if self.verify_task is not None:
+                await self.verify_task
+                self.settle_consent()
+            if self.consent["completedAt"] is not None:
                 await self.observe_consent()
-                await self.checkpoint()
+            await self.checkpoint()
 
         for index, step in enumerate(self.request.get("journey", [])):
             if not await self.run_step(index, step):
@@ -801,6 +879,9 @@ class Capture:
         """The end snapshot and the screenshot. Also the cooperative flush when Node asks to finalize."""
         if self.page is None:
             return
+        if self.verification is not None:
+            self.verify_task.cancel()
+            self.settle_consent()
         # After a refused navigation the page shows Chromium's error page: nothing to photograph.
         if self.committed and self.left_site is None:
             try:

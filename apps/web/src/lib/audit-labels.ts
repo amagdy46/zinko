@@ -44,7 +44,7 @@ const ERROR_TEXT: Record<string, string> = {
   BotBlocked: "Blocked as a bot",
   Timeout: "The page timed out",
   CmpNotFound: "Consent banner not found",
-  ConsentNotApplied: "The consent choice did not take effect",
+  ConsentNotApplied: "The consent choice was not seen to take effect",
   Navigation: "Left the site",
   JourneyStep: "A journey step failed",
   PolicyDenied: "Page refused",

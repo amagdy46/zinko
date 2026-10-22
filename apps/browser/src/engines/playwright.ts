@@ -23,6 +23,7 @@ type CapturedRequest = Extract<Checkpoint, { type: "requests" }>["requests"][num
 type DataLayerPush = Extract<Checkpoint, { type: "dataLayer" }>["entries"][number]
 type Snapshot = Extract<Checkpoint, { type: "cookies" }>["snapshot"]
 type Observation = Consent["observations"][number]
+type ConsentAction = "optIn" | "optOut"
 type Message = { readonly type?: unknown; readonly at: number; readonly frame: Frame } & Record<
   string,
   unknown
@@ -60,8 +61,10 @@ const WINDOW_CAP_MS = 10_000
 const FLUSH_IDLE_CAP_MS = 2_000
 const CMP_DETECT_MS = 10_000
 const CONSENT_STEP_MS = 15_000
-const VERIFY_MS = 3_000
+// Verifying the consent choice lasts as long as the longest post-action window.
+const VERIFY_MS = 10_000
 const VERIFY_POLL_MS = 500
+const BANNER_CHECK_MS = 2_000
 const NAVIGATION_TIMEOUT_MS = 30_000
 const CLICK_TIMEOUT_MS = 5_000
 const MAX_URL = 8_192
@@ -495,43 +498,156 @@ const nothingDetected = (message: Message) =>
   isRecord(message.state) &&
   message.state.lifecycle === "nothingDetected"
 
-const consentUpdateSince = (since: number) =>
-  dataLayer.some(
-    ({ at: pushedAt, value }) =>
-      Array.isArray(value) && value[0] === "consent" && value[1] === "update" && pushedAt >= since,
-  )
+/**
+ * A Google consent update that says the choice was made: accept grants ad or analytics storage;
+ * reject grants nothing and denies storage.
+ */
+const choiceMatches = (action: ConsentAction, params: unknown) => {
+  if (!isRecord(params)) return false
+  const { ad_storage: ad, analytics_storage: analytics } = params
+  if (action === "optIn") return ad === "granted" || analytics === "granted"
+  return !Object.values(params).includes("granted") && (ad === "denied" || analytics === "denied")
+}
 
-const bannerShown = async (frame: Frame): Promise<boolean | null> => {
+/**
+ * `matching` when a Google consent update pushed at or after `since` says what the choice means,
+ * `contradicting` when updates came but none says so, null when none came.
+ */
+const consentUpdate = (action: ConsentAction, since: number) => {
+  const updates = dataLayer.flatMap(({ at: pushedAt, value }) =>
+    Array.isArray(value) && value[0] === "consent" && value[1] === "update" && pushedAt >= since
+      ? [value[2]]
+      : [],
+  )
+  if (updates.length === 0) return null
+  return updates.some((params) => choiceMatches(action, params)) ? "matching" : "contradicting"
+}
+
+const bannerShown = async (frame: Frame, cmp: string): Promise<boolean | null> => {
   // A CMP in an iframe can remove its frame along with the banner.
   if (frame.isDetached()) return false
   const shown = await Promise.race([
-    frame.evaluate("window.__zinko ? window.__zinko.bannerShown() : null"),
-    sleep(VERIFY_MS),
+    frame.evaluate(`window.__zinko ? window.__zinko.bannerShown(${JSON.stringify(cmp)}) : null`),
+    sleep(BANNER_CHECK_MS),
   ]).catch((cause: unknown) => log(`banner check: ${firstLine(cause)}`))
   return typeof shown === "boolean" ? shown : null
 }
 
-/** Polls the banner until it closes or `deadline` passes; its last state. */
-const bannerAfterAction = async (frame: Frame, deadline: number): Promise<boolean | null> => {
-  const shown = await bannerShown(frame)
-  if (shown === false || Date.now() >= deadline) return shown
-  await sleep(VERIFY_POLL_MS)
-  return bannerAfterAction(frame, deadline)
+/**
+ * The banner in the frame the action ran in or, once the page has loaded a new document (a CMP
+ * that saves the choice and reloads), in any frame of the new one: shown anywhere is shown.
+ */
+const bannerNow = async (frame: Frame, cmp: string, newDocument: boolean) => {
+  if (!newDocument || page === undefined) return bannerShown(frame, cmp)
+  const states = await Promise.all(
+    page
+      .frames()
+      .filter((each) => !each.isDetached())
+      .map((each) => bannerShown(each, cmp)),
+  )
+  if (states.includes(true)) return true
+  return states.includes(false) ? false : null
 }
 
+type Verification = {
+  action: ConsentAction
+  cmp: string | null
+  actionAt: number
+  at: number
+  reported: boolean | null
+  done: boolean
+  bannerShown: boolean | null
+  consentUpdate: "matching" | "contradicting" | null
+  newDocument: boolean
+  checkedAt: number
+}
+// What verification of the consent action has seen, until `settleConsent` turns it into the outcome.
+let verification: Verification | undefined
+let verifying: Promise<void> | undefined
+
 /**
- * Whether the banner is still shown, polled until it closes or `VERIFY_MS` pass, and whether a
- * Google consent update followed the action. autoconsent's result only says its steps ran, not
- * that they took: its Cookiebot opt-in reports success whether or not it found a button to click.
+ * Watches for evidence that the choice took effect, the banner gone or a matching consent update,
+ * until one appears or `deadline` passes; it runs alongside the post-action window. autoconsent's
+ * result only says its steps ran: its Cookiebot opt-in reports success whether or not it found a
+ * button to click.
  */
-const verifyChoice = async (frame: Frame, actionAt: number) => {
-  const shown = await bannerAfterAction(frame, Date.now() + VERIFY_MS)
+const verifyChoice = async (
+  state: Verification,
+  frame: Frame,
+  document: string | undefined,
+  deadline: number,
+): Promise<void> => {
+  if (state !== verification) return
   await drainPage()
-  return { shown, consentUpdate: consentUpdateSince(actionAt) }
+  state.newDocument = currentDocument !== document
+  state.bannerShown = await bannerNow(frame, state.cmp ?? "", state.newDocument)
+  state.consentUpdate = consentUpdate(state.action, state.actionAt)
+  state.checkedAt = at()
+  if (state.bannerShown === false || state.consentUpdate === "matching" || Date.now() >= deadline)
+    return
+  await sleep(VERIFY_POLL_MS)
+  return verifyChoice(state, frame, document, deadline)
+}
+
+const SAID = { true: "reported success", false: "reported failure", null: "did not answer" }
+
+/**
+ * Turns what verification saw into the outcome, also when Node asks to finalize before it ended.
+ * Without evidence the outcome is `not-applied`, whether the banner was seen to stay or could not
+ * be checked: consent rules judged on a choice nobody saw take effect are the bug this fixes.
+ */
+const settleConsent = () => {
+  const state = verification
+  if (state === undefined) return
+  verification = undefined
+  autoconsentActive = false
+  const { action, cmp, bannerShown: shown, consentUpdate: seenUpdate } = state
+  const evidence = [
+    ...(shown === false ? ["banner-closed"] : []),
+    ...(seenUpdate === "matching" ? ["consent-update"] : []),
+  ]
+  let verdict = "unverified"
+  if (evidence.length > 0) verdict = "applied"
+  else if (shown === true) verdict = "not-applied"
+  consent.observations.push({
+    at: state.at,
+    source: "cmp",
+    state: {
+      event: `${action}Result`,
+      cmp,
+      result: state.reported,
+      done: state.done,
+      bannerShown: shown,
+      consentUpdate: seenUpdate,
+      newDocument: state.newDocument,
+      evidence,
+      verdict,
+    },
+  })
+  if (evidence.length > 0) {
+    consent.outcome = action === "optIn" ? "accepted" : "rejected"
+    if (state.reported !== true || !state.done)
+      error("EngineFailure", `autoconsent ${action} on ${cmp} did not complete`)
+    return
+  }
+  consent.outcome = "not-applied"
+  const followed =
+    seenUpdate === null
+      ? "no consent update followed"
+      : "the consent update that followed did not match the choice"
+  const seconds = Math.max(0, Math.round((state.checkedAt - state.actionAt) / 1000))
+  const why =
+    verdict === "not-applied"
+      ? `the banner was still shown ${seconds} s later and ${followed}`
+      : `it could not be checked: the banner check gave no answer for ${seconds} s and ${followed}`
+  error(
+    "ConsentNotApplied",
+    `autoconsent ${action} on ${cmp} ${SAID[`${state.reported}`]}, but ${why}`,
+  )
 }
 
 const runConsent = async (loadedAt: number) => {
-  const action = scenario === "accept" ? "optIn" : "optOut"
+  const action: ConsentAction = scenario === "accept" ? "optIn" : "optOut"
   const found = await waitMessage(
     (message) => message.type === "popupFound" || nothingDetected(message),
     Math.max(0, CMP_DETECT_MS - (Date.now() - loadedAt)),
@@ -548,40 +664,27 @@ const runConsent = async (loadedAt: number) => {
   consent.observations.push({ at: found.at, source: "cmp", state: { event: "popupFound", cmp } })
   emit({ type: "cookies", snapshot: await snapshot("before-consent") })
   const actionAt = at()
+  const document = currentDocument
   consent.actionAt = actionAt
   await found.frame.evaluate(`autoconsentReceiveMessage({ type: "${action}" })`)
   const result = await waitMessage((message) => message.type === `${action}Result`, CONSENT_STEP_MS)
   const done = await waitMessage((message) => message.type === "autoconsentDone", CONSENT_STEP_MS)
-  autoconsentActive = false
-  const reported = result === undefined ? null : result.result === true
-  const { shown, consentUpdate } = await verifyChoice(found.frame, actionAt)
-  consent.observations.push({
+  // autoconsent stays injected until the outcome is settled, so a reloaded page gets an instance
+  // that can look for the banner again.
+  const state: Verification = {
+    action,
+    cmp,
+    actionAt,
     at: done?.at ?? at(),
-    source: "cmp",
-    state: {
-      event: `${action}Result`,
-      cmp,
-      result: reported,
-      done: done !== undefined,
-      bannerShown: shown,
-      consentUpdate,
-    },
-  })
-  if (shown === false || consentUpdate) {
-    consent.outcome = action === "optIn" ? "accepted" : "rejected"
-    if (reported !== true || done === undefined)
-      error("EngineFailure", `autoconsent ${action} on ${cmp} did not complete`)
-    return
+    reported: result === undefined ? null : result.result === true,
+    done: done !== undefined,
+    bannerShown: null,
+    consentUpdate: null,
+    newDocument: false,
+    checkedAt: actionAt,
   }
-  consent.outcome = "not-applied"
-  const said = { true: "reported success", false: "reported failure", null: "did not answer" }[
-    `${reported}`
-  ]
-  const banner = shown ? "the banner was still shown" : "the banner could not be checked"
-  error(
-    "ConsentNotApplied",
-    `autoconsent ${action} on ${cmp} ${said}, but ${banner} ${VERIFY_MS / 1000} s later and no consent update followed`,
-  )
+  verification = state
+  verifying = verifyChoice(state, found.frame, document, Date.now() + VERIFY_MS)
 }
 
 // --- the capture --------------------------------------------------------------------------------
@@ -643,6 +746,7 @@ const runStep = async (
 
 const finish = async () => {
   if (page === undefined) return
+  settleConsent()
   // After a refused navigation the page shows Chromium's error page: nothing to photograph.
   if (committed && leftSite === undefined) {
     try {
@@ -771,11 +875,13 @@ const run = async () => {
   if (scenario === "accept" || scenario === "reject") {
     await runConsent(loadedAt)
     await checkpoint()
-    if (consent.completedAt !== null) {
-      await observeWindow()
-      await observeConsent()
-      await checkpoint()
+    if (consent.completedAt !== null) await observeWindow()
+    if (verifying !== undefined) {
+      await verifying
+      settleConsent()
     }
+    if (consent.completedAt !== null) await observeConsent()
+    await checkpoint()
   }
 
   // Steps run one after another and stop at the first that fails.
