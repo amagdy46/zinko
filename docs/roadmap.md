@@ -47,6 +47,8 @@ Two public sites, one audit each (start page and two key pages, four scenarios, 
 - **No banner is not no consent.** When the site shows no banner, say so in the consent rules' messages and do not call it a breach without a region setting (open question in `docs/vision.md`).
 - **`hygiene.tag-errors` cannot see vendor errors** while every audit answers tracking requests locally; it is `inconclusive` on every real site. Only a first-party collector (sGTM) is checked.
 - **One cause, two findings.** `clickid.lost-across-navigation` repeats `clickid.lost-on-redirect` when the redirect dropped the click ID; skip the journey check when the landing URL already lost it.
+- **"Could not check" reads like a finding.** Inconclusive findings show the rule's title ("Ad pixel fired after the visitor rejected"), which states the problem as found. Give each rule a neutral question-style label for the "Could not check" group, or lead with the reason.
+- **A fresh clone needs a build before `pnpm check`.** `check` type-checks workspace packages from their `dist` and the web app from the generated route tree, so it fails until `pnpm build` (and `pnpm typecheck`, which regenerates the routes) have run once. Make `check` build what it needs, or reorder the "Before you finish" command in `AGENTS.md`.
 - **Admission control, again.** With five audits queued, one had run no capture after 50 minutes (I started it again) while the engine sat idle between other audits' backoffs. The M2 item above now blocks demos.
 
 ## After v0.1
