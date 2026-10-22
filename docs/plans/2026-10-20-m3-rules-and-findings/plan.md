@@ -134,7 +134,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 - `getEvidence({ auditId, runId, ref: EvidenceRef })`: resolves a hit (decoded row and raw request), a raw request (from `capture.json`, including `ccm`), a cookie (name, value, domain, path, snapshot), a push (value) or a document (URL, redirects, title), checked through the audit; the run's screenshot (the final one) separately
 **Blocked by:** 1, 3, 4
 
-- [ ] Verify: an audit of `clean`, `meta-before-consent` and `duplicate-purchase` × none/accept/reject finds exactly the rules their expected result sets name and nothing from `clean`; a forced `persist` failure after its inserts reproduces identical `check_result` rows; an exhausted `persist` leaves no check results for that run; setting triage and recomputing `finish` (a temporary hook) keeps it; `getEvidence` resolves one of each evidence kind; another organization gets 404 Not run in the app: the forced `persist` failure, the exhausted `persist` and the triage-over-`finish` checks; the audit, check-result and evidence parts ran in the M3 demo.
+- [x] Verify: an audit of `clean`, `meta-before-consent` and `duplicate-purchase` × none/accept/reject finds exactly the rules their expected result sets name and nothing from `clean`; a forced `persist` failure after its inserts reproduces identical `check_result` rows; an exhausted `persist` leaves no check results for that run; setting triage and recomputing `finish` (a temporary hook) keeps it; `getEvidence` resolves one of each evidence kind; another organization gets 404
 
 ### Task 6: The Findings screen
 

@@ -1,4 +1,4 @@
-import type { Decoder, Hit } from "../types.js"
+import type { Decoder, Hit, RequestLike } from "../types.js"
 
 const ID_KEYS: Record<string, string> = {
   eid: "eventId",
@@ -7,17 +7,22 @@ const ID_KEYS: Record<string, string> = {
   external_id: "externalId",
 }
 
+/** A Meta request's fields: the query, with the form-encoded body (POST hits) overriding it. */
+export function metaRequestParams(request: RequestLike, url: URL): URLSearchParams {
+  const params = new URLSearchParams(url.search)
+  if (request.body && !request.body.trimStart().startsWith("--")) {
+    for (const [k, v] of new URLSearchParams(request.body)) params.set(k, v)
+  }
+  return params
+}
+
 export const meta: Decoder = {
   vendor: "meta",
   methods: ["GET", "POST"],
   matches: (url) => /(^|\.)facebook\.com$/.test(url.hostname) && /^\/tr\/?$/.test(url.pathname),
 
   decode(request, url) {
-    const params = new URLSearchParams(url.search)
-    // POST hits send the same fields form-encoded in the body.
-    if (request.body && !request.body.trimStart().startsWith("--")) {
-      for (const [k, v] of new URLSearchParams(request.body)) params.set(k, v)
-    }
+    const params = metaRequestParams(request, url)
     const destinationId = params.get("id")
     const event = params.get("ev")
     if (!destinationId || !event) return []
