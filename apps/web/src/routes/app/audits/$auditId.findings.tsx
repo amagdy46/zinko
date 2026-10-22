@@ -102,8 +102,9 @@ function FindingsScreen() {
         </p>
         {full ? null : (
           <p className="text-muted-foreground">
-            {plural(missing, "run")} {active ? "still to be checked" : "have no check results"}, so
-            what follows may be incomplete.
+            {plural(missing, "run")}{" "}
+            {active ? "still to be checked" : `${missing === 1 ? "has" : "have"} no check results`},
+            so what follows may be incomplete.
           </p>
         )}
         {coverage.rulesVersions.length > 1 ? (
