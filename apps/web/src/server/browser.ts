@@ -54,29 +54,34 @@ const post = (request: unknown) => ({
   body: JSON.stringify(request),
 })
 
-const ContainerBrowser = Layer.effect(
-  Browser,
-  Effect.gen(function* () {
-    const containers = yield* BrowserNamespace
-    return Browser.of({
-      // each instance name is its own container, so jobs can run in parallel
-      capture: (request, options) =>
-        containers
-          .byName(options?.instance ?? "default")
-          .fetch("http://container/capture", post(request))
-          .pipe(
-            Effect.mapError((cause) => fail(cause)),
-            Effect.flatMap(interpret),
-          ),
-    })
-  }),
-).pipe(Layer.provide(BrowserNamespace.layer({ binding: "BROWSER" })))
+/** `count` containers, `engine-0` to `engine-<count - 1>`, as many as the binding's `maxInstances`. */
+const ContainerBrowser = (count: number) =>
+  Layer.effect(
+    Browser,
+    Effect.gen(function* () {
+      const containers = yield* BrowserNamespace
+      return Browser.of({
+        engines: Array.from({ length: count }, (_, i) => `engine-${i}`),
+        // each instance name is its own container, so captures can run in parallel
+        capture: (request, options) =>
+          containers
+            .byName(options?.instance ?? "default")
+            .fetch("http://container/capture", post(request))
+            .pipe(
+              Effect.mapError((cause) => fail(cause)),
+              Effect.flatMap(interpret),
+            ),
+      })
+    }),
+  ).pipe(Layer.provide(BrowserNamespace.layer({ binding: "BROWSER" })))
 
 /** An engine started by hand (`BROWSER_URL`, dev stages only); every instance name shares it. */
 const HttpBrowser = (baseUrl: string) =>
   Layer.succeed(
     Browser,
     Browser.of({
+      // it runs one capture at a time (429 while busy)
+      engines: ["local"],
       capture: (request) =>
         Effect.tryPromise({
           try: () => fetch(`${baseUrl.replace(/\/+$/, "")}/capture`, post(request)),
@@ -87,12 +92,14 @@ const HttpBrowser = (baseUrl: string) =>
 
 /**
  * `Browser`: the engine at `BROWSER_URL` when it is set (infra/alchemy.run.ts passes it to the
- * Worker on `dev` stages only), otherwise the BROWSER container binding.
+ * Worker on `dev` stages only), otherwise the BROWSER container binding with `BROWSER_ENGINES`
+ * instances.
  */
 export const BrowserLive = Layer.unwrap(
   Effect.gen(function* () {
     const provider = yield* WorkerConfig.provider
     const url = yield* Config.option(Config.String("BROWSER_URL")).parse(provider)
-    return Option.isSome(url) && url.value !== "" ? HttpBrowser(url.value) : ContainerBrowser
+    if (Option.isSome(url) && url.value !== "") return HttpBrowser(url.value)
+    return ContainerBrowser(yield* Config.Int("BROWSER_ENGINES").parse(provider))
   }),
 ).pipe(Layer.provide(WorkerEnvLive))

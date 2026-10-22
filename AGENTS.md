@@ -149,6 +149,12 @@ Zero errors and zero warnings are the bar.
 
 <!-- efforge:section:storage -->
 
+## Capture admission
+
+- Audits take turns on the capture engines through one `AdmissionGate` Durable Object (`apps/web/src/browser/AdmissionGate.ts`, exported from `apps/web/src/server.ts`, bound as `ADMISSION_GATE`, named `engines`), reached only through the `CaptureAdmission` service from `@repo/core` (`admit`, `release`; `apps/web/src/server/admission.ts`). Decision: `docs/decisions/0003-capture-admission.md`.
+- Capture on the engine `admit` handed out (`Browser.capture(.., { instance: engine })`), never on an instance named after the audit. `Browser.engines` lists the engines: `local` for `BROWSER_URL`, `engine-0`..`engine-<n-1>` for the containers, where `BROWSER_ENGINES` must equal the container's `maxInstances` (both come from one constant in `infra/alchemy.run.ts`).
+- First come, first served, one engine per audit from its first capture to its last. A holder must ask again (`admit-<n>`) within its 5-minute lease; waiters sleep in `waitForEvent` (`ENGINE_FREE_EVENT`) and re-ask every minute. Whoever frees an engine wakes the next audit with `Jobs.sendEvent`. Keep `release` before `finish` in the workflow.
+
 ## Storage
 
 - Use the `Storage` service from `@repo/core` (put, head, get, delete, signedUrl, verify); do not touch the R2 binding directly. `head` returns an object's metadata without its body, `Option.none` when absent: use it to ask whether a key exists (the audit workflow reuses a stored `capture.json` this way) instead of `get`.

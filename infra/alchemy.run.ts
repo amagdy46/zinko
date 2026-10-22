@@ -48,6 +48,7 @@ export default Alchemy.Stack(
     const llmEncryptionKey = yield* Config.Redacted("LLM_ENCRYPTION_KEY")
     const auditWorkflow = Cloudflare.Workflow("Audit", { className: "Audit" })
     const auditRoom = Cloudflare.DurableObject("AuditRoom")
+    const admissionGate = Cloudflare.DurableObject("AdmissionGate")
     const stage = (yield* Alchemy.Stack).stage
     // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
     // named `dev` or `dev_<user>`; a deployed stage such as `devops` is never local.
@@ -57,6 +58,8 @@ export default Alchemy.Stack(
     // deployed Worker never talks to a URL from someone's .env.
     const browserUrl = isDev ? yield* Config.String("BROWSER_URL").pipe(Config.withDefault("")) : ""
     // Local Containers need Docker, so `BROWSER_URL` replaces the container resource and binding.
+    // Each container instance is one engine; the AdmissionGate hands them to audits in turn.
+    const browserEngines = 3
     const browser =
       browserUrl === ""
         ? Cloudflare.Container("Browser", {
@@ -66,9 +69,8 @@ export default Alchemy.Stack(
             // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
             // leaves too little room. 4 GiB, 1/2 vCPU.
             instanceType: "standard-1",
-            // one instance per running audit (`Browser.capture(.., { instance: auditId })`); a
-            // fourth audit waits through 503 retries until one sleeps after 2 minutes idle
-            maxInstances: 3,
+            // instances `engine-0` to `engine-2` (`BROWSER_ENGINES`), each held by one audit at a time
+            maxInstances: browserEngines,
           })
         : undefined
     const storage = yield* Cloudflare.R2.Bucket("Storage", {
@@ -96,7 +98,10 @@ export default Alchemy.Stack(
         LLM_ENCRYPTION_KEY: llmEncryptionKey,
         AUDIT_WORKFLOW: auditWorkflow,
         AUDIT_ROOM: auditRoom,
-        ...(browser === undefined ? { BROWSER_URL: browserUrl } : { BROWSER: browser }),
+        ADMISSION_GATE: admissionGate,
+        ...(browser === undefined
+          ? { BROWSER_URL: browserUrl }
+          : { BROWSER: browser, BROWSER_ENGINES: String(browserEngines) }),
         // set on local dev stages only: lets a site be on localhost (server/clients.ts)
         ...(isDev ? { ALLOW_PRIVATE_SITES: "true" } : {}),
         STORAGE: storage,

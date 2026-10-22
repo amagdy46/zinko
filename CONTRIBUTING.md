@@ -35,7 +35,7 @@ pnpm dev                                          # app on http://localhost:1337
 ```
 
 - `.env` is gitignored. Its values are local-only: never reuse them for a deployed stage. Rotating `LLM_ENCRYPTION_KEY` makes saved model keys unreadable.
-- `BROWSER_URL=http://localhost:8080` makes `Browser.capture` post to `${BROWSER_URL}/capture` and skips the container resource and binding. It works on `dev` stages only; any other stage ignores it and uses the container. Every container instance name (`capture`'s `instance` option) maps to that one engine.
+- `BROWSER_URL=http://localhost:8080` makes `Browser.capture` post to `${BROWSER_URL}/capture` and skips the container resource and binding. It works on `dev` stages only; any other stage ignores it and uses the container. Every container instance name (`capture`'s `instance` option) maps to that one engine, which the admission gate hands to one audit at a time as `local`.
 - `ALLOW_PRIVATE_NETWORKS=true` lets the engine load `localhost` and private addresses. It is for local fixture runs only: never set it in the image or in production.
 - `BETTER_AUTH_URL` can stay empty; Better Auth then uses the request's origin, so any port works.
 - `MAIL_TRANSPORT=console` prints emails (invitations) to the `pnpm dev` log.

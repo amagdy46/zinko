@@ -14,6 +14,8 @@ export class BrowserError extends Data.TaggedError("BrowserError")<{
 export class Browser extends Context.Service<
   Browser,
   {
+    /** The instance names that can capture at the same time, one capture each. */
+    readonly engines: ReadonlyArray<string>
     /**
      * Loads `request.url` under one consent scenario and reports what the page did. `instance`
      * names the container (default `"default"`); each name runs separately.

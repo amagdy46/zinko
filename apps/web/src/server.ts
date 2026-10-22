@@ -23,3 +23,4 @@ const tryRoutes = (routes: ReadonlyArray<WorkerRoute>, request: Request): Promis
 export { Audit } from "./workflows/Audit"
 export { AuditRoom } from "./realtime/AuditRoom"
 export { BrowserContainer } from "./browser/BrowserContainer"
+export { AdmissionGate } from "./browser/AdmissionGate"

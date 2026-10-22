@@ -6,6 +6,8 @@ import {
   AuditProgress,
   Browser,
   type BrowserError,
+  CaptureAdmission,
+  ENGINE_FREE_EVENT,
   JOURNEY_STEPS,
   Storage,
   StorageError,
@@ -60,6 +62,13 @@ interface RunFailure {
 const STEP = {
   retries: { limit: 8, delay: "15 seconds", backoff: "exponential" },
   timeout: "4 minutes",
+} as const
+
+// The gate is a Durable Object call: retry briefly, and treat a gate that stays down like a busy
+// engine (the run records EngineBusy: Zinko was busy).
+const ADMIT_STEP = {
+  retries: { limit: 5, delay: "2 seconds", backoff: "exponential" },
+  timeout: "30 seconds",
 } as const
 
 // Postgres takes at most 65,535 parameters per statement; a hit row has 18.
@@ -142,31 +151,85 @@ const classify = (
 
 const fromBase64 = (data: string) => Uint8Array.from(atob(data), (c) => c.charCodeAt(0))
 
-/** Marks the audit running and lists its runs. */
+/** Lists the audit's runs. The audit stays `queued` until it is admitted to an engine. */
 const start = (auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const updated = yield* db
-      .update(audit)
-      .set({ status: "running", startedAt: sql`coalesce(${audit.startedAt}, now())` })
-      .where(eq(audit.id, auditId))
-      .returning({ id: audit.id })
-    if (updated.length === 0)
+    const found = yield* db.select({ id: audit.id }).from(audit).where(eq(audit.id, auditId))
+    if (found.length === 0)
       return yield* new AuditStateError({ message: `audit ${auditId} not found` })
-    const runs = yield* db
+    return yield* db
       .select({ id: run.id, ordinal: run.ordinal })
       .from(run)
       .where(eq(run.auditId, auditId))
       .orderBy(asc(run.ordinal))
-    yield* publish(auditId, { type: "audit", status: "running" })
-    return runs
   }).pipe(Effect.catchTag("AuditStateError", failFast))
+
+/**
+ * Asks the gate for an engine. The first admission marks the audit running; an audit that holds
+ * its engine keeps it.
+ */
+const admit = (auditId: string) =>
+  Effect.gen(function* () {
+    const gate = yield* CaptureAdmission
+    const admission = yield* gate.admit(auditId)
+    if (!("engine" in admission)) return admission
+    const { db } = yield* Database
+    const started = yield* db
+      .update(audit)
+      .set({ status: "running", startedAt: sql`coalesce(${audit.startedAt}, now())` })
+      .where(and(eq(audit.id, auditId), eq(audit.status, "queued")))
+      .returning({ id: audit.id })
+    if (started.length > 0) yield* publish(auditId, { type: "audit", status: "running" })
+    return admission
+  }).pipe(
+    Effect.catchTag("AdmissionError", (error) =>
+      Effect.logWarning("Capture admission failed", error).pipe(
+        Effect.andThen(
+          Effect.fail(
+            new EngineBusy({ message: `${ENGINE_BUSY}: the capture queue did not answer` }),
+          ),
+        ),
+      ),
+    ),
+  )
+
+const release = (auditId: string) =>
+  Effect.gen(function* () {
+    const gate = yield* CaptureAdmission
+    yield* gate.release(auditId)
+  })
+
+/**
+ * Waits its turn for an engine before run `ordinal`: `admit-<n>` asks; while the audit waits,
+ * `queued-<n>-<k>` sleeps until the gate wakes it or a minute passes, and `admit-<n>-<k>` asks
+ * again.
+ */
+const engineFor = (auditId: string, ordinal: number) =>
+  Effect.gen(function* () {
+    for (let attempt = 0; ; attempt++) {
+      const admission = yield* Workflow.step(
+        attempt === 0 ? `admit-${ordinal}` : `admit-${ordinal}-${attempt}`,
+        runtime.provide(admit(auditId)),
+        ADMIT_STEP,
+      )
+      if ("engine" in admission) return admission.engine
+      yield* Effect.logInfo(
+        `Audit ${auditId} waits for an engine at position ${admission.position}`,
+      )
+      // a timeout is the periodic re-ask, not a failure
+      yield* Workflow.waitForEvent(`queued-${ordinal}-${attempt + 1}`, {
+        type: ENGINE_FREE_EVENT,
+        timeout: "1 minute",
+      }).pipe(Effect.catchTag("WorkflowStepError", () => Effect.void))
+    }
+  })
 
 /**
  * Captures one run and stores it in R2, at most once: a run that already has its keys, or whose
  * capture is already in R2 (written before a database failure), is not captured again.
  */
-const capture = (auditId: string, runId: string) =>
+const capture = (auditId: string, runId: string, engine: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const storage = yield* Storage
@@ -219,7 +282,7 @@ const capture = (auditId: string, runId: string) =>
           blockVendorRequests,
           allowedHosts: [host],
         },
-        { instance: auditId },
+        { instance: engine },
       )
       .pipe(Effect.catchTag("BrowserError", classify))
     if ("error" in answer)
@@ -510,9 +573,9 @@ const finish = (auditId: string) =>
   })
 
 /**
- * One audit: `start`, then for each run `capture-<n>` and either `persist-<n>` or `fail-<n>`, then
- * `finish`. Every step is durable: once it succeeds, a replay returns its stored result instead of
- * running it again. A run that fails does not stop the audit. Bound as AUDIT_WORKFLOW, exported
+ * One audit: `start`, then for each run `admit-<n>` (its turn for an engine), `capture-<n>` and
+ * either `persist-<n>` or `fail-<n>`, then `release` and `finish`. Every step is durable: once it
+ * succeeds, a replay returns its stored result instead of running it again. A run that fails does not stop the audit. Bound as AUDIT_WORKFLOW, exported
  * from `src/server.ts`.
  */
 export class Audit extends AuditWorkflow.make(Layer.empty, {
@@ -521,11 +584,14 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
       const runs = yield* Workflow.step("start", runtime.provide(start(auditId)), STEP)
       for (const { id, ordinal } of runs) {
         // effect-cf fails the step with WorkflowStepError once Cloudflare gives up retrying
-        const outcome = yield* Workflow.step(
-          `capture-${ordinal}`,
-          runtime.provide(capture(auditId, id)),
-          STEP,
-        ).pipe(
+        const outcome = yield* engineFor(auditId, ordinal).pipe(
+          Effect.flatMap((engine) =>
+            Workflow.step(
+              `capture-${ordinal}`,
+              runtime.provide(capture(auditId, id, engine)),
+              STEP,
+            ),
+          ),
           Effect.catchTag("WorkflowStepError", (error) =>
             Effect.succeed(
               Exhausted({
@@ -555,6 +621,10 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
         if (reason !== null)
           yield* Workflow.step(`fail-${ordinal}`, runtime.provide(fail(auditId, id, reason)), STEP)
       }
+      // a failed release only holds the next audit back until this one's lease lapses
+      yield* Workflow.step("release", runtime.provide(release(auditId)), ADMIT_STEP).pipe(
+        Effect.catchTag("WorkflowStepError", () => Effect.void),
+      )
       const status = yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP)
       return { status }
     }),

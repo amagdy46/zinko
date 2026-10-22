@@ -26,7 +26,7 @@
 M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). Not done, and not blocking M3:
 
 - **Parallel captures** for the 5-minute target: captures run one at a time per audit, 10.1 to 12.8 s per run, so 10 pages × 3 scenarios take about 5 to 6.4 minutes.
-- **Admission control:** nothing limits how many audits start at once or orders them when the engine or the containers are busy (`docs/vision.md`, open questions).
+- **Admission control:** done in the M3 leftovers (below).
 - **Cloudflare:** the Workflow, Durable Objects, R2 and the container have run only under `pnpm dev`; the container image and a deploy are still untried.
 - **A flaky navigation timeout:** one demo run hit `Page.goto` 30 s on a fixture page and passed on the next audit; the cause is not isolated.
 
@@ -49,7 +49,7 @@ Two public sites, one audit each (start page and two key pages, four scenarios, 
 - **One cause, two findings.** `clickid.lost-across-navigation` repeats `clickid.lost-on-redirect` when the redirect dropped the click ID; skip the journey check when the landing URL already lost it.
 - **"Could not check" reads like a finding.** Inconclusive findings show the rule's title ("Ad pixel fired after the visitor rejected"), which states the problem as found. Give each rule a neutral question-style label for the "Could not check" group, or lead with the reason.
 - **A fresh clone needs a build before `pnpm check`.** `check` type-checks workspace packages from their `dist` and the web app from the generated route tree, so it fails until `pnpm build` (and `pnpm typecheck`, which regenerates the routes) have run once. Make `check` build what it needs, or reorder the "Before you finish" command in `AGENTS.md`.
-- **Admission control, again.** With five audits queued, one had run no capture after 50 minutes (I started it again) while the engine sat idle between other audits' backoffs. The M2 item above now blocks demos.
+- **Admission control, again.** Done (2026-10-22, `docs/decisions/0003-capture-admission.md`). With five audits queued, one had run no capture after 50 minutes (I started it again) while the engine sat idle between other audits' backoffs. Now an `AdmissionGate` Durable Object hands the engines to audits first come, first served, and wakes the next audit with a workflow event. Verified locally: one engine, five 3-run fixture audits (none, accept, reject; desktop) started at once. With the gate, all 15 captures ran back to back with 0.1–0.2 s between one ending and the next starting, in the order the audits reached the gate, and the engine answered no 429. All five finished 2 min 12 s after queueing, twice in a row. On `main` the same load finished after 27 s, 1:10, 2:10, 4:22 and 8:11. The engine was idle for about 5 min 50 s in all between backoffs (18 s, 35 s, 95 s and 203 s), and the first audit submitted ran last. Not yet tried with containers on Cloudflare.
 
 ## After v0.1
 

@@ -47,5 +47,7 @@ export class Jobs extends Context.Service<
       options?: JobStartOptions,
     ) => Effect.Effect<JobRun, JobError>
     readonly status: (job: JobName, id: string) => Effect.Effect<JobStatus, JobError>
+    /** Wakes the instance's `waitForEvent` for `type`. */
+    readonly sendEvent: (job: JobName, id: string, type: string) => Effect.Effect<void, JobError>
   }
 >()("@repo/core/Jobs") {}

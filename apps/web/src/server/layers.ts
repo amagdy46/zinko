@@ -7,6 +7,7 @@ import { JobsLive } from "./jobs"
 import { LlmLive } from "./llm"
 import { MailerLive } from "./mailer"
 import { AuditProgressLive } from "./audit-progress"
+import { CaptureAdmissionLive } from "./admission"
 import { StorageLive } from "./storage"
 
 /**
@@ -21,6 +22,7 @@ export const AppLayer = Layer.mergeAll(
   JobsLive,
   AuditProgressLive,
   BrowserLive,
+  CaptureAdmissionLive,
   StorageLive,
   MailerLive,
   WorkerEnvLive,
