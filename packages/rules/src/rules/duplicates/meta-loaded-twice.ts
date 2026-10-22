@@ -1,5 +1,6 @@
 import { distinct, groupBy, hitRef, requestRef } from "../../documents.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
+import { withoutRetransmissions } from "../../retransmissions.js"
 import type { EvidenceRef, Rule } from "../../types.js"
 
 const id = "duplicates.meta-loaded-twice"
@@ -21,7 +22,10 @@ export const metaLoadedTwice: Rule = {
       const pixel = SIGNALS_CONFIG.exec(request.url)?.[1]
       return pixel === undefined ? [] : [{ request, pixel }]
     })
-    const pageViews = input.hits.filter((hit) => hit.vendor === "meta" && hit.event === "PageView")
+    const pageViews = withoutRetransmissions(
+      input,
+      input.hits.filter((hit) => hit.vendor === "meta" && hit.event === "PageView"),
+    )
     if (configs.length === 0 && !input.hits.some((hit) => hit.vendor === "meta"))
       return notApplicable(id, "the Meta pixel was not loaded")
     // fbevents.js fetches each pixel's config once per init, but a second fetch can be served from

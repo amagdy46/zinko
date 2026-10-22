@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved
+status: implemented
 design: ../../vision.md
 ---
 
@@ -70,7 +70,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Files:** remove the scaffold content of `apps/web/src/routes/app/index.tsx` (it redirects to `/app/clients`), `apps/web/src/server/{greeting,notes,example-job}.ts`, `apps/web/src/workflows/Example.ts`, the `Example` export in `server.ts`, `JobPayloads.example`, the `EXAMPLE_WORKFLOW` binding and resource in `infra/alchemy.run.ts`; the `note` table if nothing else uses it (a generated migration drops it); add a favicon from `.github/assets/logo.svg`
 **Blocked by:** none
 
-- [ ] Verify: `rg -n "Example|example-job|greeting|notes|EXAMPLE_WORKFLOW|\bnote\b" apps packages infra docs AGENTS.md` shows no leftovers; in the browser `/app` lands on Clients and there is no favicon 404; `pnpm dev` starts
+- [x] Verify: `rg -n "Example|example-job|greeting|notes|EXAMPLE_WORKFLOW|\bnote\b" apps packages infra docs AGENTS.md` shows no leftovers; in the browser `/app` lands on Clients and there is no favicon 404; `pnpm dev` starts
 
 ### Task 1: The rules package and the consent rules
 
@@ -87,7 +87,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 - CLI: `zinko capture … --rules` prints, per scenario, one line per rule (status, id, message, evidence count); `--json` adds `checks`
 **Blocked by:** none (its rules verify against fixtures that already exist)
 
-- [ ] Verify with `zinko capture --rules --block-vendors`: `meta-before-consent`, `tiktok-after-reject` and `consent-default-late` fail the consent rules the table names, under the scenarios it names; `clean` matches its expected result set under all four scenarios; `no-cmp` under accept gives `inconclusive` with "the banner was not found"; paste the outputs
+- [x] Verify with `zinko capture --rules --block-vendors`: `meta-before-consent`, `tiktok-after-reject` and `consent-default-late` fail the consent rules the table names, under the scenarios it names; `clean` matches its expected result set under all four scenarios; `no-cmp` under accept gives `inconclusive` with "the banner was not found"; paste the outputs
 
 ### Task 2: Fixtures for the remaining rules
 
@@ -96,11 +96,11 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Interfaces:** produces `purchase-missing-fields`, `bad-currency`, `no-page-view`, `multiple-ga4`, `meta-init-twice`, `meta-no-eventid`, `meta-eventid-reused`, `pii-in-url`, `sgtm-errors`, `location-mismatch`; and changes `clean` so it sends: GA4 `purchase` with `transaction_id`, `value`, `currency`; Ads conversion with `transaction_id`; Meta `eventID` on every standard event; one GA4 ID; `page_location` on its own host
 **Blocked by:** none
 
-- [ ] `sgtm-errors` sends GA4 hits as `POST /g/collect?v=2&tid=…&en=…` to the fixture host, which `server.mjs` answers with 500; `inspect.mjs` reports first-party collection requests too
-- [ ] `location-mismatch` overrides `page_location` to `https://staging.shop.example/…` without navigating anywhere
-- [ ] `pii-in-url` puts an email in a page query parameter that reaches GA4's `page_location`; no other fixture contains anything the PII rule matches (check timestamps and pixel ids)
-- [ ] The README gives each site's expected result set (rule × scenario × status), including the existing sites
-- [ ] Verify: `node packages/fixtures/inspect.mjs <site> accept` on each new site shows its bug; `clean` still sends nothing to a vendor
+- [x] `sgtm-errors` sends GA4 hits as `POST /g/collect?v=2&tid=…&en=…` to the fixture host, which `server.mjs` answers with 500; `inspect.mjs` reports first-party collection requests too
+- [x] `location-mismatch` overrides `page_location` to `https://staging.shop.example/…` without navigating anywhere
+- [x] `pii-in-url` puts an email in a page query parameter that reaches GA4's `page_location`; no other fixture contains anything the PII rule matches (check timestamps and pixel ids)
+- [x] The README gives each site's expected result set (rule × scenario × status), including the existing sites
+- [x] Verify: `node packages/fixtures/inspect.mjs <site> accept` on each new site shows its bug; `clean` still sends nothing to a vendor
 
 ### Task 3: The remaining rules
 
@@ -109,7 +109,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Interfaces:** consumes Task 1; produces the 14 remaining rules except `clickid.lost-across-navigation` (Task 4)
 **Blocked by:** 1, 2
 
-- [ ] Verify with `zinko capture --rules --block-vendors` on every fixture × none, accept, reject, gpc × desktop, mobile: every result matches the README's expected result set; paste a rule × fixture × scenario table; `clean/thank-you` under accept passes `duplicates.purchase-sent-twice` with one denied and one granted Ads conversion; `duplicate-purchase` fails it
+- [x] Verify with `zinko capture --rules --block-vendors` on every fixture × none, accept, reject, gpc × desktop, mobile: every result matches the README's expected result set; paste a rule × fixture × scenario table; `clean/thank-you` under accept passes `duplicates.purchase-sent-twice` with one denied and one granted Ads conversion; `duplicate-purchase` fails it
 
 ### Task 4: Journey runs
 
@@ -118,8 +118,8 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Interfaces:** when `journey` is on, `startAudit` adds, **in addition to** the per-page runs, one run per scenario × viewport that loads the start URL (with click IDs when `clickIds` is on) and then `goto`s the first 5 key pages in order in one browser context; the form says only the first 5 are walked; `run.page_url` is the start URL and `run.journey` is true; the estimate counts a journey run as (1 + steps) runs; `RunInput.journey` carries it
 **Blocked by:** 1
 
-- [ ] Journey runs use `CaptureRequest.journey` and the site allow-list; the grid labels them "Journey"; the engine's 135 s budget at 5 steps fits the workflow's 4-minute step timeout
-- [ ] Verify with `zinko capture --rules --block-vendors --goto …`: on `lost-gclid` (`?gclid=TEST`, then `/lost-gclid/thank-you`) under accept, `clickid.lost-across-navigation` fails with evidence on the second document; on `clean` the same walk passes; paste both
+- [x] Journey runs use `CaptureRequest.journey` and the site allow-list; the grid labels them "Journey"; the engine's 135 s budget at 5 steps fits the workflow's 4-minute step timeout
+- [x] Verify with `zinko capture --rules --block-vendors --goto …`: on `lost-gclid` (`?gclid=TEST`, then `/lost-gclid/thank-you`) under accept, `clickid.lost-across-navigation` fails with evidence on the second document; on `clean` the same walk passes; paste both
 
 ### Task 5: Persisting checks and findings, and the evidence resolver
 
@@ -134,7 +134,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 - `getEvidence({ auditId, runId, ref: EvidenceRef })`: resolves a hit (decoded row and raw request), a raw request (from `capture.json`, including `ccm`), a cookie (name, value, domain, path, snapshot), a push (value) or a document (URL, redirects, title), checked through the audit; the run's screenshot (the final one) separately
 **Blocked by:** 1, 3, 4
 
-- [ ] Verify: an audit of `clean`, `meta-before-consent` and `duplicate-purchase` × none/accept/reject finds exactly the rules their expected result sets name and nothing from `clean`; a forced `persist` failure after its inserts reproduces identical `check_result` rows; an exhausted `persist` leaves no check results for that run; setting triage and recomputing `finish` (a temporary hook) keeps it; `getEvidence` resolves one of each evidence kind; another organization gets 404
+- [ ] Verify: an audit of `clean`, `meta-before-consent` and `duplicate-purchase` × none/accept/reject finds exactly the rules their expected result sets name and nothing from `clean`; a forced `persist` failure after its inserts reproduces identical `check_result` rows; an exhausted `persist` leaves no check results for that run; setting triage and recomputing `finish` (a temporary hook) keeps it; `getEvidence` resolves one of each evidence kind; another organization gets 404 Not run in the app: the forced `persist` failure, the exhausted `persist` and the triage-over-`finish` checks; the audit, check-result and evidence parts ran in the M3 demo.
 
 ### Task 6: The Findings screen
 
@@ -143,10 +143,10 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Interfaces:** consumes `listFindings`, `getFinding`, `setTriage`, `getEvidence`
 **Blocked by:** 5
 
-- [ ] Layout per `docs/ui.md` screen 4: the list of failing findings (severity, title, area, affected page and scenario count, inconclusive count, triage status), then a separate "Could not check" group for `kind = inconclusive`, and the evaluation coverage ("9 of 9 runs evaluated") and the selected finding (title, why it matters, fix steps, evidence tabs: Hit, Request, Screenshot (the run's final screenshot), Cookies, dataLayer)
-- [ ] Actions: mark accepted risk or fixed (any member), copy the fix steps, open in Hits (the hit selected)
-- [ ] States: no findings with full coverage; not evaluated (an M2 audit); only inconclusive checks (never shown as clean); rules evaluated with mixed versions
-- [ ] Verify in the browser on the Task 5 audit: open each finding and each evidence tab, including a raw `ccm` request and a cookie; "Open in Hits" lands on the right hit even beyond the first 200 rows; triage survives a reload; an M2 audit shows "not evaluated"; screenshots under `$TMPDIR/m3t6-*.png`
+- [x] Layout per `docs/ui.md` screen 4: the list of failing findings (severity, title, area, affected page and scenario count, inconclusive count, triage status), then a separate "Could not check" group for `kind = inconclusive`, and the evaluation coverage ("9 of 9 runs evaluated") and the selected finding (title, why it matters, fix steps, evidence tabs: Hit, Request, Screenshot (the run's final screenshot), Cookies, dataLayer)
+- [x] Actions: mark accepted risk or fixed (any member), copy the fix steps, open in Hits (the hit selected)
+- [x] States: no findings with full coverage; not evaluated (an M2 audit); only inconclusive checks (never shown as clean); rules evaluated with mixed versions
+- [x] Verify in the browser on the Task 5 audit: open each finding and each evidence tab, including a raw `ccm` request and a cookie; "Open in Hits" lands on the right hit even beyond the first 200 rows; triage survives a reload; an M2 audit shows "not evaluated"; screenshots under `$TMPDIR/m3t6-*.png`
 
 ### Task 7: M3 demo and docs
 
@@ -154,9 +154,9 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 **Files:** modify `docs/vision.md`, `docs/roadmap.md`, `docs/architecture.md`, `README.md`, `AGENTS.md` (the rules package, and how to add a rule: fixture with the bug and its expected result set, then the rule, then prove it with `zinko capture --rules`)
 **Blocked by:** 0–6
 
-- [ ] Run an audit of every fixture site × none/accept/reject/gpc with `clickIds` and `journey` on; save the Findings screen to `mockups/m3-demo/` (untracked); paste the finding list against the expected result sets
-- [ ] `vision.md`: M3 rows working with how each was verified; the proposed rows decided (three outcomes, Google's wording and click IDs through redirects done; the approved vendor list moved to a later milestone)
-- [ ] The roadmap's M3 demo, "audit a real client site": the user asked us to pick one. `https://www.happysocks.com/eu/` (GTM, GA4, Cookiebot; autoconsent accepts it, checked 2026-10-22) is the main one, and `https://www.allbirds.com/` (GA4, Meta, TikTok; no banner from our region) the second. Always with `blockVendorRequests: true`, so nothing reaches their vendors; one audit each, no crawling beyond the key pages
+- [x] Run an audit of every fixture site × none/accept/reject/gpc with `clickIds` and `journey` on; save the Findings screen to `mockups/m3-demo/` (untracked); paste the finding list against the expected result sets
+- [x] `vision.md`: M3 rows working with how each was verified; the proposed rows decided (three outcomes, Google's wording and click IDs through redirects done; the approved vendor list moved to a later milestone)
+- [x] The roadmap's M3 demo, "audit a real client site": the user asked us to pick one. `https://www.happysocks.com/eu/` (GTM, GA4, Cookiebot; autoconsent accepts it, checked 2026-10-22) is the main one, and `https://www.allbirds.com/` (GA4, Meta, TikTok; no banner from our region) the second. Always with `blockVendorRequests: true`, so nothing reaches their vendors; one audit each, no crawling beyond the key pages
 
 ## Execution order
 

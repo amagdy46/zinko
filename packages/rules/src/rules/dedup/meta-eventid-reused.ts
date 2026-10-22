@@ -1,5 +1,6 @@
 import { count, groupBy, hitRef } from "../../documents.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
+import { withoutRetransmissions } from "../../retransmissions.js"
 import type { Rule } from "../../types.js"
 
 const id = "dedup.meta-eventid-reused"
@@ -17,7 +18,10 @@ export const metaEventIdReused: Rule = {
   evaluate(input) {
     const meta = input.hits.filter((hit) => hit.vendor === "meta")
     if (meta.length === 0) return notApplicable(id, "no Meta hit was sent")
-    const withId = meta.filter((hit) => hit.ids.eventId)
+    const withId = withoutRetransmissions(
+      input,
+      meta.filter((hit) => hit.ids.eventId),
+    )
     const reused = [
       ...groupBy(withId, (hit) => `${hit.destinationId} ${hit.event} ${hit.ids.eventId}`).values(),
     ].filter((group) => group.length > 1)

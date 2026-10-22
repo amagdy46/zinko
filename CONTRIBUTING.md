@@ -49,6 +49,7 @@ With everything above running (Postgres, the engine with `ALLOW_PRIVATE_NETWORKS
 3. On the site, choose New audit. Start URL `http://localhost:4400/clean/`, key pages `http://localhost:4400/meta-before-consent/` and `http://localhost:4400/ga4-batch/`, scenarios none, accept and reject, desktop. Leave "Answer tracking requests locally" on, so fixture traffic never reaches Google, Meta or TikTok.
 4. Start the audit and watch the run grid fill in. Nine runs take about 1.5 to 2 minutes.
 5. Open the Hits tab. Filter the run to `/meta-before-consent/` under reject and the vendor to Meta: the `PageView` fires before the consent update, and nothing follows it. Open the `ga4-batch` accept hit to see one request carrying three events.
+6. Open the Findings tab once the audit finishes. `meta-before-consent` fails "Ad pixel fired without consent" under none, accept and reject; select it to read why it matters and the fix steps, and open its Hit, Request, Cookies and dataLayer evidence. `clean` raises nothing but `hygiene.tag-errors`, which reads "could not check" because the tracking requests were answered locally.
 
 - [AGENTS.md](./AGENTS.md): code layout and rules, for people and coding agents.
 - [infra/README.md](./infra/README.md): running the web app locally (`pnpm dev`) and deploying it.

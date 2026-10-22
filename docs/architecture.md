@@ -15,11 +15,12 @@ The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decisi
 │ viewport):                                   │   │ tabs of that audit's organization           │
 │   capture-<n>: Browser.capture(...) ─────┐   │   └─────────────────────────────────────────────┘
 │     → capture.json + screenshot in R2    │   │
-│   persist-<n>: decode → hits, pushes     │   │
+│   persist-<n>: decode → hits, pushes,    │   │
+│     rules → check_result rows            │   │
 │     → Postgres in one transaction        │   │
 │   (or fail-<n>: record the run's error)  │   │
-│ finish: audit status                     │   │
-│ later (M3, M4): rules → Finding[]        │   │
+│ finish: findings from check_result,      │   │
+│     audit status (one transaction)       │   │
 │ later (M4): llm.explain(findings) (BYOK) │   │
 └──────────────────────────────────────────┼───┘
                                     │ POST /capture (packages/capture-contract)
@@ -33,7 +34,7 @@ The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decisi
    │ network, dataLayer shim, cookies, CMP, screenshot                │
    └──────────────────────────────────────────────────────────────────┘
 
-Postgres (Neon) via Hyperdrive — app data, clients, sites, audits, runs, hits (jsonb), dataLayer pushes; findings later
+Postgres (Neon) via Hyperdrive — app data, clients, sites, audits, runs, hits (jsonb), dataLayer pushes, check results, findings and triage
 R2 — per run: screenshot.png and capture.json (the immutable capture); PDFs later
 ```
 
@@ -71,19 +72,20 @@ R2 — per run: screenshot.png and capture.json (the immutable capture); PDFs la
 apps/
   web/          generated, now Zinko's app: TanStack Start on Workers (UI, server fns, auth, clients and sites, audits); hosts the `Audit` workflow, the `AuditRoom` Durable Object and the `BrowserContainer`
   browser/      Zinko: the capture container image (Node server, egress proxy, Scrapling engine in scrapling/, Playwright fallback)
-  cli/          Zinko: `decode` and `capture` (against the engine), rules later, no Cloudflare
+  cli/          Zinko: `decode` and `capture` (against the engine; `--rules` runs the same rules as the app), no Cloudflare
 packages/
   core/         generated: Effect service interfaces (Database, Auth, Storage, Llm, Browser, ...)
   db/           generated: Drizzle schema, migrations, Effect SQL layer
   decoders/     Zinko: request -> Hit (GA4, Google Ads, Meta, TikTok; pure TS, no Effect)
+  rules/        Zinko: `evaluateRun` (one run's capture and decoded hits -> one check result per rule, with evidence references) and `decodeHits`; pure TS, no Effect, shared by the workflow and the CLI
   capture-contract/  Zinko: Effect Schemas for POST /capture, shared by the web app and the CLI
   fixtures/     Zinko: fake shops, each with one known tracking bug, plus a server and an `inspect` script
 infra/
   alchemy.run.ts  generated: every Cloudflare resource, per stage
-planned: packages/rules, llm, plan
+planned: llm, plan
 ```
 
-Zinko's own packages (`decoders`, `capture-contract`, `cli`) are plain TypeScript and follow the workspace's TypeScript 7, catalog dependencies and `vp check` rules (including `no-console`; the CLI writes through `process.stdout`).
+Zinko's own packages (`decoders`, `rules`, `capture-contract`, `cli`) are plain TypeScript and follow the workspace's TypeScript 7, catalog dependencies and `vp check` rules (including `no-console`; the CLI writes through `process.stdout`).
 
 ### Where Effect goes
 
@@ -100,9 +102,12 @@ organization ─< member >─ user              (better-auth)
 organization ─< client ─< site ─< audit ─< run (page × scenario × viewport, `ordinal`)
                                            ├─< hit             (decoded, jsonb params)
                                            ├─< datalayer_push
+                                           ├─< check_result    (one per rule; evidence references)
                                            └─ R2 keys: screenshot_key, capture_key
+audit ─< finding            (derived from check_result by `finish`)
+audit ─< finding_triage     (people's calls; no foreign key to finding)
 organization ─ llm_credential (provider, encrypted key, model)
-later: finding (M3), report_share and branding (M5)
+later: report_share and branding (M5)
 ```
 
 | Table | Key columns |
@@ -113,10 +118,15 @@ later: finding (M3), report_share and branding (M5)
 | `run` | `audit_id` (cascade), `ordinal` (unique with `audit_id`), `page_url`, `scenario`, `viewport`, `status` (`pending`, `running`, `complete`, `partial`, `failed`), `failure` (`EngineFailure`, `EngineBusy`, `PersistFailure`; null when the engine refused the request), `engine`, `decoder_version`, `consent`, `documents`, `cookies`, `errors` (all jsonb), `complete`, `truncated`, `screenshot_key`, `capture_key`, `hit_count`, `started_at`, `finished_at` |
 | `hit` | primary key `(run_id, request_id, batch_index)`, no `id`; `document_id`, `at` (ms since capture start), `vendor`, `destination_id`, `event`, `params`, `ids`, `consent`, `host`, `url`, `blocked`, `status`, `after_consent_action` |
 | `datalayer_push` | primary key `(run_id, seq)`, no `id`; `document_id`, `at`, `value` |
+| `check_result` | primary key `(run_id, rule_id)` (cascade from the run); `rules_version`, `status` (`pass`, `fail`, `inconclusive`, `not_applicable`), `message`, `evidence` (jsonb `EvidenceRef[]`), and the rule's `area`, `severity`, `title`, `why`, `fix` as they read when the run was judged |
+| `finding` | primary key `(audit_id, rule_id)` (cascade from the audit); `kind` (`fail`, or `inconclusive` when no run failed and one could not be checked), `rules_versions`, the stored text, `failing_runs`, `inconclusive_runs`, `run_ids` |
+| `finding_triage` | primary key `(audit_id, rule_id)`, no foreign key to `finding`; `status` (`open`, `accepted_risk`, `fixed`), `updated_by`, `updated_at` |
 
 - **Evidence is archived, never deleted by accident.** Foreign keys from audits upward are `on delete restrict`; a client or site with audits can only be archived (`archived_at`). Runs, hits and pushes cascade from their audit. Purging evidence (rows and R2 objects) is a later, explicit feature.
-- **Natural keys make a rerun reproduce its rows.** `persist-<n>` deletes the run's hits and pushes and reinserts them from the stored `capture.json` in one transaction, with `created_at` set to the run's `finished_at`, so a retry gives identical rows, keys included. A finding that references a hit (M3) needs a deferrable foreign key, or findings regenerated in the same transaction.
+- **Natural keys make a rerun reproduce its rows.** `persist-<n>` deletes the run's hits and pushes and reinserts them from the stored `capture.json` in one transaction, with `created_at` set to the run's `finished_at`, so a retry gives identical rows, keys included. Check results and findings are derived the same way: evidence references name a hit by `(request_id, batch_index)`, not by a foreign key, so deleting and reinserting a run's hits never breaks a stored result.
 - **The capture is written once.** `capture-<n>` reuses a `capture_key` already on the run, then an object already at `audits/<audit>/runs/<run>/capture.json` (found with `Storage.head`), and only then captures and writes. Workflow step results are capped at 1 MiB, so steps return keys, never captures.
+- **Rules run inside `persist-<n>`.** The step decodes the stored capture with `decodeHits` (the CLI uses the same function), calls `evaluateRun`, and writes the run's `check_result` rows in the transaction that rewrites its hits, with `created_at` from the run's `finished_at`; `fail-<n>` deletes them, so a run that never persisted has none and the screen shows it as not evaluated. A run that is not `complete` (except one whose only error is `CmpNotFound`) is `inconclusive` for every rule.
+- **Findings are recomputed in `finish`,** in the transaction that settles the audit's status: one per rule that failed on a run, or failed on none and was inconclusive on one, with the text taken from the stored check results, not the live registry, so an old audit keeps its wording. `finding_triage` is never touched, so recomputing keeps people's calls. `getEvidence` resolves an `EvidenceRef` against the stored capture and the run's rows, through the audit, so the Findings screen can show the request, cookie or push that proves a finding.
 - **`after_consent_action`** is `startedAt >= consent.actionAt`, false whenever there was no action (`none`, `gpc`, no banner); rules branch on the run's `consent.outcome` first.
 
 ## Realtime
@@ -129,7 +139,7 @@ Events (`AuditEvent`, a `Schema`) carry a run's or the audit's new status; the p
 
 ## Key design rules
 
-1. **Findings are deterministic.** Each rule is a pure function, checked against the fixture sites. The LLM explains findings and suggests fixes but never decides pass or fail, and its output is cached per finding.
+1. **Findings are deterministic.** Each rule is a pure function in `packages/rules`, checked against the fixture sites with `zinko capture --rules`. The LLM explains findings and suggests fixes but never decides pass or fail, and its output is cached per finding.
 2. **Every finding cites evidence:** hit IDs, the request URL, a screenshot, and a cookie snapshot.
 3. **Vendor matchers are data plus small decoders,** so endpoint changes are one-line fixes.
 4. **Crawled pages are untrusted.** Their content goes to the LLM only as quoted evidence. The agent gets no credentials, and navigation is restricted to an allow-list of the site's domains.

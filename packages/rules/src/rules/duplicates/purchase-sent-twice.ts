@@ -1,6 +1,7 @@
 import { count, groupBy, hitRef, vendorName } from "../../documents.js"
 import { isPurchase, transactionId } from "../../purchases.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
+import { withoutRetransmissions } from "../../retransmissions.js"
 import type { DecodedHit, Rule } from "../../types.js"
 
 const id = "duplicates.purchase-sent-twice"
@@ -45,7 +46,7 @@ export const purchaseSentTwice: Rule = {
     "Always send the order's transaction_id, so GA4 and Google Ads can drop the repeats that still get through.",
   ],
   evaluate(input) {
-    const purchases = input.hits.filter(isPurchase)
+    const purchases = withoutRetransmissions(input, input.hits.filter(isPurchase))
     if (purchases.length === 0) return notApplicable(id, "no purchase was sent")
     const groups = [...groupBy(purchases, purchaseKey).values()].map((hits) => {
       const pairs = adsPairs(hits)
