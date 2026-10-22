@@ -48,3 +48,26 @@ export function count(n: number, noun: string): string {
 export function distinct(values: Iterable<string>): string[] {
   return [...new Set(values)]
 }
+
+/** Items grouped by key, groups and their items in first-seen order. */
+export function groupBy<T>(items: Iterable<T>, key: (item: T) => string): Map<string, [T, ...T[]]> {
+  const groups = new Map<string, [T, ...T[]]>()
+  for (const item of items) {
+    const k = key(item)
+    const group = groups.get(k)
+    if (group === undefined) groups.set(k, [item])
+    else group.push(item)
+  }
+  return groups
+}
+
+const VENDOR_NAMES: Record<DecodedHit["vendor"], string> = {
+  ga4: "GA4",
+  "google-ads": "Google Ads",
+  meta: "Meta",
+  tiktok: "TikTok",
+}
+
+export function vendorName(vendor: DecodedHit["vendor"]): string {
+  return VENDOR_NAMES[vendor]
+}

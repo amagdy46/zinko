@@ -1,11 +1,24 @@
 import type { CaptureResult } from "@repo/capture-contract"
 import { inconclusive } from "./results.js"
+import { cookieMissing } from "./rules/clickids/cookie-missing.js"
 import { lostAcrossNavigation } from "./rules/clickids/lost-across-navigation.js"
+import { lostOnRedirect } from "./rules/clickids/lost-on-redirect.js"
 import { cookiesWithoutConsent } from "./rules/consent/cookies-without-consent.js"
 import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
 import { pixelAfterReject } from "./rules/consent/pixel-after-reject.js"
 import { pixelWithoutConsent } from "./rules/consent/pixel-without-consent.js"
+import { invalidCurrency } from "./rules/coverage/invalid-currency.js"
+import { noPageView } from "./rules/coverage/no-page-view.js"
+import { purchaseMissingFields } from "./rules/coverage/purchase-missing-fields.js"
+import { metaEventIdMissing } from "./rules/dedup/meta-eventid-missing.js"
+import { metaEventIdReused } from "./rules/dedup/meta-eventid-reused.js"
+import { metaLoadedTwice } from "./rules/duplicates/meta-loaded-twice.js"
+import { multipleGa4Ids } from "./rules/duplicates/multiple-ga4-ids.js"
+import { purchaseSentTwice } from "./rules/duplicates/purchase-sent-twice.js"
+import { locationMismatch } from "./rules/hygiene/location-mismatch.js"
+import { piiInHits } from "./rules/hygiene/pii-in-hits.js"
+import { tagErrors } from "./rules/hygiene/tag-errors.js"
 import type { CheckResult, Rule, RunInput } from "./types.js"
 
 export type { CheckResult, CheckStatus, DecodedHit, EvidenceRef, Rule, RunInput } from "./types.js"
@@ -25,7 +38,20 @@ export const rules: readonly Rule[] = [
   pixelAfterReject,
   googleWithoutDeniedState,
   defaultAfterTag,
+  cookieMissing,
+  lostOnRedirect,
   lostAcrossNavigation,
+  purchaseMissingFields,
+  invalidCurrency,
+  noPageView,
+  purchaseSentTwice,
+  multipleGa4Ids,
+  metaLoadedTwice,
+  metaEventIdMissing,
+  metaEventIdReused,
+  piiInHits,
+  tagErrors,
+  locationMismatch,
 ]
 
 const byId = new Map(rules.map((rule) => [rule.id, rule]))
