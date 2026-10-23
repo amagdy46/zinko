@@ -77,7 +77,7 @@ function SignIn() {
           </p>
         )}
         <Button type="submit" className="w-full" disabled={pending}>
-          Sign in
+          {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
     </AuthCard>

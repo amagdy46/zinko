@@ -1,5 +1,7 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 
+import { PageHeader } from "@/components/page-header"
+
 export const Route = createFileRoute("/app/settings")({ component: SettingsLayout })
 
 /** Tabs of the settings area; `efforge add` extras link their own pages here. */
@@ -11,9 +13,9 @@ const tabs = [
 
 function SettingsLayout() {
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Settings</h1>
-      <nav className="flex gap-1 border-b">
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader title="Settings" description="Your profile and organization preferences." />
+      <nav aria-label="Settings" className="flex gap-1 border-b">
         {tabs.map(({ to, label }) => (
           <Link
             key={to}

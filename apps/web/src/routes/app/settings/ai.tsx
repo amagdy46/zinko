@@ -1,6 +1,14 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { toast } from "sonner"
+import { Info } from "lucide-react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -27,21 +35,14 @@ const providers = [
 
 type ProviderId = (typeof providers)[number]["id"]
 
-const selectClass =
-  "h-9 w-full rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-
 const isProviderId = (value: string): value is ProviderId =>
   providers.some((provider) => provider.id === value)
-
-async function test() {
-  const result = await testLlmSettings()
-  if (result.ok) toast.success(`The model answered: ${result.value}`)
-  else toast.error(result.message)
-}
 
 function AiSettings() {
   const settings = Route.useLoaderData()
   const router = useRouter()
+  const [pending, setPending] = useState<"save" | "test" | "remove" | null>(null)
+  const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
   const [provider, setProvider] = useState<ProviderId>(
     settings?.provider !== null &&
       settings?.provider !== undefined &&
@@ -60,6 +61,8 @@ function AiSettings() {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
+    setPending("save")
+    setFeedback(null)
     const result = await saveLlmSettings({
       data: {
         provider,
@@ -68,6 +71,7 @@ function AiSettings() {
         baseUrl: formField(data, "baseUrl"),
       },
     })
+    setPending(null)
     if (!result.ok) {
       toast.error(result.message)
       return
@@ -77,15 +81,29 @@ function AiSettings() {
     await router.invalidate()
   }
 
+  async function test() {
+    setPending("test")
+    setFeedback(null)
+    const result = await testLlmSettings()
+    setPending(null)
+    setFeedback({
+      ok: result.ok,
+      message: result.ok ? `The model answered: ${result.value}` : result.message,
+    })
+  }
+
   async function clear() {
+    setPending("remove")
+    setFeedback(null)
     const result = await clearLlmSettings()
+    setPending(null)
     if (!result.ok) toast.error(result.message)
     else toast.success("API key removed")
     await router.invalidate()
   }
 
   return (
-    <Card className="max-w-xl">
+    <Card className="max-w-xl shadow-none">
       <CardHeader>
         <CardTitle>AI provider</CardTitle>
         <CardDescription>
@@ -96,40 +114,59 @@ function AiSettings() {
       <CardContent className="space-y-4">
         {configured ? (
           <p className="text-sm" data-testid="ai-status">
-            Using {settings.provider} / {settings.model}
+            <span className="font-medium">{settings.provider}</span> ·{" "}
+            <span className="font-mono break-all">{settings.model}</span>
             {last4 === null ? (
               ""
             ) : (
               <>
                 {" "}
-                with the key ending in <code>{last4}</code>
+                <code className="font-mono">•••• {last4}</code>
               </>
             )}
-            .
           </p>
         ) : (
-          <p className="text-sm text-muted-foreground" data-testid="ai-status">
-            No key is set for this organization yet.
+          <div
+            className="flex items-start gap-2 rounded-md border p-3 text-sm text-muted-foreground"
+            data-testid="ai-status"
+          >
+            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <p>No key is set for this organization. Without a key, fix templates are used.</p>
+          </div>
+        )}
+        <p className="text-sm text-muted-foreground">
+          Rules decide pass or fail; the model only writes explanations.
+        </p>
+        {feedback === null ? null : (
+          <p
+            role={feedback.ok ? "status" : "alert"}
+            className={feedback.ok ? "text-sm text-status-pass" : "text-sm text-destructive"}
+          >
+            {feedback.message}
           </p>
         )}
         {canManage ? (
           <form onSubmit={save} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="ai-provider">Provider</Label>
-              <select
-                id="ai-provider"
-                className={selectClass}
+              <Select
                 value={provider}
-                onChange={(event) => {
-                  if (isProviderId(event.target.value)) setProvider(event.target.value)
+                disabled={pending !== null}
+                onValueChange={(value) => {
+                  if (isProviderId(value)) setProvider(value)
                 }}
               >
-                {providers.map(({ id, label }) => (
-                  <option key={id} value={id}>
-                    {label}
-                  </option>
-                ))}
-              </select>
+                <SelectTrigger id="ai-provider" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {providers.map(({ id, label }) => (
+                    <SelectItem key={id} value={id}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="ai-model">Model</Label>
@@ -143,7 +180,7 @@ function AiSettings() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ai-key">API key</Label>
+              <Label htmlFor="ai-key">{configured ? "New API key" : "API key"}</Label>
               <Input
                 id="ai-key"
                 name="apiKey"
@@ -168,15 +205,27 @@ function AiSettings() {
                 />
               </div>
             ) : null}
-            <div className="flex gap-2">
-              <Button type="submit">Save</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={pending !== null}>
+                {pending === "save" ? "Saving…" : "Save settings"}
+              </Button>
               {configured ? (
                 <>
-                  <Button type="button" variant="outline" onClick={test}>
-                    Test
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending !== null}
+                    onClick={test}
+                  >
+                    {pending === "test" ? "Testing…" : "Test"}
                   </Button>
-                  <Button type="button" variant="outline" onClick={clear}>
-                    Remove key
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={pending !== null}
+                    onClick={clear}
+                  >
+                    {pending === "remove" ? "Removing…" : "Remove key"}
                   </Button>
                 </>
               ) : null}

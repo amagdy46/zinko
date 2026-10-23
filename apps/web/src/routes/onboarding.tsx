@@ -10,7 +10,9 @@ import { getSession } from "@/server/session"
 
 export const Route = createFileRoute("/onboarding")({
   beforeLoad: async () => {
-    if ((await getSession()) === null) throw redirect({ to: "/sign-in" })
+    const session = await getSession()
+    if (session === null) throw redirect({ to: "/sign-in" })
+    return { session }
   },
   component: Onboarding,
 })
@@ -25,6 +27,8 @@ const slugify = (name: string) =>
   }-${crypto.randomUUID().slice(0, 6)}`
 
 function Onboarding() {
+  const { session } = Route.useRouteContext()
+  const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
 
@@ -39,13 +43,36 @@ function Onboarding() {
       setPending(false)
       return
     }
-    window.location.assign("/app")
+    window.location.assign("/app/clients")
   }
 
   return (
     <AuthCard
       title="Create your organization"
-      description="Organizations hold your members and your data. You can create more later."
+      description="Keep your clients, audits and team together. Next, add your first client."
+      account={
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <span className="break-all">Signed in as {session.email}</span>
+          <span aria-hidden="true">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={signingOut}
+            onClick={async () => {
+              setSigningOut(true)
+              const { error: failure } = await authClient.signOut()
+              if (failure) {
+                setError(failure.message ?? "Could not sign out")
+                setSigningOut(false)
+                return
+              }
+              window.location.assign("/sign-in")
+            }}
+          >
+            {signingOut ? "Signing out…" : "Sign out"}
+          </Button>
+        </div>
+      }
     >
       <form method="post" onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
@@ -58,7 +85,7 @@ function Onboarding() {
           </p>
         )}
         <Button type="submit" className="w-full" disabled={pending}>
-          Create organization
+          {pending ? "Creating organization…" : "Create organization"}
         </Button>
       </form>
     </AuthCard>

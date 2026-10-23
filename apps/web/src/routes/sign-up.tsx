@@ -83,7 +83,7 @@ function SignUp() {
           </p>
         )}
         <Button type="submit" className="w-full" disabled={pending}>
-          Create account
+          {pending ? "Creating account…" : "Create account"}
         </Button>
       </form>
     </AuthCard>

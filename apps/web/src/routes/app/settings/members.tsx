@@ -1,43 +1,77 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { toast } from "sonner"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 
 export const Route = createFileRoute("/app/settings/members")({ component: Members })
 
 const roles = ["member", "admin", "owner"] as const
-const inviteRoles = ["member", "admin"] as const
-
-const selectClass =
-  "h-9 rounded-md border bg-transparent px-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-
-const inviteLink = (invitationId: string) =>
-  `${window.location.origin}/accept-invite/${invitationId}`
-
-async function copy(text: string) {
-  await navigator.clipboard.writeText(text)
-  toast.success("Link copied")
-}
-
-async function cancel(invitationId: string) {
-  const { error } = await authClient.organization.cancelInvitation({ invitationId })
-  if (error) toast.error(error.message ?? "Could not cancel the invitation")
-}
-
+const roleLabels = { member: "Member", admin: "Admin", owner: "Owner" }
+const inviteLink = (id: string) => `${window.location.origin}/accept-invite/${id}`
 const isRole = (value: string): value is (typeof roles)[number] =>
   roles.some((role) => role === value)
 
+async function copy(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast.success("Link copied")
+  } catch {
+    toast.error("Could not copy the link. Open the invitation dialog to copy it manually.")
+  }
+}
+
 function Members() {
   const { session } = Route.useRouteContext()
-  const { data: org } = authClient.useActiveOrganization()
+  const { data: org, isPending, error: loadError, refetch } = authClient.useActiveOrganization()
+  const [open, setOpen] = useState(false)
   const [link, setLink] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
 
-  if (!org) return <p className="text-sm text-muted-foreground">Loading members...</p>
+  if (isPending)
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        Loading members…
+      </p>
+    )
+  if (loadError)
+    return (
+      <p role="alert" className="text-sm text-destructive">
+        Could not load members. Reload the page to try again.
+      </p>
+    )
+  if (!org)
+    return (
+      <p className="text-sm text-muted-foreground">Select an organization to view its members.</p>
+    )
 
   const me = org.members.find((member) => member.userId === session.userId)
   const canManage = me?.role === "owner" || me?.role === "admin"
@@ -45,154 +79,259 @@ function Members() {
 
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = event.currentTarget
-    const data = new FormData(form)
-    const role = data.get("role") === "admin" ? "admin" : "member"
+    const data = new FormData(event.currentTarget)
+    setBusy("invite")
     const { data: created, error } = await authClient.organization.inviteMember({
       email: formField(data, "email"),
-      role,
+      role: data.get("role") === "admin" ? "admin" : "member",
       organizationId: org?.id,
     })
+    setBusy(null)
     if (error || !created) {
       toast.error(error?.message ?? "Could not create the invitation")
       return
     }
-    form.reset()
     setLink(inviteLink(created.id))
+    toast.success("Invitation created")
+    await refetch()
   }
 
   async function changeRole(memberId: string, role: (typeof roles)[number]) {
+    setBusy(memberId)
     const { error } = await authClient.organization.updateMemberRole({
       memberId,
       role,
       organizationId: org?.id,
     })
     if (error) toast.error(error.message ?? "Could not change the role")
+    else await refetch()
+    setBusy(null)
   }
 
   async function remove(memberId: string) {
+    setBusy(memberId)
     const { error } = await authClient.organization.removeMember({
       memberIdOrEmail: memberId,
       organizationId: org?.id,
     })
     if (error) toast.error(error.message ?? "Could not remove the member")
+    else await refetch()
+    setBusy(null)
+  }
+
+  async function cancel(invitationId: string) {
+    setBusy(invitationId)
+    const { error } = await authClient.organization.cancelInvitation({ invitationId })
+    if (error) toast.error(error.message ?? "Could not cancel the invitation")
+    else await refetch()
+    setBusy(null)
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Members of {org.name}</CardTitle>
-          <CardDescription>People with access to this organization.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="divide-y">
-            {org.members.map((member) => (
-              <li key={member.id} className="flex items-center gap-3 py-3 text-sm">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{member.user.name}</div>
-                  <div className="truncate text-muted-foreground">{member.user.email}</div>
-                </div>
-                {canManage && member.userId !== session.userId ? (
-                  <>
-                    <select
-                      aria-label={`Role of ${member.user.email}`}
-                      className={selectClass}
-                      value={member.role}
-                      onChange={(event) => {
-                        const role = event.target.value
-                        if (isRole(role)) void changeRole(member.id, role)
-                      }}
-                    >
-                      {roles.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                    <Button variant="outline" size="sm" onClick={() => remove(member.id)}>
-                      Remove
-                    </Button>
-                  </>
-                ) : (
-                  <span className="text-muted-foreground">{member.role}</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
-
-      {canManage ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Invite a member</CardTitle>
-            <CardDescription>
-              Share the link with them. With the email extra they also get it by email.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <form onSubmit={invite} className="flex items-end gap-2">
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="invite-email">Email</Label>
-                <Input id="invite-email" name="email" type="email" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="invite-role">Role</Label>
-                <select id="invite-role" name="role" className={selectClass}>
-                  {inviteRoles.map((role) => (
-                    <option key={role} value={role}>
-                      {role}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <Button type="submit">Invite</Button>
-            </form>
-            {link === null ? null : (
-              <div className="space-y-2">
-                <Label htmlFor="invite-link">Invitation link</Label>
-                <div className="flex gap-2">
+    <section className="space-y-4" aria-labelledby="members-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h2 id="members-title" className="text-lg font-semibold wrap-break-word">
+            Members of {org.name}
+          </h2>
+          <p className="text-sm text-muted-foreground">People with access to this organization.</p>
+        </div>
+        {canManage ? (
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={() => setLink(null)}>Invite member</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Invite member</DialogTitle>
+                <DialogDescription>
+                  Invite someone to {org.name}. They must sign in with the invited email address.
+                </DialogDescription>
+              </DialogHeader>
+              {link === null ? (
+                <form onSubmit={invite} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="invite-email">Email</Label>
+                    <Input
+                      id="invite-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="invite-role">Role</Label>
+                    <Select name="role" defaultValue="member">
+                      <SelectTrigger id="invite-role" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="member">Member</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1 text-xs text-muted-foreground">
+                    <p>
+                      <span className="font-medium text-foreground">Member:</span> Works with
+                      clients, sites and audits.
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Admin:</span> Also manages
+                      members and AI settings.
+                    </p>
+                    <p>
+                      <span className="font-medium text-foreground">Owner:</span> Has full
+                      organization control. Assign this role after joining.
+                    </p>
+                  </div>
+                  <Button type="submit" disabled={busy !== null}>
+                    {busy === "invite" ? "Inviting…" : "Send invitation"}
+                  </Button>
+                </form>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="invite-link">Invitation link</Label>
                   <Input
                     id="invite-link"
                     readOnly
                     value={link}
-                    onFocus={(e) => e.target.select()}
+                    onFocus={(event) => event.target.select()}
                   />
                   <Button variant="outline" onClick={() => copy(link)}>
-                    Copy
+                    Copy link
                   </Button>
                 </div>
-              </div>
-            )}
-            {pending.length === 0 ? null : (
-              <div className="space-y-2">
-                <h3 className="text-sm font-medium">Pending invitations</h3>
-                <ul className="divide-y">
-                  {pending.map((invitation) => (
-                    <li key={invitation.id} className="flex items-center gap-2 py-2 text-sm">
-                      <span className="flex-1 truncate">
-                        {invitation.email}{" "}
-                        <span className="text-muted-foreground">({invitation.role})</span>
-                      </span>
+              )}
+            </DialogContent>
+          </Dialog>
+        ) : null}
+      </div>
+      <Table className="table-fixed">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-1/2 sm:w-2/5">Member</TableHead>
+            <TableHead>Role</TableHead>
+            <TableHead className="hidden sm:table-cell">Status</TableHead>
+            {canManage ? (
+              <TableHead className="w-24 sm:w-44">
+                <span className="sr-only">Actions</span>
+              </TableHead>
+            ) : null}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {org.members.map((member) => (
+            <TableRow key={member.id}>
+              <TableCell className="whitespace-normal">
+                <div className="flex items-center gap-2">
+                  <Avatar className="hidden sm:flex">
+                    <AvatarFallback>{member.user.name.slice(0, 1).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0">
+                    <div className="wrap-break-word font-medium">
+                      {member.user.name}
+                      {member.userId === session.userId ? " (you)" : ""}
+                    </div>
+                    <div className="break-all text-xs text-muted-foreground">
+                      {member.user.email}
+                    </div>
+                  </div>
+                </div>
+              </TableCell>
+              <TableCell>
+                {canManage && member.userId !== session.userId ? (
+                  <Select
+                    value={member.role}
+                    disabled={busy !== null}
+                    onValueChange={(value) => {
+                      if (isRole(value)) void changeRole(member.id, value)
+                    }}
+                  >
+                    <SelectTrigger
+                      size="sm"
+                      className="w-full sm:w-28"
+                      aria-label={`Role of ${member.user.email}`}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {roles.map((role) => (
+                        <SelectItem key={role} value={role}>
+                          {roleLabels[role]}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Badge variant="secondary">
+                    {isRole(member.role) ? roleLabels[member.role] : member.role}
+                  </Badge>
+                )}
+              </TableCell>
+              <TableCell className="hidden text-muted-foreground sm:table-cell">Joined</TableCell>
+              {canManage ? (
+                <TableCell className="text-right">
+                  {member.userId !== session.userId ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={busy !== null}
+                      onClick={() => remove(member.id)}
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </TableCell>
+              ) : null}
+            </TableRow>
+          ))}
+          {canManage
+            ? pending.map((invitation) => (
+                <TableRow key={invitation.id}>
+                  <TableCell className="whitespace-normal">
+                    <div className="break-all text-sm">{invitation.email}</div>
+                    <Badge variant="outline" className="mt-1 sm:hidden">
+                      Pending
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="whitespace-normal text-muted-foreground">
+                    {invitation.role !== null && isRole(invitation.role)
+                      ? roleLabels[invitation.role]
+                      : invitation.role}
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <Badge variant="outline">Pending</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        onClick={() => copy(inviteLink(invitation.id))}
+                        onClick={() => {
+                          setLink(inviteLink(invitation.id))
+                          setOpen(true)
+                          void copy(inviteLink(invitation.id))
+                        }}
                       >
                         Copy link
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => cancel(invitation.id)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy !== null}
+                        onClick={() => cancel(invitation.id)}
+                      >
                         Cancel
                       </Button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
-    </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            : null}
+        </TableBody>
+      </Table>
+    </section>
   )
 }
