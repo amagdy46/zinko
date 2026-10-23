@@ -1,4 +1,5 @@
 import type { Scenario } from "@repo/capture-contract"
+import { count } from "@/lib/format"
 
 /** Mean wall time of one run, measured in Task 5 of the M2 plan. */
 const SECONDS_PER_RUN = 12.8
@@ -44,14 +45,14 @@ export const runBreakdown = ({
     duration: estimateDuration(workUnits),
     lines: [
       {
-        label: `${pages} pages × ${scenarios} scenarios × ${viewports} viewports`,
+        label: `${count(pages, "page")} × ${count(scenarios, "scenario")} × ${count(viewports, "viewport")}`,
         runs: pageRuns,
         workUnits: pageRuns,
       },
       ...(journeySteps > 0
         ? [
             {
-              label: `Journey × ${scenarios} scenarios × ${viewports} viewports`,
+              label: `Journey × ${count(scenarios, "scenario")} × ${count(viewports, "viewport")}`,
               runs: journeyRuns,
               workUnits: journeyWork,
             },
