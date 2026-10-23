@@ -318,7 +318,7 @@ function NewAudit() {
                 </div>
               )}
               <Collapsible>
-                <CollapsibleTrigger className="text-sm font-medium underline-offset-4 hover:underline">
+                <CollapsibleTrigger className="-my-1.5 py-1.5 text-sm font-medium underline-offset-4 hover:underline">
                   Advanced
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-3">

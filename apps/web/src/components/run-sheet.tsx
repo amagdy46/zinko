@@ -185,7 +185,7 @@ export function RunSheet({
                     to="/app/audits/$auditId/findings"
                     params={{ auditId }}
                     search={{ finding: finding.ruleId }}
-                    className="block text-sm underline underline-offset-4"
+                    className="block py-1.5 text-sm underline underline-offset-4"
                   >
                     {finding.title}
                   </Link>

@@ -136,7 +136,7 @@ export function KeyValueTable({
                     <CopyButton
                       value={String(value)}
                       label={`Copy ${name}`}
-                      className="-my-1.5 size-6 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+                      className="-my-2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
                     />
                   </div>
                 </TableCell>

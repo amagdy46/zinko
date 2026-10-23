@@ -85,7 +85,7 @@ function AuditPage() {
   }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const navClass =
-    "-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+    "-mb-px border-b-2 border-transparent pt-1 pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -211,7 +211,7 @@ function AuditPage() {
                   className="flex items-start gap-2 underline-offset-4 hover:underline"
                 >
                   <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
-                  <span className="break-all">
+                  <span className="min-w-0 [overflow-wrap:anywhere]">
                     {runPage(run)} · {scenarioLabel(run.scenario)} · {run.viewport}:{" "}
                     {runReason(run)}
                   </span>

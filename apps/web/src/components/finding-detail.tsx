@@ -255,7 +255,7 @@ export function FindingDetail({
         <span>{AREAS[row.area] ?? row.area}</span>
         <code className="ml-auto flex items-center gap-0.5">
           {row.ruleId}
-          <CopyButton value={row.ruleId} label="Copy rule id" className="size-6" />
+          <CopyButton value={row.ruleId} label="Copy rule id" className="-my-1.5" />
         </code>
       </div>
       <div className="flex items-start justify-between gap-3">
@@ -514,7 +514,7 @@ function OpenInHits({
     search = { run: runId, hit: `${reference.requestId}:${reference.batchIndex}` }
   if (reference.kind === "push") search = { runId, source: "dataLayer" }
   return (
-    <Button asChild variant="ghost" size="xs">
+    <Button asChild variant="ghost" size="sm">
       <Link to="/app/audits/$auditId/hits" params={{ auditId }} search={search}>
         Open in Hits
       </Link>
