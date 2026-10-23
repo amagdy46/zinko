@@ -18,13 +18,14 @@ export const ENGINE_FREE_EVENT = "engine-free"
 
 /**
  * Hands the capture engines out one capture at a time, first come first served. An audit asks
- * before each capture and joins the back of the line; the capture confirms its grant before it
+ * before each capture, naming the turn, and joins the back of the line; asking for a new turn
+ * drops any grant the audit failed to release for an earlier one; the capture confirms its grant before it
  * touches the engine, and releases it as soon as the capture is stored or has failed.
  */
 export class CaptureAdmission extends Context.Service<
   CaptureAdmission,
   {
-    readonly admit: (auditId: string) => Effect.Effect<Admission, AdmissionError>
+    readonly admit: (auditId: string, turn: string) => Effect.Effect<Admission, AdmissionError>
     /** Whether `grant` still holds its engine; renews it when it does. */
     readonly confirm: (auditId: string, grant: Grant) => Effect.Effect<boolean, AdmissionError>
     readonly release: (auditId: string, grant: Grant) => Effect.Effect<void, AdmissionError>

@@ -9,7 +9,7 @@ export class AdmissionGateNamespace extends DurableObject.Tag<AdmissionGateNames
   "AdmissionGate",
   {
     admit: DurableObject.method({
-      args: [Schema.String, Engines],
+      args: [Schema.String, Schema.String, Engines],
       success: Schema.Struct({ admission: Admission, promoted: Promoted }),
     }),
     confirm: DurableObject.method({
@@ -25,6 +25,7 @@ export class AdmissionGateNamespace extends DurableObject.Tag<AdmissionGateNames
 
 const Holder = Schema.Struct({
   holder: Schema.String,
+  turn: Schema.String,
   token: Schema.String,
   engine: Schema.String,
   until: Schema.Finite,
@@ -33,7 +34,9 @@ type Holder = typeof Holder.Type
 
 const State = Schema.Struct({
   holders: Schema.Array(Holder),
-  waiting: Schema.Array(Schema.Struct({ holder: Schema.String, seen: Schema.Finite })),
+  waiting: Schema.Array(
+    Schema.Struct({ holder: Schema.String, turn: Schema.String, seen: Schema.Finite }),
+  ),
 })
 type State = typeof State.Type
 
@@ -47,13 +50,24 @@ const LEASE_MS = 5 * 60_000
 const WAITER_MS = 3 * 60_000
 
 const KEY = "state"
-// Keep pre-token holders until their lease ends; an upgrade must not free a running engine.
+// Keep holders stored before tokens and turns existed until their lease ends; an upgrade must not
+// free a running engine.
 const decodeState = Schema.decodeUnknownEffect(
   Schema.Struct({
     holders: Schema.Array(
-      Schema.Struct({ ...Holder.fields, token: Schema.optionalKey(Schema.String) }),
+      Schema.Struct({
+        ...Holder.fields,
+        token: Schema.optionalKey(Schema.String),
+        turn: Schema.optionalKey(Schema.String),
+      }),
     ),
-    waiting: State.fields.waiting,
+    waiting: Schema.Array(
+      Schema.Struct({
+        holder: Schema.String,
+        seen: Schema.Finite,
+        turn: Schema.optionalKey(Schema.String),
+      }),
+    ),
   }),
 )
 
@@ -69,7 +83,9 @@ const load = Effect.gen(function* () {
       engine: h.engine,
       until: h.until,
       token: h.token ?? crypto.randomUUID(),
+      turn: h.turn ?? "",
     })),
+    waiting: state.waiting.map((w) => ({ holder: w.holder, seen: w.seen, turn: w.turn ?? "" })),
   }
 })
 
@@ -93,7 +109,15 @@ const settle = (state: State, engines: ReadonlyArray<string>, now: number) => {
     const next = waiting[i]
     return next === undefined
       ? []
-      : [{ holder: next.holder, token: crypto.randomUUID(), engine, until: now + CLAIM_MS }]
+      : [
+          {
+            holder: next.holder,
+            turn: next.turn,
+            token: crypto.randomUUID(),
+            engine,
+            until: now + CLAIM_MS,
+          },
+        ]
   })
   return {
     state: { holders: [...holders, ...handed], waiting: waiting.slice(handed.length) },
@@ -120,23 +144,31 @@ const update = <A>(change: (state: State, now: number) => { state: State; result
  */
 export class AdmissionGate extends AdmissionGateNamespace.make(Layer.empty, {
   rpc: {
-    // an audit asks for one capture at a time, so a second ask (a retried step) gets the same grant
-    admit: (holder, engines) =>
+    // An audit asks for one capture turn at a time. Asking again for the same turn (a retried
+    // step) returns the same grant or place. Asking for another turn means the audit is done with
+    // its earlier one, so a grant it failed to release is dropped and the new turn joins the tail
+    // behind the waiters.
+    admit: (holder, turn, engines) =>
       update((current, now) => {
-        const holding = current.holders.some((h) => h.holder === holder && live(h, engines, now))
+        const holding = current.holders.some(
+          (h) => h.holder === holder && h.turn === turn && live(h, engines, now),
+        )
+        const waiting = current.waiting.some((w) => w.holder === holder && w.turn === turn)
+          ? current.waiting.map((w) =>
+              w.holder === holder && w.turn === turn ? { ...w, seen: now } : w,
+            )
+          : [...current.waiting.filter((w) => w.holder !== holder), { holder, turn, seen: now }]
         const settled = settle(
           holding
             ? current
             : {
-                holders: current.holders,
-                waiting: current.waiting.some((w) => w.holder === holder)
-                  ? current.waiting.map((w) => (w.holder === holder ? { holder, seen: now } : w))
-                  : [...current.waiting, { holder, seen: now }],
+                holders: current.holders.filter((h) => h.holder !== holder),
+                waiting,
               },
           engines,
           now,
         )
-        const held = settled.state.holders.find((h) => h.holder === holder)
+        const held = settled.state.holders.find((h) => h.holder === holder && h.turn === turn)
         return {
           state: settled.state,
           result: {

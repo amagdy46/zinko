@@ -208,10 +208,10 @@ const start = (auditId: string) =>
 /**
  * Asks the gate for an engine for one capture. The first grant marks the audit running.
  */
-const admit = (auditId: string) =>
+const admit = (auditId: string, turn: string) =>
   Effect.gen(function* () {
     const gate = yield* CaptureAdmission
-    const admission = yield* gate.admit(auditId)
+    const admission = yield* gate.admit(auditId, turn)
     if (!("engine" in admission)) return admission
     const { db } = yield* Database
     const started = yield* db
@@ -242,7 +242,7 @@ const grantFor = (auditId: string, turn: string) =>
     for (let attempt = 0; ; attempt++) {
       const admission = yield* Workflow.step(
         attempt === 0 ? `admit-${turn}` : `admit-${turn}-${attempt}`,
-        runtime.provide(admit(auditId)),
+        runtime.provide(admit(auditId, turn)),
         ADMIT_STEP,
       )
       if ("engine" in admission) return admission
@@ -343,7 +343,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
         const gate = yield* CaptureAdmission
         yield* gate.release(auditId, grant)
       }).pipe(
-        // the lease lapses on its own; this only frees the engine sooner
+        // if this fails the grant stays until the audit's next admit drops it or the lease lapses
         Effect.ignoreCause({ log: "Warn", message: "Engine not released" }),
       ),
     ),

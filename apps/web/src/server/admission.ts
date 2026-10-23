@@ -22,8 +22,8 @@ const make = Effect.gen(function* () {
       { discard: true },
     )
   return CaptureAdmission.of({
-    admit: (auditId) =>
-      gate.admit(auditId, engines).pipe(
+    admit: (auditId, turn) =>
+      gate.admit(auditId, turn, engines).pipe(
         Effect.mapError(fail("admit")),
         Effect.tap(({ promoted }) => wake(promoted)),
         Effect.map(({ admission }) => admission),
