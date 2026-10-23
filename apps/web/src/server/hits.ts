@@ -1,8 +1,9 @@
 import { Database } from "@repo/core/Database"
 import { datalayerPush, hit, run } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, eq, type SQL, sql } from "drizzle-orm"
-import { Effect, Schema } from "effect"
+import { CaptureResult } from "@repo/capture-contract"
+import { and, asc, count, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm"
+import { Effect, Option, Schema } from "effect"
 import {
   auditInOrg,
   decodeHitColumns,
@@ -92,19 +93,34 @@ const compareText = (a: string, b: string) => {
 const compare = (a: Cursor, b: Cursor) =>
   a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || compareText(a[3], b[3]) || a[4] - b[4]
 
+const OneOrMany = Schema.Union([Schema.String, Schema.Array(Schema.String)])
+const many = (value: string | ReadonlyArray<string> | undefined): ReadonlyArray<string> => {
+  if (value === undefined) return []
+  return typeof value === "string" ? [value] : value
+}
+
 const TimelineInput = Schema.Struct({
   auditId: Schema.String,
-  runId: Schema.optional(Schema.String),
-  vendor: Schema.optional(Schema.String),
-  event: Schema.optional(Schema.String),
-  scenario: Schema.optional(Schema.String),
+  runId: Schema.optional(OneOrMany),
+  vendor: Schema.optional(OneOrMany),
+  event: Schema.optional(OneOrMany),
+  scenario: Schema.optional(OneOrMany),
+  q: Schema.optional(Schema.String),
   source: Schema.optional(Schema.Literals(["all", "network", "dataLayer"])),
   cursor: Schema.optional(Schema.String),
 })
 
+const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`)
+
+const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
+
 /**
- * One page of an audit's hits and `dataLayer` pushes, interleaved by time. A vendor or event
- * filter applies to hits only; `source` limits the page to hits (`network`) or pushes (`dataLayer`). Runs are reached through the audit.
+ * One page of an audit's hits and `dataLayer` pushes, interleaved by time. `runId`, `vendor`,
+ * `event` and `scenario` take one value or several. Vendor, event and `q` (a case-insensitive
+ * match on event, destination, ids and parameters) apply to hits only; `source` limits the page
+ * to hits (`network`) or pushes (`dataLayer`). Besides the page it returns the runs the filters
+ * select with their consent action time, and the matched and total counts of each kind, whatever
+ * page is loaded. Runs are reached through the audit.
  */
 export const listTimeline = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -117,16 +133,36 @@ export const listTimeline = createServerFn({ method: "GET" })
         const after = yield* openCursor(data.cursor)
         const { db } = yield* Database
         const [o, a, k, r, i] = after ?? [0, 0, HIT, "", 0]
-        const inRun: SQL[] = [eq(run.auditId, auditId), eq(run.orgId, orgId)]
-        if (data.runId !== undefined) {
-          if (!isUuid(data.runId)) return { items: [], nextCursor: null }
-          inRun.push(eq(run.id, data.runId))
+        const inAudit: SQL[] = [eq(run.auditId, auditId), eq(run.orgId, orgId)]
+        const inRun = [...inAudit]
+        const runIds = many(data.runId)
+        if (runIds.length > 0) {
+          // an id that is not a uuid selects nothing
+          const valid = runIds.filter(isUuid)
+          inRun.push(valid.length === runIds.length ? inArray(run.id, valid) : sql`false`)
         }
-        if (data.scenario !== undefined) inRun.push(eq(run.scenario, data.scenario))
+        const scenarios = many(data.scenario)
+        if (scenarios.length > 0) inRun.push(inArray(run.scenario, [...scenarios]))
 
-        const hitWhere = [...inRun, eq(hit.orgId, orgId)]
-        if (data.vendor !== undefined) hitWhere.push(eq(hit.vendor, data.vendor))
-        if (data.event !== undefined) hitWhere.push(eq(hit.event, data.event))
+        const hitFilters: SQL[] = []
+        const vendors = many(data.vendor)
+        if (vendors.length > 0) hitFilters.push(inArray(hit.vendor, [...vendors]))
+        const events = many(data.event)
+        if (events.length > 0) hitFilters.push(inArray(hit.event, [...events]))
+        const q = data.q?.trim()
+        if (q !== undefined && q !== "") {
+          const pattern = `%${escapeLike(q)}%`
+          const match = or(
+            ilike(hit.event, pattern),
+            ilike(hit.destinationId, pattern),
+            sql`${hit.ids}::text ilike ${pattern}`,
+            sql`${hit.params}::text ilike ${pattern}`,
+          )
+          if (match !== undefined) hitFilters.push(match)
+        }
+
+        const hitWhere = [...inRun, eq(hit.orgId, orgId), ...hitFilters]
+        const hitMatched = [...hitWhere]
         if (after !== undefined)
           hitWhere.push(
             sql`(${run.ordinal}, ${hit.at}, ${HIT}::int, ${hit.requestId} collate "C", ${hit.batchIndex}) > (${o}::int, ${a}::int, ${k}::int, ${r}::text collate "C", ${i}::int)`,
@@ -166,6 +202,7 @@ export const listTimeline = createServerFn({ method: "GET" })
                 .limit(PAGE_SIZE + 1)
 
         const pushWhere = [...inRun, eq(datalayerPush.orgId, orgId)]
+        const pushMatched = [...pushWhere]
         if (after !== undefined)
           pushWhere.push(
             sql`(${run.ordinal}, ${datalayerPush.at}, ${PUSH}::int, ''::text collate "C", ${datalayerPush.seq}) > (${o}::int, ${a}::int, ${k}::int, ${r}::text collate "C", ${i}::int)`,
@@ -188,6 +225,35 @@ export const listTimeline = createServerFn({ method: "GET" })
                 .orderBy(asc(run.ordinal), asc(datalayerPush.at), asc(datalayerPush.seq))
                 .limit(PAGE_SIZE + 1)
 
+        const hitsOf = (where: SQL[]) =>
+          db
+            .select({ n: count() })
+            .from(hit)
+            .innerJoin(run, eq(run.id, hit.runId))
+            .where(and(...where))
+        const pushesOf = (where: SQL[]) =>
+          db
+            .select({ n: count() })
+            .from(datalayerPush)
+            .innerJoin(run, eq(run.id, datalayerPush.runId))
+            .where(and(...where))
+        const [[hitsMatched], [hitsTotal], [pushesMatched], [pushesTotal]] = yield* Effect.all([
+          hitsOf(hitMatched),
+          hitsOf([...inAudit, eq(hit.orgId, orgId)]),
+          pushesOf(pushMatched),
+          pushesOf([...inAudit, eq(datalayerPush.orgId, orgId)]),
+        ])
+        const selectedRuns = yield* db
+          .select({
+            id: run.id,
+            ordinal: run.ordinal,
+            scenario: run.scenario,
+            consent: run.consent,
+          })
+          .from(run)
+          .where(and(...inRun))
+          .orderBy(asc(run.ordinal))
+
         const hits = yield* Effect.forEach(hitRows, (row) =>
           decodeHitColumns(row).pipe(
             Effect.orDie,
@@ -207,12 +273,41 @@ export const listTimeline = createServerFn({ method: "GET" })
           merged.length > PAGE_SIZE && last !== undefined
             ? toBase64(encodeCursor(tupleOf(last)))
             : null
-        return { items, nextCursor }
+        return {
+          items,
+          nextCursor,
+          runs: selectedRuns.map((selected) => {
+            const consent = Option.getOrNull(decodeConsent(selected.consent))
+            const acted =
+              consent?.outcome === "accepted" ||
+              consent?.outcome === "rejected" ||
+              consent?.outcome === "not-applied"
+            return {
+              id: selected.id,
+              ordinal: selected.ordinal,
+              scenario: selected.scenario,
+              consentOutcome: consent?.outcome ?? null,
+              consentActionAt: acted ? consent.actionAt : null,
+            }
+          }),
+          counts: {
+            hits: { matched: hitsMatched?.n ?? 0, total: hitsTotal?.n ?? 0 },
+            pushes: { matched: pushesMatched?.n ?? 0, total: pushesTotal?.n ?? 0 },
+          },
+        }
       }),
     ),
   )
 
-/** The vendors and events an audit's hits have, for the explorer's filters. */
+const countBy = (rows: ReadonlyArray<{ value: string; n: number }>) =>
+  rows
+    .toSorted((x, y) => compareText(x.value, y.value))
+    .map(({ value, n }) => ({ value, count: n }))
+
+/**
+ * The vendors, events and scenarios an audit has, each with its number of hits (runs for a
+ * scenario), for the explorer's filters.
+ */
 export const listHitFilters = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String })))
@@ -222,14 +317,27 @@ export const listHitFilters = createServerFn({ method: "GET" })
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { db } = yield* Database
-        const rows = yield* db
-          .selectDistinct({ vendor: hit.vendor, event: hit.event })
-          .from(hit)
-          .innerJoin(run, eq(run.id, hit.runId))
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId)))
+        const inAudit = and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId))
+        const grouped = (column: typeof hit.vendor) =>
+          db
+            .select({ value: column, n: count() })
+            .from(hit)
+            .innerJoin(run, eq(run.id, hit.runId))
+            .where(inAudit)
+            .groupBy(column)
+        const [vendors, events, scenarios] = yield* Effect.all([
+          grouped(hit.vendor),
+          grouped(hit.event),
+          db
+            .select({ value: run.scenario, n: count() })
+            .from(run)
+            .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+            .groupBy(run.scenario),
+        ])
         return {
-          vendors: [...new Set(rows.map((r) => r.vendor))].toSorted(),
-          events: [...new Set(rows.map((r) => r.event))].toSorted(),
+          vendors: countBy(vendors),
+          events: countBy(events),
+          scenarios: countBy(scenarios),
         }
       }),
     ),

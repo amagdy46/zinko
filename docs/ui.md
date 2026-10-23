@@ -56,7 +56,7 @@ Each finding has these actions: mark as accepted risk or fixed (and reopen), cop
 - Cells: the events that fired. A red cell means the tag fired when it shouldn't have, for example under reject. An empty amber cell means the tag was expected but didn't fire.
 - This is the screen that replaces the consultant's spreadsheet.
 
-**6. Hits explorer.** A virtualized timeline filterable by vendor, event and scenario. Clicking a hit opens a decoded parameter table next to the raw request. `dataLayer` pushes are interleaved, so you can see the push → tag → hit chain.
+**6. Hits explorer.** A timeline of decoded hits and `dataLayer` pushes, 200 per page, with a search box (event, destination, ids, parameters) and chips for Vendor, Event, Scenario, Source and Run that take several values; below `md` they sit in a "Filters" sheet. A count line ("11 of 342 hits · 40 of 120 pushes") comes from the server, not from the loaded pages. Pushes show their event name and identical neighbours collapse into "6 pushes · 716–718 ms". A neutral divider marks each run's consent action once, however many pages are loaded. Clicking a row opens the decoded consent, ids, parameters and the request (Decoded or Raw) next to the list, or in a bottom sheet with previous and next below `lg`.
 
 **7. Report (client-facing).**
 - The agency logo and accent color, with Zinko credited in a small footer.
