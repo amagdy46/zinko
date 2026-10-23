@@ -1,6 +1,6 @@
 import { useRouter } from "@tanstack/react-router"
 import { Building2, Globe, Plus, Users } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   CommandDialog,
@@ -33,43 +33,72 @@ export function CommandPalette({
   const router = useRouter()
   const [search, setSearch] = useState("")
   const [naming, setNaming] = useState(false)
-  const input = useRef<HTMLInputElement>(null)
+  const [creating, setCreating] = useState(false)
+  const [switching, setSwitching] = useState(false)
   const [targets, setTargets] = useState<Awaited<ReturnType<typeof searchTargets>> | null>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const loaded = useRef(false)
+  const opener = useRef<HTMLElement | null>(null)
+  const query = naming ? "" : search.trim()
 
   useEffect(() => {
     let current = true
-    if (open)
-      searchTargets().then(
-        (found) => {
-          if (current) setTargets(found)
-        },
-        () => {
-          if (current) toast.error("Could not load clients and sites.")
-        },
-      )
+    const timer = window.setTimeout(
+      () => {
+        if (!open) return
+        searchTargets({ data: { query } }).then(
+          (found) => {
+            if (!current) return
+            loaded.current = true
+            setTargets(found)
+          },
+          () => {
+            if (current) toast.error("Could not load clients and sites.")
+          },
+        )
+      },
+      loaded.current ? 200 : 0,
+    )
     return () => {
       current = false
+      window.clearTimeout(timer)
     }
-  }, [open])
+  }, [open, query])
+
+  function change(next: boolean) {
+    if (next === open || (next && switching)) return
+    if (next) {
+      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    } else {
+      setSearch("")
+      setTargets(null)
+      loaded.current = false
+      setNaming(false)
+    }
+    onOpenChange(next)
+  }
+
+  const toggle = useEffectEvent(() => change(!open))
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault()
-        onOpenChange(!open)
+        toggle()
       }
     }
     document.addEventListener("keydown", onKeyDown)
     return () => document.removeEventListener("keydown", onKeyDown)
-  }, [open, onOpenChange])
+  }, [])
 
-  function change(next: boolean) {
-    onOpenChange(next)
-    if (!next) {
-      setSearch("")
-      setTargets(null)
-      setNaming(false)
-    }
+  function restoreFocus(event: Event) {
+    event.preventDefault()
+    const back = opener.current?.isConnected
+      ? opener.current
+      : [...document.querySelectorAll<HTMLElement>("[data-find-return]")].find(
+          (el) => el.offsetParent !== null,
+        )
+    back?.focus()
   }
 
   function go(run: () => Promise<unknown>) {
@@ -78,28 +107,42 @@ export function CommandPalette({
   }
 
   async function create(name: string) {
-    const result = await createClient({ data: { name } })
-    if (!result.ok) {
-      toast.error(result.message)
-      return
+    if (creating) return
+    setCreating(true)
+    try {
+      const result = await createClient({ data: { name } })
+      if (!result.ok) {
+        toast.error(result.message)
+        return
+      }
+      change(false)
+      await router.navigate({ to: "/app/clients/$clientId", params: { clientId: result.value.id } })
+    } finally {
+      setCreating(false)
     }
-    change(false)
-    await router.navigate({ to: "/app/clients/$clientId", params: { clientId: result.value.id } })
   }
 
   async function switchOrganization(organizationId: string) {
-    const { error } = await authClient.organization.setActive({ organizationId })
-    if (error) {
-      toast.error(error.message ?? "Could not switch organization. Try again.")
-      return
+    setSwitching(true)
+    try {
+      const { error } = await authClient.organization.setActive({ organizationId })
+      if (error) {
+        toast.error(error.message ?? "Could not switch organization. Try again.")
+        return
+      }
+      await router.invalidate()
+      await router.navigate({ to: "/app/clients" })
+    } finally {
+      setSwitching(false)
     }
-    await router.invalidate()
-    await router.navigate({ to: "/app/clients" })
   }
 
   const clients = targets?.clients ?? []
   const sites = targets?.sites ?? []
   const text = search.trim()
+  let createLabel = `Create client "${text}"`
+  if (text === "") createLabel = "Type a name, then press Enter"
+  else if (creating) createLabel = "Creating…"
 
   return (
     <CommandDialog
@@ -107,7 +150,8 @@ export function CommandPalette({
       onOpenChange={change}
       title="Find"
       description="Go to a client or site, create a client, or switch organization."
-      commandProps={{ shouldFilter: !naming }}
+      onCloseAutoFocus={restoreFocus}
+      commandProps={{ shouldFilter: !naming, label: "Find clients, sites and actions" }}
     >
       <CommandInput
         ref={input}
@@ -120,11 +164,11 @@ export function CommandPalette({
           <CommandGroup heading="New client">
             <CommandItem
               value="create-client"
-              disabled={text === ""}
+              disabled={text === "" || creating}
               onSelect={() => void create(text)}
             >
               <Plus />
-              {text === "" ? "Type a name, then press Enter" : `Create client "${text}"`}
+              {createLabel}
             </CommandItem>
           </CommandGroup>
         ) : (
@@ -170,6 +214,7 @@ export function CommandPalette({
                     <span className="truncate">{c.name}</span>
                   </CommandItem>
                 ))}
+                {targets?.clientsCapped ? <CapNote noun="clients" /> : null}
               </CommandGroup>
             ) : null}
             {sites.length > 0 ? (
@@ -189,6 +234,7 @@ export function CommandPalette({
                     <span className="ml-auto truncate text-xs text-muted-foreground">{s.host}</span>
                   </CommandItem>
                 ))}
+                {targets?.sitesCapped ? <CapNote noun="sites" /> : null}
               </CommandGroup>
             ) : null}
             {organizations.length > 1 ? (
@@ -211,5 +257,13 @@ export function CommandPalette({
         )}
       </CommandList>
     </CommandDialog>
+  )
+}
+
+function CapNote({ noun }: { noun: string }) {
+  return (
+    <p className="px-2 py-1.5 text-xs text-muted-foreground">
+      Showing first 20 {noun}. Keep typing to narrow the list.
+    </p>
   )
 }

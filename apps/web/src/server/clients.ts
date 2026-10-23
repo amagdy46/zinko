@@ -1,7 +1,7 @@
 import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, count, desc, eq, inArray, isNull } from "drizzle-orm"
+import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
 import { Config, Effect, Option, Schema } from "effect"
 import { WorkerConfig } from "effect-cf"
 import { isPrivateHost } from "@repo/capture-contract"
@@ -159,24 +159,54 @@ export const listClients = createServerFn({ method: "GET" })
     ),
   )
 
+const SEARCH_LIMIT = 20
+
+const SearchInput = Schema.Struct({ query: Schema.String.check(Schema.isMaxLength(100)) })
+
+/** Escapes `\`, `%` and `_` so the text matches literally inside `ilike`. */
+const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
+
+/** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. An empty query lists the first by name. */
 export const searchTargets = createServerFn({ method: "GET" })
   .middleware([requireSession])
-  .handler(({ context }) =>
+  .validator(Schema.toStandardSchemaV1(SearchInput))
+  .handler(({ context, data }) =>
     read(
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const { db } = yield* Database
+        const text = data.query.trim()
+        const pattern = likePattern(text)
         const clients = yield* db
           .select({ id: client.id, name: client.name })
           .from(client)
-          .where(and(eq(client.orgId, orgId), isNull(client.archivedAt)))
+          .where(
+            and(
+              eq(client.orgId, orgId),
+              isNull(client.archivedAt),
+              text === "" ? undefined : ilike(client.name, pattern),
+            ),
+          )
           .orderBy(client.name)
+          .limit(SEARCH_LIMIT + 1)
         const sites = yield* db
-          .select({ id: site.id, name: site.name, host: site.host, clientId: site.clientId })
+          .select({ id: site.id, name: site.name, host: site.host })
           .from(site)
-          .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
+          .where(
+            and(
+              eq(site.orgId, orgId),
+              isNull(site.archivedAt),
+              text === "" ? undefined : or(ilike(site.name, pattern), ilike(site.host, pattern)),
+            ),
+          )
           .orderBy(site.name)
-        return { clients, sites }
+          .limit(SEARCH_LIMIT + 1)
+        return {
+          clients: clients.slice(0, SEARCH_LIMIT),
+          sites: sites.slice(0, SEARCH_LIMIT),
+          clientsCapped: clients.length > SEARCH_LIMIT,
+          sitesCapped: sites.length > SEARCH_LIMIT,
+        }
       }),
     ),
   )

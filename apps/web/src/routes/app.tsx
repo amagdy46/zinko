@@ -50,6 +50,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
       />
       <button
         type="button"
+        data-find-return
         onClick={onFind}
         className="flex h-8 items-center gap-2 rounded-md border bg-background px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2"
       >
@@ -88,7 +89,7 @@ function AppShell() {
         <header className="flex items-center gap-2 border-b bg-sidebar px-4 py-2 md:hidden">
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" aria-label="Open menu">
+              <Button variant="ghost" size="icon" aria-label="Open menu" data-find-return>
                 <Menu />
               </Button>
             </SheetTrigger>
@@ -115,6 +116,7 @@ function AppShell() {
           <Outlet />
         </main>
         <CommandPalette
+          key={session.activeOrganizationId}
           open={findOpen}
           onOpenChange={setFindOpen}
           organizations={organizations}
