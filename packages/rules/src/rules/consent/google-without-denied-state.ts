@@ -16,6 +16,7 @@ export const googleWithoutDeniedState: Rule = {
   area: "consent",
   severity: "critical",
   title: "Tag fired before consent default",
+  checkTitle: "Google tags wait for the consent default",
   why: "With Consent Mode, a Google tag may send cookieless pings before consent, but only when they say storage is denied (gcs=G100). A GA4 or Google Ads hit, or a Consent Mode ping, with no consent state or a granted one before the visitor chooses means Google treats the visit as consented: it may set cookies and use the data for ads.",
   fix: [
     "Push gtag('consent', 'default', { ad_storage: 'denied', analytics_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }) before the Google tag loads, above the gtag.js snippet or in Google Tag Manager's Consent Initialization trigger.",

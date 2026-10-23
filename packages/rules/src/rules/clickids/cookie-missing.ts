@@ -12,6 +12,7 @@ export const cookieMissing: Rule = {
   area: "clickids",
   severity: "warning",
   title: "Missing conversion linker",
+  checkTitle: "Conversion linker present",
   why: "The click ID on the landing URL only reaches a later conversion if a cookie keeps it: _gcl_aw for Google Ads (written by the conversion linker), _fbc for Meta, _ttp for TikTok. Without the cookie, a purchase on another page cannot be tied to the ad click, and the platforms under-report conversions and bid on the wrong campaigns.",
   fix: [
     "Google Ads: add a Conversion Linker tag in Google Tag Manager that fires on all pages, or leave conversion_linker on in the gtag config (it is on by default).",

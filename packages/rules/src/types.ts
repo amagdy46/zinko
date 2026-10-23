@@ -55,6 +55,8 @@ export interface Rule {
   area: "consent" | "clickids" | "coverage" | "duplicates" | "dedup" | "hygiene"
   severity: "critical" | "warning" | "info"
   title: string
+  /** A neutral noun phrase that reads true whether the check passes or fails; shown when it could not be run. */
+  checkTitle: string
   why: string
   fix: readonly string[]
   evaluate(input: RunInput): CheckResult

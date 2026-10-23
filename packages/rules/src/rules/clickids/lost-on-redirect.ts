@@ -10,6 +10,7 @@ export const lostOnRedirect: Rule = {
   area: "clickids",
   severity: "warning",
   title: "Redirects dropping click IDs",
+  checkTitle: "Click IDs survive redirects",
   why: "Ad platforms attribute a conversion to the click through the click ID on the landing URL (gclid, fbclid, ttclid). A redirect that drops the query string (a tracking link, an http to https or trailing-slash rule, a locale redirect) lands the visitor without it, so the tags never see the click and the conversion is reported as unattributed.",
   fix: [
     "Make every redirect on the landing path keep the query string: in the server or CDN rule, append the original query (for example $args in nginx, the QSA flag in Apache, 'preserve query string' in a CDN redirect rule).",

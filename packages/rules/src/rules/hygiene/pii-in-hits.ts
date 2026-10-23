@@ -100,6 +100,7 @@ export const piiInHits: Rule = {
   area: "hygiene",
   severity: "critical",
   title: "Personal data sent to tracking vendors",
+  checkTitle: "No personal data in tracking requests",
   why: "Google, Meta and TikTok forbid sending personal data such as email addresses and phone numbers in hits, and under the GDPR it is a transfer the visitor never agreed to. Google may delete the affected GA4 data, and the address ends up in the vendors' logs and reports. It usually comes from a URL that carries the address (a sign-up or newsletter form using GET, a link in an email) and is copied into page_location.",
   fix: [
     "Stop putting personal data in URLs: submit forms with POST, and do not add the email or phone to redirect or confirmation URLs.",

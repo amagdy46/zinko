@@ -13,6 +13,7 @@ export const locationMismatch: Rule = {
   area: "hygiene",
   severity: "warning",
   title: "Hits report another site's page location",
+  checkTitle: "Hits report this site's page location",
   why: "GA4 and Meta read the page a hit came from from its page location. When a tag overrides it with another host (a staging or old domain, a hard-coded URL), page reports, referral exclusions and audiences built on URLs all describe the wrong site, and the real pages look as if they were never visited.",
   fix: [
     "Remove the page_location override from the GA4 config or tag, or build it from the current page (location.href) instead of a fixed host.",

@@ -34,6 +34,7 @@ export const defaultAfterTag: Rule = {
   area: "consent",
   severity: "warning",
   title: "Consent default set after the Google tag",
+  checkTitle: "Consent default is set before Google tags",
   why: "Consent Mode applies the default to whatever the Google tag does after it. A tag configured, or a hit sent, before the consent default is set runs without any consent state, so Google may treat the visit as consented, and the first page_view carries no consent signal.",
   fix: [
     "With gtag.js on the page, move the gtag('consent', 'default', …) call above the gtag.js snippet and every gtag('config', …) call, in the page's <head>.",

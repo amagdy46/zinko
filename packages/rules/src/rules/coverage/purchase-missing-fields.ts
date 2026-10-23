@@ -10,6 +10,7 @@ export const purchaseMissingFields: Rule = {
   area: "coverage",
   severity: "critical",
   title: "Purchase missing transaction ID, value or currency",
+  checkTitle: "Purchase carries transaction ID, value and currency",
   why: "Revenue reports, ROAS and conversion value bidding read the value and currency of every purchase, and GA4 and Google Ads use the transaction ID to drop repeated purchases. A purchase without them is counted with no revenue, in the wrong currency, or once per page reload.",
   fix: [
     "Send transaction_id, value and currency with the GA4 purchase event, from the order on the confirmation page (or the dataLayer purchase push your tag manager reads).",

@@ -30,6 +30,7 @@ export const metaEventIdMissing: Rule = {
   area: "dedup",
   severity: "warning",
   title: "Meta event sent without an event ID",
+  checkTitle: "Meta events carry an event ID",
   why: "Meta matches a browser event with the same event from the Conversions API by its event ID. Without one, an event sent both ways is counted twice, and Meta cannot tell which copy to keep, so conversions and their value are overstated.",
   fix: [
     "Pass an eventID with every Meta standard event: fbq('track', 'Purchase', { … }, { eventID: '<order id>' }), or the Event ID field of the tag manager's Meta tag.",

@@ -10,6 +10,15 @@ export const SCENARIOS: ReadonlyArray<{ value: Scenario; label: string; hint: st
   { value: "gpc", label: "Global Privacy Control", hint: "Send the GPC signal" },
 ]
 
+export const AREAS: Readonly<Record<string, string>> = {
+  consent: "Consent",
+  clickids: "Click IDs",
+  coverage: "Coverage",
+  duplicates: "Duplicates",
+  dedup: "Dedup",
+  hygiene: "Hygiene",
+}
+
 export const scenarioLabel = (scenario: string) =>
   SCENARIOS.find((s) => s.value === scenario)?.label ?? scenario
 

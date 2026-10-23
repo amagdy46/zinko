@@ -463,6 +463,7 @@ const persist = (auditId: string, runId: string) =>
         area: rule.area,
         severity: rule.severity,
         title: rule.title,
+        checkTitle: rule.checkTitle,
         why: rule.why,
         fix: rule.fix,
         createdAt,
@@ -572,6 +573,7 @@ type StoredCheck = Pick<
   | "area"
   | "severity"
   | "title"
+  | "checkTitle"
   | "why"
   | "fix"
 >
@@ -610,6 +612,7 @@ const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
       area: text.area,
       severity: text.severity,
       title: text.title,
+      checkTitle: text.checkTitle,
       why: text.why,
       fix: text.fix,
       failingRuns,
@@ -644,6 +647,7 @@ const finish = (auditId: string) =>
             area: checkResult.area,
             severity: checkResult.severity,
             title: checkResult.title,
+            checkTitle: checkResult.checkTitle,
             why: checkResult.why,
             fix: checkResult.fix,
           })

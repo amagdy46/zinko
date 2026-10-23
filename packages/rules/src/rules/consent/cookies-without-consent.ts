@@ -11,6 +11,7 @@ export const cookiesWithoutConsent: Rule = {
   area: "consent",
   severity: "critical",
   title: "Ad or analytics cookies set without consent",
+  checkTitle: "Ad and analytics cookies wait for consent",
   why: "Under the GDPR and the ePrivacy rules, cookies that track visitors for analytics or advertising need consent before they are set. A cookie written before the visitor chooses, or when they never choose, is the most visible kind of consent breach: anyone can see it in the browser.",
   fix: [
     "Load the Google tag with Consent Mode's default set to denied, before any tag runs, so gtag does not write _ga or _gcl_* cookies until consent is granted.",

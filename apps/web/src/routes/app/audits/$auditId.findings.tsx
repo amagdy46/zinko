@@ -1,71 +1,95 @@
-import { createFileRoute, getRouteApi, Link, useRouter } from "@tanstack/react-router"
+import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
+import { Option, Schema } from "effect"
 import { useEffect, useState } from "react"
-import { HitSummary, Pairs, Pre, RawRequest, Section } from "@/components/evidence"
-import { Badge } from "@/components/ui/badge"
+import { ChevronDown, ChevronLeft, ChevronRight, ListFilter } from "lucide-react"
+import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
+import { SeverityMark } from "@/components/severity"
+import { StatusGlyph } from "@/components/status-glyph"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { runPage, scenarioLabel } from "@/lib/audit-labels"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { AREAS } from "@/lib/audit-labels"
+import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { getEvidence, getFinding, listFindings, setTriage } from "@/server/findings"
+import { listFindings } from "@/server/findings"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
 
-type Search = { finding?: string }
+const TRIAGES = ["open", "accepted_risk", "fixed"] as const
+const TRIAGE_TABS: Record<Triage, string> = {
+  open: "Open",
+  accepted_risk: "Accepted risk",
+  fixed: "Fixed",
+}
+const SEVERITIES = ["critical", "warning", "info"] as const
+type Severity = (typeof SEVERITIES)[number]
+const SEVERITY_LABEL: Record<Severity, string> = {
+  critical: "Critical",
+  warning: "Warning",
+  info: "Info",
+}
+const AREA_IDS = Object.keys(AREAS)
 
-const text = (value: unknown) => (typeof value === "string" && value !== "" ? value : undefined)
+const decodeText = Schema.decodeUnknownOption(Schema.NonEmptyString)
+const decodeTriage = Schema.decodeUnknownOption(Schema.Literals(TRIAGES))
+
+/** A comma-separated list in the URL, reduced to the known values in their canonical order. */
+const known = (value: unknown, allowed: ReadonlyArray<string>) => {
+  if (typeof value !== "string") return undefined
+  const chosen = value.split(",")
+  const kept = allowed.filter((a) => chosen.includes(a))
+  return kept.length === 0 ? undefined : kept.join(",")
+}
+const listOf = (value: string | undefined) => (value === undefined ? [] : value.split(","))
+
+type Search = { finding?: string; triage?: Triage; severity?: string; area?: string }
 
 export const Route = createFileRoute("/app/audits/$auditId/findings")({
-  validateSearch: (search: Record<string, unknown>): Search => ({ finding: text(search.finding) }),
+  validateSearch: (search: Record<string, unknown>): Search => ({
+    finding: Option.getOrUndefined(decodeText(search.finding)),
+    triage: Option.getOrUndefined(decodeTriage(search.triage)),
+    severity: known(search.severity, SEVERITIES),
+    area: known(search.area, AREA_IDS),
+  }),
   loader: ({ params }) => listFindings({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   component: FindingsScreen,
 })
 
 type Listing = Awaited<ReturnType<typeof listFindings>>
-type FindingRow = Listing["findings"][number]
-type FindingDetail = Awaited<ReturnType<typeof getFinding>>
-type Check = FindingDetail["checks"][number]
-type Ref = Check["evidence"][number]
-type Triage = FindingRow["triage"]["status"]
 
-const AREAS: Record<string, string> = {
-  consent: "Consent",
-  clickids: "Click IDs",
-  coverage: "Coverage",
-  duplicates: "Duplicates",
-  dedup: "Dedup",
-  hygiene: "Hygiene",
-}
-
-const SEVERITIES: Record<FindingRow["severity"], { label: string; tone: string }> = {
-  critical: { label: "Critical", tone: "bg-destructive/10 text-destructive" },
-  warning: { label: "Warning", tone: "bg-sev-warning-bg text-sev-warning" },
-  info: { label: "Info", tone: "bg-muted text-muted-foreground" },
-}
-
-const TRIAGE_LABEL: Record<Triage, string> = {
-  open: "Open",
-  accepted_risk: "Accepted risk",
-  fixed: "Fixed",
-}
-
-const COPY_LABEL = { idle: "Copy fix steps", copied: "Copied", failed: "Could not copy" }
-
-const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
-
-function SeverityBadge({ severity }: { severity: FindingRow["severity"] }) {
-  const { label, tone } = SEVERITIES[severity]
-  return (
-    <Badge variant="secondary" className={tone}>
-      {label}
-    </Badge>
-  )
+function useBelowLg() {
+  const [below, setBelow] = useState(false)
+  useEffect(() => {
+    const media = window.matchMedia("(max-width: 1023px)")
+    const update = () => setBelow(media.matches)
+    update()
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [])
+  return below
 }
 
 function FindingsScreen() {
-  const { audit } = auditRoute.useLoaderData()
+  const { audit, runs } = auditRoute.useLoaderData()
   const { status, coverage, findings } = Route.useLoaderData()
-  const { finding: ruleId } = Route.useSearch()
+  const search = Route.useSearch()
+  const navigate = Route.useNavigate()
+  const below = useBelowLg()
+  const triage = search.triage ?? "open"
+  const severities = listOf(search.severity)
+  const areas = listOf(search.area)
+  const [unchecked, setUnchecked] = useState<boolean | null>(null)
   // findings are written when the audit finishes, check results as each run is saved; the status
   // comes with the findings, not from the audit loader, which may be a moment ahead of them
   const finished = ["complete", "partial", "failed"].includes(status)
@@ -84,93 +108,385 @@ function FindingsScreen() {
     )
 
   const failing = findings.filter((f) => f.kind === "fail")
-  const unchecked = findings.filter((f) => f.kind === "inconclusive")
-  const selected = findings.find((f) => f.ruleId === ruleId) ?? failing[0] ?? unchecked[0]
+  const couldNotCheck = findings.filter((f) => f.kind === "inconclusive")
+  const inTab = failing.filter((f) => f.triage.status === triage)
+  const matchesArea = (f: FindingRow) => areas.length === 0 || areas.includes(f.area)
+  const matchesSeverity = (f: FindingRow) =>
+    severities.length === 0 || severities.some((s) => s === f.severity)
+  const visible = inTab.filter((f) => matchesArea(f) && matchesSeverity(f))
+  const visibleUnchecked = triage === "open" ? couldNotCheck.filter(matchesArea) : []
+  const uncheckedOpen = unchecked ?? failing.length === 0
+  const ordered = [...visible, ...(uncheckedOpen ? visibleUnchecked : [])]
+  const tabCount = (t: Triage) => failing.filter((f) => f.triage.status === t).length
+  const explicit = findings.find((f) => f.ruleId === search.finding)
+  const selected = explicit ?? (below ? undefined : ordered[0])
+  const position =
+    selected === undefined ? -1 : ordered.findIndex((f) => f.ruleId === selected.ruleId)
   const full = coverage.evaluatedRuns >= coverage.totalRuns
   const missing = coverage.totalRuns - coverage.evaluatedRuns
+  const mixed = coverage.rulesVersions.length > 1
+  const filtered = severities.length > 0 || areas.length > 0
+
+  const go = (patch: Partial<Search>) =>
+    void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true })
+  const selectFinding = (ruleId: string | undefined) => go({ finding: ruleId })
+  const toggleArea = (area: string, on: boolean) => {
+    const next = AREA_IDS.filter((a) => (a === area ? on : areas.includes(a)))
+    go({ area: next.length === 0 ? undefined : next.join(",") })
+  }
+  const areaCount = (area: string) => inTab.filter((f) => f.area === area).length
+  const severityCount = (severity: Severity) => inTab.filter((f) => f.severity === severity).length
 
   return (
     <div className="space-y-4">
-      <div
-        className={cn(
-          "rounded-lg border p-3 text-sm",
-          full ? "bg-card" : "border-sev-warning-border bg-sev-warning-bg",
+      <Coverage coverage={coverage} full={full} missing={missing} active={active} mixed={mixed} />
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div className="min-w-0 space-y-4">
+          <Tabs
+            value={triage}
+            onValueChange={(next) => go({ triage: Option.getOrUndefined(decodeTriage(next)) })}
+          >
+            <TabsList aria-label="Triage status">
+              {TRIAGES.map((t) => (
+                <TabsTrigger key={t} value={t}>
+                  {TRIAGE_TABS[t]}
+                  <span className="text-xs tabular-nums text-muted-foreground">{tabCount(t)}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value={triage} className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <ToggleGroup
+                  type="multiple"
+                  variant="outline"
+                  size="sm"
+                  aria-label="Severity"
+                  value={severities}
+                  onValueChange={(next) => go({ severity: known(next.join(","), SEVERITIES) })}
+                >
+                  {SEVERITIES.map((s) => (
+                    <ToggleGroupItem
+                      key={s}
+                      value={s}
+                      disabled={severityCount(s) === 0 && !severities.includes(s)}
+                      className="gap-1.5"
+                    >
+                      <StatusGlyph meaning={s} />
+                      {SEVERITY_LABEL[s]}
+                      <span className="tabular-nums text-muted-foreground">{severityCount(s)}</span>
+                    </ToggleGroupItem>
+                  ))}
+                </ToggleGroup>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <ListFilter aria-hidden="true" />
+                      {areas.length === 0
+                        ? "Area"
+                        : `Area: ${AREAS[areas[0] ?? ""] ?? areas[0]}${areas.length > 1 ? ` +${areas.length - 1}` : ""}`}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start">
+                    {AREA_IDS.map((area) => (
+                      <DropdownMenuCheckboxItem
+                        key={area}
+                        checked={areas.includes(area)}
+                        onSelect={(event) => event.preventDefault()}
+                        onCheckedChange={(on) => toggleArea(area, on)}
+                      >
+                        {AREAS[area]}
+                        <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
+                          {areaCount(area)}
+                        </span>
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {filtered ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => go({ severity: undefined, area: undefined })}
+                  >
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+              {visible.length === 0 ? (
+                <EmptyList
+                  triage={triage}
+                  filtered={filtered}
+                  triagedElsewhere={failing.length - tabCount("open")}
+                  noFailing={failing.length === 0}
+                  finished={finished}
+                  full={full}
+                  evaluated={coverage.evaluatedRuns}
+                  missing={missing}
+                  couldNotCheck={couldNotCheck.length}
+                />
+              ) : (
+                SEVERITIES.map((s) => {
+                  const rows = visible.filter((f) => f.severity === s)
+                  return rows.length === 0 ? null : (
+                    <section key={s} aria-label={SEVERITY_LABEL[s]}>
+                      <h2 className="sticky top-0 z-10 flex items-center gap-1.5 bg-background py-1.5 text-xs font-medium">
+                        <StatusGlyph meaning={s} />
+                        {SEVERITY_LABEL[s]}
+                        <span className="tabular-nums text-muted-foreground">{rows.length}</span>
+                      </h2>
+                      <ul>
+                        {rows.map((row) => (
+                          <li key={row.ruleId}>
+                            <FindingItem row={row} selected={row.ruleId === selected?.ruleId} />
+                          </li>
+                        ))}
+                      </ul>
+                    </section>
+                  )
+                })
+              )}
+              {visibleUnchecked.length === 0 ? null : (
+                <Collapsible open={uncheckedOpen} onOpenChange={setUnchecked}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="-ml-2">
+                      <ChevronDown
+                        aria-hidden="true"
+                        className={cn(!uncheckedOpen && "-rotate-90")}
+                      />
+                      Could not check
+                      <span className="tabular-nums text-muted-foreground">
+                        {visibleUnchecked.length}
+                      </span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <p className="pb-1 text-xs text-muted-foreground">
+                      These checks did not run. They are not passes.
+                    </p>
+                    <ul>
+                      {visibleUnchecked.map((row) => (
+                        <li key={row.ruleId}>
+                          <FindingItem row={row} selected={row.ruleId === selected?.ruleId} />
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+        {below ? null : (
+          <aside
+            aria-label="Finding"
+            className="overflow-hidden rounded-lg border bg-card text-sm lg:sticky lg:top-4 lg:max-h-[calc(100svh-2rem)] lg:overflow-y-auto"
+          >
+            {selected === undefined ? (
+              <p className="p-4 text-muted-foreground">Select a finding to see its evidence.</p>
+            ) : (
+              <FindingDetail key={selected.ruleId} auditId={audit.id} row={selected} runs={runs} />
+            )}
+          </aside>
         )}
-        data-testid="coverage"
-      >
-        <p className="font-medium">
-          {coverage.evaluatedRuns} of {plural(coverage.totalRuns, "run")} evaluated
-        </p>
+      </div>
+      {below ? (
+        <Sheet
+          open={explicit !== undefined}
+          onOpenChange={(open) => {
+            if (!open) selectFinding(undefined)
+          }}
+        >
+          <SheetContent side="bottom" className="max-h-[90svh] gap-0 p-0">
+            <SheetTitle className="sr-only">{explicit?.title ?? "Finding"}</SheetTitle>
+            <SheetDescription className="sr-only">Evidence and fix steps</SheetDescription>
+            <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2 pr-12">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Previous finding"
+                disabled={position < 1}
+                onClick={() => selectFinding(ordered[position - 1]?.ruleId)}
+              >
+                <ChevronLeft />
+              </Button>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {position < 0 ? "" : `${position + 1}/${ordered.length}`}
+              </span>
+              <Button
+                variant="outline"
+                size="icon-sm"
+                aria-label="Next finding"
+                disabled={position < 0 || position >= ordered.length - 1}
+                onClick={() => selectFinding(ordered[position + 1]?.ruleId)}
+              >
+                <ChevronRight />
+              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {explicit === undefined ? null : (
+                <FindingDetail
+                  key={explicit.ruleId}
+                  auditId={audit.id}
+                  row={explicit}
+                  runs={runs}
+                />
+              )}
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
+    </div>
+  )
+}
+
+function Coverage({
+  coverage,
+  full,
+  missing,
+  active,
+  mixed,
+}: {
+  coverage: Listing["coverage"]
+  full: boolean
+  missing: number
+  active: boolean
+  mixed: boolean
+}) {
+  const { runs } = coverage
+  const summary = [
+    `${runs.failing} failing${coverage.couldNotCheckOnFailingRuns > 0 ? ` (${coverage.couldNotCheckOnFailingRuns} also could not check)` : ""}`,
+    `${runs.couldNotCheck} could not check`,
+    `${runs.passed} passed`,
+  ]
+  if (full && !mixed)
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="coverage">
+        All {count(coverage.totalRuns, "run")} evaluated · {summary.join(" · ")}
+      </p>
+    )
+  const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
+    { key: "failing", n: runs.failing, tone: "bg-sev-critical-solid", label: "failing" },
+    {
+      key: "unsure",
+      n: runs.couldNotCheck,
+      tone: "bg-muted-foreground/40",
+      label: "could not check",
+    },
+    { key: "passed", n: runs.passed, tone: "bg-status-pass-solid", label: "passed" },
+    {
+      key: "none",
+      n: runs.notEvaluated,
+      tone: "border border-dashed bg-muted",
+      label: "not evaluated",
+    },
+  ]
+  return (
+    <Alert
+      role="status"
+      className="border-sev-warning-border bg-sev-warning-bg"
+      data-testid="coverage"
+    >
+      <AlertTitle className="line-clamp-none">
+        {coverage.evaluatedRuns} of {count(coverage.totalRuns, "run")} evaluated
+      </AlertTitle>
+      <AlertDescription className="text-foreground">
         {full ? null : (
-          <p className="text-muted-foreground">
-            {plural(missing, "run")}{" "}
+          <p>
+            {count(missing, "run")}{" "}
             {active ? "still to be checked" : `${missing === 1 ? "has" : "have"} no check results`},
             so what follows may be incomplete.
           </p>
         )}
-        {coverage.rulesVersions.length > 1 ? (
-          <p className="text-muted-foreground" data-testid="mixed-versions">
+        {mixed ? (
+          <p data-testid="mixed-versions">
             The runs were evaluated with different versions of the rules (
             {coverage.rulesVersions.join(", ")}). The checks and their wording can differ between
             them.
           </p>
         ) : null}
-      </div>
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="space-y-4">
-          <FindingGroup
-            title="Findings"
-            rows={failing}
-            selected={selected}
-            auditId={audit.id}
-            empty={
-              <EmptyFindings
-                finished={finished}
-                full={full}
-                evaluated={coverage.evaluatedRuns}
-                missing={missing}
-                couldNotCheck={unchecked.length}
-              />
-            }
-          />
-          {unchecked.length === 0 ? null : (
-            <FindingGroup
-              title="Could not check"
-              hint="The page or the consent banner did not allow these checks to run. They are not passes."
-              rows={unchecked}
-              selected={selected}
-              auditId={audit.id}
-            />
+        <div className="flex h-2 w-full gap-px overflow-hidden rounded-full" aria-hidden="true">
+          {segments.flatMap((segment) =>
+            Array.from({ length: segment.n }, (_, i) => (
+              <span key={`${segment.key}-${i}`} className={cn("flex-1", segment.tone)} />
+            )),
           )}
         </div>
-        <aside
-          aria-label="Finding"
-          className="rounded-lg border bg-card p-3 text-sm lg:sticky lg:top-4"
-        >
-          {selected === undefined ? (
-            <p className="text-muted-foreground">Select a finding to see its evidence.</p>
-          ) : (
-            <Detail key={selected.ruleId} auditId={audit.id} row={selected} />
-          )}
-        </aside>
-      </div>
-    </div>
+        <TooltipProvider>
+          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
+            {segments.map((segment) => (
+              <li key={segment.key} className="flex items-center gap-1.5">
+                <span aria-hidden="true" className={cn("size-2 rounded-full", segment.tone)} />
+                {segment.key === "passed" && coverage.passedNothingApplied > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="underline decoration-dotted underline-offset-2">
+                        {segment.n} {segment.label}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {coverage.passedNothingApplied} passed with nothing applied
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <span>
+                    {segment.n} {segment.label}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </TooltipProvider>
+        {coverage.couldNotCheckOnFailingRuns > 0 ? (
+          <p className="text-xs">
+            {coverage.couldNotCheckOnFailingRuns} failing{" "}
+            {coverage.couldNotCheckOnFailingRuns === 1 ? "run" : "runs"} also had a check that could
+            not run.
+          </p>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   )
 }
 
-function EmptyFindings({
+function EmptyList({
+  triage,
+  filtered,
+  triagedElsewhere,
+  noFailing,
   finished,
   full,
   evaluated,
   missing,
   couldNotCheck,
 }: {
+  triage: Triage
+  filtered: boolean
+  triagedElsewhere: number
+  noFailing: boolean
   finished: boolean
   full: boolean
   evaluated: number
   missing: number
   couldNotCheck: number
 }) {
+  if (filtered)
+    return <p className="text-sm text-muted-foreground">No findings match these filters.</p>
+  if (triage !== "open")
+    return (
+      <p className="text-sm text-muted-foreground">
+        {triage === "fixed" ? "No finding is marked fixed." : "No risk has been accepted."}
+      </p>
+    )
+  if (!noFailing)
+    return (
+      <p className="text-sm" data-testid="all-triaged">
+        Nothing is open. {count(triagedElsewhere, "finding")}{" "}
+        {triagedElsewhere === 1 ? "is" : "are"} accepted or fixed.
+        {couldNotCheck > 0 || !full
+          ? " This audit is not confirmed clean: some checks could not run or some runs were not evaluated."
+          : ""}
+      </p>
+    )
   if (!finished)
     return (
       <p className="text-sm" data-testid="collecting">
@@ -181,607 +497,51 @@ function EmptyFindings({
   if (couldNotCheck > 0)
     return (
       <p className="text-sm" data-testid="only-inconclusive">
-        Nothing failed, but {plural(couldNotCheck, "check")} could not be run. This audit is not
+        Nothing failed, but {count(couldNotCheck, "check")} could not be run. This audit is not
         confirmed clean.
       </p>
     )
   if (!full)
     return (
       <p className="text-sm" data-testid="partial-clean">
-        No findings were recorded for the {plural(evaluated, "evaluated run")}, but{" "}
-        {plural(missing, "run")} could not be evaluated, so this audit is not confirmed clean.
+        No findings were recorded for the {count(evaluated, "evaluated run")}, but{" "}
+        {count(missing, "run")} could not be evaluated, so this audit is not confirmed clean.
       </p>
     )
   return (
     <p className="text-sm" data-testid="no-findings">
-      No findings. All {plural(evaluated, "run")} were evaluated, and every check passed or did not
+      No findings. All {count(evaluated, "run")} were evaluated, and every check passed or did not
       apply.
     </p>
   )
 }
 
-function FindingGroup({
-  title,
-  hint,
-  rows,
-  selected,
-  auditId,
-  empty,
-}: {
-  title: string
-  hint?: string
-  rows: ReadonlyArray<FindingRow>
-  selected: FindingRow | undefined
-  auditId: string
-  empty?: React.ReactNode
-}) {
-  return (
-    <section className="space-y-2" aria-label={title}>
-      <div>
-        <h2 className="text-sm font-medium">
-          {title} <span className="text-muted-foreground">({rows.length})</span>
-        </h2>
-        {hint === undefined ? null : <p className="text-xs text-muted-foreground">{hint}</p>}
-      </div>
-      {rows.length === 0 ? (
-        empty
-      ) : (
-        <ul className="space-y-2">
-          {rows.map((row) => (
-            <li key={row.ruleId}>
-              <FindingItem row={row} auditId={auditId} selected={row.ruleId === selected?.ruleId} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-function FindingItem({
-  row,
-  auditId,
-  selected,
-}: {
-  row: FindingRow
-  auditId: string
-  selected: boolean
-}) {
+function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) {
+  const failing = row.kind === "fail"
   return (
     <Link
       to="/app/audits/$auditId/findings"
-      params={{ auditId }}
-      search={{ finding: row.ruleId }}
+      from="/app/audits/$auditId/findings"
+      search={(prev) => ({ ...prev, finding: row.ruleId })}
       replace
       data-testid="finding"
       data-selected={selected}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "block space-y-1.5 rounded-lg border bg-card p-3 text-sm outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-        selected && "border-primary bg-accent",
+        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        failing ? SeverityMark[row.severity] : "border-l-2 border-l-transparent",
+        selected && "bg-accent",
       )}
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <SeverityBadge severity={row.severity} />
-        <span className="text-xs text-muted-foreground">{AREAS[row.area] ?? row.area}</span>
-        {row.triage.status === "open" ? null : (
-          <Badge variant="outline">{TRIAGE_LABEL[row.triage.status]}</Badge>
-        )}
-      </div>
-      <p className="font-medium">{row.title}</p>
-      <p className="text-xs text-muted-foreground">
-        {plural(row.pages, "page")} · {plural(row.scenarios, "scenario")}
-        {row.kind === "fail" && row.inconclusiveRuns > 0
-          ? ` · ${row.inconclusiveRuns} inconclusive`
-          : ""}
-      </p>
+      {failing ? null : <StatusGlyph meaning="could-not-check" className="mt-0.5" />}
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">{failing ? row.title : row.checkTitle}</span>
+        <span className="block text-xs text-muted-foreground">
+          {failing
+            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}${row.inconclusiveRuns > 0 ? ` · also could not check on ${count(row.inconclusiveRuns, "run")}` : ""}`
+            : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
+        </span>
+      </span>
     </Link>
-  )
-}
-
-type Loaded<T> = { state: "loading" } | { state: "failed" } | { state: "ready"; value: T }
-
-function Detail({ auditId, row }: { auditId: string; row: FindingRow }) {
-  const router = useRouter()
-  const { runs } = auditRoute.useLoaderData()
-  const [detail, setDetail] = useState<Loaded<FindingDetail>>({ state: "loading" })
-  const [triage, setTriageState] = useState<FindingDetail["triage"] | null>(null)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState<keyof typeof COPY_LABEL>("idle")
-  const [pickedRun, setPickedRun] = useState<string | null>(null)
-  const [pickedRef, setPickedRef] = useState<Ref | null>(null)
-
-  useEffect(() => {
-    let current = true
-    getFinding({ data: { auditId, ruleId: row.ruleId } })
-      .then((value) => current && setDetail({ state: "ready", value }))
-      .catch(() => current && setDetail({ state: "failed" }))
-    return () => {
-      current = false
-    }
-  }, [auditId, row.ruleId])
-
-  async function changeTriage(status: Triage) {
-    setPending(true)
-    setError(null)
-    try {
-      const result = await setTriage({ data: { auditId, ruleId: row.ruleId, status } })
-      if (!result.ok) setError(result.message)
-      else {
-        setTriageState(result.value)
-        await router.invalidate()
-      }
-    } catch {
-      setError("The change could not be saved.")
-    } finally {
-      setPending(false)
-    }
-  }
-
-  async function copyFix(fix: ReadonlyArray<string>) {
-    try {
-      await navigator.clipboard.writeText(fix.map((step, i) => `${i + 1}. ${step}`).join("\n"))
-      setCopied("copied")
-    } catch {
-      setCopied("failed")
-    }
-  }
-
-  const header = (
-    <div className="space-y-1">
-      <div className="flex flex-wrap items-center gap-2">
-        <SeverityBadge severity={row.severity} />
-        <span className="text-xs text-muted-foreground">{AREAS[row.area] ?? row.area}</span>
-        <code className="text-xs text-muted-foreground">{row.ruleId}</code>
-      </div>
-      <h2 className="text-base font-medium">{row.title}</h2>
-    </div>
-  )
-
-  if (detail.state !== "ready")
-    return (
-      <div className="space-y-3">
-        {header}
-        <div aria-live="polite">
-          {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
-          {detail.state === "failed" ? (
-            <p role="alert" className="text-destructive">
-              This finding could not be loaded.
-            </p>
-          ) : null}
-        </div>
-      </div>
-    )
-
-  const { finding, checks } = detail.value
-  const status = (triage ?? detail.value.triage).status
-  const check =
-    checks.find((c) => c.runId === pickedRun) ??
-    checks.find((c) => c.status === "fail") ??
-    checks[0]
-  const hitRef =
-    pickedRef?.kind === "hit" ? pickedRef : check?.evidence.find((e) => e.kind === "hit")
-  const actions: ReadonlyArray<{ status: Triage; label: string }> = [
-    { status: "accepted_risk", label: "Accept risk" },
-    { status: "fixed", label: "Mark fixed" },
-    { status: "open", label: "Reopen" },
-  ]
-
-  return (
-    <div className="space-y-4">
-      {header}
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" data-testid="triage-status">
-          {TRIAGE_LABEL[status]}
-        </Badge>
-        {actions
-          .filter((a) => a.status !== status)
-          .map((a) => (
-            <Button
-              key={a.status}
-              variant="outline"
-              size="sm"
-              disabled={pending}
-              onClick={() => void changeTriage(a.status)}
-            >
-              {a.label}
-            </Button>
-          ))}
-        <Button variant="outline" size="sm" onClick={() => void copyFix(finding.fix)}>
-          {COPY_LABEL[copied]}
-        </Button>
-        {check === undefined ? null : (
-          <Button asChild variant="outline" size="sm">
-            <Link
-              to="/app/audits/$auditId/hits"
-              params={{ auditId }}
-              search={
-                hitRef?.kind === "hit"
-                  ? { run: check.runId, hit: `${hitRef.requestId}:${hitRef.batchIndex}` }
-                  : { runId: check.runId }
-              }
-            >
-              Open in Hits
-            </Link>
-          </Button>
-        )}
-      </div>
-      {error === null ? null : (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      )}
-      {finding.kind === "inconclusive" ? (
-        <p className="rounded-md border border-sev-warning-border bg-sev-warning-bg p-2 text-sm">
-          This could not be checked, which is different from passing. Nothing here says the tracking
-          is right or wrong.
-        </p>
-      ) : null}
-      {finding.rulesVersions.length > 1 ? (
-        <p className="text-xs text-muted-foreground">
-          Evaluated with rules versions {finding.rulesVersions.join(", ")}; the text below is from
-          the newest.
-        </p>
-      ) : null}
-      <Section title="Why it matters">
-        <p>{finding.why}</p>
-      </Section>
-      <Section title="How to fix it">
-        <ol className="list-decimal space-y-1 pl-5">
-          {finding.fix.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </Section>
-      <Section title="Where it was seen">
-        <ul className="space-y-1.5">
-          {checks.map((c) => (
-            <li key={c.runId}>
-              <button
-                type="button"
-                data-testid="check"
-                aria-pressed={c.runId === check?.runId}
-                onClick={() => {
-                  setPickedRun(c.runId)
-                  setPickedRef(null)
-                }}
-                className={cn(
-                  "w-full space-y-0.5 rounded-md border p-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                  c.runId === check?.runId && "border-primary bg-accent",
-                )}
-              >
-                <span className="flex flex-wrap items-center gap-2">
-                  <code className="text-xs break-all">{runPage(c)}</code>
-                  <span className="text-xs text-muted-foreground">
-                    {scenarioLabel(c.scenario)} · {c.viewport}
-                  </span>
-                  <Badge
-                    variant="secondary"
-                    className={
-                      c.status === "fail"
-                        ? "bg-destructive/10 text-destructive"
-                        : "bg-sev-warning-bg text-sev-warning"
-                    }
-                  >
-                    {c.status}
-                  </Badge>
-                </span>
-                <span className="block text-xs text-muted-foreground">{c.message}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Section>
-      {check === undefined ? null : (
-        <Evidence
-          key={check.runId}
-          auditId={auditId}
-          check={check}
-          picked={pickedRef}
-          onPick={setPickedRef}
-          screenshotUrl={runs.find((r) => r.id === check.runId)?.screenshotUrl ?? null}
-        />
-      )}
-    </div>
-  )
-}
-
-const TABS = ["hit", "request", "screenshot", "cookies", "datalayer"] as const
-type Tab = (typeof TABS)[number]
-
-const FIRST_TAB: Record<Ref["kind"], Tab> = {
-  hit: "hit",
-  request: "request",
-  document: "request",
-  cookie: "cookies",
-  push: "datalayer",
-}
-
-const TAB_REFS: Record<Exclude<Tab, "screenshot">, ReadonlyArray<Ref["kind"]>> = {
-  hit: ["hit"],
-  request: ["hit", "request", "document"],
-  cookies: ["cookie"],
-  datalayer: ["push"],
-}
-
-const TAB_LABEL: Record<Tab, string> = {
-  hit: "Hit",
-  request: "Request",
-  screenshot: "Screenshot",
-  cookies: "Cookies",
-  datalayer: "dataLayer",
-}
-
-const refLabel = (ref: Ref) => {
-  if (ref.kind === "hit") return `${ref.requestId} #${ref.batchIndex}`
-  if (ref.kind === "request") return ref.requestId
-  if (ref.kind === "cookie") return `${ref.name} (${ref.label})`
-  if (ref.kind === "push") return `push ${ref.seq}`
-  return `document ${ref.documentId}`
-}
-
-const refKey = (ref: Ref) => JSON.stringify(ref)
-
-function Evidence({
-  auditId,
-  check,
-  picked,
-  onPick,
-  screenshotUrl,
-}: {
-  auditId: string
-  check: Check
-  picked: Ref | null
-  onPick: (ref: Ref) => void
-  screenshotUrl: string | null
-}) {
-  const first = check.evidence[0]
-  const [tab, setTab] = useState<Tab>(first === undefined ? "screenshot" : FIRST_TAB[first.kind])
-  const refsOf = (t: Tab) =>
-    t === "screenshot" ? [] : check.evidence.filter((e) => TAB_REFS[t].includes(e.kind))
-
-  return (
-    <Section title="Evidence">
-      <Tabs
-        value={tab}
-        onValueChange={(value) => {
-          setTab(TABS.find((t) => t === value) ?? "hit")
-        }}
-      >
-        <TabsList>
-          {TABS.map((t) => (
-            <TabsTrigger key={t} value={t}>
-              {TAB_LABEL[t]}
-              {t !== "screenshot" ? (
-                <span className="text-xs text-muted-foreground">{refsOf(t).length}</span>
-              ) : null}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        <TabsContent value={tab} className="space-y-2">
-          <TabBody
-            auditId={auditId}
-            runId={check.runId}
-            tab={tab}
-            refs={refsOf(tab)}
-            firstRef={check.evidence[0]}
-            picked={picked}
-            onPick={onPick}
-            screenshotUrl={screenshotUrl}
-          />
-        </TabsContent>
-      </Tabs>
-    </Section>
-  )
-}
-
-function TabBody({
-  auditId,
-  runId,
-  tab,
-  refs,
-  firstRef,
-  picked,
-  onPick,
-  screenshotUrl,
-}: {
-  auditId: string
-  runId: string
-  tab: Tab
-  refs: ReadonlyArray<Ref>
-  firstRef: Ref | undefined
-  picked: Ref | null
-  onPick: (ref: Ref) => void
-  screenshotUrl: string | null
-}) {
-  if (tab === "screenshot")
-    return (
-      <Screenshot auditId={auditId} runId={runId} reference={firstRef} loaderUrl={screenshotUrl} />
-    )
-  const ref = refs.find((r) => picked !== null && refKey(r) === refKey(picked)) ?? refs[0]
-  if (ref === undefined)
-    return (
-      <p className="text-xs text-muted-foreground">
-        This check points at no {TAB_LABEL[tab]} evidence.
-      </p>
-    )
-  return (
-    <>
-      {refs.length > 1 ? (
-        <div className="flex flex-wrap gap-1">
-          {refs.map((r) => (
-            <Button
-              key={refKey(r)}
-              variant={r === ref ? "secondary" : "outline"}
-              size="xs"
-              aria-pressed={r === ref}
-              onClick={() => onPick(r)}
-            >
-              {refLabel(r)}
-            </Button>
-          ))}
-        </div>
-      ) : null}
-      <EvidenceView key={refKey(ref)} auditId={auditId} runId={runId} tab={tab} reference={ref} />
-    </>
-  )
-}
-
-/**
- * The run's final screenshot. A signed URL lasts 5 minutes, so opening the tab asks for a fresh
- * one through any of the check's evidence (the audit loader's URL when it has none), and an image
- * that fails to load is asked for once more.
- */
-function Screenshot({
-  auditId,
-  runId,
-  reference,
-  loaderUrl,
-}: {
-  auditId: string
-  runId: string
-  reference: Ref | undefined
-  loaderUrl: string | null
-}) {
-  const router = useRouter()
-  const [fresh, setFresh] = useState<string | null | undefined>(undefined)
-  const url = reference === undefined ? loaderUrl : fresh
-  const [retried, setRetried] = useState(false)
-  const [broken, setBroken] = useState(false)
-
-  useEffect(() => {
-    let current = true
-    if (reference !== undefined)
-      getEvidence({ data: { auditId, runId, ref: reference } })
-        .then((value) => current && setFresh(value.screenshotUrl))
-        .catch(() => current && setBroken(true))
-    return () => {
-      current = false
-    }
-  }, [auditId, runId, reference])
-
-  function failed() {
-    if (retried) {
-      setBroken(true)
-      return
-    }
-    setRetried(true)
-    if (reference === undefined) void router.invalidate()
-    else
-      getEvidence({ data: { auditId, runId, ref: reference } })
-        .then((value) => setFresh(value.screenshotUrl))
-        .catch(() => setBroken(true))
-  }
-
-  if (broken)
-    return (
-      <p role="alert" className="text-xs text-destructive">
-        The screenshot could not be loaded.
-      </p>
-    )
-  if (url === undefined) return <p className="text-xs text-muted-foreground">Loading</p>
-  if (url === null)
-    return <p className="text-xs text-muted-foreground">This run has no screenshot.</p>
-  return (
-    <figure className="space-y-1">
-      <img
-        src={url}
-        alt="The page at the end of the run"
-        onError={failed}
-        className="w-full rounded-md border object-cover object-top"
-      />
-      <figcaption className="text-xs text-muted-foreground">
-        Taken at the end of the run, not at the moment of the evidence.
-      </figcaption>
-    </figure>
-  )
-}
-
-type EvidenceResult = Awaited<ReturnType<typeof getEvidence>>["evidence"]
-
-function EvidenceView({
-  auditId,
-  runId,
-  tab,
-  reference,
-}: {
-  auditId: string
-  runId: string
-  tab: Tab
-  reference: Ref
-}) {
-  const [loaded, setLoaded] = useState<Loaded<EvidenceResult>>({ state: "loading" })
-
-  useEffect(() => {
-    let current = true
-    getEvidence({ data: { auditId, runId, ref: reference } })
-      .then((value) => current && setLoaded({ state: "ready", value: value.evidence }))
-      .catch(() => current && setLoaded({ state: "failed" }))
-    return () => {
-      current = false
-    }
-  }, [auditId, runId, reference])
-
-  if (loaded.state === "loading") return <p className="text-muted-foreground">Loading</p>
-  if (loaded.state === "failed")
-    return (
-      <p role="alert" className="text-destructive">
-        This evidence could not be loaded.
-      </p>
-    )
-  const evidence = loaded.value
-  if (evidence.kind === "hit")
-    return tab === "hit" ? (
-      <div className="space-y-3">
-        <HitSummary hit={evidence.hit} />
-      </div>
-    ) : (
-      <RawRequest request={evidence.request} />
-    )
-  if (evidence.kind === "request") return <RawRequest request={evidence.request} />
-  if (evidence.kind === "document")
-    return (
-      <Pairs
-        rows={[
-          ["url", evidence.document.url],
-          ["title", evidence.document.title ?? "-"],
-          ["started", `${evidence.document.startedAt} ms`],
-          ...evidence.document.redirects.map((hop, i) => [`redirect ${i + 1}`, hop] as const),
-        ]}
-      />
-    )
-  if (evidence.kind === "cookie")
-    return (
-      <div className="space-y-2">
-        <Pairs
-          rows={[
-            ["name", evidence.cookie.name],
-            ["value", evidence.cookie.value],
-            ["domain", evidence.cookie.domain],
-            ["path", evidence.cookie.path],
-            [
-              "expires",
-              evidence.cookie.expires === null
-                ? "session"
-                : new Date(evidence.cookie.expires * 1000).toISOString(),
-            ],
-            ["secure", String(evidence.cookie.secure)],
-            ["httpOnly", String(evidence.cookie.httpOnly)],
-            ["sameSite", evidence.cookie.sameSite],
-          ]}
-        />
-        <p className="text-xs text-muted-foreground">
-          Seen in the {evidence.snapshot.label} snapshot at {evidence.snapshot.at} ms.
-        </p>
-      </div>
-    )
-  return (
-    <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        dataLayer push {evidence.seq} at {evidence.at} ms
-      </p>
-      <Pre>{JSON.stringify(evidence.value, null, 2)}</Pre>
-    </div>
   )
 }

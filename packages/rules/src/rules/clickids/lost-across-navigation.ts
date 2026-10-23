@@ -61,6 +61,7 @@ export const lostAcrossNavigation: Rule = {
   area: "clickids",
   severity: "warning",
   title: "Click ID lost between pages",
+  checkTitle: "Click IDs kept between pages",
   why: "A visitor who lands from an ad brings a click ID on the landing URL. When a conversion on a later page carries neither that click ID nor the cookie that stores it, the ad platform cannot tie the sale to the click: the campaign looks like it converts less than it does, and bidding optimizes on the wrong signal.",
   fix: [
     "For Google Ads, turn the Conversion Linker on (in Google Tag Manager, a Conversion Linker tag on all pages; with gtag, do not set conversion_linker: false) so _gcl_aw stores the gclid on the landing page.",

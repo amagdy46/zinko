@@ -1,0 +1,1 @@
+ALTER TABLE "finding_triage" ADD COLUMN "reason" text;

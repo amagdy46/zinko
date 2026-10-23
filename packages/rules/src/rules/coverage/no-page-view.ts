@@ -9,6 +9,7 @@ export const noPageView: Rule = {
   area: "coverage",
   severity: "warning",
   title: "GA4 events without a page_view",
+  checkTitle: "GA4 events preceded by a page_view",
   why: "GA4 builds sessions, landing pages and traffic sources from page_view. When a page sends other GA4 events but no page_view, its visits are missing from page reports and its events are attributed to the wrong page or to no session source.",
   fix: [
     "Remove send_page_view: false from the GA4 config, or send the page_view yourself (a GA4 event tag on page load, or gtag('event', 'page_view') on each route change in a single-page app).",

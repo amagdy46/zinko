@@ -1,13 +1,15 @@
 import { CookieSnapshot } from "@repo/capture-contract"
 import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
+import { audit, checkResult, finding, findingTriage, member, run, user } from "@repo/db"
+import { ruleById } from "@repo/rules"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, countDistinct, eq, inArray } from "drizzle-orm"
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
+import { AREAS } from "@/lib/audit-labels"
 import { auditInOrg, hitWithRequest, readCapture, runInAudit } from "./audit-data"
 import { requireSession } from "./require-session"
-import { membership, NotFound, read, respond } from "./server-fn"
+import { Invalid, membership, NotFound, read, respond } from "./server-fn"
 
 /** Long enough for one look at the evidence; the screen asks again for the next one. */
 const SCREENSHOT_URL_SECONDS = 5 * 60
@@ -37,16 +39,32 @@ const decodeKind = Schema.decodeUnknownEffect(FindingKind)
 const Severity = Schema.Literals(["critical", "warning", "info"])
 const decodeSeverity = Schema.decodeUnknownEffect(Severity)
 
+const MAX_REASON = 1000
+
 const SEVERITY_ORDER: Record<typeof Severity.Type, number> = { critical: 0, warning: 1, info: 2 }
 
 /** A finding with no triage row is `open`. */
 const triageOf = (row: typeof findingTriage.$inferSelect | null) =>
   row === null
-    ? Effect.succeed({ status: "open" as const, updatedBy: null, updatedAt: null })
+    ? Effect.succeed({
+        status: "open" as const,
+        reason: null,
+        updatedBy: null,
+        updatedAt: null,
+      })
     : decodeTriageStatus(row.status).pipe(
         Effect.orDie,
-        Effect.map((status) => ({ status, updatedBy: row.updatedBy, updatedAt: row.updatedAt })),
+        Effect.map((status) => ({
+          status,
+          reason: row.reason,
+          updatedBy: row.updatedBy,
+          updatedAt: row.updatedAt,
+        })),
       )
+
+/** What the check is called when it could not be run: the stored title, then the rule's, then the area. */
+const checkTitleOf = (stored: string | null, ruleId: string, area: string) =>
+  stored ?? ruleById(ruleId)?.checkTitle ?? `Check: ${AREAS[area] ?? area}`
 
 const triageJoin = and(
   eq(findingTriage.auditId, finding.auditId),
@@ -57,7 +75,10 @@ const triageJoin = and(
 /**
  * The audit's findings, failing ones first by severity, then those that could not be checked.
  * `coverage.evaluatedRuns` counts the runs with check results: 0 means the audit was not
- * evaluated (an M2 audit, or no run reached `persist`), never that it is clean.
+ * evaluated (an M2 audit, or no run reached `persist`), never that it is clean. `coverage.runs`
+ * puts every run in exactly one bucket (failing, else could not check, else passed, else not
+ * evaluated), so the four add up to `totalRuns`; `couldNotCheckOnFailingRuns` is how many of the
+ * failing runs also had a check that could not run.
  */
 export const listFindings = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -83,18 +104,58 @@ export const listFindings = createServerFn({ method: "GET" })
         const evaluated = yield* db
           .select({
             rulesVersion: checkResult.rulesVersion,
-            runs: countDistinct(checkResult.runId),
+            runs: sql<number>`count(distinct ${checkResult.runId})`.mapWith(Number),
           })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
           .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
           .groupBy(checkResult.rulesVersion)
+        const verdicts = yield* db
+          .select({ runId: checkResult.runId, status: checkResult.status, n: count() })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+          .groupBy(checkResult.runId, checkResult.status)
+        const reasons = yield* db
+          .select({
+            ruleId: checkResult.ruleId,
+            message: checkResult.message,
+          })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(
+            and(
+              eq(run.auditId, auditId),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+              eq(checkResult.status, "inconclusive"),
+            ),
+          )
+          .orderBy(asc(run.ordinal))
         const rows = yield* db
           .select({ finding, triage: findingTriage })
           .from(finding)
           .leftJoin(findingTriage, triageJoin)
           .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
         const runById = new Map(runs.map((r) => [r.id, r]))
+        const reasonOf = new Map<string, string>()
+        for (const r of reasons) if (!reasonOf.has(r.ruleId)) reasonOf.set(r.ruleId, r.message)
+        const failingRuns = new Set(verdicts.filter((v) => v.status === "fail").map((v) => v.runId))
+        const unsureRuns = new Set(
+          verdicts.filter((v) => v.status === "inconclusive").map((v) => v.runId),
+        )
+        const checkedRuns = new Set(verdicts.map((v) => v.runId))
+        const passingRuns = new Set(verdicts.filter((v) => v.status === "pass").map((v) => v.runId))
+        let nothingApplied = 0
+        const buckets = { failing: 0, couldNotCheck: 0, passed: 0, notEvaluated: 0 }
+        for (const r of runs) {
+          if (failingRuns.has(r.id)) buckets.failing += 1
+          else if (unsureRuns.has(r.id)) buckets.couldNotCheck += 1
+          else if (checkedRuns.has(r.id)) {
+            buckets.passed += 1
+            if (!passingRuns.has(r.id)) nothingApplied += 1
+          } else buckets.notEvaluated += 1
+        }
         const findings = yield* Effect.forEach(rows, ({ finding: f, triage }) =>
           Effect.gen(function* () {
             const affected = f.runIds.flatMap((id) => {
@@ -107,6 +168,8 @@ export const listFindings = createServerFn({ method: "GET" })
               area: f.area,
               severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
               title: f.title,
+              checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
+              reason: f.kind === "inconclusive" ? (reasonOf.get(f.ruleId) ?? null) : null,
               rulesVersions: f.rulesVersions,
               failingRuns: f.failingRuns,
               inconclusiveRuns: f.inconclusiveRuns,
@@ -123,6 +186,9 @@ export const listFindings = createServerFn({ method: "GET" })
             totalRuns: runs.length,
             // a run's check results are written together, with one version
             evaluatedRuns: evaluated.reduce((sum, e) => sum + e.runs, 0),
+            runs: buckets,
+            passedNothingApplied: nothingApplied,
+            couldNotCheckOnFailingRuns: [...failingRuns].filter((id) => unsureRuns.has(id)).length,
             rulesVersions: evaluated.map((e) => e.rulesVersion).toSorted(),
           },
           findings: findings.toSorted(
@@ -165,6 +231,17 @@ export const getFinding = createServerFn({ method: "GET" })
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
         const { finding: f } = found
+        const [actor] =
+          found.triage === null
+            ? []
+            : yield* db
+                .select({ name: user.name })
+                .from(member)
+                .innerJoin(user, eq(user.id, member.userId))
+                .where(
+                  and(eq(member.organizationId, orgId), eq(member.userId, found.triage.updatedBy)),
+                )
+                .limit(1)
         const checks = yield* db
           .select({
             runId: run.id,
@@ -197,13 +274,14 @@ export const getFinding = createServerFn({ method: "GET" })
             area: f.area,
             severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
             title: f.title,
+            checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
             why: f.why,
             fix: yield* decodeFix(f.fix).pipe(Effect.orDie),
             rulesVersions: f.rulesVersions,
             failingRuns: f.failingRuns,
             inconclusiveRuns: f.inconclusiveRuns,
           },
-          triage: yield* triageOf(found.triage),
+          triage: { ...(yield* triageOf(found.triage)), updatedByName: actor?.name ?? null },
           checks: yield* Effect.forEach(checks, (check) =>
             decodeEvidence(check.evidence).pipe(
               Effect.orDie,
@@ -223,7 +301,12 @@ export const setTriage = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(
     Schema.toStandardSchemaV1(
-      Schema.Struct({ auditId: Schema.String, ruleId: Schema.String, status: TriageStatus }),
+      Schema.Struct({
+        auditId: Schema.String,
+        ruleId: Schema.String,
+        status: TriageStatus,
+        reason: Schema.optional(Schema.String),
+      }),
     ),
   )
   .handler(({ context, data }) =>
@@ -231,6 +314,12 @@ export const setTriage = createServerFn({ method: "POST" })
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
+        const reason = data.status === "accepted_risk" ? (data.reason?.trim() ?? "") : null
+        if (reason === "") return yield* new Invalid({ message: "Say why the risk is accepted." })
+        if (reason !== null && reason.length > MAX_REASON)
+          return yield* new Invalid({
+            message: `The reason can be at most ${MAX_REASON} characters.`,
+          })
         const { db } = yield* Database
         const [found] = yield* db
           .select({ ruleId: finding.ruleId })
@@ -244,7 +333,7 @@ export const setTriage = createServerFn({ method: "POST" })
           )
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
-        const values = { status: data.status, updatedBy: userId, updatedAt: new Date() }
+        const values = { status: data.status, reason, updatedBy: userId, updatedAt: new Date() }
         yield* db
           .insert(findingTriage)
           .values({ auditId, orgId, ruleId: found.ruleId, ...values })

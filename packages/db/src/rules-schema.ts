@@ -31,6 +31,8 @@ export const checkResult = pgTable(
     area: text().notNull(),
     severity: text().notNull(),
     title: text().notNull(),
+    /** Null on rows written before the rule had a `checkTitle`. */
+    checkTitle: text("check_title"),
     why: text().notNull(),
     fix: jsonb().notNull(),
     /** The run's `finished_at`, so a retry reproduces the row. */
@@ -58,6 +60,8 @@ export const finding = pgTable(
     area: text().notNull(),
     severity: text().notNull(),
     title: text().notNull(),
+    /** Null on rows written before the rule had a `checkTitle`. */
+    checkTitle: text("check_title"),
     why: text().notNull(),
     fix: jsonb().notNull(),
     failingRuns: integer("failing_runs").notNull(),
@@ -81,6 +85,8 @@ export const findingTriage = pgTable(
     orgId: orgId(),
     ruleId: text("rule_id").notNull(),
     status: text().notNull(),
+    /** Why the risk was accepted; required for `accepted_risk`, null otherwise. */
+    reason: text(),
     updatedBy: text("updated_by").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },

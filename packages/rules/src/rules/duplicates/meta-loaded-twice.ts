@@ -12,6 +12,7 @@ export const metaLoadedTwice: Rule = {
   area: "duplicates",
   severity: "warning",
   title: "Meta pixel loaded twice",
+  checkTitle: "Meta pixel loaded once",
   why: "When the Meta pixel is installed twice (a shop plugin and a tag manager, or a theme snippet left behind), it is started twice for the same pixel and every event can go out twice: page views and conversions are overcounted, and the second copy may send them without the event ids the first one sets.",
   fix: [
     "Find every place that installs the pixel (the theme, shop or CMS plugins such as the Facebook for WooCommerce or Shopify app, the tag manager) and keep one.",

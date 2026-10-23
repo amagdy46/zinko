@@ -10,6 +10,7 @@ export const tagErrors: Rule = {
   area: "hygiene",
   severity: "warning",
   title: "Tracking requests failing with HTTP errors",
+  checkTitle: "Tracking requests succeed",
   why: "A hit answered with a 4xx or 5xx was not recorded. A server-side tag manager that is down or misconfigured, a wrong endpoint or a revoked pixel loses every event it should collect, and nothing on the page shows it.",
   fix: [
     "Open the failing endpoint: for a server-side Google Tag Manager container, check that the server is running, its domain points at it, and its clients accept the request path (/g/collect for GA4).",
