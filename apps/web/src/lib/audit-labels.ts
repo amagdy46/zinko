@@ -14,7 +14,7 @@ export const scenarioLabel = (scenario: string) =>
   SCENARIOS.find((s) => s.value === scenario)?.label ?? scenario
 
 /** A journey run loads its start URL, then one page per step: it takes as long as that many runs. */
-export const runCount = ({
+export const runBreakdown = ({
   pages,
   scenarios,
   viewports,
@@ -24,7 +24,33 @@ export const runCount = ({
   scenarios: number
   viewports: number
   journeySteps: number
-}) => (pages + (journeySteps > 0 ? 1 + journeySteps : 0)) * scenarios * viewports
+}) => {
+  const pageRuns = pages * scenarios * viewports
+  const journeyRuns = journeySteps > 0 ? scenarios * viewports : 0
+  const journeyWork = journeyRuns * (1 + journeySteps)
+  const workUnits = pageRuns + journeyWork
+  return {
+    runs: pageRuns + journeyRuns,
+    workUnits,
+    duration: estimateDuration(workUnits),
+    lines: [
+      {
+        label: `${pages} pages × ${scenarios} scenarios × ${viewports} viewports`,
+        runs: pageRuns,
+        workUnits: pageRuns,
+      },
+      ...(journeySteps > 0
+        ? [
+            {
+              label: `Journey × ${scenarios} scenarios × ${viewports} viewports`,
+              runs: journeyRuns,
+              workUnits: journeyWork,
+            },
+          ]
+        : []),
+    ],
+  }
+}
 
 export const estimateDuration = (runs: number) => {
   const minutes = Math.ceil((runs * SECONDS_PER_RUN) / 60)
