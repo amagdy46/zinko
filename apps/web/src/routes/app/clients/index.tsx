@@ -1,8 +1,26 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import type { FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
+import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
@@ -15,60 +33,122 @@ export const Route = createFileRoute("/app/clients/")({
 
 function Clients() {
   const clients = Route.useLoaderData()
+  const { session } = Route.useRouteContext()
   const router = useRouter()
-
+  const [query, setQuery] = useState("")
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const form = event.currentTarget
-    const result = await createClient({ data: { name: formField(new FormData(form), "name") } })
-    if (!result.ok) {
-      toast.error(result.message)
-      return
+    setPending(true)
+    try {
+      const result = await createClient({
+        data: { name: formField(new FormData(event.currentTarget), "name") },
+      })
+      if (!result.ok) {
+        toast.error(result.message)
+        return
+      }
+      setOpen(false)
+      await router.navigate({ to: "/app/clients/$clientId", params: { clientId: result.value.id } })
+    } finally {
+      setPending(false)
     }
-    form.reset()
-    await router.navigate({ to: "/app/clients/$clientId", params: { clientId: result.value.id } })
   }
-
+  const filtered = clients.filter((c) =>
+    c.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  )
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Clients</h1>
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle>New client</CardTitle>
-          <CardDescription>A client groups the sites you audit for one customer.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={create} className="flex items-end gap-2">
-            <div className="flex-1 space-y-2">
-              <Label htmlFor="client-name">Name</Label>
-              <Input id="client-name" name="name" required maxLength={100} />
-            </div>
-            <Button type="submit">Create client</Button>
-          </form>
-        </CardContent>
-      </Card>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title="Clients"
+        actions={
+          <>
+            <Input
+              aria-label="Search clients"
+              placeholder="Search clients…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-44"
+            />
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>New client</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>New client</DialogTitle>
+                  <DialogDescription>
+                    A client groups the sites you audit for one customer.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={create} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="client-name">Name</Label>
+                    <Input id="client-name" name="name" required maxLength={100} />
+                  </div>
+                  <Button type="submit" disabled={pending}>
+                    {pending ? "Creating…" : "Create client"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </>
+        }
+      />
+      <FirstRun organizationId={session.activeOrganizationId ?? ""} clients={clients} />
       {clients.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No clients yet. Create your first client to add a site and run an audit.
-        </p>
-      ) : (
-        <ul className="grid max-w-xl gap-2">
-          {clients.map((client) => (
-            <li key={client.id}>
-              <Link
-                to="/app/clients/$clientId"
-                params={{ clientId: client.id }}
-                className="flex items-center justify-between rounded-md border px-4 py-3 text-sm hover:bg-accent"
-              >
-                <span className="font-medium">{client.name}</span>
-                <span className="text-muted-foreground">
-                  {client.siteCount} {client.siteCount === 1 ? "site" : "sites"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
+        <EmptyState
+          title="Add your first client"
+          description="Group the sites you audit for one customer, then run your first audit."
+          action={<Button onClick={() => setOpen(true)}>New client</Button>}
+        />
+      ) : null}
+      {clients.length > 0 && filtered.length === 0 ? (
+        <EmptyState
+          title="No matching clients"
+          description="Try another name or clear your search."
+          action={
+            <Button variant="outline" onClick={() => setQuery("")}>
+              Clear search
+            </Button>
+          }
+        />
+      ) : null}
+      {filtered.length > 0 ? (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Client</TableHead>
+              <TableHead>Sites</TableHead>
+              <TableHead>Last audit</TableHead>
+              <TableHead>Open findings</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filtered.map((c) => (
+              <TableRow key={c.id} className="relative">
+                <TableCell className="font-medium">
+                  <Link
+                    className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                    to="/app/clients/$clientId"
+                    params={{ clientId: c.id }}
+                  >
+                    {c.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="tabular-nums">{c.siteCount}</TableCell>
+                <TableCell>
+                  <LastAudit latest={c.latest} running={c.running} />
+                </TableCell>
+                <TableCell>
+                  <OpenFindings latest={c.latest} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      ) : null}
     </div>
   )
 }

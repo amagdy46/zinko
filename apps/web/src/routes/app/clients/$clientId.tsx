@@ -1,9 +1,36 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import type { FormEvent } from "react"
+import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { MoreHorizontal } from "lucide-react"
+import { PageHeader } from "@/components/page-header"
+import { EmptyState } from "@/components/empty-state"
+import { LastAudit, OpenFindings } from "@/components/first-run"
+import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { count, relativeTime } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
@@ -18,20 +45,28 @@ export const Route = createFileRoute("/app/clients/$clientId")({
 function ClientPage() {
   const { client, sites, canManage } = Route.useLoaderData()
   const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
 
   async function addSite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = event.currentTarget
     const data = new FormData(form)
-    const result = await createSite({
-      data: { clientId: client.id, name: formField(data, "name"), url: formField(data, "url") },
-    })
-    if (!result.ok) {
-      toast.error(result.message)
-      return
+    setPending(true)
+    try {
+      const result = await createSite({
+        data: { clientId: client.id, name: formField(data, "name"), url: formField(data, "url") },
+      })
+      if (!result.ok) {
+        toast.error(result.message)
+        return
+      }
+      form.reset()
+      setOpen(false)
+      await router.navigate({ to: "/app/sites/$siteId", params: { siteId: result.value.id } })
+    } finally {
+      setPending(false)
     }
-    form.reset()
-    await router.navigate({ to: "/app/sites/$siteId", params: { siteId: result.value.id } })
   }
 
   async function leave(
@@ -47,88 +82,150 @@ function ClientPage() {
     await router.navigate({ to: "/app/clients" })
   }
 
+  const lastAudit = sites.reduce<Date | string | null>(
+    (last, s) =>
+      s.lastAuditAt !== null && (last === null || new Date(s.lastAuditAt) > new Date(last))
+        ? s.lastAuditAt
+        : last,
+    null,
+  )
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <Link to="/app/clients" className="text-sm text-muted-foreground hover:text-foreground">
-          Clients
-        </Link>
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-2xl font-semibold">{client.name}</h1>
-          {canManage && !client.archived ? (
-            <div className="flex gap-2">
-              <ConfirmDialog
-                label="Archive"
-                variant="outline"
-                title={`Archive ${client.name}?`}
-                description="The client and its sites are hidden from the lists. Nothing is deleted."
-                onConfirm={() => leave(archiveClient)}
-              />
-              <ConfirmDialog
-                label="Delete"
-                variant="destructive"
-                title={`Delete ${client.name}?`}
-                description="The client and its sites are deleted. This cannot be undone."
-                onConfirm={() => leave(deleteClient)}
-              />
-            </div>
-          ) : null}
-        </div>
-        {client.archived ? <p className="text-sm text-muted-foreground">Archived</p> : null}
-      </div>
-      {client.archived ? null : (
-        <Card className="max-w-xl">
-          <CardHeader>
-            <CardTitle>New site</CardTitle>
-            <CardDescription>
-              The site's address decides which pages an audit may visit.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={addSite} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="site-name">Name</Label>
-                <Input id="site-name" name="name" required maxLength={100} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="site-url">Address</Label>
-                <Input
-                  id="site-url"
-                  name="url"
-                  type="url"
-                  required
-                  placeholder="https://shop.example"
-                />
-              </div>
-              <Button type="submit">Create site</Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+    <div className="mx-auto max-w-6xl space-y-6">
+      <PageHeader
+        title={client.name}
+        breadcrumb={[{ label: "Clients", to: "/app/clients" }, { label: client.name }]}
+        meta={
+          <>
+            {client.archived ? <Badge variant="secondary">Archived</Badge> : null}
+            <span>
+              {count(sites.length, "site")} ·{" "}
+              {lastAudit ? `last audit ${relativeTime(lastAudit).text}` : "Not audited"}
+            </span>
+          </>
+        }
+        actions={
+          <>
+            {!client.archived ? (
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button>Add site</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Add site</DialogTitle>
+                    <DialogDescription>
+                      The site's address decides which pages an audit may visit.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={addSite} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="site-name">Name</Label>
+                      <Input id="site-name" name="name" required maxLength={100} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="site-url">Address</Label>
+                      <Input
+                        id="site-url"
+                        name="url"
+                        type="url"
+                        required
+                        placeholder="https://shop.example"
+                      />
+                    </div>
+                    <Button type="submit" disabled={pending}>
+                      {pending ? "Creating…" : "Create site"}
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            ) : null}
+            {canManage && !client.archived ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" aria-label="Client actions">
+                    <MoreHorizontal />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+                    <div className="[&_button]:w-full [&_button]:justify-start">
+                      <ConfirmDialog
+                        label="Archive"
+                        variant="ghost"
+                        title={`Archive ${client.name}?`}
+                        description="The client and its sites are hidden from the lists. Nothing is deleted."
+                        onConfirm={() => leave(archiveClient)}
+                      />
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    asChild
+                    variant="destructive"
+                    onSelect={(e) => e.preventDefault()}
+                  >
+                    <div className="[&_button]:w-full [&_button]:justify-start [&_button]:text-destructive">
+                      <ConfirmDialog
+                        label="Delete"
+                        variant="ghost"
+                        title={`Delete ${client.name}?`}
+                        description="The client and its sites are deleted. This cannot be undone."
+                        onConfirm={() => leave(deleteClient)}
+                      />
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </>
+        }
+      />
       {sites.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No sites yet. Add the first site of this client to start auditing.
-        </p>
+        <EmptyState
+          title="Add the site to audit"
+          description={
+            client.archived
+              ? "This client is archived."
+              : "Add a site address to start checking its tags and consent."
+          }
+          action={
+            client.archived ? undefined : <Button onClick={() => setOpen(true)}>Add site</Button>
+          }
+        />
       ) : (
-        <ul className="grid max-w-xl gap-2">
-          {sites.map((site) => (
-            <li key={site.id}>
-              <Link
-                to="/app/sites/$siteId"
-                params={{ siteId: site.id }}
-                className="flex items-center justify-between rounded-md border px-4 py-3 text-sm hover:bg-accent"
-              >
-                <span>
-                  <span className="font-medium">{site.name}</span>{" "}
-                  <span className="text-muted-foreground">{site.origin}</span>
-                </span>
-                <span className="text-muted-foreground">
-                  {site.auditCount} {site.auditCount === 1 ? "audit" : "audits"}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Site</TableHead>
+              <TableHead>Origin</TableHead>
+              <TableHead>Last audit</TableHead>
+              <TableHead>Open findings</TableHead>
+              <TableHead>Audits</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sites.map((s) => (
+              <TableRow key={s.id} className="relative">
+                <TableCell className="font-medium">
+                  <Link
+                    to="/app/sites/$siteId"
+                    params={{ siteId: s.id }}
+                    className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    {s.name}
+                  </Link>
+                </TableCell>
+                <TableCell className="font-mono text-xs">{s.origin}</TableCell>
+                <TableCell>
+                  <LastAudit latest={s.latest} running={s.running} />
+                </TableCell>
+                <TableCell>
+                  <OpenFindings latest={s.latest} />
+                </TableCell>
+                <TableCell className="tabular-nums">{s.auditCount}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   )

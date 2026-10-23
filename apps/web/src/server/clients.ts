@@ -1,11 +1,12 @@
 import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, count, desc, eq, inArray, isNull, max } from "drizzle-orm"
+import { and, count, desc, eq, inArray, isNull } from "drizzle-orm"
 import { Config, Effect, Option, Schema } from "effect"
 import { WorkerConfig } from "effect-cf"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
+import { auditSummaries, clientSummary, settled, siteSummary } from "./client-summary"
 import { requireSession } from "./require-session"
 import {
   atomically,
@@ -130,16 +131,27 @@ export const listClients = createServerFn({ method: "GET" })
           .from(client)
           .where(and(eq(client.orgId, orgId), isNull(client.archivedAt)))
           .orderBy(client.name)
-        const counts = yield* db
-          .select({ clientId: site.clientId, total: count() })
+        const sites = yield* db
+          .select({ id: site.id, clientId: site.clientId })
           .from(site)
           .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
-          .groupBy(site.clientId)
-        return clients.map((c) => ({
-          id: c.id,
-          name: c.name,
-          siteCount: counts.find((row) => row.clientId === c.id)?.total ?? 0,
-        }))
+        const summaries = yield* auditSummaries(
+          orgId,
+          sites.map((s) => s.id),
+        )
+        return clients.map((c) => {
+          const owned = sites.filter((s) => s.clientId === c.id)
+          const summary = clientSummary(
+            owned.map((s) => siteSummary(summaries.filter((a) => a.siteId === s.id))),
+          )
+          return {
+            id: c.id,
+            name: c.name,
+            siteCount: owned.length,
+            running: summary.running,
+            latest: summary.latest,
+          }
+        })
       }),
     ),
   )
@@ -239,32 +251,25 @@ export const getClient = createServerFn({ method: "GET" })
           .from(site)
           .where(and(eq(site.orgId, orgId), eq(site.clientId, found.id), isNull(site.archivedAt)))
           .orderBy(site.name)
-        const stats =
-          sites.length === 0
-            ? []
-            : yield* db
-                .select({ siteId: audit.siteId, total: count(), last: max(audit.createdAt) })
-                .from(audit)
-                .where(
-                  and(
-                    eq(audit.orgId, orgId),
-                    inArray(
-                      audit.siteId,
-                      sites.map((s) => s.id),
-                    ),
-                  ),
-                )
-                .groupBy(audit.siteId)
+        const summaries = yield* auditSummaries(
+          orgId,
+          sites.map((s) => s.id),
+        )
         return {
           client: { id: found.id, name: found.name, archived: found.archivedAt !== null },
           canManage: isManager(role),
-          sites: sites.map((s) => ({
-            id: s.id,
-            name: s.name,
-            origin: s.origin,
-            auditCount: stats.find((row) => row.siteId === s.id)?.total ?? 0,
-            lastAuditAt: stats.find((row) => row.siteId === s.id)?.last ?? null,
-          })),
+          sites: sites.map((s) => {
+            const summary = siteSummary(summaries.filter((a) => a.siteId === s.id))
+            return {
+              id: s.id,
+              name: s.name,
+              origin: s.origin,
+              latest: summary.latest,
+              running: summary.running,
+              auditCount: summary.auditCount,
+              lastAuditAt: summary.lastAuditAt,
+            }
+          }),
         }
       }),
     ),
@@ -367,6 +372,7 @@ export const getSite = createServerFn({ method: "GET" })
           .limit(AUDITS_PER_PAGE + 1)
           .offset(page * AUDITS_PER_PAGE)
         const audits = rows.slice(0, AUDITS_PER_PAGE)
+        const summaries = yield* auditSummaries(orgId, [found.id])
         const [latest] = yield* db
           .select({ config: audit.config })
           .from(audit)
@@ -383,12 +389,25 @@ export const getSite = createServerFn({ method: "GET" })
           },
           client: { id: owner.id, name: owner.name },
           canManage: isManager(role),
-          audits: audits.map((a) => ({
-            id: a.id,
-            status: a.status,
-            error: a.error,
-            createdAt: a.createdAt,
-          })),
+          audits: audits.map((a) => {
+            const summary = summaries.find((row) => row.id === a.id)
+            return {
+              id: a.id,
+              status: a.status,
+              error: a.error,
+              createdAt: a.createdAt,
+              runs: { total: summary?.total ?? 0, finished: summary?.finished ?? 0 },
+              findings:
+                summary === undefined || summary.evaluated === 0 || !settled(a.status)
+                  ? null
+                  : {
+                      critical: summary.critical,
+                      warning: summary.warning,
+                      info: summary.info,
+                      couldNotCheck: summary.couldNotCheck,
+                    },
+            }
+          }),
           page,
           hasMore: rows.length > AUDITS_PER_PAGE,
           lastConfig: latest?.config ?? null,
