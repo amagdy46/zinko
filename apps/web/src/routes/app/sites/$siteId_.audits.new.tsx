@@ -346,7 +346,7 @@ function NewAudit() {
               {breakdown.runs === 0 ? "No runs yet" : breakdown.duration}
             </p>
           </div>
-          <ul className="space-y-2 font-mono text-xs text-muted-foreground tabular-nums">
+          <ul className="hidden space-y-2 font-mono text-xs lg:block text-muted-foreground tabular-nums">
             {breakdown.lines.map((line) => (
               <li key={line.label}>
                 {line.label} = {line.runs} runs
@@ -354,7 +354,7 @@ function NewAudit() {
             ))}
           </ul>
           {journey && keyPages.length > 0 && (
-            <p className="text-xs text-muted-foreground">
+            <p className="hidden text-xs text-muted-foreground lg:block">
               A journey run takes as long as {1 + Math.min(keyPages.length, JOURNEY_STEPS)} page
               runs.
             </p>
@@ -377,7 +377,7 @@ function NewAudit() {
               {disabledReason}
             </p>
           )}
-          <Collapsible>
+          <Collapsible className="hidden lg:block">
             <CollapsibleTrigger className="text-xs text-muted-foreground underline-offset-4 hover:underline">
               How is this estimated?
             </CollapsibleTrigger>
