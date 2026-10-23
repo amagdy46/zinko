@@ -63,7 +63,9 @@ function AuditPage() {
     if (previous.current.id === audit.id && previous.current.active && !active) {
       let message = `Audit complete: ${findings} findings`
       if (audit.status === "failed") message = "Audit failed"
-      if (audit.status === "partial")
+      if (audit.status === "partial" && summary.evaluatedRuns === 0)
+        message = "Audit finished: not evaluated"
+      else if (audit.status === "partial")
         message = `Audit finished with gaps: ${findings} findings, ${partial + failed} runs incomplete`
       toast(message, {
         id: `audit-finished-${audit.id}`,
@@ -79,7 +81,7 @@ function AuditPage() {
       })
     }
     previous.current = { id: audit.id, active }
-  }, [audit.id, audit.status, active, findings, partial, failed, router])
+  }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const navClass =
     "-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"

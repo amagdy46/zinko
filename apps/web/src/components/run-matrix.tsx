@@ -88,11 +88,14 @@ export function RunMatrix({
     )
   const pageKey = (run: AuditRun) => `${run.pageUrl}\0${run.journey}`
   const pages = [...new Map(runs.map((run) => [pageKey(run), run])).values()]
-  const paths = pages.map((run) => runPage(run))
-  const pageLabel = (run: AuditRun) =>
-    paths.filter((path) => path === runPage(run)).length > 1
-      ? `${new URL(run.pageUrl).host}${runPage(run)}`
-      : runPage(run)
+  const count = (label: (run: AuditRun) => string, run: AuditRun) =>
+    pages.filter((other) => label(other) === label(run)).length
+  const withHost = (run: AuditRun) => `${new URL(run.pageUrl).host}${runPage(run)}`
+  const withUrl = (run: AuditRun) => (run.journey ? `Journey from ${run.pageUrl}` : run.pageUrl)
+  const pageLabel = (run: AuditRun) => {
+    if (count(runPage, run) === 1) return runPage(run)
+    return count(withHost, run) === 1 ? withHost(run) : withUrl(run)
+  }
   const viewports = [...new Set(runs.map((run) => run.viewport))]
   const scenarios = [...new Set(runs.map((run) => run.scenario))]
   const cells = new Map(
