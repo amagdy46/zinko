@@ -159,6 +159,28 @@ export const listClients = createServerFn({ method: "GET" })
     ),
   )
 
+export const searchTargets = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const { db } = yield* Database
+        const clients = yield* db
+          .select({ id: client.id, name: client.name })
+          .from(client)
+          .where(and(eq(client.orgId, orgId), isNull(client.archivedAt)))
+          .orderBy(client.name)
+        const sites = yield* db
+          .select({ id: site.id, name: site.name, host: site.host, clientId: site.clientId })
+          .from(site)
+          .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
+          .orderBy(site.name)
+        return { clients, sites }
+      }),
+    ),
+  )
+
 export const createClient = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ name: Schema.String })))

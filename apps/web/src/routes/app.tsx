@@ -1,6 +1,7 @@
 import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
-import { Menu, Settings, Users } from "lucide-react"
+import { Menu, Search, Settings, Users } from "lucide-react"
 import { useState } from "react"
+import { CommandPalette } from "@/components/command-palette"
 import { LogoMark } from "@/components/logo"
 import { OrgSwitcher } from "@/components/org-switcher"
 import { Button } from "@/components/ui/button"
@@ -30,7 +31,7 @@ const nav = [
   { to: "/app/settings", label: "Settings", icon: Settings },
 ] as const
 
-function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFind: () => void }) {
   const { session, organizations } = Route.useRouteContext()
   return (
     <>
@@ -47,6 +48,15 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         activeId={session.activeOrganizationId}
         onNavigate={onNavigate}
       />
+      <button
+        type="button"
+        onClick={onFind}
+        className="flex h-8 items-center gap-2 rounded-md border bg-background px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2"
+      >
+        <Search className="size-4" />
+        <span className="flex-1 text-left">Find…</span>
+        <kbd className="hidden font-sans text-xs md:inline">⌘K</kbd>
+      </button>
       <nav aria-label="Workspace" className="flex flex-1 flex-col gap-0.5">
         {nav.map(({ to, label, icon: Icon }) => (
           <Link
@@ -66,11 +76,13 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 function AppShell() {
+  const { session, organizations } = Route.useRouteContext()
   const [menuOpen, setMenuOpen] = useState(false)
+  const [findOpen, setFindOpen] = useState(false)
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex">
-        <SidebarContent />
+        <SidebarContent onFind={() => setFindOpen(true)} />
       </aside>
       <div className="flex min-w-0 flex-col">
         <header className="flex items-center gap-2 border-b bg-sidebar px-4 py-2 md:hidden">
@@ -88,7 +100,13 @@ function AppShell() {
               <SheetDescription className="sr-only">
                 Switch organization, navigate, or manage your account.
               </SheetDescription>
-              <SidebarContent onNavigate={() => setMenuOpen(false)} />
+              <SidebarContent
+                onNavigate={() => setMenuOpen(false)}
+                onFind={() => {
+                  setMenuOpen(false)
+                  setFindOpen(true)
+                }}
+              />
             </SheetContent>
           </Sheet>
           <LogoMark className="size-5" />
@@ -96,6 +114,12 @@ function AppShell() {
         <main className="min-w-0 flex-1 p-4 md:p-6">
           <Outlet />
         </main>
+        <CommandPalette
+          open={findOpen}
+          onOpenChange={setFindOpen}
+          organizations={organizations}
+          activeId={session.activeOrganizationId}
+        />
       </div>
     </div>
   )
