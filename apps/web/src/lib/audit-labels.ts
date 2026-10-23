@@ -52,7 +52,7 @@ export const runBreakdown = ({
   }
 }
 
-export const estimateDuration = (runs: number) => {
+const estimateDuration = (runs: number) => {
   const minutes = Math.ceil((runs * SECONDS_PER_RUN) / 60)
   return minutes <= 1 ? "about 1 minute" : `about ${minutes} minutes`
 }
