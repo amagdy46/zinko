@@ -836,7 +836,10 @@ function HitRow({
       data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
-      className={cn("h-7 cursor-pointer border-t hover:bg-muted/50", isSelected && "bg-accent")}
+      className={cn(
+        "h-7 max-md:h-9 cursor-pointer border-t hover:bg-muted/50",
+        isSelected && "bg-accent",
+      )}
     >
       <RunCell ordinal={item.ordinal} singleRun={singleRun} />
       <td className={cn(cellBase, "tabular-nums")}>{thousands(item.at)} ms</td>
@@ -844,7 +847,7 @@ function HitRow({
       <td className={cellBase}>
         <button
           type="button"
-          className="text-left font-medium outline-none focus-visible:underline"
+          className="text-left font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onSelect}
         >
           {item.event}
@@ -927,7 +930,7 @@ function PushRow({
       data-selected={isSelected}
       onClick={onSelect}
       className={cn(
-        "h-7 cursor-pointer border-t text-muted-foreground hover:bg-muted/50",
+        "h-7 max-md:h-9 cursor-pointer border-t text-muted-foreground hover:bg-muted/50",
         isSelected && "bg-accent text-foreground",
       )}
     >
@@ -940,7 +943,7 @@ function PushRow({
         <button
           type="button"
           aria-expanded={group?.open}
-          className="inline-flex items-center gap-1 text-left outline-none focus-visible:underline"
+          className="inline-flex items-center gap-1 text-left outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={(event) => {
             event.stopPropagation()
             onSelect()
