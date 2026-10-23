@@ -211,11 +211,11 @@ function Members() {
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
-            <TableHead className="w-1/2 sm:w-2/5">Member</TableHead>
+            <TableHead className="w-2/5">Member</TableHead>
             <TableHead>Role</TableHead>
             <TableHead className="hidden sm:table-cell">Status</TableHead>
             {canManage ? (
-              <TableHead className="w-24 sm:w-44">
+              <TableHead className="w-20 sm:w-44">
                 <span className="sr-only">Actions</span>
               </TableHead>
             ) : null}

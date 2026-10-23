@@ -13,13 +13,18 @@ export const Route = createFileRoute("/accept-invite/$id")({
 function AcceptInvite() {
   const { id } = Route.useParams()
   const { session } = Route.useLoaderData()
-  const [error, setError] = useState<string | null>(null)
-  const [invitation, setInvitation] = useState<{ organizationName: string; role: string } | null>(
-    null,
-  )
-  const [loading, setLoading] = useState(session !== null)
+  const [error, setError] = useState<{ id: string; message: string } | null>(null)
+  const [loaded, setLoaded] = useState<{
+    id: string
+    invitation: { organizationName: string; role: string } | null
+    error: string | null
+  } | null>(null)
   const [pending, setPending] = useState(false)
   const redirect = `/accept-invite/${id}`
+  const current = loaded?.id === id ? loaded : null
+  const invitation = current?.invitation ?? null
+  const shownError = (error?.id === id ? error.message : null) ?? current?.error ?? null
+  const loading = session !== null && current === null
 
   useEffect(() => {
     if (session === null) return undefined
@@ -28,10 +33,13 @@ function AcceptInvite() {
       .getInvitation({ query: { id } })
       .then(({ data, error: failure }) => {
         if (!active) return
-        setLoading(false)
-        if (failure)
-          setError(failure.message ?? "Could not load the invitation. Ask for a new link.")
-        else if (data) setInvitation({ organizationName: data.organizationName, role: data.role })
+        setLoaded({
+          id,
+          invitation: data ? { organizationName: data.organizationName, role: data.role } : null,
+          error: failure
+            ? (failure.message ?? "Could not load the invitation. Ask for a new link.")
+            : null,
+        })
       })
     return () => {
       active = false
@@ -43,7 +51,7 @@ function AcceptInvite() {
     setError(null)
     const { error: failure } = await authClient.organization.acceptInvitation({ invitationId: id })
     if (failure) {
-      setError(failure.message ?? "Could not accept the invitation")
+      setError({ id, message: failure.message ?? "Could not accept the invitation" })
       setPending(false)
       return
     }
@@ -87,9 +95,9 @@ function AcceptInvite() {
           <strong>{invitation.role}</strong>.
         </p>
       )}
-      {error === null ? null : (
+      {shownError === null ? null : (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {shownError}
         </p>
       )}
       <Button
