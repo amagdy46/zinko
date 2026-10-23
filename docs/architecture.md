@@ -15,11 +15,11 @@ The stack follows the Ovriq house stack: **Effect 4 on Cloudflare**. See [decisi
 │ viewport): admit-<n> (AdmissionGate), then   │   │ tabs of that audit's organization           │
 │   capture-<n>: Browser.capture(...) ─────┐   │   └─────────────────────────────────────────────┘
 │     → capture.json + screenshot in R2    │   │
+│     → release grant to the next capture  │   │
 │   persist-<n>: decode → hits, pushes,    │   │
 │     rules → check_result rows            │   │
 │     → Postgres in one transaction        │   │
 │   (or fail-<n>: record the run's error)  │   │
-│   release: hand the engine to the next   │   │
 │ finish: findings from check_result,      │   │
 │     audit status (one transaction)       │   │
 │ later (M4): llm.explain(findings) (BYOK) │   │
@@ -52,9 +52,9 @@ R2 — per run: screenshot.png and capture.json (the immutable capture); PDFs la
 | Validation | **Effect Schema** | Replaces Zod; shared by server functions, rule config and LLM output |
 | Database | **Postgres (Neon) through Hyperdrive**, **Drizzle** (`drizzle-orm/effect-postgres`); `drizzle-kit` generates the migrations, `pnpm db:migrate` applies them | Postgres keeps a non-Cloudflare self-host path open; D1 would not |
 | Auth | **better-auth** + organization plugin, on the same Postgres | Workspaces, invites, roles; runs on Workers |
-| Orchestration | **Cloudflare Workflows**: one workflow instance per audit (instance id = audit id); per run an `admit-<n>` step (an engine from the admission gate), a `capture-<n>` step, then `persist-<n>` or `fail-<n>`; `start` before them, `release` and `finish` after | Durable retries per step; a failed run does not stop the audit; replaces pg-boss |
+| Orchestration | **Cloudflare Workflows**: one workflow instance per audit (instance id = audit id); per run an `admit-<n>` step (an engine from the admission gate), a `capture-<n>` step, then `persist-<n>` or `fail-<n>`; `start` before them, release in each capture finalizer before persistence, and `finish` after | Durable retries per step; a failed run does not stop the audit; replaces pg-boss |
 | Live progress | **Durable Object per audit** (`AuditRoom`) with hibernating WebSockets, behind an authenticated Worker route (see Realtime below) | Replaces SSE-from-Postgres |
-| Capture admission | **One Durable Object** (`AdmissionGate`, `docs/decisions/0003-capture-admission.md`): a FIFO line for the engines in `Browser.engines`; an audit holds one engine from its first capture to its last, waiters sleep in `waitForEvent` and are woken by an `engine-free` event | Engines never idle while audits wait, and audits start in the order they were queued; replaces independent 429/503 backoffs |
+| Capture admission | **One Durable Object** (`AdmissionGate`, `docs/decisions/0003-capture-admission.md`): a FIFO line for the engines in `Browser.engines`; each capture joins the tail, confirms its grant token before every browser attempt, and releases after storage before persistence; waiters sleep in `waitForEvent` and are woken by an `engine-free` event | Capture turns follow FIFO order across audits; short audits can finish before a large one; replaces independent 429/503 backoffs |
 | Browser | **Scrapling 0.5** (`AsyncStealthySession`, Python, on patchright) in a Cloudflare Container, behind the `Browser` service ([decision 0002](decisions/0002-capture-engine.md)) | Stealth browser launcher; `capture.py` drives the page with the Playwright API (routes, request listeners, cookies, screenshot) rather than Scrapling's `fetch()`. Every capability capture needs works, some through `additional_args`. Less visible to fingerprint checks than plain Playwright (spike RESULTS.md, 2026-10-20) |
 | Browser (fallback) | Plain Playwright + Chromium in the same container (`apps/browser/src/engines/playwright.ts`) | Operational fallback, picked per request when Scrapling fails to launch or with `CAPTURE_ENGINE=playwright`, and the comparison baseline. Shares the shim, vendor list and autoconsent bridge; `engine` on the result says which ran |
 | Browser (egress) | A per-capture HTTP proxy in the Node server; Chromium starts with `--proxy-server` | Playwright routes never see redirect hops, so the SSRF policy and `blockVendorRequests` are enforced where every connection passes |
