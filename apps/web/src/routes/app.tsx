@@ -82,7 +82,7 @@ function AppShell() {
             </SheetTrigger>
             <SheetContent
               side="left"
-              className="w-72 gap-4 bg-sidebar p-3 sm:max-w-72 [&>button]:top-2 [&>button]:right-2 [&>button]:flex [&>button]:size-8 [&>button]:items-center [&>button]:justify-center"
+              className="w-72 gap-4 bg-sidebar p-3 sm:max-w-72 [&>button.absolute]:top-2 [&>button.absolute]:right-2 [&>button.absolute]:flex [&>button.absolute]:size-8 [&>button.absolute]:items-center [&>button.absolute]:justify-center"
             >
               <SheetTitle className="sr-only">Workspace menu</SheetTitle>
               <SheetDescription className="sr-only">
