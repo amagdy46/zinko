@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
@@ -41,6 +41,7 @@ export const Route = createFileRoute("/app/sites/$siteId")({
 function SitePage() {
   const { site, client, canManage, audits, page, hasMore } = Route.useLoaderData()
   const router = useRouter()
+  const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
 
   async function leave(action: typeof archiveSite) {
@@ -79,7 +80,7 @@ function SitePage() {
             {canManage && !site.archived ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Site actions">
+                  <Button ref={menuButton} variant="ghost" size="icon" aria-label="Site actions">
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
@@ -107,6 +108,7 @@ function SitePage() {
         variant="outline"
         title={`Archive ${site.name}?`}
         description="The site is hidden from the lists. Nothing is deleted."
+        returnFocus={menuButton}
         onConfirm={() => leave(archiveSite)}
       />
       <ConfirmDialog
@@ -116,6 +118,7 @@ function SitePage() {
         variant="destructive"
         title={`Delete ${site.name}?`}
         description="The site is deleted. This cannot be undone."
+        returnFocus={menuButton}
         onConfirm={() => leave(deleteSite)}
       />
       <h2 className="text-lg font-medium">Audits</h2>

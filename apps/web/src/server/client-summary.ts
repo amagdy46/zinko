@@ -1,6 +1,6 @@
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
-import { and, desc, eq, inArray, sql } from "drizzle-orm"
+import { and, count, desc, eq, inArray, max, sql } from "drizzle-orm"
 import { Effect } from "effect"
 
 type Latest = {
@@ -11,6 +11,8 @@ type Latest = {
   couldNotCheck: number
   openFindings: { critical: number; warning: number; info: number }
 }
+
+export const SETTLED = ["complete", "partial", "failed"] as const
 
 const runsWhere = (orgId: string) => sql`${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId}`
 
@@ -70,40 +72,50 @@ export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
     const { db } = yield* Database
     const summaries = new Map<string, SiteSummary>()
     if (siteIds.length === 0) return summaries
-    const heads = yield* db
+    const hasChecks = sql<boolean>`exists (select 1 from ${run} join ${checkResult} on ${checkResult.runId} = ${run.id} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId})`
+    const scope = and(eq(audit.orgId, orgId), inArray(audit.siteId, [...siteIds]))
+    const counts = yield* db
       .select({
+        siteId: audit.siteId,
+        total: count(),
+        running:
+          sql<number>`count(*) filter (where ${audit.status} in ('queued', 'running'))`.mapWith(
+            Number,
+          ),
+        lastAuditAt: max(audit.createdAt),
+      })
+      .from(audit)
+      .where(scope)
+      .groupBy(audit.siteId)
+    const lasts = yield* db
+      .selectDistinctOn([audit.siteId], {
         id: audit.id,
         siteId: audit.siteId,
         createdAt: audit.createdAt,
         status: audit.status,
-        hasChecks: sql<boolean>`exists (select 1 from ${run} join ${checkResult} on ${checkResult.runId} = ${run.id} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId})`,
       })
       .from(audit)
-      .where(and(eq(audit.orgId, orgId), inArray(audit.siteId, [...siteIds])))
-      .orderBy(desc(audit.createdAt), desc(audit.id))
-    const bySite = new Map<string, typeof heads>()
-    for (const head of heads) {
-      const rows = bySite.get(head.siteId)
-      if (rows === undefined) bySite.set(head.siteId, [head])
-      else rows.push(head)
-    }
-    const picked = siteIds.map((siteId) => {
-      const rows = bySite.get(siteId) ?? []
-      const done = rows.filter((a) => settled(a.status))
-      return { siteId, rows, last: done.find((a) => a.hasChecks) ?? done[0] }
-    })
+      .where(and(scope, inArray(audit.status, [...SETTLED])))
+      .orderBy(audit.siteId, desc(hasChecks), desc(audit.createdAt), desc(audit.id))
+    const countsBySite = new Map(counts.map((c) => [c.siteId, c]))
+    const lastBySite = new Map(lasts.map((l) => [l.siteId, l]))
+    const picked = siteIds.map((siteId) => ({
+      siteId,
+      counts: countsBySite.get(siteId),
+      last: lastBySite.get(siteId),
+    }))
     const details = yield* auditDetails(
       orgId,
       picked.flatMap((p) => (p.last === undefined ? [] : [p.last.id])),
     )
     const detailById = new Map(details.map((d) => [d.id, d]))
-    for (const { siteId, rows, last } of picked) {
+    for (const { siteId, counts: own, last } of picked) {
       const detail = last === undefined ? undefined : detailById.get(last.id)
       summaries.set(siteId, {
         latest: last === undefined || detail === undefined ? null : latestOf(last, detail),
-        running: rows.filter((a) => a.status === "queued" || a.status === "running").length,
-        auditCount: rows.length,
-        lastAuditAt: rows[0]?.createdAt ?? null,
+        running: own?.running ?? 0,
+        auditCount: own?.total ?? 0,
+        lastAuditAt: own?.lastAuditAt ?? null,
       })
     }
     return summaries
@@ -131,7 +143,6 @@ const worstCoverage = (results: readonly Latest[], siteCount: number): Latest["c
     : "partial"
 }
 
-export const settled = (status: string) => ["complete", "partial", "failed"].includes(status)
 export const clientSummary = (sites: readonly SiteSummary[]) => {
   const results = sites
     .flatMap((s) => (s.latest === null ? [] : [s.latest]))

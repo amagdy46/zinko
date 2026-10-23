@@ -6,7 +6,7 @@ import { Config, Effect, Option, Schema } from "effect"
 import { WorkerConfig } from "effect-cf"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
-import { auditDetails, clientSummary, settled, siteSummaries } from "./client-summary"
+import { auditDetails, clientSummary, SETTLED, siteSummaries } from "./client-summary"
 import { requireSession } from "./require-session"
 import {
   atomically,
@@ -403,7 +403,9 @@ export const getSite = createServerFn({ method: "GET" })
               createdAt: a.createdAt,
               runs: { total: summary?.total ?? 0, finished: summary?.finished ?? 0 },
               findings:
-                summary === undefined || summary.evaluated === 0 || !settled(a.status)
+                summary === undefined ||
+                summary.evaluated === 0 ||
+                !SETTLED.some((status) => status === a.status)
                   ? null
                   : {
                       critical: summary.critical,

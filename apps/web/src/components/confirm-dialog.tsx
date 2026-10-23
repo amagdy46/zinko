@@ -1,4 +1,4 @@
-import { type ComponentProps, useState } from "react"
+import { type ComponentProps, type RefObject, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,6 +18,7 @@ export function ConfirmDialog({
   title,
   description,
   onConfirm,
+  returnFocus,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -26,6 +27,8 @@ export function ConfirmDialog({
   title: string
   description: string
   onConfirm: () => Promise<void>
+  /** The control that opened the dialog; the dialog has no trigger of its own to return focus to. */
+  returnFocus: RefObject<HTMLElement | null>
 }) {
   const [pending, setPending] = useState(false)
 
@@ -38,7 +41,12 @@ export function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          returnFocus.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>

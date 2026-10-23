@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
@@ -45,6 +45,7 @@ export const Route = createFileRoute("/app/clients/$clientId")({
 function ClientPage() {
   const { client, sites, canManage } = Route.useLoaderData()
   const router = useRouter()
+  const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -143,7 +144,7 @@ function ClientPage() {
             {canManage && !client.archived ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" aria-label="Client actions">
+                  <Button ref={menuButton} variant="ghost" size="icon" aria-label="Client actions">
                     <MoreHorizontal />
                   </Button>
                 </DropdownMenuTrigger>
@@ -171,6 +172,7 @@ function ClientPage() {
         variant="outline"
         title={`Archive ${client.name}?`}
         description="The client and its sites are hidden from the lists. Nothing is deleted."
+        returnFocus={menuButton}
         onConfirm={() => leave(archiveClient)}
       />
       <ConfirmDialog
@@ -180,6 +182,7 @@ function ClientPage() {
         variant="destructive"
         title={`Delete ${client.name}?`}
         description="The client and its sites are deleted. This cannot be undone."
+        returnFocus={menuButton}
         onConfirm={() => leave(deleteClient)}
       />
       {sites.length === 0 ? (
