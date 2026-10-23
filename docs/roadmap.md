@@ -21,6 +21,15 @@
 | M5 | **Report:** branding settings, report page, share link, PDF | Send a white-label report to a client |
 | M6 | **Compare and polish:** re-run with diff, empty and partial states, docs, self-host guide, public demo instance | **v0.1 release:** a Show HN post and a "we audited N sites" write-up |
 
+## UI refresh (done locally, 2026-10-24)
+
+Shell with organization switcher and `⌘K` palette, clients and sites with honest aggregates, the new audit form with a live estimate, the audit header with live progress and the runs matrix, the findings screen with triage and a detail sheet, the hits explorer with filters and a consent divider, and refreshed auth and settings, all on one token set and one set of shared components (`docs/ui.md`). Checked in the browser at 390px and 1440px in both themes, plus a grayscale pass (`docs/plans/2026-10-22-ui-refresh/plan.md`, Task 11). Leftovers:
+
+- Not exercised in the browser: a 44-run audit for density, the "Audit failed" and "not evaluated" completion toasts, the mixed-rules-versions alert on Findings, the null `check_result.check_title` fallback, and Open in Hits from every evidence kind (only hits and pushes were followed).
+- The runs matrix has no legend; a partial run (half ring) and a running one (spinner) are told apart by the word in the hover card and header, which grayscale keeps but a glance does not.
+- The optional sales-page brand alignment (plan Task 12) has not been done.
+- Out of scope in the plan and still open: runs filters, re-run with the same settings, screenshot compare, audit cancel and single-run retry, site settings, `j`/`k`/`e` shortcuts, Overview, tag matrix and report (M4 and later).
+
 ## Left over from M2
 
 M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). Not done, and not blocking M3:

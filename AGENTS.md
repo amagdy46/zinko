@@ -30,6 +30,10 @@ Rules for AI agents (and humans) working in this repo. Read this before changing
 - Style with Tailwind classes and the theme tokens (`bg-background`, `text-muted-foreground`, ...), not hard-coded colors.
 - No inline `style` props and no CSS-in-JS.
 - Do not add a dependency unless the task cannot be done without it.
+- Reuse the shared pieces before writing new ones: `PageHeader` (every page's top: breadcrumb, title, meta, actions), `EmptyState`, `StatusGlyph` plus `StatusBadge`, `SeverityBadge` and `CheckStatusBadge` (a glyph and a word, never colour alone), `lib/format.ts` (`relativeTime`, `duration`, `count`) and the evidence primitives in `components/evidence.tsx`. Use the vocabulary in `docs/ui.md` (Could not check, never "inconclusive"; Not evaluated, never clean).
+- Touch targets are at least 32px (`h-8`, `size-8`) and every interactive element, including a focusable `tabpanel` or scroll area, keeps a visible `focus-visible:ring-[3px] focus-visible:ring-ring/50`; do not leave `outline-none` without a ring.
+- A controlled `Dialog` or `Sheet` that opens from something other than its own trigger (a table row, a menu item, a URL search param) restores focus itself: keep a ref to the opener and focus it in `onCloseAutoFocus` after `preventDefault()` (see `ConfirmDialog`, `run-sheet.tsx`, `finding-detail.tsx`).
+- Check UI changes at 390px and 1440px in both themes, using the real theme menu (account menu, Theme), with no horizontal page scroll (tables scroll inside their container) and a grayscale look at anything that relies on status or severity.
 
 ## Style
 

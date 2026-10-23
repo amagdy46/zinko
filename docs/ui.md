@@ -8,69 +8,71 @@ Zinko should feel like a professional debugging tool: dense, calm and fast, in t
 - Logo-tinted neutrals (hue 285) with violet `primary` as the only brand accent; `sidebar` supplies the navigation surface. Severity uses `sev-critical` (red), `sev-warning` (amber), `sev-info` (blue); passes and complete runs use `status-pass` (green). Each set has plain text/glyph, `-bg`, `-border` and `-solid` tokens. Tints belong in badges, headers and detail views; rows stay neutral. `destructive` is for destructive actions and form errors.
 - System sans (`ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`); no Inter download or font dependency. System monospace for IDs, parameters, URLs and timestamps. The type scale is `text-2xs` 11/16, `text-xs` 12/16, `text-sm` 13/20, `text-base` 14/22, `text-lg` 16/24, `text-xl` 20/28 and `text-2xl` 28/34 (px size/line height). Base radius is 8px (sm 4, md 6, lg 8, xl 12).
 - Meaning uses a glyph and a word: Critical a filled diamond, Warning a filled triangle, Info a filled dot; Fail an x ring, Pass and Complete a check ring, Partial a half ring, Could not check a neutral dashed ring, Not applicable a dash ring, Queued a hollow ring, Running a violet spinning arc. Could not check is neutral, never amber or green. Reduced motion stops spinning and pulsing indicators.
-- Keyboard-first: `⌘K` command palette, `j`/`k` to move through findings, `e` to open the evidence panel.
+- Keyboard-first: `⌘K` / `Ctrl+K` command palette (built); `j`/`k` through findings and `e` for the evidence panel are not built.
 - Every number links to the evidence behind it.
+- Pages are `mx-auto max-w-6xl space-y-6` for lists and full width for audit pages. Status and severity are never colour alone: a glyph (`StatusGlyph`) and a word sit together, so a grayscale screenshot still tells Fail, Could not check and Pass apart.
+- Touch targets are at least 32px (buttons `h-8`, tabs `h-8`, icon buttons `size-8`; dense table rows are 28px with a pointer and 36px below `md`). Every interactive element shows a `ring-ring/50` focus ring on keyboard focus, including focusable tab panels. Colours come from tokens only; the exceptions are the logo mark (`#8b7cf6`) and the `bg-black/50` scrim of dialogs.
+
+## Vocabulary
+
+| Where | Words |
+|---|---|
+| Severity | Critical, Warning, Info |
+| Check result | Fail, Could not check, Pass, Not applicable (the stored word `inconclusive` never appears) |
+| Triage | Open, Accepted risk, Fixed |
+| Run and audit | Queued, Running, Complete, Partial, Failed, Not audited |
+| An audit without check results | Not evaluated, never shown as clean |
 
 ## Navigation
 
 ```
-Workspace switcher
-├── Clients                       list → client → sites
-│   └── Site
-│       ├── Audits                history, compare any two
-│       │   └── Audit
-│       │       ├── Overview      score, severity counts, top 5 issues, what changed since last run
-│       │       ├── Findings      grouped list + evidence panel
-│       │       ├── Tag matrix    vendor/ID × page × consent scenario
-│       │       ├── Hits          timeline explorer
-│       │       └── Report        preview · branding · share link · PDF
-│       └── Settings              pages, scenarios, click-id params, allowed domains
-└── Settings                      members, branding, LLM keys
+Sidebar: organization switcher, Find… (⌘K), Clients, Settings, account menu
+├── Clients                       list → client → site
+│   └── Site                      history of audits, New audit
+│       └── Audit                 header, then tabs Runs · Findings · Hits
+└── Settings                      Profile · Members · AI
 ```
 
-## Key screens
+Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar and closes on navigation. Each page opens with a `PageHeader` (breadcrumb, title, meta line, actions).
 
-**1. New audit.** A single form with the start URL, a key-pages textarea, consent scenario checkboxes (none, accept, reject), a viewport choice, and a "simulate ad click" toggle that appends test click IDs and UTMs. The estimated duration updates as you edit. Last-used settings are saved per site.
+## Screens as built
 
-**2. Audit running.** A grid with one tile per page × scenario. Each tile shows a status, a screenshot thumbnail and a hit count. Findings stream into a side list as rules finish, so you can start reading before the audit is done.
+**Shell.** The sidebar's top row is the organization switcher (menu: organizations with a check, Members, Create organization). The foot row is the account menu: email, Theme (Light, Dark, System, a radio group, stored per browser), Sign out. The landing page keeps its own theme toggle; the sign-in and sign-up pages follow the stored theme.
 
-**3. Overview.**
-- A health score (0–100, weighted by severity) with its change since the last run.
-- Counts by severity and by area (Consent, Click IDs, Coverage, Duplicates, Dedup, Hygiene).
-- The "Top issues" list, written in plain business language: "Purchases are counted twice in GA4 (inflates revenue by ~2×)".
+**Command palette.** `⌘K` / `Ctrl+K` anywhere in `/app`, or the "Find…" row (the only way on touch). Groups: Actions (New client, which asks for a name), Clients and Sites (organization-scoped names from `searchTargets`), and Switch organization. Esc closes and focus returns to where it was.
 
-**4. Findings.**
+**Clients.** A table (Client, Sites, Last audit with a status badge and a relative date, Open findings per severity). The figures come from each site's latest settled, evaluated audit; a running audit shows "Audit running" beside them. "No open findings" appears only at full coverage with nothing that could not be checked; otherwise "0 open · not fully checked", "Not evaluated" or "Not audited". A search box filters by name; "New client" opens a dialog. A fresh organization sees an empty state and a three-step checklist (client, site, audit) that can be dismissed.
 
-| Pane | Shows |
-|---|---|
-| Left: the list | Severity, title, area, affected page and scenario count, status |
-| Right: the selected finding | Explanation, why it matters, fix steps, and evidence tabs: **Hit** (decoded params table), **Request** (raw URL and body), **Screenshot**, **Cookies**, **dataLayer** |
+**Client and site.** The client page lists its sites (origin in mono, last audit, open findings, audits) and has "Add site"; archive and delete sit in a "…" menu behind a confirm dialog (a client or site with audits can only be archived). The site page has "New audit" in the header and a history table (started, status, runs "9 of 9", findings by severity or "Not evaluated"), Newer and Older.
 
-Above the two panes sits the evaluation coverage ("9 of 9 runs evaluated"). Checks that could not run (the page or the banner did not load) are a separate "Could not check" group under the failing list, never counted as passes; an audit with no check results says "Not evaluated" instead of "no findings". The `j`/`k` and `e` shortcuts are not built yet.
+**New audit.** Three sections: Pages (start URL, key pages with per-line errors and "n of 19"), Scenarios and viewports (checkbox cards with All and Only reject, a Desktop/Mobile toggle), Options (ad-click IDs, journey, and under Advanced, answering tracking requests locally). With journey on, a numbered list shows which pages are walked. A sticky estimate (a bottom bar below `lg`) shows the run count that will be created, the breakdown, the duration at 12.8 s per work unit, and the Start button, disabled with a reason when no scenario or viewport is chosen. Last-used settings prefill.
 
-Each finding has these actions: mark as accepted risk or fixed (and reopen), copy the fix steps, and open in Hits with the hit selected.
+**Audit and runs.** The header shows the status, a live dot (Connected / Reconnecting) and either progress (a bar, "12 of 44 runs", elapsed, time left, counts of running, partial and failed) or, when finished, a stat strip (Runs, Findings, Duration, Started). A strip names every failed or partial run with its reason. Tabs carry counts. A finished audit with a failing finding opens on Findings; Runs stays one click away. The Runs tab has three views: a matrix (page rows, scenario columns grouped by viewport, a glyph and the hit count per cell, a hover card with the screenshot), a list and thumbnails. A cell opens the run sheet (`?run=`, a right `Sheet`, a bottom one below `md`): screenshot, facts, reason, the page's other scenarios, previous and next (arrow keys), Open in Hits and the failing findings that cite the run. A toast announces completion once.
 
-**5. Tag matrix.**
-- Rows: each destination (GA4 G-XXXX, Meta pixel 123…, Ads AW-…, TikTok).
-- Columns: pages, each split by scenario (∅, ✓ accept, ✗ reject).
-- Cells: the events that fired. A red cell means the tag fired when it shouldn't have, for example under reject. An empty amber cell means the tag was expected but didn't fire.
-- This is the screen that replaces the consultant's spreadsheet.
+**Findings.** Coverage is a muted line at full coverage and an alert with a segmented bar when partial or mixed. Tabs Open, Accepted risk and Fixed (counts); severity chips and an Area menu, both in the URL. Failing findings are two-line rows under sticky severity headers with a 2px severity rule; "Could not check (n)" is a collapsible group of neutral rows (dashed glyph, the rule's `checkTitle`, the reason, no severity colour). Selecting a row opens the detail beside the list (`?finding=`), or in a bottom sheet below `lg` with previous and next: severity and rule id, the triage menu (Accept risk asks for a reason in a dialog), why it matters, how to fix it, where it was seen (a table whose selected row drives the evidence tabs; empty tabs are disabled), Open in Hits per evidence item. Not evaluated, running and "not confirmed clean" states are distinct from "No findings".
 
-**6. Hits explorer.** A timeline of decoded hits and `dataLayer` pushes, 200 per page, with a search box (event, destination, ids, parameters) and chips for Vendor, Event, Scenario, Source and Run that take several values; below `md` they sit in a "Filters" sheet. A count line ("11 of 342 hits · 40 of 120 pushes") comes from the server, not from the loaded pages. Pushes show their event name and identical neighbours collapse into "6 pushes · 716–718 ms". A neutral divider marks each run's consent action once, however many pages are loaded. Clicking a row opens the decoded consent, ids, parameters and the request (Decoded or Raw) next to the list, or in a bottom sheet with previous and next below `lg`.
+**Hits.** A timeline of decoded hits and `dataLayer` pushes, 200 per page. A search box (event, destination, ids, parameters) and "+ Vendor / Event / Scenario / Source / Run" chips with several values each; below `md` they sit in a "Filters" sheet. A count line comes from the server ("11 of 342 hits · 40 of 120 pushes"). Pushes show their event name and identical neighbours collapse ("6 pushes · 716–718 ms"). A neutral divider marks each run's consent action once. A row opens the detail (decoded consent as tokens, ids, parameters with copy, the request as Decoded or Raw) beside the list, or in a bottom sheet with previous and next below `lg`.
 
-**7. Report (client-facing).**
-- The agency logo and accent color, with Zinko credited in a small footer.
-- Sections: summary, score, issues ordered by business impact (each with evidence and fix steps), a tag inventory, and a methodology note.
-- A read-only share link at `/share/:token`, and a PDF export. No Zinko chrome or navigation appears in the shared view.
+**Sign-in, sign-up, onboarding, invitations.** A narrow centred card with the brand mark, one sentence and the form. Onboarding creates the first organization ("Signed in as … · Sign out"). The invitation page names the organization and the role.
 
-## States to design
+**Settings.** Profile, Members (a table with avatar, role select for owners and admins, pending invitations with Copy link, an invite dialog) and AI (provider, model, the key's last four characters, test and remove).
 
-- **Empty:** no clients yet, no audits yet.
-- **Running:** in progress.
-- **Partial:** some runs failed, with the reason shown (bot blocked, timeout, consent banner not found).
-- **No LLM key:** static fix templates are used, and a quiet prompt suggests adding a key.
-- **Revoked share link.**
+## Shared building blocks
+
+`PageHeader`, `EmptyState`, `StatusGlyph` (twelve meanings), `StatusBadge`, `SeverityBadge`, `CheckStatusBadge`, `lib/format.ts` (`relativeTime`, `duration`, `count`), the evidence primitives in `components/evidence.tsx` (`ConsentTokens`, `KeyValueTable`, `RequestView`, `JsonView`, `CopyButton`) and `ConfirmDialog`. A controlled dialog or sheet opened from a button that is not its trigger restores focus itself in `onCloseAutoFocus` (run sheet, finding sheet, filters sheet, triage menu, palette, confirm dialog).
+
+## Not built yet
+
+Overview and health score, the tag matrix, the report and share link, the `j`/`k`/`e` shortcuts, audit compare, site settings, audit cancel and single-run retry.
+
+## States
+
+- **Empty:** no clients, no sites, no audits, nothing to choose in a filter. Built.
+- **Running, partial, failed:** progress header, failure strip with reasons, matrix glyphs. Built.
+- **Not evaluated, could not check:** distinct from clean. Built.
+- **No LLM key:** static fix text; a neutral row on the AI page. Built.
+- **Revoked share link:** not built (no sharing yet).
 
 ## Mockup
 
-An unversioned clickable mockup lives at `mockups/ui.html` (not committed).
+An unversioned clickable mockup lives at `mockups/ui.html`, and the verification screenshots of the refreshed screens at `mockups/ui-refresh-demo/` (neither committed).

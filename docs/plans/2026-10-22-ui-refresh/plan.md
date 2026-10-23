@@ -1,6 +1,6 @@
 ---
 type: plan
-status: in progress
+status: implemented
 design: ../../ui.md
 ---
 
@@ -22,7 +22,8 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - Task 1 integrated locally at `21e17e3`; independent specification and standards reviews found no blockers. The required checks passed again during integration. Browser evidence: 48 screenshots across 12 screens, desktop/mobile and light/dark, plus a running and finished fixture audit (`$TMPDIR/ui-t1-verification.md`). Reduced motion was source-checked only.
 - Task 2 integrated locally after specification/standards review and the Sheet backdrop token correction. Combined gallery verification at 1440px/390px, light/dark/grayscale found no overflow or interface regressions; Sheet focus containment, dismissal and restoration worked. Screenshots: `/tmp/ui-t2-gallery-review-*`. The full check/typecheck/build chain passed after rebasing onto the consent revision.
 - Claude and then Codex usage limits interrupted earlier tasks; the unfinished queue and request-blocking changes were preserved and resumed in their existing worktrees. The consent revision and corrected ADR/roadmap are integrated locally; six fresh captures reproduced the three original failure cases on both engines and all passed.
-- Wave 2 (Tasks 3, 4, 5, 6, 7 and 10) is ready to start from the integrated foundation. Task 5's `lib/audit-labels.ts` changes integrate before Task 6's.
+- Tasks 3 to 10 and 13 integrated locally, each verified in the browser by its own task; Task 11 swept every screen again (below). Task 12 (sales page) is optional and not done.
+- Task 11 (2026-10-24): 28 screens and states at 390px and 1440px, light and dark (theme set through the real menus), against a fresh organization with three tiny audits (a clean fixture, `meta-before-consent`, and a 12-run `no-cmp` audit with partial runs and a running state). No horizontal page scroll anywhere; no hard-coded colours (only the logo mark and the dialog scrim); a focus ring on every keyboard-focused element except menu items and the palette input (they highlight); 32px targets except inline text links, label-wrapped checkboxes and dense hit rows with a pointer (28px; 36px below `md`). Grayscale pass on runs, findings and clients: critical, warning and info (diamond, triangle, dot), fail, could not check and pass (x ring, dashed ring, check ring) stay distinguishable; partial and running (half ring and spinner) differ by shape and by the adjacent word. Fixes: tabs 32px and a ring on focusable tab panels, sheet and dialog close buttons 32px, copy buttons 32px, breadcrumb, nav tab, estimate help and failure-strip link targets, a ring on hits row buttons and 36px rows on touch, partial reasons wrapping at word boundaries. Screenshots: `$TMPDIR/ui-t11-*`, saved to `mockups/ui-refresh-demo/` (untracked).
 
 ### Decision details
 
@@ -60,8 +61,8 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Interfaces:** produces Tailwind colors `sev-{critical,warning,info}`, `status-pass`, each with `-bg`, `-border`, `-solid`; `sidebar`; text sizes `text-2xs` … `text-2xl` per the type scale; radius 8px; `--color-success`/`--color-warning` removed (every `text-success`, `bg-warning/15`, `border-warning/50` replaced: warning-severity and partial → `sev-warning*`, pass → `status-pass*`). Font: the system stack (`ui-sans-serif, system-ui, …`); Inter is not loaded, because fontsource is a new dependency, and `docs/ui.md` says so. `@media (prefers-reduced-motion: reduce)` stops `animate-spin` and `animate-pulse`.
 **Blocked by:** none
 
-- [ ] `rg -n '\b(text|bg|border|ring|fill|stroke)-(success|warning)\b' apps/web/src` finds nothing (`toast.success` and Sonner's icon names are not token uses)
-- [ ] Verify: every existing screen (clients, client, site, new audit, runs, findings, hits, settings ×3, sign-in, onboarding) at both widths and themes: no clipped text, no unreadable badge, primary buttons violet; screenshots `$TMPDIR/ui-t1-*`
+- [x] `rg -n '\b(text|bg|border|ring|fill|stroke)-(success|warning)\b' apps/web/src` finds nothing (`toast.success` and Sonner's icon names are not token uses)
+- [x] Verify: every existing screen (clients, client, site, new audit, runs, findings, hits, settings ×3, sign-in, onboarding) at both widths and themes: no clipped text, no unreadable badge, primary buttons violet; screenshots `$TMPDIR/ui-t1-*`
 
 ### Task 2: Shared building blocks
 
@@ -76,8 +77,8 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - Page frame: list pages `mx-auto max-w-6xl space-y-6`; audit pages full width
 **Blocked by:** none (uses the token names above; merge after Task 1)
 
-- [ ] `git diff apps/web/package.json pnpm-lock.yaml` is empty
-- [ ] Verify: a temporary route under `routes/app/` renders every `StatusGlyph` meaning, both badges, `PageHeader` and `EmptyState` in both themes; screenshot `$TMPDIR/ui-t2-gallery-*`, including one in grayscale (`filter: grayscale(1)` via devtools) where every meaning is distinguishable; delete the route before merging
+- [x] `git diff apps/web/package.json pnpm-lock.yaml` is empty
+- [x] Verify: a temporary route under `routes/app/` renders every `StatusGlyph` meaning, both badges, `PageHeader` and `EmptyState` in both themes; screenshot `$TMPDIR/ui-t2-gallery-*`, including one in grayscale (`filter: grayscale(1)` via devtools) where every meaning is distinguishable; delete the route before merging
 
 ### Task 3: App shell, org switcher, account menu
 
@@ -86,7 +87,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Interfaces:** sidebar top row is the switcher (ghost button: org initial in `Avatar`, name, `ChevronsUpDown`; menu: organizations with a check, "Members" → `/app/settings/members`, "Create organization"); `LogoMark` at 20px above it; nav rows `h-8 text-sm`, active `bg-accent font-medium`; Settings last; the account row at the sidebar foot (avatar, name; menu: email, Theme as `DropdownMenuRadioGroup` light/dark/system, Sign out). The desktop top bar is removed; below `md` a top bar keeps the menu button and opens the sidebar in a `Sheet side="left"` (replacing the restyled `DialogContent`). Sidebar `bg-sidebar`.
 **Blocked by:** 1, 2
 
-- [ ] Verify: switch organization and land on its clients; Members shortcut; theme changes from the account menu and survives a reload; sign out; at 390px the Sheet opens, navigates and closes on navigation; screenshots `$TMPDIR/ui-t3-*`
+- [x] Verify: switch organization and land on its clients; Members shortcut; theme changes from the account menu and survives a reload; sign out; at 390px the Sheet opens, navigates and closes on navigation; screenshots `$TMPDIR/ui-t3-*`
 
 ### Task 4: Clients, client detail and site pages
 
@@ -101,7 +102,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - Site: breadcrumb (Clients / Client / Site), origin `font-mono`, "New audit" primary in the header, same overflow menu, history `Table` (Started relative with full date in `title`, Status, Runs "9 of 9", Findings by severity or "Not evaluated"), Newer/Older kept
 **Blocked by:** 1, 2
 
-- [ ] Verify: a fresh organization shows the empty state and the checklist, which ticks through client → site → audit and can be dismissed; the clients table shows the right latest status and open counts for audits A and B (cross-check one against its Findings tab), "Not evaluated" for D, and B (could-not-check items) never reads "No open findings"; while a new audit of an A site runs, the row shows "Audit running" and keeps A's counts; triaging a finding as fixed lowers the count after reload; a second organization sees none of it; archive and delete still confirm; screenshots `$TMPDIR/ui-t4-*`
+- [x] Verify: a fresh organization shows the empty state and the checklist, which ticks through client → site → audit and can be dismissed; the clients table shows the right latest status and open counts for audits A and B (cross-check one against its Findings tab), "Not evaluated" for D, and B (could-not-check items) never reads "No open findings"; while a new audit of an A site runs, the row shows "Audit running" and keeps A's counts; triaging a finding as fixed lowers the count after reload; a second organization sees none of it; archive and delete still confirm; screenshots `$TMPDIR/ui-t4-*`
 
 ### Task 5: New audit form and live estimate
 
@@ -110,7 +111,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Interfaces:** `runBreakdown({ pages, scenarios, viewports, journeySteps }) → { runs, workUnits, lines: Array<{ label, runs, workUnits }>, duration }` replaces `runCount`. `runs` is the rows `startAudit` creates: `pages × scenarios × viewports`, plus one journey run per scenario × viewport when journey is on and there is at least one key page (`server/audits.ts`); `workUnits` weights a journey run as `1 + steps` (steps = `min(key pages, JOURNEY_STEPS)`) and drives `duration` (`workUnits × 12.8 s`). Today's `runCount` returns the work units and the form labels them runs (11 pages × 4 scenarios × 1 viewport with journey: 68 shown, 48 created); the fix shows "48 runs" and the duration from 68 units, and the breakdown says a journey run takes as long as 6 page runs. Form in three sections (Pages, Scenarios and viewports, Options), label and help left from `lg` (`grid lg:grid-cols-[14rem_1fr]`, `border-t pt-6`), a section-local `FormSection` in the route file. Scenarios stay checkbox cards (selected `border-primary bg-primary/5`) with "All" / "Only reject" quick actions; viewports become a `ToggleGroup type="multiple"` (Desktop, Mobile; the stored `viewports` array is unchanged, `choiceOf`/`viewportsOf` go); click IDs and journey under Options, "Answer tracking requests locally" under a collapsed Advanced `Collapsible`. Key pages: per-line client-side errors (invalid URL, not on the site's host, duplicate), "n of 19"; with Journey on, a numbered `ol` of the walk (start, then the first 5 pages; the rest muted with a "not walked" badge). Estimate: sticky aside from `lg` (a bottom bar below it) with the run count (headline), the breakdown lines in `font-mono tabular-nums`, "about 10 minutes", the Start button, and a "How is this estimated?" `Collapsible` (12.8 s per run); `text-sev-warning` note above 100 runs (actual runs). Submit disabled with a reason when no scenario or viewport is chosen. Server-side per-URL errors keep landing under their input.
 **Blocked by:** 1, 2
 
-- [ ] Verify: 11 pages × 4 scenarios × 1 viewport reads 44 runs, about 10 minutes, and `startAudit` creates 44 runs; with journey on it reads 48 runs and about 15 minutes, and `select count(*) from run where audit_id = …` returns 48; the journey line and the path preview show; a foreign URL and a duplicate show inline errors before submit; last-used settings still prefill; screenshots `$TMPDIR/ui-t5-*`
+- [x] Verify: 11 pages × 4 scenarios × 1 viewport reads 44 runs, about 10 minutes, and `startAudit` creates 44 runs; with journey on it reads 48 runs and about 15 minutes, and `select count(*) from run where audit_id = …` returns 48; the journey line and the path preview show; a foreign URL and a duplicate show inline errors before submit; last-used settings still prefill; screenshots `$TMPDIR/ui-t5-*`
 
 ### Task 6: Audit header, progress and the runs matrix
 
@@ -124,7 +125,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - Decision 4b, if approved: the redirect to Findings on default arrival only (no `view` and no `run` in the search); the Runs tab link carries `view=matrix`
 **Blocked by:** 1, 2
 
-- [ ] Verify on audit C while running: the header counts and progress move with each run, no layout shift in the matrix, the toast appears once at the end; on A: matrix, list and thumbnails agree, a cell opens its sheet, prev/next and arrow keys walk the runs, the scenario strip switches; on B: the failure strip names the partial runs and why; `?run=<id>` reloads into the sheet; with 4b, a finished audit with findings lands on Findings, and clicking Runs stays on Runs (also after a reload); another organization's audit id is a 404; screenshots `$TMPDIR/ui-t6-*`
+- [x] Verify on audit C while running: the header counts and progress move with each run, no layout shift in the matrix, the toast appears once at the end; on A: matrix, list and thumbnails agree, a cell opens its sheet, prev/next and arrow keys walk the runs, the scenario strip switches; on B: the failure strip names the partial runs and why; `?run=<id>` reloads into the sheet; with 4b, a finished audit with findings lands on Findings, and clicking Runs stays on Runs (also after a reload); another organization's audit id is a 404; screenshots `$TMPDIR/ui-t6-*`
 
 ### Task 7: The evidence viewer
 
@@ -133,7 +134,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Interfaces:** Consent as tokens ("ad_storage denied", "analytics_storage granted"; granted `status-pass`, denied `sev-critical`, unknown muted, each with its word); Ids and Params as a two-column `Table` with a hover Copy button per value (`navigator.clipboard`, a Sonner toast), a filter input above more than 12 params, and glosses for known keys (`en` event name, `dl` page location, `tid` measurement ID, `gcs` consent state, `npa`, `oid`); Request: method and URL on one line with Copy, the query string as a decoded table, the body in a `Collapsible` code block, a `ToggleGroup` "Decoded | Raw"; dataLayer values as indented JSON (`JSON.stringify(v, null, 2)`) in a `ScrollArea`, collapsed beyond 20 lines. Existing exports keep working until Tasks 8 and 9 switch to the new ones, which then remove the old ones
 **Blocked by:** 1, 2
 
-- [ ] Verify: the Findings and Hits screens are unchanged (old exports intact); the new primitives, rendered in a temporary route on audit A data (a GA4 hit, a raw `ccm` request, a Meta hit with an event id, a cookie, a push), show correctly; Copy copies; Decoded/Raw switches; the route is deleted before merging; screenshots `$TMPDIR/ui-t7-*`
+- [x] Verify: the Findings and Hits screens are unchanged (old exports intact); the new primitives, rendered in a temporary route on audit A data (a GA4 hit, a raw `ccm` request, a Meta hit with an event id, a cookie, a push), show correctly; Copy copies; Decoded/Raw switches; the route is deleted before merging; screenshots `$TMPDIR/ui-t7-*`
 
 ### Task 8: Findings
 
@@ -147,7 +148,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - States kept from M3: not evaluated, running ("checks are still to come"), only could-not-check (never clean), no findings at full coverage
 **Blocked by:** 1, 2, 6 (the audit header), 7
 
-- [ ] Verify on A, B and D: the rows and groups, a could-not-check item on B shows its `checkTitle` and no red; accept risk with a reason, reload, the actor line and the Accepted risk tab count; reopen; Open in Hits per evidence item; D reads "Not evaluated"; the coverage segments sum to the total runs on A, B and C; a run evaluated before the migration falls back to the registry `checkTitle`; the severity and area filters narrow the list and survive a reload; another organization 404s; 390px opens the bottom sheet; screenshots `$TMPDIR/ui-t8-*`
+- [x] Verify on A, B and D: the rows and groups, a could-not-check item on B shows its `checkTitle` and no red; accept risk with a reason, reload, the actor line and the Accepted risk tab count; reopen; Open in Hits per evidence item; D reads "Not evaluated"; the coverage segments sum to the total runs on A, B and C; a run evaluated before the migration falls back to the registry `checkTitle`; the severity and area filters narrow the list and survive a reload; another organization 404s; 390px opens the bottom sheet; screenshots `$TMPDIR/ui-t8-*`
 
 ### Task 9: Hits
 
@@ -160,7 +161,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 - Detail: built from the Task 7 primitives; below `lg` a bottom `Sheet` with prev/next
 **Blocked by:** 1, 2, 7
 
-- [ ] Verify on A: two vendors at once, a search for `gclid` and for a transaction id, paging past 200 rows with filters on, the count line against a `select count(*)` per kind; on an accept run with more than 200 items, with the page boundary near the consent action (filter it to one run), the divider appears once, in the right place, after loading every page, and once on a run whose items all precede the action; none in a none run; collapsed pushes expand; `?run=&hit=` from Findings still opens the hit; at 390px the filter sheet and detail sheet; screenshots `$TMPDIR/ui-t9-*`
+- [x] Verify on A: two vendors at once, a search for `gclid` and for a transaction id, paging past 200 rows with filters on, the count line against a `select count(*)` per kind; on an accept run with more than 200 items, with the page boundary near the consent action (filter it to one run), the divider appears once, in the right place, after loading every page, and once on a run whose items all precede the action; none in a none run; collapsed pushes expand; `?run=&hit=` from Findings still opens the hit; at 390px the filter sheet and detail sheet; screenshots `$TMPDIR/ui-t9-*`
 
 ### Task 10: Auth, onboarding and settings
 
@@ -169,7 +170,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Interfaces:** auth pages: a narrow column, `Brand`, heading, one sentence, the form, the switch link, and one `text-xs` muted line "Open source (AGPL-3.0). Audits from the outside."; `safeRedirect` unchanged. Onboarding: `Brand` top left, "Signed in as email · Sign out" top right, the one-field form, then Clients (where Task 4's checklist appears). Accept invite states the organization and the role granted. Settings keep their three tabs, under a `PageHeader`. Members: one `Table` (member with `Avatar`, role, status or joined), pending invitations as rows with a "Pending" badge and "Copy link"; the native role `select` becomes the shadcn `Select` (owners and admins only, server checks unchanged); "Invite member" `Dialog` with email, role and one line per role. AI: one card with the status line (provider, model, `•••• 1234` in mono), new key input, Test and Remove, and "Rules decide pass or fail; the model only writes explanations." No-key state is a neutral info row
 **Blocked by:** 1, 2
 
-- [ ] Verify: sign up, onboard, sign out from onboarding; invite a member, copy the link, accept it in a second browser context, change and remove the role as admin; a member sees no role controls; save, test and remove an AI key (Ollama or a dummy key showing the error); screenshots `$TMPDIR/ui-t10-*`
+- [x] Verify: sign up, onboard, sign out from onboarding; invite a member, copy the link, accept it in a second browser context, change and remove the role as admin; a member sees no role controls; save, test and remove an AI key (Ollama or a dummy key showing the error); screenshots `$TMPDIR/ui-t10-*`
 
 ### Task 11: Mobile and theme sweep, docs
 
@@ -177,7 +178,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Files:** fixes in any route or component above; modify `docs/ui.md` (navigation as built, states, vocabulary, the visual system summary), `docs/vision.md` (a UI row: what changed and how it was verified; decisions 1–4 as taken)
 **Blocked by:** 3–10, and 13 when decision 1 is approved
 
-- [ ] Every screen at 390px and 1440px, light and dark, with no horizontal page scroll (tables scroll inside their container), touch targets at least 32px, focus rings visible on keyboard navigation; a grayscale pass on runs and findings; screenshots `$TMPDIR/ui-t11-*`; save the final set to `mockups/ui-refresh-demo/` (untracked)
+- [x] Every screen at 390px and 1440px, light and dark, with no horizontal page scroll (tables scroll inside their container), touch targets at least 32px, focus rings visible on keyboard navigation; a grayscale pass on runs and findings; screenshots `$TMPDIR/ui-t11-*`; save the final set to `mockups/ui-refresh-demo/` (untracked)
 
 ### Task 12 (optional): Sales page brand alignment
 
@@ -193,7 +194,7 @@ The user approved all four decisions on 2026-10-22: `cmdk`, a required accepted-
 **Files:** add `components/ui/command.tsx` (shadcn, `cmdk`), create `components/command-palette.tsx`; modify `routes/app.tsx` (a "Find…" row with a `⌘K` hint), `server/clients.ts` (`searchTargets → { clients, sites }`, names and ids, org-scoped)
 **Blocked by:** 3, 4
 
-- [ ] Verify: ⌘K / Ctrl+K opens it anywhere in `/app`; go to a client and a site by typing; New client; switch organization; Esc closes; works at 390px from the "Find…" row
+- [x] Verify: ⌘K / Ctrl+K opens it anywhere in `/app`; go to a client and a site by typing; New client; switch organization; Esc closes; works at 390px from the "Find…" row
 
 ## Execution order
 
@@ -214,3 +215,16 @@ Tasks 5 and 6 both touch `lib/audit-labels.ts` (different functions); merge 5 fi
 - Backend the boards assumed but that does not exist: single-run retry and "Retry failed", audit cancel, per-phase timings (the list view shows total run duration, which is stored), site settings (banner selector, "what would let us check it"), a demo fixture client ("Try with a demo site"), AI key "last tested", triage expiry.
 - Health score, Overview tab, tag matrix and report (M4 and later). The shadcn `sidebar` block, an icon rail and a settings sub-nav (at five settings pages).
 - Dropped as contradictions: tinted failed rows in the runs matrix and amber left rules on after-consent hits (the visual system keeps tints out of rows and amber for warning and partial only; Task 9 uses a neutral divider instead); amber for Accepted risk (neutral with its own glyph); "Not checked" as a second name for could not check; `text-success`/`text-warning` from the shell board (replaced by the Task 1 tokens); Command-based chip filters in Hits (Popover with checkboxes needs no `cmdk`); progress counts as filter chips (filters are P2).
+
+## Leftovers
+
+Not exercised in the browser by any task, so unverified:
+
+- A 44-run audit (11 pages x 4 scenarios) for matrix and list density.
+- The "Audit failed" and "not evaluated" completion toast variants (only "Audit complete" was seen).
+- The mixed-rules-versions alert on Findings.
+- A null `check_result.check_title` (an audit evaluated before the migration): the fallback to the registry's `checkTitle`, then `Check: <area>`.
+- Open in Hits from every evidence kind (cookie, document, screenshot); only hit, request and push targets were followed.
+
+Known and left: the runs matrix has no legend (a partial run and a running one are told apart by shape, the hover card and the header counts); hits rows are 28px with a pointer; the new-audit estimate bar on touch covers the bottom of the scenario cards while scrolling; the sales-page alignment (Task 12) is not done.
+
