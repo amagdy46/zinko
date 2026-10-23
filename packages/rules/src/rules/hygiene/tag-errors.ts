@@ -1,29 +1,9 @@
+import { isCollectionRequest } from "@ovriq/zinko-decoders"
 import { count, distinct, requestRef } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
 const id = "hygiene.tag-errors"
-
-/**
- * Vendor collection endpoints the decoders leave undecoded (Consent Mode pings, audience syncs,
- * TikTok's page metadata). Listed by path, so other resources on vendor hosts, such as a favicon,
- * are not tracking requests.
- */
-const COLLECTION_ENDPOINTS: readonly { host: RegExp; path: RegExp }[] = [
-  {
-    host: /(^|\.)(google\.com|googlesyndication\.com)$/,
-    path: /^\/(ccm\/collect|pagead\/1p-user-list\/)/,
-  },
-  { host: /(^|\.)googleadservices\.com$/, path: /^\/pagead\/set_partitioned_cookie$/ },
-  { host: /(^|\.)doubleclick\.net$/, path: /^\/ccm\/s\/collect$/ },
-  { host: /^analytics\.tiktok\.com$/, path: /^\/api\/v2\/pixel\/act\/?$/ },
-]
-
-function isCollectionEndpoint(url: string): boolean {
-  if (!URL.canParse(url)) return false
-  const { hostname, pathname } = new URL(url)
-  return COLLECTION_ENDPOINTS.some(({ host, path }) => host.test(hostname) && path.test(pathname))
-}
 
 export const tagErrors: Rule = {
   id,
@@ -42,7 +22,7 @@ export const tagErrors: Rule = {
     const tracking = input.capture.requests.filter(
       (request) =>
         request.method.toUpperCase() !== "OPTIONS" &&
-        (hitRequests.has(request.id) || isCollectionEndpoint(request.url)),
+        (hitRequests.has(request.id) || isCollectionRequest(request.method, request.url)),
     )
     if (tracking.length === 0) return notApplicable(id, "no tracking request was sent")
     const answered = tracking.filter((request) => !request.blocked && request.status !== null)

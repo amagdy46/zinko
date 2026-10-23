@@ -1,0 +1,73 @@
+{
+  "endpoints": [
+    {
+      "methods": ["GET", "POST"],
+      "path": "/g/collect$",
+      "query": {
+        "v": "2"
+      }
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/pagead/conversion/(\\d+)/?$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/pagead/1p-conversion/(\\d+)/?$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/rmkt/collect/(\\d+)/?$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/pagead/viewthroughconversion/(\\d+)/?$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/tr/?$",
+      "query": {}
+    },
+    {
+      "methods": ["POST"],
+      "path": "^/api/v2/pixel/?$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/(ccm/collect|pagead/1p-user-list/)",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/pagead/set_partitioned_cookie$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/ccm/s/collect$",
+      "query": {}
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "/j/collect$",
+      "query": {
+        "v": "1"
+      }
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "^/privacy_sandbox/pixel/register/trigger/?$",
+      "query": {}
+    },
+    {
+      "methods": ["POST"],
+      "path": "^/api/v2/pixel/act/?$",
+      "query": {}
+    }
+  ]
+}

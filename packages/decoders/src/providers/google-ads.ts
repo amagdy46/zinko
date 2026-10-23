@@ -1,28 +1,8 @@
+import { decodedBy } from "../collection.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
 
-// gtag sends conversions to googleadservices.com and remarketing to google.com/rmkt/collect. While
-// ad_storage is denied it sends the conversion to pagead2.googlesyndication.com instead (a POST with
-// gcs=G100, same label and oid), and sends the googleadservices one only after consent.
-// Left out on purpose: google.com/ccm/collect and ad.doubleclick.net/ccm/s/collect mirror the same
-// events for Consent Mode (the latter has no account ID), and google.com/pagead/1p-user-list is an
-// audience-sync echo of each rmkt hit; decoding them would count every event twice.
-const ENDPOINTS = [
-  { host: /(^|\.)googleadservices\.com$/, path: /^\/pagead\/conversion\/(\d+)\/?$/ },
-  { host: /^pagead2\.googlesyndication\.com$/, path: /^\/pagead\/conversion\/(\d+)\/?$/ },
-  { host: /^(www\.)?google\.com$/, path: /^\/pagead\/1p-conversion\/(\d+)\/?$/ },
-  { host: /^(www\.)?google\.com$/, path: /^\/rmkt\/collect\/(\d+)\/?$/ },
-  {
-    host: /^googleads\.g\.doubleclick\.net$/,
-    path: /^\/pagead\/viewthroughconversion\/(\d+)\/?$/,
-  },
-]
-
 function accountId(url: URL): string | null {
-  for (const { host, path } of ENDPOINTS) {
-    const id = host.test(url.hostname) ? path.exec(url.pathname)?.[1] : undefined
-    if (id) return id
-  }
-  return null
+  return decodedBy("google-ads", url)?.[1] ?? null
 }
 
 /** `gcs` is "G1" + ad_storage + analytics_storage, each "1" (granted) or "0" (denied). */

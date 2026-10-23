@@ -13,5 +13,5 @@
     "tiktok.com",
     "tiktokw.us"
   ],
-  "sdkFiles": "^https://(www\\.googletagmanager\\.com/(gtag/js|gtm\\.js)(?=[?#]|$)|connect\\.facebook\\.net/([\\w-]+/fbevents\\.js(?=[?#]|$)|signals/config/)|analytics\\.tiktok\\.com/i18n/pixel/)"
+  "sdkFiles": "^https://(www\\.googletagmanager\\.com/(gtag/js|gtm\\.js)(?=[?#]|$)|connect\\.facebook\\.net/([\\w-]+/fbevents\\.js(?=[?#]|$)|signals/config/\\d+(?=[?#]|$))|analytics\\.tiktok\\.com/i18n/pixel/(events\\.js|static/[\\w.-]+\\.js)(?=[?#]|$))"
 }

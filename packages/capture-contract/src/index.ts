@@ -193,7 +193,7 @@ const VENDOR_DOMAINS = [
   "tiktokw.us",
 ]
 const SDK_FILES = new RegExp(
-  String.raw`^https://(www\.googletagmanager\.com/(gtag/js|gtm\.js)(?=[?#]|$)|connect\.facebook\.net/([\w-]+/fbevents\.js(?=[?#]|$)|signals/config/)|analytics\.tiktok\.com/i18n/pixel/)`,
+  String.raw`^https://(www\.googletagmanager\.com/(gtag/js|gtm\.js)(?=[?#]|$)|connect\.facebook\.net/([\w-]+/fbevents\.js(?=[?#]|$)|signals/config/\d+(?=[?#]|$))|analytics\.tiktok\.com/i18n/pixel/(events\.js|static/[\w.-]+\.js)(?=[?#]|$))`,
 )
 
 /** The URL's host is a vendor domain or any subdomain of one. */

@@ -160,6 +160,8 @@ export const EngineJob = Schema.Struct({
   files: Schema.Struct({
     shim: Schema.String,
     vendors: Schema.String,
+    collection: Schema.String,
+    socketGuard: Schema.String,
     chromium: Schema.String,
     autoconsent: Schema.String,
     rules: Schema.String,
@@ -176,6 +178,21 @@ export type EngineJob = typeof EngineJob.Type
 export const Vendors = Schema.Struct({
   hosts: Schema.Array(Schema.String),
   sdkFiles: Schema.String,
+})
+
+/**
+ * `src/inject/collection.json`, written from `@ovriq/zinko-decoders` when it builds: the request
+ * shapes tags send events in, which `blockVendorRequests` answers on any host. Patterns are
+ * regular expression sources both engines read; all hosts share the same paths.
+ */
+export const Collection = Schema.Struct({
+  endpoints: Schema.Array(
+    Schema.Struct({
+      methods: Schema.Array(Schema.String),
+      path: Schema.String,
+      query: Schema.Record(Schema.String, Schema.String),
+    }),
+  ),
 })
 
 /** `src/chromium-args.json`: the switches both engines launch Chromium with. */

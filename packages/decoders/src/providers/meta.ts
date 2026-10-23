@@ -1,3 +1,4 @@
+import { decodedBy } from "../collection.js"
 import type { Decoder, Hit, RequestLike } from "../types.js"
 
 const ID_KEYS: Record<string, string> = {
@@ -19,7 +20,7 @@ export function metaRequestParams(request: RequestLike, url: URL): URLSearchPara
 export const meta: Decoder = {
   vendor: "meta",
   methods: ["GET", "POST"],
-  matches: (url) => /(^|\.)facebook\.com$/.test(url.hostname) && /^\/tr\/?$/.test(url.pathname),
+  matches: (url) => decodedBy("meta", url) !== undefined,
 
   decode(request, url) {
     const params = metaRequestParams(request, url)

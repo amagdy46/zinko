@@ -16,7 +16,7 @@ import time
 import urllib.error
 import urllib.request
 from importlib.metadata import version
-from urllib.parse import quote, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 from scrapling.fetchers import AsyncStealthySession
 
@@ -127,6 +127,76 @@ def to_cookie(raw: dict) -> dict:
     }
 
 
+async def guard_frame_targets(cdp, patterns: list[dict], on_paused) -> None:
+    """OOPIFs have separate Fetch domains; enable each before its scripts run, recursively."""
+    auto_attach = {
+        "autoAttach": True, "waitForDebuggerOnStart": True, "flatten": False,
+        "filter": [{"type": "iframe", "exclude": False}, {"exclude": True}],
+    }
+
+    def listen(send):
+        children = {}
+
+        def on_event(method: str, params: dict) -> None:
+            if method == "Target.receivedMessageFromTarget":
+                handler = children.get(params["sessionId"])
+                if handler is not None:
+                    handler(params["message"])
+            elif method == "Target.attachedToTarget":
+                session_id = params["sessionId"]
+                next_id = 0
+                pending = {}
+
+                async def child_send(command: str, args: dict) -> None:
+                    nonlocal next_id
+                    next_id += 1
+                    command_id = next_id
+                    future = asyncio.get_running_loop().create_future()
+                    pending[command_id] = future
+                    await send("Target.sendMessageToTarget", {
+                        "sessionId": session_id,
+                        "message": json.dumps({"id": command_id, "method": command, "params": args}),
+                    })
+                    await future
+
+                child_event = listen(child_send)
+
+                def receive(raw: str) -> None:
+                    message = json.loads(raw)
+                    if "id" in message:
+                        future = pending.pop(message["id"], None)
+                        if future is not None:
+                            if "error" in message:
+                                future.set_exception(RuntimeError(str(message["error"])))
+                            else:
+                                future.set_result(None)
+                    elif message.get("method") == "Fetch.requestPaused":
+                        on_paused(message["params"], child_send)
+                    elif "method" in message:
+                        child_event(message["method"], message.get("params", {}))
+
+                children[session_id] = receive
+
+                async def enable() -> None:
+                    try:
+                        await child_send("Fetch.enable", {"patterns": patterns})
+                        await child_send("Target.setAutoAttach", auto_attach)
+                        await child_send("Runtime.runIfWaitingForDebugger", {})
+                    except Exception as exc:
+                        log(f"frame fetch: {exc}")
+
+                asyncio.ensure_future(enable())
+            elif method == "Target.detachedFromTarget":
+                children.pop(params["sessionId"], None)
+
+        return on_event
+
+    event = listen(cdp.send)
+    for method in ("Target.attachedToTarget", "Target.receivedMessageFromTarget", "Target.detachedFromTarget"):
+        cdp.on(method, lambda params, method=method: event(method, params))
+    await cdp.send("Target.setAutoAttach", auto_attach)
+
+
 class Capture:
     def __init__(self, job: dict) -> None:
         self.request = job["request"]
@@ -137,6 +207,13 @@ class Capture:
         vendors = json.loads(open(job["files"]["vendors"], encoding="utf-8").read())
         self.vendor_hosts = vendors["hosts"]
         self.sdk_files = re.compile(vendors["sdkFiles"])
+        collection = json.loads(open(job["files"]["collection"], encoding="utf-8").read())
+        self.collection = [
+            {**endpoint, "path": re.compile(endpoint["path"])}
+            for endpoint in collection["endpoints"]
+        ]
+        self.blocked_redirects: dict[str, list[str]] = {}
+        self.observed_redirects: dict[str, list[str]] = {}
         self.block_vendors = bool(self.request.get("blockVendorRequests", False))
         self.scenario = self.request["scenario"]
 
@@ -205,6 +282,20 @@ class Capture:
             return False
         return any(host == h or host.endswith("." + h) for h in self.vendor_hosts)
 
+    def is_collection_request(self, method: str, url: str) -> bool:
+        """Mirrors the decoders and Playwright, including first-party collector paths."""
+        try:
+            parsed = urlsplit(url)
+        except ValueError:
+            return False
+        query = parse_qs(parsed.query, keep_blank_values=True)
+        return any(
+            method.upper() in endpoint["methods"]
+            and endpoint["path"].search(parsed.path)
+            and all(query.get(key, [None])[0] == value for key, value in endpoint["query"].items())
+            for endpoint in self.collection
+        )
+
     def fetch_sdk(self, url: str, headers: dict) -> tuple[int, dict, bytes]:
         """Gets an SDK file through the egress proxy, which refuses the vendor host to the browser."""
         sent = {name: headers[name] for name in SDK_HEADERS if name in headers}
@@ -254,7 +345,7 @@ class Capture:
             return
         # The egress proxy refuses vendor hosts outright; these answers only keep page requests on
         # the record, and SDK files come through the proxy's /sdk fetch.
-        if self.block_vendors and self.is_vendor_host(url):
+        if self.block_vendors and (self.is_vendor_host(url) or self.is_collection_request(req.method, url)):
             if self.sdk_files.search(url):
                 await self.serve_sdk(route)
                 return
@@ -267,6 +358,34 @@ class Capture:
             await route.fulfill(status=204, headers=headers, body="")
             return
         await route.fallback()
+
+    def socket_guard_script(self) -> str:
+        """`socket-guard.js` with this run's vendor hosts and collection endpoints filled in."""
+        endpoints = [
+            {"methods": e["methods"], "path": e["path"].pattern, "query": e["query"]}
+            for e in self.collection
+        ]
+        config = json.dumps({"hosts": self.vendor_hosts, "endpoints": endpoints})
+        template = open(self.job["files"]["socketGuard"], encoding="utf-8").read()
+        return template.replace("__ZINKO_SOCKET_CONFIG__", config, 1)
+
+    async def on_blocked_socket(self, source, url) -> None:
+        """A WebSocket refused before it connected: it has no Request, so it is recorded directly."""
+        self.last_activity = time.monotonic()
+        if len(self.requests) >= self.limits["requests"]:
+            self.mark_truncated()
+            return
+        if self.current_document is None or not isinstance(url, str):
+            return
+        if len(url) > MAX_URL:
+            self.mark_truncated()
+        rid = f"r{len(self.requests) + 1}"
+        self.requests[rid] = {
+            "id": rid, "documentId": self.current_document, "url": url[:MAX_URL],
+            "method": "GET", "body": None, "bodyTruncated": False,
+            "resourceType": "websocket", "status": None, "startedAt": self.at(), "blocked": True,
+        }
+        self.dirty.add(rid)
 
     def on_request(self, req) -> None:
         self.last_activity = time.monotonic()
@@ -306,7 +425,12 @@ class Capture:
                 body_truncated = True
                 self.mark_truncated()
             body = raw.decode("utf-8", errors="replace")
-        rid = f"r{len(self.requests) + 1}"
+        key = f"{req.method} {req.url}"
+        pending = self.blocked_redirects.get(key, []) if req.redirected_from is not None else []
+        intercepted = pending.pop(0) if pending else None
+        rid = intercepted or f"r{len(self.requests) + 1}"
+        if req.redirected_from is not None and intercepted is None:
+            self.observed_redirects.setdefault(key, []).append(rid)
         if len(req.url) > MAX_URL:
             self.mark_truncated()
         self.request_ids[req] = rid
@@ -318,9 +442,9 @@ class Capture:
             "body": body,
             "bodyTruncated": body_truncated,
             "resourceType": req.resource_type,
-            "status": None,
+            "status": 204 if intercepted is not None else None,
             "startedAt": self.at(),
-            "blocked": req in self.blocked,
+            "blocked": intercepted is not None or req in self.blocked,
         }
         self.dirty.add(rid)
 
@@ -390,27 +514,64 @@ class Capture:
 
     async def guard_navigations(self) -> None:
         """Pauses every main-frame document request, redirect hops included (page routes never see
-        those), and fails an off-site one before it is sent. Subresources and subframes are not paused.
-        A navigation that sends no request (`about:blank`, `blob:`) is caught when it commits."""
-        if self.allowed_hosts is None:
+        those), and fails an off-site one before it is sent. With vendor blocking, pauses all
+        resources to answer collection redirects even inside HTTPS tunnels. A navigation that sends no request (`about:blank`, `blob:`) is caught when it commits."""
+        if self.allowed_hosts is None and not self.block_vendors:
             return
         cdp = await self.context.new_cdp_session(self.page)
         tree = await cdp.send("Page.getFrameTree")
         main_frame_id = tree["frameTree"]["frame"]["id"]
+        seen_network_requests: set[str] = set()
 
-        async def reply(method: str, params: dict) -> None:
+        async def reply(send, method: str, params: dict) -> None:
             try:
-                await cdp.send(method, params)
+                await send(method, params)
             except Exception as exc:
                 log(f"fetch: {exc}")
 
-        def on_paused(event: dict) -> None:
+        def on_paused(event: dict, send) -> None:
             url = event["request"]["url"]
-            reason = self.off_site(url) if event.get("frameId") == main_frame_id else None
-            if reason is None:
-                asyncio.ensure_future(reply("Fetch.continueRequest", {"requestId": event["requestId"]}))
+            # Cross-scheme redirects may omit redirectedRequestId but keep the Network id.
+            network_id = event.get("networkId")
+            redirect = event.get("redirectedRequestId") is not None or network_id in seen_network_requests
+            if network_id is not None:
+                seen_network_requests.add(network_id)
+            reason = self.off_site(url) if event.get("resourceType") == "Document" and event.get("frameId") == main_frame_id else None
+            if reason is None and self.block_vendors and redirect and not self.sdk_files.search(url) and self.is_collection_request(event["request"]["method"], url):
+                # Fetch may answer before Patchright reports the redirected request.
+                if self.current_document is not None and len(self.requests) < self.limits["requests"]:
+                    request = event["request"]
+                    key = f"{request['method']} {url}"
+                    observed = self.observed_redirects.get(key, [])
+                    rid = observed.pop(0) if observed else f"r{len(self.requests) + 1}"
+                    if rid not in self.requests:
+                        self.blocked_redirects.setdefault(key, []).append(rid)
+                    raw = request["postData"].encode("utf-8") if "postData" in request else None
+                    body_truncated = raw is not None and len(raw) > self.limits["bodyBytes"]
+                    if body_truncated or len(url) > MAX_URL:
+                        self.mark_truncated()
+                    self.requests[rid] = {
+                        "id": rid, "documentId": self.current_document, "url": url[:MAX_URL],
+                        "method": request["method"],
+                        "body": raw[:self.limits["bodyBytes"]].decode("utf-8", errors="replace") if raw is not None else None,
+                        "bodyTruncated": body_truncated, "resourceType": event["resourceType"].lower(),
+                        "status": 204, "startedAt": self.at(), "blocked": True,
+                    }
+                    self.dirty.add(rid)
+                elif len(self.requests) >= self.limits["requests"]:
+                    self.mark_truncated()
+                origin = next((value for key, value in event["request"]["headers"].items() if key.lower() == "origin"), "*")
+                headers = {**CORS, "access-control-allow-origin": origin}
+                asyncio.ensure_future(reply(send, "Fetch.fulfillRequest", {
+                    "requestId": event["requestId"], "responseCode": 204,
+                    "responseHeaders": [{"name": key, "value": value} for key, value in headers.items()],
+                    "body": "",
+                }))
                 return
-            asyncio.ensure_future(reply("Fetch.failRequest", {"requestId": event["requestId"], "errorReason": "BlockedByClient"}))
+            if reason is None:
+                asyncio.ensure_future(reply(send, "Fetch.continueRequest", {"requestId": event["requestId"]}))
+                return
+            asyncio.ensure_future(reply(send, "Fetch.failRequest", {"requestId": event["requestId"], "errorReason": "BlockedByClient"}))
             self.leave_site(url, reason)
 
         def on_navigated(frame) -> None:
@@ -421,11 +582,11 @@ class Capture:
             if reason is not None:
                 self.leave_site(frame.url, reason)
 
-        cdp.on("Fetch.requestPaused", on_paused)
-        await cdp.send(
-            "Fetch.enable",
-            {"patterns": [{"urlPattern": "*", "resourceType": "Document", "requestStage": "Request"}]},
-        )
+        cdp.on("Fetch.requestPaused", lambda event: on_paused(event, cdp.send))
+        patterns = [{"urlPattern": "*", "requestStage": "Request", **({} if self.block_vendors else {"resourceType": "Document"})}]
+        await cdp.send("Fetch.enable", {"patterns": patterns})
+        if self.block_vendors:
+            await guard_frame_targets(cdp, patterns, on_paused)
         self.page.on("framenavigated", on_navigated)
 
     def is_popup_request(self, req) -> bool:
@@ -477,6 +638,13 @@ class Capture:
     async def drain_page(self) -> None:
         try:
             self.add_data_layer(await self.evaluate("window.__zinko ? window.__zinko.drain() : []"))
+            for frame in self.page.frames:
+                try:
+                    queued = await self.evaluate("window.__zinkoSockets ? window.__zinkoSockets.splice(0) : []", frame)
+                except Exception:
+                    continue
+                for url in queued:
+                    await self.on_blocked_socket(None, url)
         except Exception as exc:
             log(f"drain: {exc}")
         doc = self.documents.get(self.current_document or "")
@@ -783,6 +951,8 @@ class Capture:
         if self.scenario == "gpc":
             await ctx.add_init_script(script=GPC_SCRIPT)
         await ctx.route("**/*", self.on_route)
+        if self.block_vendors:
+            await ctx.add_init_script(script=self.socket_guard_script())
         ctx.on("request", self.on_request)
         ctx.on("response", self.on_response)
         ctx.on("requestfinished", self.on_request_done)
@@ -792,6 +962,8 @@ class Capture:
         ctx.on("page", self.refuse_popup)
         self.page.on("pageerror", lambda exc: log(f"pageerror: {exc}"))
         await self.page.expose_binding("__zinkoDataLayer", self.on_data_layer)
+        if self.block_vendors:
+            await self.page.expose_binding("__zinkoBlockedSocket", self.on_blocked_socket)
         if self.autoconsent_active:
             await self.page.expose_binding("autoconsentSendMessage", self.on_autoconsent)
             self.page.on("framenavigated", lambda frame: asyncio.ensure_future(self.inject_autoconsent(frame)))

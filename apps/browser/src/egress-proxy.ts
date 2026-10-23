@@ -11,7 +11,7 @@
  */
 import { request as httpsRequest } from "node:https"
 import { connect, createServer, isIPv6, type LookupFunction, type Socket } from "node:net"
-import { isSdkFile, isServiceHost, isVendorHost } from "./browser-config.ts"
+import { isCollectionRequest, isSdkFile, isServiceHost, isVendorHost } from "./browser-config.ts"
 import { checkUrl, resolveHost } from "./url-policy.ts"
 
 /** A connection the policy refused. `url` is known for plain http; https only shows its origin. */
@@ -208,8 +208,11 @@ export const startEgressProxy = (options: {
     if (!checked.ok) return refuse(checked.reason)
     const url = checked.url
     if (isServiceHost(url.hostname)) return refuse("Chromium service host")
-    if (options.blockVendors && isVendorHost(url.hostname))
-      return refuse("vendor host, blocked by blockVendorRequests")
+    if (
+      options.blockVendors &&
+      (isVendorHost(url.hostname) || (!tunnel && isCollectionRequest(head.method, url.href)))
+    )
+      return refuse("vendor host or collection request, blocked by blockVendorRequests")
     const resolved = await resolveHost(url.hostname, options.allowPrivate)
     if (!resolved.ok) return refuse(resolved.reason)
     const port = Number(url.port || (url.protocol === "https:" ? 443 : 80))

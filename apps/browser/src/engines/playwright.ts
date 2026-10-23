@@ -15,8 +15,9 @@ import {
   type Response,
   type Route,
 } from "playwright"
-import { chromiumArgs, isSdkFile, isVendorHost } from "../browser-config.ts"
+import { chromiumArgs, isCollectionRequest, isSdkFile, isVendorHost } from "../browser-config.ts"
 import { type CaptureError, type Checkpoint, type Consent, EngineJob } from "../contract.ts"
+import { type FetchReply, guardFrameTargets, type PausedRequest } from "./cdp-frames.ts"
 
 type Document = Extract<Checkpoint, { type: "document" }>["document"]
 type CapturedRequest = Extract<Checkpoint, { type: "requests" }>["requests"][number]
@@ -167,6 +168,12 @@ const markTruncated = () => {
 
 // --- network ------------------------------------------------------------------------------------
 
+// Fetch can answer a redirect before Playwright emits its request event. Keep the attempted
+// endpoint and body, then reuse its row if Playwright subsequently reports the same hop.
+const blockedRedirects = new Map<string, string[]>()
+const observedRedirects = new Map<string, string[]>()
+const requestKey = (method: string, url: string) => `${method} ${url}`
+
 const onRequest = (req: Request) => {
   lastActivity = Date.now()
   inflight.add(req)
@@ -197,8 +204,13 @@ const onRequest = (req: Request) => {
     bodyTruncated = true
     markTruncated()
   }
-  const id = `r${requests.size + 1}`
   const url = req.url()
+  const key = requestKey(req.method(), url)
+  const intercepted = req.redirectedFrom() === null ? undefined : blockedRedirects.get(key)?.shift()
+  const id = intercepted ?? `r${requests.size + 1}`
+  if (req.redirectedFrom() !== null && intercepted === undefined) {
+    observedRedirects.set(key, [...(observedRedirects.get(key) ?? []), id])
+  }
   if (url.length > MAX_URL) markTruncated()
   requestIds.set(req, id)
   requests.set(id, {
@@ -209,9 +221,31 @@ const onRequest = (req: Request) => {
     body: raw === null ? null : raw.toString("utf8"),
     bodyTruncated,
     resourceType: req.resourceType(),
+    status: intercepted === undefined ? null : 204,
+    startedAt: at(),
+    blocked: intercepted !== undefined || blocked.has(req),
+  })
+  dirty.add(id)
+}
+
+/** A WebSocket refused before it connected: it has no `Request`, so it is recorded directly. */
+const recordBlockedSocket = (url: string) => {
+  lastActivity = Date.now()
+  if (requests.size >= limits.requests) return markTruncated()
+  if (currentDocument === undefined) return
+  if (url.length > MAX_URL) markTruncated()
+  const id = `r${requests.size + 1}`
+  requests.set(id, {
+    id,
+    documentId: currentDocument,
+    url: url.slice(0, MAX_URL),
+    method: "GET",
+    body: null,
+    bodyTruncated: false,
+    resourceType: "websocket",
     status: null,
     startedAt: at(),
-    blocked: blocked.has(req),
+    blocked: true,
   })
   dirty.add(id)
 }
@@ -293,27 +327,92 @@ const leaveSite = (url: string, reason: string) => {
 
 /**
  * Pauses every main-frame document request, redirect hops included (page routes never see those),
- * and fails an off-site one before it is sent. Subresources and subframes are not paused. A
- * navigation that sends no request (`about:blank`, `blob:`) is caught when it commits.
+ * and fails an off-site one before it is sent. With vendor blocking, pauses all resources to
+ * answer collection redirects even inside HTTPS tunnels. A navigation that sends no request (`about:blank`, `blob:`) is caught when it commits.
  */
 const guardNavigations = async (target: Page) => {
-  if (allowedHosts === undefined) return
+  if (allowedHosts === undefined && captureRequest.blockVendorRequests !== true) return
   const cdp = await target.context().newCDPSession(target)
   const { frameTree } = await cdp.send("Page.getFrameTree")
   const mainFrameId = frameTree.frame.id
-  cdp.on("Fetch.requestPaused", (event) => {
+  const seenNetworkRequests = new Set<string>()
+  const onPaused = (event: PausedRequest, send: FetchReply) => {
     const { requestId, request } = event
-    const reason = event.frameId === mainFrameId ? offSite(request.url) : undefined
+    // Chromium can start a new interception job on a cross-scheme redirect, omitting
+    // redirectedRequestId. Its Network request id still identifies the redirect chain.
+    const redirect =
+      event.redirectedRequestId !== undefined ||
+      (event.networkId !== undefined && seenNetworkRequests.has(event.networkId))
+    if (event.networkId !== undefined) seenNetworkRequests.add(event.networkId)
+    const reason =
+      event.resourceType === "Document" && event.frameId === mainFrameId
+        ? offSite(request.url)
+        : undefined
+    if (
+      reason === undefined &&
+      captureRequest.blockVendorRequests === true &&
+      redirect &&
+      !isSdkFile(request.url) &&
+      isCollectionRequest(request.method, request.url)
+    ) {
+      if (currentDocument !== undefined && requests.size < limits.requests) {
+        const key = requestKey(request.method, request.url)
+        const observed = observedRedirects.get(key)?.shift()
+        const id = observed ?? `r${requests.size + 1}`
+        if (observed === undefined)
+          blockedRedirects.set(key, [...(blockedRedirects.get(key) ?? []), id])
+        const raw = request.postData === undefined ? null : Buffer.from(request.postData)
+        const bodyTruncated = raw !== null && raw.length > limits.bodyBytes
+        if (bodyTruncated || request.url.length > MAX_URL) markTruncated()
+        requests.set(id, {
+          id,
+          documentId: currentDocument,
+          url: request.url.slice(0, MAX_URL),
+          method: request.method,
+          body: raw === null ? null : raw.subarray(0, limits.bodyBytes).toString("utf8"),
+          bodyTruncated,
+          resourceType: event.resourceType.toLowerCase(),
+          status: 204,
+          startedAt: at(),
+          blocked: true,
+        })
+        dirty.add(id)
+      } else if (requests.size >= limits.requests) markTruncated()
+      const origin =
+        Object.entries(request.headers).find(([key]) => key.toLowerCase() === "origin")?.[1] ?? "*"
+      send("Fetch.fulfillRequest", {
+        requestId,
+        responseCode: 204,
+        responseHeaders: Object.entries({
+          "access-control-allow-origin": origin,
+          "access-control-allow-credentials": "true",
+          "access-control-allow-headers": "*",
+          "access-control-allow-methods": "GET, POST, OPTIONS",
+        }).map(([name, value]) => ({ name, value })),
+        body: "",
+      }).catch((cause: unknown) => log(`fetch: ${firstLine(cause)}`))
+      return
+    }
     const reply =
       reason === undefined
-        ? cdp.send("Fetch.continueRequest", { requestId })
-        : cdp.send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" })
+        ? send("Fetch.continueRequest", { requestId })
+        : send("Fetch.failRequest", { requestId, errorReason: "BlockedByClient" })
     reply.catch((cause: unknown) => log(`fetch: ${firstLine(cause)}`))
     if (reason !== undefined) leaveSite(request.url, reason)
-  })
-  await cdp.send("Fetch.enable", {
-    patterns: [{ urlPattern: "*", resourceType: "Document", requestStage: "Request" }],
-  })
+  }
+  cdp.on("Fetch.requestPaused", (event) => onPaused(event, cdp.send.bind(cdp)))
+  const patterns = [
+    {
+      urlPattern: "*",
+      requestStage: "Request" as const,
+      ...(captureRequest.blockVendorRequests === true ? {} : { resourceType: "Document" as const }),
+    },
+  ]
+  await cdp.send("Fetch.enable", { patterns })
+  if (captureRequest.blockVendorRequests === true)
+    await guardFrameTargets(cdp, patterns, onPaused, (cause) =>
+      log(`frame fetch: ${firstLine(cause)}`),
+    )
   target.on("framenavigated", (frame) => {
     const url = frame.url()
     if (frame !== target.mainFrame() || currentDocument === undefined) return
@@ -825,7 +924,10 @@ const run = async () => {
     const host = URL.canParse(url) ? new URL(url).hostname : ""
     // The egress proxy refuses vendor hosts outright; these answers only keep page requests on
     // the record, and SDK files come through the proxy's /sdk fetch.
-    if (captureRequest.blockVendorRequests === true && isVendorHost(host)) {
+    if (
+      captureRequest.blockVendorRequests === true &&
+      (isVendorHost(host) || isCollectionRequest(req.method(), url))
+    ) {
       if (isSdkFile(url)) return serveSdk(route)
       blocked.add(req)
       update(req, { blocked: true })
@@ -842,6 +944,16 @@ const run = async () => {
     }
     return route.fallback()
   })
+  // Page routes never see WebSockets and the proxy only sees a CONNECT, so a socket to a collector
+  // is refused here, before it connects. Other sockets are not routed and keep the proxy path.
+  if (captureRequest.blockVendorRequests === true)
+    await context.routeWebSocket(
+      (socket) => isVendorHost(socket.hostname) || isCollectionRequest("GET", socket.href),
+      (socket) => {
+        recordBlockedSocket(socket.url())
+        return socket.close({ code: 1008, reason: "blocked by blockVendorRequests" })
+      },
+    )
   context.on("request", onRequest)
   context.on("response", onResponse)
   context.on("requestfinished", onRequestDone)

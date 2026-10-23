@@ -1,3 +1,4 @@
+import { decodedBy } from "../collection.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
 
 const ID_KEYS: Record<string, string> = {
@@ -60,7 +61,7 @@ export const ga4: Decoder = {
   vendor: "ga4",
   methods: ["GET", "POST"],
   // Matches Google's endpoints and first-party (server-side GTM) collectors alike.
-  matches: (url) => url.pathname.endsWith("/g/collect") && url.searchParams.get("v") === "2",
+  matches: (url) => decodedBy("ga4", url) !== undefined,
 
   decode(request, url) {
     const lines = (request.body ?? "").split(/\r?\n/).filter((l) => l.trim() !== "")

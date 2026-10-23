@@ -1,3 +1,4 @@
+import { decodedBy } from "../collection.js"
 import type { Decoder, Hit } from "../types.js"
 
 type Json = Record<string, unknown>
@@ -14,12 +15,11 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined
 }
 
-// One event per POST. `/api/v2/pixel/act` (auto-collected page metadata, no event name) is not matched.
+// One event per POST. `/api/v2/pixel/act` (auto-collected page metadata, no event name) is not decoded.
 export const tiktok: Decoder = {
   vendor: "tiktok",
   methods: ["POST"],
-  matches: (url) =>
-    url.hostname === "analytics.tiktok.com" && /^\/api\/v2\/pixel\/?$/.test(url.pathname),
+  matches: (url) => decodedBy("tiktok", url) !== undefined,
 
   decode(request, url) {
     let body: Json
