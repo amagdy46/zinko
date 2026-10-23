@@ -66,14 +66,14 @@ export function ConsentTokens({ consent }: { consent: HitFields["consent"] }) {
   )
 }
 
-const PARAMETER_GLOSSES: Readonly<Record<string, string>> = {
-  en: "Event name",
-  dl: "Page location",
-  tid: "Measurement ID",
-  gcs: "Consent state",
-  npa: "Non-personalized ads",
-  oid: "Order ID",
-}
+const PARAMETER_GLOSSES: ReadonlyMap<string, string> = new Map([
+  ["en", "Event name"],
+  ["dl", "Page location"],
+  ["tid", "Measurement ID"],
+  ["gcs", "Consent state"],
+  ["npa", "Non-personalized ads"],
+  ["oid", "Order ID"],
+])
 
 export function KeyValueTable({
   rows,
@@ -95,7 +95,7 @@ export function KeyValueTable({
       return { name, value, key: `${name}:${occurrence}` }
     })
     .filter(({ name, value }) =>
-      `${name} ${value} ${PARAMETER_GLOSSES[name] ?? ""}`.toLowerCase().includes(query),
+      `${name} ${value} ${PARAMETER_GLOSSES.get(name) ?? ""}`.toLowerCase().includes(query),
     )
   return (
     <div className="min-w-0 space-y-2">
@@ -120,9 +120,9 @@ export function KeyValueTable({
               <TableRow key={key} className="group">
                 <TableCell className="w-2/5 align-top whitespace-normal">
                   <span className="break-all font-mono">{name}</span>
-                  {PARAMETER_GLOSSES[name] ? (
+                  {PARAMETER_GLOSSES.get(name) ? (
                     <span className="mt-0.5 block text-2xs text-muted-foreground">
-                      {PARAMETER_GLOSSES[name]}
+                      {PARAMETER_GLOSSES.get(name)}
                     </span>
                   ) : null}
                 </TableCell>
