@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { remainingTime, runPage, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { duration } from "@/lib/format"
 import { useAuditRoom } from "@/lib/use-audit-room"
@@ -61,12 +61,13 @@ function AuditPage() {
   const left = remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
-      let message = `Audit complete: ${findings} findings`
+      const noun = findings === 1 ? "finding" : "findings"
+      let message = `Audit complete: ${findings} ${noun}`
       if (audit.status === "failed") message = "Audit failed"
       if (audit.status === "partial" && summary.evaluatedRuns === 0)
         message = "Audit finished: not evaluated"
       else if (audit.status === "partial")
-        message = `Audit finished with gaps: ${findings} findings, ${partial + failed} runs incomplete`
+        message = `Audit finished with gaps: ${findings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
       toast(message, {
         id: `audit-finished-${audit.id}`,
         action: {
@@ -99,25 +100,27 @@ function AuditPage() {
           <>
             <StatusBadge status={audit.status} />
             {active ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
-                    <span
-                      className={
-                        connected
-                          ? "size-2 rounded-full bg-primary"
-                          : "size-2 rounded-full border border-muted-foreground"
-                      }
-                    />
-                    {connected ? "Connected" : "Reconnecting"}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {connected
-                    ? "Connected to live audit progress"
-                    : "Reconnecting to live audit progress"}
-                </TooltipContent>
-              </Tooltip>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
+                      <span
+                        className={
+                          connected
+                            ? "size-2 rounded-full bg-primary"
+                            : "size-2 rounded-full border border-muted-foreground"
+                        }
+                      />
+                      {connected ? "Connected" : "Reconnecting"}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {connected
+                      ? "Connected to live audit progress"
+                      : "Reconnecting to live audit progress"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : null}
           </>
         }
@@ -194,7 +197,9 @@ function AuditPage() {
           className={`space-y-2 rounded-md border p-3 text-sm ${failed > 0 ? "border-sev-critical-border bg-sev-critical-bg" : "border-sev-warning-border bg-sev-warning-bg"}`}
         >
           <h2 className="font-medium">
-            {failed} failed · {partial} partial runs
+            {[failed > 0 && `${failed} failed`, partial > 0 && `${partial} partial`]
+              .filter(Boolean)
+              .join(" · ")}
           </h2>
           <ul className="space-y-1">
             {problems.map((run) => (

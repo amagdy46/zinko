@@ -1,3 +1,4 @@
+import { useState } from "react"
 import type { getAudit } from "@/server/audits"
 import { StatusBadge } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
@@ -18,10 +19,12 @@ export type AuditRun = Awaited<ReturnType<typeof getAudit>>["runs"][number]
 export function RunMatrix({
   runs,
   view,
+  sheetOpen,
   onSelect,
 }: {
   runs: AuditRun[]
   view: "matrix" | "list" | "thumbnails"
+  sheetOpen: boolean
   onSelect: (id: string) => void
 }) {
   if (view === "thumbnails")
@@ -141,30 +144,14 @@ export function RunMatrix({
                   return (
                     <TableCell key={`${viewport}-${scenario}`} className="p-1 text-center">
                       {run ? (
-                        <HoverCard>
-                          <HoverCardTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => onSelect(run.id)}
-                              aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${run.status === "pending" ? "Queued" : run.status}, ${run.hitCount} hits`}
-                              className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md px-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                            >
-                              <StatusGlyph meaning={runMeaning(run.status)} />
-                              <span className="font-mono text-xs tabular-nums">
-                                {run.status === "pending" || run.status === "running"
-                                  ? "—"
-                                  : run.hitCount}
-                              </span>
-                            </button>
-                          </HoverCardTrigger>
-                          <HoverCardContent>
-                            <StatusBadge status={run.status} />
-                            <div className="my-2">
-                              <RunImage run={run} />
-                            </div>
-                            <p className="text-xs">{runReason(run) ?? `${run.hitCount} hits`}</p>
-                          </HoverCardContent>
-                        </HoverCard>
+                        <MatrixCell
+                          run={run}
+                          page={page}
+                          scenario={scenario}
+                          viewport={viewport}
+                          sheetOpen={sheetOpen}
+                          onSelect={onSelect}
+                        />
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -200,5 +187,50 @@ export function RunImage({ run }: { run: AuditRun }) {
         <p className="p-3 text-xs text-muted-foreground">Screenshot not available yet.</p>
       )}
     </div>
+  )
+}
+
+function MatrixCell({
+  run,
+  page,
+  scenario,
+  viewport,
+  sheetOpen,
+  onSelect,
+}: {
+  run: AuditRun
+  page: string
+  scenario: string
+  viewport: string
+  sheetOpen: boolean
+  onSelect: (id: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <HoverCard open={open} onOpenChange={(next) => setOpen(next && !sheetOpen)}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            onSelect(run.id)
+          }}
+          aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${run.status === "pending" ? "Queued" : run.status}, ${run.hitCount} hits`}
+          className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md px-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <StatusGlyph meaning={runMeaning(run.status)} />
+          <span className="font-mono text-xs tabular-nums">
+            {run.status === "pending" || run.status === "running" ? "—" : run.hitCount}
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent>
+        <StatusBadge status={run.status} />
+        <div className="my-2">
+          <RunImage run={run} />
+        </div>
+        <p className="text-xs">{runReason(run) ?? `${run.hitCount} hits`}</p>
+      </HoverCardContent>
+    </HoverCard>
   )
 }
