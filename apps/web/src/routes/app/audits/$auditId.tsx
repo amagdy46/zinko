@@ -208,7 +208,7 @@ function AuditPage() {
                   to="/app/audits/$auditId"
                   params={{ auditId: audit.id }}
                   search={{ view: "matrix", run: run.id }}
-                  className="flex items-start gap-2 underline-offset-4 hover:underline"
+                  className="flex items-start gap-2 py-1.5 underline-offset-4 hover:underline"
                 >
                   <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
                   <span className="min-w-0 [overflow-wrap:anywhere]">

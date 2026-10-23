@@ -378,7 +378,7 @@ function NewAudit() {
             </p>
           )}
           <Collapsible className="hidden lg:block">
-            <CollapsibleTrigger className="text-xs text-muted-foreground underline-offset-4 hover:underline">
+            <CollapsibleTrigger className="-my-2 py-2 text-xs text-muted-foreground underline-offset-4 hover:underline">
               How is this estimated?
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2 text-xs text-muted-foreground">
