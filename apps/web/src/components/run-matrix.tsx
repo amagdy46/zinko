@@ -86,11 +86,17 @@ export function RunMatrix({
         </TableBody>
       </Table>
     )
-  const pages = [...new Set(runs.map((run) => runPage(run)))]
+  const pageKey = (run: AuditRun) => `${run.pageUrl}\0${run.journey}`
+  const pages = [...new Map(runs.map((run) => [pageKey(run), run])).values()]
+  const paths = pages.map((run) => runPage(run))
+  const pageLabel = (run: AuditRun) =>
+    paths.filter((path) => path === runPage(run)).length > 1
+      ? `${new URL(run.pageUrl).host}${runPage(run)}`
+      : runPage(run)
   const viewports = [...new Set(runs.map((run) => run.viewport))]
   const scenarios = [...new Set(runs.map((run) => run.scenario))]
   const cells = new Map(
-    runs.map((run) => [`${runPage(run)}\0${run.viewport}\0${run.scenario}`, run]),
+    runs.map((run) => [`${pageKey(run)}\0${run.viewport}\0${run.scenario}`, run]),
   )
   return (
     <Table>
@@ -116,53 +122,56 @@ export function RunMatrix({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {pages.map((page) => (
-          <TableRow key={page}>
-            <TableCell
-              className="sticky left-0 z-10 max-w-64 truncate bg-background font-mono text-xs"
-              title={page}
-            >
-              {page}
-            </TableCell>
-            {viewports.flatMap((viewport) =>
-              scenarios.map((scenario) => {
-                const run = cells.get(`${page}\0${viewport}\0${scenario}`)
-                return (
-                  <TableCell key={`${viewport}-${scenario}`} className="p-1 text-center">
-                    {run ? (
-                      <HoverCard>
-                        <HoverCardTrigger asChild>
-                          <button
-                            type="button"
-                            onClick={() => onSelect(run.id)}
-                            aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${run.status === "pending" ? "Queued" : run.status}, ${run.hitCount} hits`}
-                            className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md px-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
-                          >
-                            <StatusGlyph meaning={runMeaning(run.status)} />
-                            <span className="font-mono text-xs tabular-nums">
-                              {run.status === "pending" || run.status === "running"
-                                ? "—"
-                                : run.hitCount}
-                            </span>
-                          </button>
-                        </HoverCardTrigger>
-                        <HoverCardContent>
-                          <StatusBadge status={run.status} />
-                          <div className="my-2">
-                            <RunImage run={run} />
-                          </div>
-                          <p className="text-xs">{runReason(run) ?? `${run.hitCount} hits`}</p>
-                        </HoverCardContent>
-                      </HoverCard>
-                    ) : (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                )
-              }),
-            )}
-          </TableRow>
-        ))}
+        {pages.map((pageRun) => {
+          const page = pageLabel(pageRun)
+          return (
+            <TableRow key={pageKey(pageRun)}>
+              <TableCell
+                className="sticky left-0 z-10 max-w-64 truncate bg-background font-mono text-xs"
+                title={page}
+              >
+                {page}
+              </TableCell>
+              {viewports.flatMap((viewport) =>
+                scenarios.map((scenario) => {
+                  const run = cells.get(`${pageKey(pageRun)}\0${viewport}\0${scenario}`)
+                  return (
+                    <TableCell key={`${viewport}-${scenario}`} className="p-1 text-center">
+                      {run ? (
+                        <HoverCard>
+                          <HoverCardTrigger asChild>
+                            <button
+                              type="button"
+                              onClick={() => onSelect(run.id)}
+                              aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${run.status === "pending" ? "Queued" : run.status}, ${run.hitCount} hits`}
+                              className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md px-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <StatusGlyph meaning={runMeaning(run.status)} />
+                              <span className="font-mono text-xs tabular-nums">
+                                {run.status === "pending" || run.status === "running"
+                                  ? "—"
+                                  : run.hitCount}
+                              </span>
+                            </button>
+                          </HoverCardTrigger>
+                          <HoverCardContent>
+                            <StatusBadge status={run.status} />
+                            <div className="my-2">
+                              <RunImage run={run} />
+                            </div>
+                            <p className="text-xs">{runReason(run) ?? `${run.hitCount} hits`}</p>
+                          </HoverCardContent>
+                        </HoverCard>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )
+                }),
+              )}
+            </TableRow>
+          )
+        })}
       </TableBody>
     </Table>
   )
@@ -174,7 +183,7 @@ export function RunImage({ run }: { run: AuditRun }) {
       className={
         run.viewport === "mobile"
           ? "mx-auto aspect-[390/844] w-full max-w-64 overflow-hidden rounded-md border bg-muted"
-          : "aspect-[1440/900] w-full overflow-hidden rounded-md border bg-muted"
+          : "aspect-[1366/768] w-full overflow-hidden rounded-md border bg-muted"
       }
     >
       {run.screenshotUrl ? (

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { type AuditRun, RunImage } from "@/components/run-matrix"
 import { StatusBadge } from "@/components/status-badge"
@@ -44,6 +44,15 @@ export function RunSheet({
     media.addEventListener("change", update)
     return () => media.removeEventListener("change", update)
   }, [])
+  const opener = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (selected !== undefined) return undefined
+    const remember = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement) opener.current = event.target
+    }
+    document.addEventListener("focusin", remember)
+    return () => document.removeEventListener("focusin", remember)
+  }, [selected])
   const index = runs.findIndex((run) => run.id === selected)
   const run = runs[index]
   const move = (offset: number) => {
@@ -59,6 +68,13 @@ export function RunSheet({
     >
       <SheetContent
         side={mobile ? "bottom" : "right"}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          const target = opener.current?.isConnected
+            ? opener.current
+            : document.getElementById("runs-view")
+          target?.focus()
+        }}
         className={mobile ? "max-h-[90dvh] overflow-y-auto" : "w-full overflow-y-auto sm:max-w-xl"}
         onKeyDown={(event) => {
           if (

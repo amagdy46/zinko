@@ -42,9 +42,30 @@ function AuditPage() {
     return () => clearInterval(timer)
   }, [active])
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
+  const complete = runs.filter((r) => r.status === "complete").length
+  const partial = runs.filter((r) => r.status === "partial").length
+  const failed = runs.filter((r) => r.status === "failed").length
+  const running = runs.filter((r) => r.status === "running").length
+  const done = complete + partial + failed
+  const start = audit.startedAt ?? audit.createdAt
+  const elapsed = Math.max(
+    0,
+    (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime(),
+  )
+  const units = (run: (typeof runs)[number]) =>
+    run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1
+  const workUnits = runs.reduce((total, run) => total + units(run), 0)
+  const remainingUnits = runs
+    .filter((run) => run.status === "pending" || run.status === "running")
+    .reduce((total, run) => total + units(run), 0)
+  const left = remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
-      toast(`Audit complete: ${findings} findings`, {
+      let message = `Audit complete: ${findings} findings`
+      if (audit.status === "failed") message = "Audit failed"
+      if (audit.status === "partial")
+        message = `Audit finished with gaps: ${findings} findings, ${partial + failed} runs incomplete`
+      toast(message, {
         id: `audit-finished-${audit.id}`,
         action: {
           label: "Findings",
@@ -58,22 +79,7 @@ function AuditPage() {
       })
     }
     previous.current = { id: audit.id, active }
-  }, [audit.id, active, findings, router])
-  const complete = runs.filter((r) => r.status === "complete").length
-  const partial = runs.filter((r) => r.status === "partial").length
-  const failed = runs.filter((r) => r.status === "failed").length
-  const running = runs.filter((r) => r.status === "running").length
-  const done = complete + partial + failed
-  const start = audit.startedAt ?? audit.createdAt
-  const elapsed = Math.max(
-    0,
-    (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime(),
-  )
-  const workUnits = runs.reduce(
-    (total, run) => total + (run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1),
-    0,
-  )
-  const left = remainingTime(runs.length - done, elapsed, workUnits)
+  }, [audit.id, audit.status, active, findings, partial, failed, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const navClass =
     "-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"

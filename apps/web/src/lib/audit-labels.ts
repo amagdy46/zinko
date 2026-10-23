@@ -120,8 +120,8 @@ export const runMeaning = (status: string) => {
   }
 }
 
-export const remainingTime = (remaining: number, elapsed: number, workUnits: number) => {
-  if (elapsed > workUnits * SECONDS_PER_RUN * 1000 || remaining === 0) return null
-  const minutes = (remaining * SECONDS_PER_RUN) / 60
+export const remainingTime = (remainingUnits: number, elapsed: number, totalUnits: number) => {
+  if (elapsed > totalUnits * SECONDS_PER_RUN * 1000 || remainingUnits === 0) return null
+  const minutes = (remainingUnits * SECONDS_PER_RUN) / 60
   return `${Math.max(1, Math.floor(minutes * 0.75))}–${Math.max(2, Math.ceil(minutes * 1.5))} minutes left`
 }

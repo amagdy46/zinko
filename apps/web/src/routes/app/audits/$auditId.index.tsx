@@ -41,7 +41,7 @@ function RunsPage() {
     void navigate({ search: { view, run: id } })
   }
   return (
-    <div className="min-w-0 space-y-4">
+    <div id="runs-view" tabIndex={-1} className="min-w-0 space-y-4 outline-none">
       <ToggleGroup
         type="single"
         value={view}
