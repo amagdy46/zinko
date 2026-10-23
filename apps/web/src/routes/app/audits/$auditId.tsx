@@ -1,6 +1,13 @@
 import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router"
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
+import { toast } from "sonner"
+import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
+import { StatusGlyph } from "@/components/status-glyph"
+import { Progress } from "@/components/ui/progress"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { remainingTime, runPage, runReason, scenarioLabel } from "@/lib/audit-labels"
+import { duration } from "@/lib/format"
 import { useAuditRoom } from "@/lib/use-audit-room"
 import { getAudit } from "@/server/audits"
 
@@ -14,11 +21,12 @@ const ACTIVE = new Set(["queued", "running"])
 const REFETCH_DELAY_MS = 250
 
 function AuditPage() {
-  const { audit, site, runs } = Route.useLoaderData()
+  const { audit, site, client, runs, summary } = Route.useLoaderData()
   const router = useRouter()
   const active = ACTIVE.has(audit.status)
   const refetch = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  // a run's events arrive in pairs a few ms apart; one reload covers both
+  const previous = useRef({ id: audit.id, active })
+  const [now, setNow] = useState<number | null>(null)
   const { connected } = useAuditRoom(
     audit.id,
     () => {
@@ -28,66 +36,213 @@ function AuditPage() {
     active,
   )
   useEffect(() => () => clearTimeout(refetch.current), [])
-  const done = runs.filter((r) => r.status !== "pending" && r.status !== "running").length
-
+  useEffect(() => {
+    if (!active) return undefined
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [active])
+  const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
+  useEffect(() => {
+    if (previous.current.id === audit.id && previous.current.active && !active) {
+      toast(`Audit complete: ${findings} findings`, {
+        id: `audit-finished-${audit.id}`,
+        action: {
+          label: "Findings",
+          onClick: () => {
+            void router.navigate({
+              to: "/app/audits/$auditId/findings",
+              params: { auditId: audit.id },
+            })
+          },
+        },
+      })
+    }
+    previous.current = { id: audit.id, active }
+  }, [audit.id, active, findings, router])
+  const complete = runs.filter((r) => r.status === "complete").length
+  const partial = runs.filter((r) => r.status === "partial").length
+  const failed = runs.filter((r) => r.status === "failed").length
+  const running = runs.filter((r) => r.status === "running").length
+  const done = complete + partial + failed
+  const start = audit.startedAt ?? audit.createdAt
+  const elapsed = Math.max(
+    0,
+    (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime(),
+  )
+  const workUnits = runs.reduce(
+    (total, run) => total + (run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1),
+    0,
+  )
+  const left = remainingTime(runs.length - done, elapsed, workUnits)
+  const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
+  const navClass =
+    "-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <div className="flex gap-1 text-sm text-muted-foreground">
-          <Link
-            to="/app/sites/$siteId"
-            params={{ siteId: site.id }}
-            className="hover:text-foreground"
-          >
-            {site.name}
-          </Link>
-          <span>/</span>
-          <span>Audit</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-semibold">Audit of {site.name}</h1>
-          <StatusBadge status={audit.status} />
-          {active ? (
-            <span className="text-xs text-muted-foreground">
-              {connected ? "Live" : "Reconnecting"}
+    <div className="min-w-0 space-y-6">
+      <PageHeader
+        title={`Audit of ${site.name}`}
+        breadcrumb={[
+          { label: "Clients", to: "/app/clients" },
+          { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
+          { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
+          { label: `Audit · ${audit.createdAt.toLocaleDateString()}` },
+        ]}
+        meta={
+          <>
+            <StatusBadge status={audit.status} />
+            {active ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
+                    <span
+                      className={
+                        connected
+                          ? "size-2 rounded-full bg-primary"
+                          : "size-2 rounded-full border border-muted-foreground"
+                      }
+                    />
+                    {connected ? "Connected" : "Reconnecting"}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {connected
+                    ? "Connected to live audit progress"
+                    : "Reconnecting to live audit progress"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </>
+        }
+      />
+      {active ? (
+        <div className="space-y-3">
+          <Progress value={done} max={Math.max(1, runs.length)} aria-label="Finished runs" />
+          <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm tabular-nums">
+            <span>
+              {done} of {runs.length} runs
             </span>
-          ) : null}
+            <span className="text-muted-foreground">{duration(elapsed)} elapsed</span>
+            {left ? <span className="text-muted-foreground">{left}</span> : null}
+            <span>{running} running</span>
+            <span>{partial} partial</span>
+            <span>{failed} failed</span>
+          </div>
         </div>
-        <p className="text-sm text-muted-foreground">
-          {new Date(audit.createdAt).toLocaleString()} · {done} of {runs.length} runs finished ·{" "}
-          {audit.config.pages.length} {audit.config.pages.length === 1 ? "page" : "pages"}
+      ) : (
+        <div className="grid grid-cols-2 gap-y-4 divide-x text-sm lg:grid-cols-4">
+          <div className="pr-4">
+            <p className="text-xs text-muted-foreground">Runs</p>
+            <p className="tabular-nums">
+              {runs.length}: {complete} complete, {partial} partial, {failed} failed
+            </p>
+            <div className="mt-2 flex h-1 overflow-hidden rounded-full" aria-hidden="true">
+              {runs.map((run) => (
+                <span key={run.id} className={`flex-1 ${barTone(run.status)}`} />
+              ))}
+            </div>
+          </div>
+          <div className="px-4">
+            <p className="text-xs text-muted-foreground">Findings</p>
+            <Link
+              to="/app/audits/$auditId/findings"
+              params={{ auditId: audit.id }}
+              className="underline underline-offset-4"
+            >
+              {summary.evaluatedRuns === 0
+                ? "Not evaluated"
+                : `${findings}: ${summary.findings.critical} critical`}
+            </Link>
+            {summary.findings.couldNotCheck > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {summary.findings.couldNotCheck} could not check
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {summary.evaluatedRuns} of {runs.length} runs evaluated
+            </p>
+          </div>
+          <div className="px-4">
+            <p className="text-xs text-muted-foreground">Duration</p>
+            <p className="font-mono tabular-nums">{duration(elapsed)}</p>
+          </div>
+          <div className="px-4">
+            <p className="text-xs text-muted-foreground">Started</p>
+            <time dateTime={start.toISOString()} className="tabular-nums">
+              {start.toLocaleString()}
+            </time>
+          </div>
+        </div>
+      )}
+      {audit.error ? (
+        <p
+          role="alert"
+          className="rounded-md border border-sev-critical-border bg-sev-critical-bg p-3 text-sm text-sev-critical"
+        >
+          {audit.error}
         </p>
-        {audit.error === null ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {audit.error}
-          </p>
-        )}
-      </div>
-      <nav className="flex gap-4 border-b text-sm">
+      ) : null}
+      {problems.length > 0 ? (
+        <div
+          className={`space-y-2 rounded-md border p-3 text-sm ${failed > 0 ? "border-sev-critical-border bg-sev-critical-bg" : "border-sev-warning-border bg-sev-warning-bg"}`}
+        >
+          <h2 className="font-medium">
+            {failed} failed · {partial} partial runs
+          </h2>
+          <ul className="space-y-1">
+            {problems.map((run) => (
+              <li key={run.id}>
+                <Link
+                  to="/app/audits/$auditId"
+                  params={{ auditId: audit.id }}
+                  search={{ view: "matrix", run: run.id }}
+                  className="flex items-start gap-2 underline-offset-4 hover:underline"
+                >
+                  <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
+                  <span className="break-all">
+                    {runPage(run)} · {scenarioLabel(run.scenario)} · {run.viewport}:{" "}
+                    {runReason(run)}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <nav className="flex gap-4 border-b text-sm tabular-nums">
         <Link
           to="/app/audits/$auditId"
           params={{ auditId: audit.id }}
-          activeOptions={{ exact: true }}
-          className="-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+          search={{ view: "matrix" }}
+          activeOptions={{ exact: true, includeSearch: false }}
+          className={navClass}
         >
-          Runs
+          Runs {runs.length}
         </Link>
         <Link
           to="/app/audits/$auditId/findings"
           params={{ auditId: audit.id }}
-          className="-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+          className={navClass}
         >
-          Findings
+          Findings {summary.evaluatedRuns === 0 ? "(not evaluated)" : findings}
         </Link>
-        <Link
-          to="/app/audits/$auditId/hits"
-          params={{ auditId: audit.id }}
-          className="-mb-px border-b-2 border-transparent pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
-        >
-          Hits
+        <Link to="/app/audits/$auditId/hits" params={{ auditId: audit.id }} className={navClass}>
+          Hits {summary.hits}
         </Link>
       </nav>
       <Outlet />
     </div>
   )
+}
+
+function barTone(status: string) {
+  switch (status) {
+    case "complete":
+      return "bg-status-pass-solid"
+    case "partial":
+      return "bg-sev-warning-solid"
+    case "failed":
+      return "bg-sev-critical-solid"
+    default:
+      return "bg-muted"
+  }
 }

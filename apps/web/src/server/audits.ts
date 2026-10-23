@@ -1,8 +1,9 @@
+import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig, Jobs, Storage, TEST_CLICK_IDS } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, run, site } from "@repo/db"
+import { audit, run, site, client, finding, checkResult } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, eq } from "drizzle-orm"
+import { and, asc, eq, countDistinct } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { hasCredentials, isOnSite, withoutCredentials } from "@/lib/site-url"
 import { requireSession } from "./require-session"
@@ -23,6 +24,7 @@ const MAX_URL_LENGTH = 2048
 const SCREENSHOT_URL_SECONDS = 5 * 60
 
 const RunErrors = Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))
+const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 const decodeRunErrors = Schema.decodeUnknownOption(RunErrors)
 
 /**
@@ -158,9 +160,14 @@ export const getAudit = createServerFn({ method: "GET" })
         if (!isUuid(data.id)) return yield* new NotFound({ message: "Not found" })
         const { db } = yield* Database
         const [found] = yield* db
-          .select({ audit, site: { id: site.id, name: site.name, host: site.host } })
+          .select({
+            audit,
+            site: { id: site.id, name: site.name, host: site.host },
+            client: { id: client.id, name: client.name },
+          })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
+          .innerJoin(client, eq(client.id, site.clientId))
           .where(and(eq(audit.id, data.id), eq(audit.orgId, orgId)))
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
@@ -191,6 +198,9 @@ export const getAudit = createServerFn({ method: "GET" })
               status: r.status,
               failure: r.failure,
               errors: Option.getOrElse(decodeRunErrors(r.errors), () => []),
+              consentOutcome: Option.getOrNull(
+                Option.map(decodeConsent(r.consent), (consent) => consent.outcome),
+              ),
               hitCount: r.hitCount,
               complete: r.complete,
               truncated: r.truncated,
@@ -200,6 +210,37 @@ export const getAudit = createServerFn({ method: "GET" })
             }
           }),
         )
+        const findings = yield* db
+          .select({
+            ruleId: finding.ruleId,
+            title: finding.title,
+            kind: finding.kind,
+            severity: finding.severity,
+            runIds: finding.runIds,
+          })
+          .from(finding)
+          .where(and(eq(finding.auditId, found.audit.id), eq(finding.orgId, orgId)))
+        const [evaluation] = yield* db
+          .select({ total: countDistinct(checkResult.runId) })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(
+            and(
+              eq(run.auditId, found.audit.id),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+            ),
+          )
+        const summary = {
+          hits: runs.reduce((total, row) => total + row.hitCount, 0),
+          findings: {
+            critical: findings.filter((f) => f.kind === "fail" && f.severity === "critical").length,
+            warning: findings.filter((f) => f.kind === "fail" && f.severity === "warning").length,
+            info: findings.filter((f) => f.kind === "fail" && f.severity === "info").length,
+            couldNotCheck: findings.filter((f) => f.kind === "inconclusive").length,
+          },
+          evaluatedRuns: evaluation?.total ?? 0,
+        }
         const { audit: a } = found
         return {
           audit: {
@@ -212,6 +253,9 @@ export const getAudit = createServerFn({ method: "GET" })
             config,
           },
           site: found.site,
+          client: found.client,
+          summary,
+          findings: findings.filter((f) => f.kind === "fail"),
           runs,
         }
       }),

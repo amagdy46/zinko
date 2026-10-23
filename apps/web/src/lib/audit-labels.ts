@@ -99,3 +99,29 @@ export const runReason = (run: RunProblem): string | null => {
     return run.status === "partial" ? "Some data is missing" : "The run failed"
   return ERROR_TEXT[first.code] ?? first.message
 }
+
+export const runDuration = (run: { startedAt: Date | null; finishedAt: Date | null }) =>
+  run.startedAt === null || run.finishedAt === null
+    ? null
+    : run.finishedAt.getTime() - run.startedAt.getTime()
+
+export const runMeaning = (status: string) => {
+  switch (status) {
+    case "complete":
+      return "pass"
+    case "running":
+      return "running"
+    case "partial":
+      return "partial"
+    case "failed":
+      return "failed"
+    default:
+      return "queued"
+  }
+}
+
+export const remainingTime = (remaining: number, elapsed: number, workUnits: number) => {
+  if (elapsed > workUnits * SECONDS_PER_RUN * 1000 || remaining === 0) return null
+  const minutes = (remaining * SECONDS_PER_RUN) / 60
+  return `${Math.max(1, Math.floor(minutes * 0.75))}–${Math.max(2, Math.ceil(minutes * 1.5))} minutes left`
+}
