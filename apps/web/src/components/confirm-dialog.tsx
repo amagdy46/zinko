@@ -7,45 +7,44 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog"
 
-/** A button that asks before it acts. The dialog closes when `onConfirm` settles. */
+/** Asks before it acts; the caller opens it (from a menu item). It closes when `onConfirm` settles. */
 export function ConfirmDialog({
+  open,
+  onOpenChange,
   label,
   variant,
   title,
   description,
   onConfirm,
 }: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
   label: string
   variant: ComponentProps<typeof Button>["variant"]
   title: string
   description: string
   onConfirm: () => Promise<void>
 }) {
-  const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
 
   async function confirm() {
     setPending(true)
     await onConfirm()
     setPending(false)
-    setOpen(false)
+    onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant={variant}>{label}</Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button variant={variant} disabled={pending} onClick={confirm}>

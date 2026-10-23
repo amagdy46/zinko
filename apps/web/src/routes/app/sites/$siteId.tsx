@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { useState } from "react"
 import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
@@ -40,6 +41,7 @@ export const Route = createFileRoute("/app/sites/$siteId")({
 function SitePage() {
   const { site, client, canManage, audits, page, hasMore } = Route.useLoaderData()
   const router = useRouter()
+  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
 
   async function leave(action: typeof archiveSite) {
     const result = await action({ data: { id: site.id } })
@@ -82,37 +84,39 @@ function SitePage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
-                    <div className="[&_button]:w-full [&_button]:justify-start">
-                      <ConfirmDialog
-                        label="Archive"
-                        variant="ghost"
-                        title={`Archive ${site.name}?`}
-                        description="The site is hidden from the lists. Nothing is deleted."
-                        onConfirm={() => leave(archiveSite)}
-                      />
-                    </div>
+                  <DropdownMenuItem onSelect={() => setConfirming("archive")}>
+                    Archive
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    asChild
                     variant="destructive"
-                    onSelect={(e) => e.preventDefault()}
+                    className="text-destructive"
+                    onSelect={() => setConfirming("delete")}
                   >
-                    <div className="[&_button]:w-full [&_button]:justify-start [&_button]:text-destructive">
-                      <ConfirmDialog
-                        label="Delete"
-                        variant="ghost"
-                        title={`Delete ${site.name}?`}
-                        description="The site is deleted. This cannot be undone."
-                        onConfirm={() => leave(deleteSite)}
-                      />
-                    </div>
+                    Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
           </>
         }
+      />
+      <ConfirmDialog
+        open={confirming === "archive"}
+        onOpenChange={(isOpen) => setConfirming(isOpen ? "archive" : null)}
+        label="Archive"
+        variant="outline"
+        title={`Archive ${site.name}?`}
+        description="The site is hidden from the lists. Nothing is deleted."
+        onConfirm={() => leave(archiveSite)}
+      />
+      <ConfirmDialog
+        open={confirming === "delete"}
+        onOpenChange={(isOpen) => setConfirming(isOpen ? "delete" : null)}
+        label="Delete"
+        variant="destructive"
+        title={`Delete ${site.name}?`}
+        description="The site is deleted. This cannot be undone."
+        onConfirm={() => leave(deleteSite)}
       />
       <h2 className="text-lg font-medium">Audits</h2>
       {audits.length === 0 ? (

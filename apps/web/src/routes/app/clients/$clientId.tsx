@@ -45,6 +45,7 @@ export const Route = createFileRoute("/app/clients/$clientId")({
 function ClientPage() {
   const { client, sites, canManage } = Route.useLoaderData()
   const router = useRouter()
+  const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
 
@@ -147,37 +148,39 @@ function ClientPage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
-                    <div className="[&_button]:w-full [&_button]:justify-start">
-                      <ConfirmDialog
-                        label="Archive"
-                        variant="ghost"
-                        title={`Archive ${client.name}?`}
-                        description="The client and its sites are hidden from the lists. Nothing is deleted."
-                        onConfirm={() => leave(archiveClient)}
-                      />
-                    </div>
+                  <DropdownMenuItem onSelect={() => setConfirming("archive")}>
+                    Archive
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    asChild
                     variant="destructive"
-                    onSelect={(e) => e.preventDefault()}
+                    className="text-destructive"
+                    onSelect={() => setConfirming("delete")}
                   >
-                    <div className="[&_button]:w-full [&_button]:justify-start [&_button]:text-destructive">
-                      <ConfirmDialog
-                        label="Delete"
-                        variant="ghost"
-                        title={`Delete ${client.name}?`}
-                        description="The client and its sites are deleted. This cannot be undone."
-                        onConfirm={() => leave(deleteClient)}
-                      />
-                    </div>
+                    Delete
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
           </>
         }
+      />
+      <ConfirmDialog
+        open={confirming === "archive"}
+        onOpenChange={(isOpen) => setConfirming(isOpen ? "archive" : null)}
+        label="Archive"
+        variant="outline"
+        title={`Archive ${client.name}?`}
+        description="The client and its sites are hidden from the lists. Nothing is deleted."
+        onConfirm={() => leave(archiveClient)}
+      />
+      <ConfirmDialog
+        open={confirming === "delete"}
+        onOpenChange={(isOpen) => setConfirming(isOpen ? "delete" : null)}
+        label="Delete"
+        variant="destructive"
+        title={`Delete ${client.name}?`}
+        description="The client and its sites are deleted. This cannot be undone."
+        onConfirm={() => leave(deleteClient)}
       />
       {sites.length === 0 ? (
         <EmptyState

@@ -12,40 +12,101 @@ type Latest = {
   openFindings: { critical: number; warning: number; info: number }
 }
 
-// Only settled audits expose aggregated findings: persist writes checks before finish writes findings.
-export const auditSummaries = (orgId: string, siteIds: readonly string[]) =>
+const runsWhere = (orgId: string) => sql`${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId}`
+
+/** Run and finding aggregates for the given audits only; callers pass the few ids they show. */
+export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    if (siteIds.length === 0) return []
+    if (auditIds.length === 0) return []
     return yield* db
       .select({
         id: audit.id,
-        siteId: audit.siteId,
-        createdAt: audit.createdAt,
-        status: audit.status,
-        total:
-          sql<number>`(select count(*) from ${run} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId})`.mapWith(
-            Number,
-          ),
+        total: sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)})`.mapWith(Number),
         finished:
-          sql<number>`(select count(*) from ${run} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${run.status} in ('complete', 'partial', 'failed'))`.mapWith(
+          sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and ${run.status} in ('complete', 'partial', 'failed'))`.mapWith(
             Number,
           ),
         evaluated:
-          sql<number>`(select count(*) from ${run} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and exists (select 1 from ${checkResult} where ${checkResult.runId} = ${run.id} and ${checkResult.orgId} = ${orgId}))`.mapWith(
+          sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and exists (select 1 from ${checkResult} where ${checkResult.runId} = ${run.id} and ${checkResult.orgId} = ${orgId}))`.mapWith(
             Number,
           ),
         critical: openCount(orgId, "critical"),
         warning: openCount(orgId, "warning"),
         info: openCount(orgId, "info"),
         couldNotCheck:
-          sql<number>`(select count(*) from ${finding} where ${finding.auditId} = ${audit.id} and ${finding.orgId} = ${orgId} and ${finding.kind} = 'inconclusive')`.mapWith(
+          sql<number>`(select count(*) from ${finding} where ${finding.auditId} = ${audit.id} and ${finding.orgId} = ${orgId} and ${finding.inconclusiveRuns} > 0)`.mapWith(
             Number,
           ),
       })
       .from(audit)
+      .where(and(eq(audit.orgId, orgId), inArray(audit.id, [...auditIds])))
+  })
+
+type AuditDetail = Effect.Success<ReturnType<typeof auditDetails>>[number]
+
+const latestOf = (
+  head: { id: string; createdAt: Date; status: string },
+  detail: AuditDetail,
+): Latest => ({
+  auditId: head.id,
+  createdAt: head.createdAt,
+  status: head.status,
+  coverage: coverageOf(detail),
+  couldNotCheck: detail.couldNotCheck,
+  openFindings: { critical: detail.critical, warning: detail.warning, info: detail.info },
+})
+
+export type SiteSummary = {
+  latest: Latest | null
+  running: number
+  auditCount: number
+  lastAuditAt: Date | null
+}
+
+/** One summary per site: cheap rows for every audit, counts only for each site's latest settled one. */
+export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const summaries = new Map<string, SiteSummary>()
+    if (siteIds.length === 0) return summaries
+    const heads = yield* db
+      .select({
+        id: audit.id,
+        siteId: audit.siteId,
+        createdAt: audit.createdAt,
+        status: audit.status,
+        hasChecks: sql<boolean>`exists (select 1 from ${run} join ${checkResult} on ${checkResult.runId} = ${run.id} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId})`,
+      })
+      .from(audit)
       .where(and(eq(audit.orgId, orgId), inArray(audit.siteId, [...siteIds])))
       .orderBy(desc(audit.createdAt), desc(audit.id))
+    const bySite = new Map<string, typeof heads>()
+    for (const head of heads) {
+      const rows = bySite.get(head.siteId)
+      if (rows === undefined) bySite.set(head.siteId, [head])
+      else rows.push(head)
+    }
+    const picked = siteIds.map((siteId) => {
+      const rows = bySite.get(siteId) ?? []
+      const done = rows.filter((a) => settled(a.status))
+      return { siteId, rows, last: done.find((a) => a.hasChecks) ?? done[0] }
+    })
+    const details = yield* auditDetails(
+      orgId,
+      picked.flatMap((p) => (p.last === undefined ? [] : [p.last.id])),
+    )
+    const detailById = new Map(details.map((d) => [d.id, d]))
+    for (const { siteId, rows, last } of picked) {
+      const detail = last === undefined ? undefined : detailById.get(last.id)
+      summaries.set(siteId, {
+        latest: last === undefined || detail === undefined ? null : latestOf(last, detail),
+        running: rows.filter((a) => a.status === "queued" || a.status === "running").length,
+        auditCount: rows.length,
+        lastAuditAt: rows[0]?.createdAt ?? null,
+      })
+    }
+    return summaries
   })
 
 const openCount = (orgId: string, severity: string) =>
@@ -64,38 +125,14 @@ const coverageOf = (a: { evaluated: number; total: number }): Latest["coverage"]
 }
 
 const worstCoverage = (results: readonly Latest[], siteCount: number): Latest["coverage"] => {
-  if (results.some((r) => r.coverage === "not-evaluated")) return "not-evaluated"
-  if (results.length !== siteCount || results.some((r) => r.coverage === "partial"))
-    return "partial"
-  return "full"
+  if (results.every((r) => r.coverage === "not-evaluated")) return "not-evaluated"
+  return results.length === siteCount && results.every((r) => r.coverage === "full")
+    ? "full"
+    : "partial"
 }
 
 export const settled = (status: string) => ["complete", "partial", "failed"].includes(status)
-type AuditSummary = Effect.Success<ReturnType<typeof auditSummaries>>[number]
-
-export const siteSummary = (rows: readonly AuditSummary[]) => {
-  const last =
-    rows.find((a) => settled(a.status) && a.evaluated > 0) ?? rows.find((a) => settled(a.status))
-  const latest: Latest | null =
-    last === undefined
-      ? null
-      : {
-          auditId: last.id,
-          createdAt: last.createdAt,
-          status: last.status,
-          coverage: coverageOf(last),
-          couldNotCheck: last.couldNotCheck,
-          openFindings: { critical: last.critical, warning: last.warning, info: last.info },
-        }
-  return {
-    latest,
-    running: rows.filter((a) => a.status === "queued" || a.status === "running").length,
-    auditCount: rows.length,
-    lastAuditAt: rows[0]?.createdAt ?? null,
-  }
-}
-
-export const clientSummary = (sites: readonly ReturnType<typeof siteSummary>[]) => {
+export const clientSummary = (sites: readonly SiteSummary[]) => {
   const results = sites
     .flatMap((s) => (s.latest === null ? [] : [s.latest]))
     .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
