@@ -1,5 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router"
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, CircleDashed } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -88,6 +88,7 @@ function TriageMenu({
   const [asking, setAsking] = useState(false)
   const [reason, setReason] = useState("")
   const [error, setError] = useState<string | null>(null)
+  const menuButton = useRef<HTMLButtonElement>(null)
 
   async function accept() {
     const message = await onChange("accepted_risk", reason)
@@ -103,6 +104,7 @@ function TriageMenu({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={menuButton}
             variant="outline"
             size="sm"
             disabled={pending}
@@ -130,7 +132,12 @@ function TriageMenu({
         </DropdownMenuContent>
       </DropdownMenu>
       <Dialog open={asking} onOpenChange={setAsking}>
-        <DialogContent>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            menuButton.current?.focus()
+          }}
+        >
           <form
             className="space-y-4"
             onSubmit={(event) => {
@@ -187,6 +194,7 @@ export function FindingDetail({
   const [pending, setPending] = useState(false)
   const [pickedRun, setPickedRun] = useState<string | null>(null)
   const [pickedRef, setPickedRef] = useState<Ref | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const load = useCallback(
     () =>
@@ -207,6 +215,12 @@ export function FindingDetail({
   }, [auditId, row.ruleId])
 
   async function changeTriage(status: Triage, reason?: string): Promise<string | null> {
+    const message = await save(status, reason)
+    setActionError(status === "accepted_risk" ? null : message)
+    return message
+  }
+
+  async function save(status: Triage, reason?: string): Promise<string | null> {
     setPending(true)
     try {
       const result = await setTriage({ data: { auditId, ruleId: row.ruleId, status, reason } })
@@ -250,6 +264,11 @@ export function FindingDetail({
           <TriageMenu status={triage.status} pending={pending} onChange={changeTriage} />
         )}
       </div>
+      {actionError === null ? null : (
+        <p role="alert" className="text-sm text-destructive">
+          {actionError}
+        </p>
+      )}
     </header>
   )
 
@@ -637,9 +656,7 @@ function HitFacts({ hit }: { hit: Extract<EvidenceResult, { kind: "hit" }>["hit"
         </p>
         <div className="flex flex-wrap gap-1 text-xs">
           {hit.afterConsentAction ? (
-            <Badge variant="secondary" className="bg-sev-warning-bg text-sev-warning">
-              sent at or after the consent action
-            </Badge>
+            <Badge variant="outline">sent at or after the consent action</Badge>
           ) : null}
           {hit.blocked ? <Badge variant="outline">attempt, not sent to the vendor</Badge> : null}
           {!hit.blocked && hit.status !== null ? (

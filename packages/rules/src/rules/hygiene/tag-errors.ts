@@ -32,7 +32,7 @@ export const tagErrors: Rule = {
       return inconclusive(
         id,
         local
-          ? `every tracking request was answered locally (${count(tracking.length, "request")}), so no endpoint's answer was seen`
+          ? "Endpoint delivery was not checked because Zinko answered tracking requests locally"
           : "no tracking request got a response",
       )
     }

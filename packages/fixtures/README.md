@@ -93,7 +93,7 @@ and Chromium on `localhost`; where a rule's wording left a choice open, the choi
 
 Every rule is `pass` or n.a. under all four scenarios, on `/`, `/product` and `/thank-you`, except:
 
-- `hygiene.tag-errors`: **inconclusive**, every scenario and page (every tracking request was answered locally).
+- `hygiene.tag-errors`: **inconclusive**, every scenario and page ("Endpoint delivery was not checked because Zinko answered tracking requests locally").
 
 n.a. cases: `consent.pixel-after-reject` outside `reject`; `clickid.cookie-missing` outside `accept` or
 without a click ID in the run URL; `clickid.lost-on-redirect` without a click ID; `clickid.lost-across-navigation`

@@ -1,6 +1,6 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, ListFilter } from "lucide-react"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { SeverityMark } from "@/components/severity"
@@ -68,6 +68,12 @@ export const Route = createFileRoute("/app/audits/$auditId/findings")({
 
 type Listing = Awaited<ReturnType<typeof listFindings>>
 
+/** The "answered locally" limit of Zinko's own audits: expected, and never a pass. */
+const isLocalLimit = (row: FindingRow) =>
+  row.ruleId === "hygiene.tag-errors" &&
+  row.kind === "inconclusive" &&
+  /answered (tracking requests )?locally/.test(row.reason ?? "")
+
 function useBelowLg() {
   const [below, setBelow] = useState(false)
   useEffect(() => {
@@ -86,6 +92,16 @@ function FindingsScreen() {
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const below = useBelowLg()
+  const opener = useRef<HTMLElement | null>(null)
+  const sheetOpen = search.finding !== undefined
+  useEffect(() => {
+    if (sheetOpen) return undefined
+    const remember = (event: FocusEvent) => {
+      if (event.target instanceof HTMLElement) opener.current = event.target
+    }
+    document.addEventListener("focusin", remember)
+    return () => document.removeEventListener("focusin", remember)
+  }, [sheetOpen])
   const triage = search.triage ?? "open"
   const severities = listOf(search.severity)
   const areas = listOf(search.area)
@@ -139,7 +155,14 @@ function FindingsScreen() {
 
   return (
     <div className="space-y-4">
-      <Coverage coverage={coverage} full={full} missing={missing} active={active} mixed={mixed} />
+      <Coverage
+        coverage={coverage}
+        full={full}
+        missing={missing}
+        active={active}
+        mixed={mixed}
+        localLimit={couldNotCheck.some(isLocalLimit)}
+      />
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div className="min-w-0 space-y-4">
           <Tabs
@@ -296,7 +319,14 @@ function FindingsScreen() {
             if (!open) selectFinding(undefined)
           }}
         >
-          <SheetContent side="bottom" className="max-h-[90svh] gap-0 p-0">
+          <SheetContent
+            side="bottom"
+            className="max-h-[90svh] gap-0 p-0"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              if (opener.current?.isConnected) opener.current.focus()
+            }}
+          >
             <SheetTitle className="sr-only">{explicit?.title ?? "Finding"}</SheetTitle>
             <SheetDescription className="sr-only">Evidence and fix steps</SheetDescription>
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2 pr-12">
@@ -345,23 +375,28 @@ function Coverage({
   missing,
   active,
   mixed,
+  localLimit,
 }: {
   coverage: Listing["coverage"]
   full: boolean
   missing: number
   active: boolean
   mixed: boolean
+  localLimit: boolean
 }) {
   const { runs } = coverage
   const summary = [
     `${runs.failing} failing${coverage.couldNotCheckOnFailingRuns > 0 ? ` (${coverage.couldNotCheckOnFailingRuns} also could not check)` : ""}`,
     `${runs.couldNotCheck} could not check`,
-    `${runs.passed} passed`,
+    `${runs.passed} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`,
   ]
   if (full && !mixed)
     return (
       <p className="text-sm text-muted-foreground" data-testid="coverage">
         All {count(coverage.totalRuns, "run")} evaluated · {summary.join(" · ")}
+        {localLimit
+          ? ". Expected: tracking requests are answered locally, so endpoint delivery is not checked."
+          : ""}
       </p>
     )
   const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
@@ -436,6 +471,12 @@ function Coverage({
             ))}
           </ul>
         </TooltipProvider>
+        {localLimit ? (
+          <p className="text-xs">
+            Expected limitation: tracking requests are answered locally, so endpoint delivery is not
+            checked. That check is never counted as passed.
+          </p>
+        ) : null}
         {coverage.couldNotCheckOnFailingRuns > 0 ? (
           <p className="text-xs">
             {coverage.couldNotCheckOnFailingRuns} failing{" "}
@@ -541,6 +582,11 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
             ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}${row.inconclusiveRuns > 0 ? ` · also could not check on ${count(row.inconclusiveRuns, "run")}` : ""}`
             : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
         </span>
+        {isLocalLimit(row) ? (
+          <span className="block text-xs text-muted-foreground">
+            Expected: requests are answered locally
+          </span>
+        ) : null}
       </span>
     </Link>
   )
