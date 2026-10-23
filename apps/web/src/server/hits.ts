@@ -14,6 +14,7 @@ import {
   readCapture,
   runInAudit,
 } from "./audit-data"
+import { FilterText, FilterValues } from "@/lib/hits-filter"
 import { requireSession } from "./require-session"
 import { isUuid, membership, NotFound, read } from "./server-fn"
 
@@ -93,7 +94,6 @@ const compareText = (a: string, b: string) => {
 const compare = (a: Cursor, b: Cursor) =>
   a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || compareText(a[3], b[3]) || a[4] - b[4]
 
-const OneOrMany = Schema.Union([Schema.String, Schema.Array(Schema.String)])
 const many = (value: string | ReadonlyArray<string> | undefined): ReadonlyArray<string> => {
   if (value === undefined) return []
   return typeof value === "string" ? [value] : value
@@ -101,11 +101,11 @@ const many = (value: string | ReadonlyArray<string> | undefined): ReadonlyArray<
 
 const TimelineInput = Schema.Struct({
   auditId: Schema.String,
-  runId: Schema.optional(OneOrMany),
-  vendor: Schema.optional(OneOrMany),
-  event: Schema.optional(OneOrMany),
-  scenario: Schema.optional(OneOrMany),
-  q: Schema.optional(Schema.String),
+  runId: Schema.optional(FilterValues),
+  vendor: Schema.optional(FilterValues),
+  event: Schema.optional(FilterValues),
+  scenario: Schema.optional(FilterValues),
+  q: Schema.optional(FilterText),
   source: Schema.optional(Schema.Literals(["all", "network", "dataLayer"])),
   cursor: Schema.optional(Schema.String),
 })

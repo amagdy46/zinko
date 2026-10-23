@@ -1,6 +1,6 @@
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { Ban, ChevronDown, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react"
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react"
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { ConsentTokens, JsonView, KeyValueTable, RequestView, Section } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { runPage, scenarioLabel } from "@/lib/audit-labels"
+import { searchText, searchValues } from "@/lib/hits-filter"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
 import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
@@ -25,7 +26,7 @@ import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
 const auditRoute = getRouteApi("/app/audits/$auditId")
 
 /** One value (the old links) or several. */
-type ListParam = string | string[]
+type ListParam = string | ReadonlyArray<string>
 
 type HitsSearch = {
   source?: Source
@@ -43,22 +44,11 @@ type HitsSearch = {
 const SOURCES = ["network", "dataLayer"] as const
 type Source = (typeof SOURCES)[number]
 
-const text = (value: unknown) => {
-  if (typeof value === "number") return String(value)
-  return typeof value === "string" && value !== "" ? value : undefined
-}
-
-const list = (value: unknown): ListParam | undefined => {
-  if (!Array.isArray(value)) return text(value)
-  const values = value.map(text).filter((v) => v !== undefined)
-  return values.length === 0 ? undefined : values
-}
-
 const nonEmpty = (values: string[]) => (values.length === 0 ? undefined : values)
 
 const asList = (value: ListParam | undefined): string[] => {
   if (value === undefined) return []
-  return typeof value === "string" ? [value] : value
+  return typeof value === "string" ? [value] : [...value]
 }
 
 type DraftKey = "vendor" | "event" | "scenario" | "runId" | "source"
@@ -77,13 +67,13 @@ const parseHit = (run: string | undefined, hit: string | undefined): HitRef | un
 export const Route = createFileRoute("/app/audits/$auditId/hits")({
   validateSearch: (search: Record<string, unknown>): HitsSearch => ({
     source: SOURCES.find((s) => s === search.source),
-    runId: list(search.runId),
-    vendor: list(search.vendor),
-    event: list(search.event),
-    scenario: list(search.scenario),
-    q: text(search.q),
-    run: text(search.run),
-    hit: text(search.hit),
+    runId: searchValues(search.runId),
+    vendor: searchValues(search.vendor),
+    event: searchValues(search.event),
+    scenario: searchValues(search.scenario),
+    q: searchText(search.q),
+    run: searchText(search.run),
+    hit: searchText(search.hit),
   }),
   // opening a hit changes no filter, so it does not reload the timeline
   loaderDeps: ({ search }) => ({
@@ -337,6 +327,9 @@ function HitsExplorer() {
   const navigate = useNavigate({ from: Route.fullPath })
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [typed, setTyped] = useState(search.q ?? "")
+  // what this box pushed to the URL, so only a change from elsewhere replaces the text
+  const pushedQ = useRef(new Set<string>())
+  const filtersButton = useRef<HTMLButtonElement>(null)
 
   const apply = (patch: HitsSearch) =>
     void navigate({
@@ -379,20 +372,25 @@ function HitsExplorer() {
     })
   }
 
+  useEffect(() => {
+    const urlQ = search.q ?? ""
+    if (pushedQ.current.delete(urlQ)) return
+    setTyped(urlQ)
+  }, [search.q, pushedQ])
+
   // the box is the source of truth while typing; the URL follows once the typing pauses
   useEffect(() => {
     const next = typed.trim() === "" ? undefined : typed.trim()
     if (next === search.q) return undefined
-    const timer = setTimeout(
-      () =>
-        void navigate({
-          search: (prev) => ({ ...prev, run: undefined, hit: undefined, q: next }),
-          replace: true,
-        }),
-      300,
-    )
+    const timer = setTimeout(() => {
+      pushedQ.current.add(next ?? "")
+      void navigate({
+        search: (prev) => ({ ...prev, run: undefined, hit: undefined, q: next }),
+        replace: true,
+      })
+    }, 300)
     return () => clearTimeout(timer)
-  }, [typed, search.q, navigate])
+  }, [typed, search.q, navigate, pushedQ])
 
   const vendor = drafted.vendor ?? asList(search.vendor)
   const events = drafted.event ?? asList(search.event)
@@ -455,6 +453,8 @@ function HitsExplorer() {
   const filtered = active > 0 || search.q !== undefined || typed !== ""
   const clear = () => {
     setTyped("")
+    setDraft({ urlKey, values: {} })
+    pushedQ.current.add("")
     apply({
       source: undefined,
       runId: undefined,
@@ -487,6 +487,7 @@ function HitsExplorer() {
           <Button
             variant="outline"
             size="sm"
+            ref={filtersButton}
             className="md:hidden"
             onClick={() => setFiltersOpen(true)}
           >
@@ -526,7 +527,14 @@ function HitsExplorer() {
           runLabels={new Map(runs.map((r) => [r.id, r]))}
         />
         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
-          <SheetContent side="bottom" className="max-h-[85svh] overflow-y-auto">
+          <SheetContent
+            side="bottom"
+            className="max-h-[85svh] overflow-y-auto"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              filtersButton.current?.focus()
+            }}
+          >
             <SheetHeader>
               <SheetTitle>Filters</SheetTitle>
               <SheetDescription>Narrow the hits and pushes in the list.</SheetDescription>
@@ -590,6 +598,10 @@ function Timeline({
   const runs = useMemo(() => new Map(first.runs.map((r) => [r.id, r])), [first.runs])
   const rows = useMemo(() => buildRows(items, runs, cursor === null), [items, runs, cursor])
   const shown = selected ?? (pinned && hitKey(pinned)) ?? ""
+  const lastShown = useRef(shown)
+  useEffect(() => {
+    if (shown !== "") lastShown.current = shown
+  }, [shown])
   const activeIndex = items.findIndex((item) => itemKey(item) === shown)
   const active = items[activeIndex]
   // a hit opened from a link may be on a page that is not loaded
@@ -752,7 +764,17 @@ function Timeline({
             if (!open) setSelected("")
           }}
         >
-          <SheetContent side="bottom" className="max-h-[90svh] overflow-y-auto">
+          <SheetContent
+            side="bottom"
+            className="max-h-[90svh] overflow-y-auto"
+            onCloseAutoFocus={(event) => {
+              event.preventDefault()
+              const row = [...document.querySelectorAll<HTMLElement>("tr[data-row-key]")].find(
+                (el) => el.dataset.rowKey === lastShown.current,
+              )
+              row?.querySelector("button")?.focus()
+            }}
+          >
             <SheetHeader className="pr-12">
               <SheetTitle>
                 {target?.kind === "push" ? "dataLayer push" : "Hit"}
@@ -811,6 +833,7 @@ function HitRow({
     <tr
       data-testid="timeline-row"
       data-kind="hit"
+      data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
       className={cn("h-7 cursor-pointer border-t hover:bg-muted/50", isSelected && "bg-accent")}
@@ -900,6 +923,7 @@ function PushRow({
     <tr
       data-testid="timeline-row"
       data-kind="push"
+      data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
       className={cn(
