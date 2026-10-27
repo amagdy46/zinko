@@ -77,6 +77,11 @@ function handle(req, res) {
   if (rest === "go" && flags.adEntry) {
     return send(res, 302, { location: `/r?to=${encodeURIComponent(`/${name}/`)}` }, "")
   }
+  if (rest === "go-keep-fbclid" && flags.adEntry) {
+    const fbclid = url.searchParams.get("fbclid")
+    const target = fbclid === null ? `/${name}/` : `/${name}/?fbclid=${encodeURIComponent(fbclid)}`
+    return send(res, 302, { location: `/r?to=${encodeURIComponent(target)}` }, "")
+  }
   if (!Object.hasOwn(pages, rest))
     return send(res, 404, { "content-type": "text/plain" }, "not found")
 

@@ -2,6 +2,7 @@ import type { CapturedDocument, CookieSnapshot } from "@repo/capture-contract"
 import { readableByScriptOn } from "../../cookies.js"
 import { consentTimeline } from "../../consent-state.js"
 import { count, documentRef, hitRef } from "../../documents.js"
+import { landingDocument, queryParam } from "../../landing.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { DecodedHit, EvidenceRef, Rule, RunInput } from "../../types.js"
 
@@ -32,9 +33,17 @@ const VENDORS = [
 type Vendor = (typeof VENDORS)[number]
 
 function landingClickIds(pageUrl: string): readonly Vendor[] {
-  if (!URL.canParse(pageUrl)) return []
-  const params = new URL(pageUrl).searchParams
-  return VENDORS.filter((vendor) => (params.get(vendor.param) ?? "") !== "")
+  return VENDORS.filter((vendor) => queryParam(pageUrl, vendor.param) !== null)
+}
+
+/** The same test `clickid.lost-on-redirect` fails on, so a dropped click ID is reported once. */
+function droppedByRedirect(input: RunInput, vendor: Vendor): boolean {
+  const landing = landingDocument(input)
+  return (
+    landing !== undefined &&
+    landing.redirects.length > 0 &&
+    queryParam(landing.url, vendor.param) !== queryParam(input.pageUrl, vendor.param)
+  )
 }
 
 /** The cookies as the document left them: `document-end` before a navigation, `end` for the last. */
@@ -72,8 +81,14 @@ export const lostAcrossNavigation: Rule = {
     if (!input.journey) return notApplicable(id, "only checked on journey runs")
     if (input.scenario !== "accept")
       return notApplicable(id, "only checked when the visitor accepts")
-    const vendors = landingClickIds(input.pageUrl)
-    if (vendors.length === 0) return notApplicable(id, "the landing URL carries no gclid or fbclid")
+    const sent = landingClickIds(input.pageUrl)
+    if (sent.length === 0) return notApplicable(id, "the landing URL carries no gclid or fbclid")
+    const vendors = sent.filter((vendor) => !droppedByRedirect(input, vendor))
+    if (vendors.length === 0)
+      return notApplicable(
+        id,
+        "the redirect already dropped the click ID (see clickid.lost-on-redirect)",
+      )
     const timeline = consentTimeline(input)
     if (timeline.kind === "inconclusive") return inconclusive(id, timeline.reason)
     if (timeline.kind === "no-action") return inconclusive(id, "the accept action did not run")

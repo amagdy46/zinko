@@ -31,7 +31,7 @@ export { pushesByDocument } from "./documents.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "2"
+export const RULES_VERSION = "3"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
