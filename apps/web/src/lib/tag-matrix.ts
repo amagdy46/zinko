@@ -1,3 +1,4 @@
+import { MAX_URL_LENGTH } from "@repo/capture-contract"
 import { Option, Schema } from "effect"
 
 export const TAGS_PER_PAGE = { scenario: 25, page: 10 } as const
@@ -12,7 +13,7 @@ const Short = Schema.String.check(Schema.isMaxLength(20))
 export const MatrixView = Schema.Struct({
   viewport: Schema.optional(Short),
   by: Schema.Literals(["scenario", "page"]),
-  page: Schema.optional(Schema.String.check(Schema.isMaxLength(2000))),
+  page: Schema.optional(Schema.String.check(Schema.isMaxLength(MAX_URL_LENGTH))),
   scenario: Schema.optional(Short),
   mode: Schema.Literals(["events", "consent"]),
   tagPage: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100_000 })),

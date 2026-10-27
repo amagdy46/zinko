@@ -1,4 +1,4 @@
-import { Scenario } from "@repo/capture-contract"
+import { MAX_URL_LENGTH, Scenario } from "@repo/capture-contract"
 import { Context, Data, type Effect, Schema } from "effect"
 
 const unique = (items: ReadonlyArray<unknown>) => new Set(items).size === items.length
@@ -9,7 +9,7 @@ const unique = (items: ReadonlyArray<unknown>) => new Set(items).size === items.
  * (`isOnSite`) when the audit starts.
  */
 export const AuditConfig = Schema.Struct({
-  pages: Schema.Array(Schema.String.check(Schema.isMaxLength(2048))).check(
+  pages: Schema.Array(Schema.String.check(Schema.isMaxLength(MAX_URL_LENGTH))).check(
     Schema.isMinLength(1),
     Schema.isMaxLength(20),
     Schema.makeFilter(unique, { expected: "no repeated page" }),

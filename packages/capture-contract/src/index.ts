@@ -6,8 +6,14 @@ import { Schema } from "effect"
 /** Milliseconds since the capture started. Every `at` and `*At` field uses this one clock. */
 const Ms = Schema.Finite.check(Schema.isGreaterThanOrEqualTo(0))
 
+/** The longest page URL an audit accepts, and so the longest one a stored run or a matrix filter holds. */
+export const MAX_URL_LENGTH = 2048
+
 /** A URL we ask the engine to open; captured URLs are not bounded, since pages emit longer ones. */
-const TargetUrl = Schema.String.check(Schema.isPattern(/^https?:\/\//i), Schema.isMaxLength(2048))
+const TargetUrl = Schema.String.check(
+  Schema.isPattern(/^https?:\/\//i),
+  Schema.isMaxLength(MAX_URL_LENGTH),
+)
 
 /** `gpc` sends `Sec-GPC: 1` and sets `navigator.globalPrivacyControl`, with no banner action. */
 export const Scenario = Schema.Literals(["none", "accept", "reject", "gpc"])

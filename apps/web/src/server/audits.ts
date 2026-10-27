@@ -1,4 +1,4 @@
-import { CaptureResult } from "@repo/capture-contract"
+import { CaptureResult, MAX_URL_LENGTH } from "@repo/capture-contract"
 import { AuditConfig, Jobs, Storage, TEST_CLICK_IDS } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, run, site, client, finding, checkResult } from "@repo/db"
@@ -17,8 +17,6 @@ import {
   respond,
   siteInOrg,
 } from "./server-fn"
-
-const MAX_URL_LENGTH = 2048
 
 /** Long enough for one page load; the audit page refetches every 4 minutes while it is open. */
 const SCREENSHOT_URL_SECONDS = 5 * 60
