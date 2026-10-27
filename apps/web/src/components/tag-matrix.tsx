@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useSyncExternalStore } from "react"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -11,6 +11,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import {
   Table,
   TableBody,
@@ -56,6 +63,20 @@ const COVERAGE_WORD: Record<string, string> = {
   partial: "Partial",
   none: "Not captured",
 }
+
+const NARROW = "(max-width: 767px)"
+const subscribeNarrow = (notify: () => void) => {
+  const media = window.matchMedia(NARROW)
+  media.addEventListener("change", notify)
+  return () => media.removeEventListener("change", notify)
+}
+/** Below `md` a cell's details open in a bottom sheet; a popover would not fit the screen. */
+const useNarrow = () =>
+  useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW).matches,
+    () => false,
+  )
 
 const CHIPS_COLLAPSED = 4
 
@@ -626,18 +647,24 @@ function CellPopover({
   label: string
   children: React.ReactNode
 }) {
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          className="flex min-h-8 w-full cursor-pointer rounded-md px-2 py-1.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
-        >
-          {children}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-96 max-w-[calc(100vw-2rem)] space-y-3 text-sm">
+  const narrow = useNarrow()
+  const trigger = (
+    <button
+      type="button"
+      aria-label={label}
+      className="flex min-h-8 w-full cursor-pointer rounded-md px-2 py-1.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      {children}
+    </button>
+  )
+  const detail = (
+    <>
+      <div
+        tabIndex={0}
+        role="region"
+        aria-label="Cell details"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
         <div>
           <p className="text-xs text-muted-foreground">
             {vendorName(row.vendor)} · {column.label}
@@ -645,9 +672,34 @@ function CellPopover({
           <p className="font-mono [overflow-wrap:anywhere]">{row.destinationId}</p>
         </div>
         <CellDetailBody auditId={auditId} matrix={matrix} mode={mode} row={row} column={column} />
-        <div className="flex flex-wrap gap-x-3 border-t pt-2">
-          <HitsLinks auditId={auditId} mode={mode} row={row} column={column} cell={cell} />
-        </div>
+      </div>
+      <div className="flex flex-wrap gap-x-3 border-t pt-2">
+        <HitsLinks auditId={auditId} mode={mode} row={row} column={column} cell={cell} />
+      </div>
+    </>
+  )
+  if (narrow)
+    return (
+      <Sheet>
+        <SheetTrigger asChild>{trigger}</SheetTrigger>
+        <SheetContent side="bottom" className="max-h-[85dvh] gap-3 p-4 text-sm">
+          <SheetTitle className="pr-8">Tag details</SheetTitle>
+          <SheetDescription className="sr-only">
+            Every event this tag fired in the column, the hits of each run, and a link to Hits.
+          </SheetDescription>
+          {detail}
+        </SheetContent>
+      </Sheet>
+    )
+  return (
+    <Popover>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+      <PopoverContent
+        align="start"
+        collisionPadding={16}
+        className="flex max-h-[min(32rem,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] flex-col gap-3 text-sm"
+      >
+        {detail}
       </PopoverContent>
     </Popover>
   )
