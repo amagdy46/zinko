@@ -13,12 +13,14 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { UserMenu } from "@/components/user-menu"
+import { safeRedirect } from "@/lib/redirect"
 import { getAppState } from "@/server/session"
 
 export const Route = createFileRoute("/app")({
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
     const state = await getAppState()
-    if (state === null) throw redirect({ to: "/sign-in" })
+    if (state === null)
+      throw redirect({ to: "/sign-in", search: { redirect: safeRedirect(location.href) } })
     // first sign-in: nothing to work in yet, so create an organization
     if (state.organizations.length === 0) throw redirect({ to: "/onboarding" })
     return state
