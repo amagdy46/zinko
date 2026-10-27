@@ -33,7 +33,9 @@ type HitsSearch = {
   runId?: ListParam
   vendor?: ListParam
   event?: ListParam
+  destinationId?: ListParam
   scenario?: ListParam
+  timing?: Timing
   q?: string
   /** With `hit`: the run of the hit to open, whatever page of the timeline it falls on. */
   run?: string
@@ -44,6 +46,9 @@ type HitsSearch = {
 const SOURCES = ["network", "dataLayer"] as const
 type Source = (typeof SOURCES)[number]
 
+const TIMINGS = ["before", "after"] as const
+type Timing = (typeof TIMINGS)[number]
+
 const nonEmpty = (values: string[]) => (values.length === 0 ? undefined : values)
 
 const asList = (value: ListParam | undefined): string[] => {
@@ -51,7 +56,7 @@ const asList = (value: ListParam | undefined): string[] => {
   return typeof value === "string" ? [value] : [...value]
 }
 
-type DraftKey = "vendor" | "event" | "scenario" | "runId" | "source"
+type DraftKey = "vendor" | "event" | "destinationId" | "scenario" | "runId" | "source" | "timing"
 
 type HitRef = { runId: string; requestId: string; batchIndex: number }
 
@@ -70,7 +75,9 @@ export const Route = createFileRoute("/app/audits/$auditId/hits")({
     runId: searchValues(search.runId),
     vendor: searchValues(search.vendor),
     event: searchValues(search.event),
+    destinationId: searchValues(search.destinationId),
     scenario: searchValues(search.scenario),
+    timing: TIMINGS.find((t) => t === search.timing),
     q: searchText(search.q),
     run: searchText(search.run),
     hit: searchText(search.hit),
@@ -81,7 +88,9 @@ export const Route = createFileRoute("/app/audits/$auditId/hits")({
     runId: asList(search.runId),
     vendor: asList(search.vendor),
     event: asList(search.event),
+    destinationId: asList(search.destinationId),
     scenario: asList(search.scenario),
+    timing: search.timing,
     q: search.q,
   }),
   loader: async ({ params, deps }) => {
@@ -320,6 +329,11 @@ const SOURCE_CHOICES: ReadonlyArray<Choice> = [
   { value: "dataLayer", label: "dataLayer" },
 ]
 
+const TIMING_CHOICES: ReadonlyArray<Choice> = [
+  { value: "before", label: "Before the choice" },
+  { value: "after", label: "After the choice" },
+]
+
 function HitsExplorer() {
   const { audit, runs } = auditRoute.useLoaderData()
   const { timeline, filters } = Route.useLoaderData()
@@ -344,7 +358,9 @@ function HitsExplorer() {
     search.runId,
     search.vendor,
     search.event,
+    search.destinationId,
     search.scenario,
+    search.timing,
   ])
   const [draft, setDraft] = useState<{
     urlKey: string
@@ -361,12 +377,17 @@ function HitsExplorer() {
         hit: undefined,
         vendor: nonEmpty(values.vendor ?? asList(prev.vendor)),
         event: nonEmpty(values.event ?? asList(prev.event)),
+        destinationId: nonEmpty(values.destinationId ?? asList(prev.destinationId)),
         scenario: nonEmpty(values.scenario ?? asList(prev.scenario)),
         runId: nonEmpty(values.runId ?? asList(prev.runId)),
         source:
           values.source === undefined
             ? prev.source
             : SOURCES.find((s) => values.source?.length === 1 && s === values.source[0]),
+        timing:
+          values.timing === undefined
+            ? prev.timing
+            : TIMINGS.find((t) => values.timing?.length === 1 && t === values.timing[0]),
       }),
       replace: true,
     })
@@ -394,9 +415,11 @@ function HitsExplorer() {
 
   const vendor = drafted.vendor ?? asList(search.vendor)
   const events = drafted.event ?? asList(search.event)
+  const destinations = drafted.destinationId ?? asList(search.destinationId)
   const scenario = drafted.scenario ?? asList(search.scenario)
   const runId = drafted.runId ?? asList(search.runId)
   const sources = drafted.source ?? (search.source === undefined ? [] : [search.source])
+  const timings = drafted.timing ?? (search.timing === undefined ? [] : [search.timing])
   const groups = [
     {
       label: "Vendor",
@@ -417,6 +440,15 @@ function HitsExplorer() {
       ),
     },
     {
+      label: "Destination",
+      selected: destinations,
+      onChange: choose("destinationId"),
+      options: withSelected(
+        filters.destinations.map((d) => ({ value: d.value, label: d.value, count: d.count })),
+        destinations,
+      ),
+    },
+    {
       label: "Scenario",
       selected: scenario,
       onChange: choose("scenario"),
@@ -434,6 +466,12 @@ function HitsExplorer() {
       selected: sources,
       onChange: choose("source"),
       options: [...SOURCE_CHOICES],
+    },
+    {
+      label: "Timing",
+      selected: timings,
+      onChange: choose("timing"),
+      options: [...TIMING_CHOICES],
     },
     {
       label: "Run",
@@ -460,7 +498,9 @@ function HitsExplorer() {
       runId: undefined,
       vendor: undefined,
       event: undefined,
+      destinationId: undefined,
       scenario: undefined,
+      timing: undefined,
       q: undefined,
     })
   }

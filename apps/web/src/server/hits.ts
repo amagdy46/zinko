@@ -104,7 +104,9 @@ const TimelineInput = Schema.Struct({
   runId: Schema.optional(FilterValues),
   vendor: Schema.optional(FilterValues),
   event: Schema.optional(FilterValues),
+  destinationId: Schema.optional(FilterValues),
   scenario: Schema.optional(FilterValues),
+  timing: Schema.optional(Schema.Literals(["before", "after"])),
   q: Schema.optional(FilterText),
   source: Schema.optional(Schema.Literals(["all", "network", "dataLayer"])),
   cursor: Schema.optional(Schema.String),
@@ -128,8 +130,9 @@ const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 
 /**
  * One page of an audit's hits and `dataLayer` pushes, interleaved by time. `runId`, `vendor`,
- * `event` and `scenario` take one value or several. Vendor and event apply to hits
- * only. `q` is a case-insensitive match, as typed, percent-encoded and percent-decoded, on a hit's
+ * `event`, `destinationId` and `scenario` take one value or several. Vendor, event, destination
+ * and `timing` apply to hits only; `timing` is `before` or `after` the visitor's choice
+ * (`after_consent_action`), so `before` holds every hit of a run with no action. `q` is a case-insensitive match, as typed, percent-encoded and percent-decoded, on a hit's
  * event, destination, ids and parameters and on a push's value; `source` limits the page
  * to hits (`network`) or pushes (`dataLayer`). Besides the page it returns the runs the filters
  * select with their consent action time, and the matched and total counts of each kind, whatever
@@ -163,6 +166,10 @@ export const listTimeline = createServerFn({ method: "GET" })
         if (vendors.length > 0) hitFilters.push(inArray(hit.vendor, [...vendors]))
         const events = many(data.event)
         if (events.length > 0) hitFilters.push(inArray(hit.event, [...events]))
+        const destinations = many(data.destinationId)
+        if (destinations.length > 0) hitFilters.push(inArray(hit.destinationId, [...destinations]))
+        if (data.timing !== undefined)
+          hitFilters.push(eq(hit.afterConsentAction, data.timing === "after"))
         const q = data.q?.trim()
         if (q !== undefined && q !== "") {
           const patterns = likePatterns(q)
@@ -325,8 +332,8 @@ const countBy = (rows: ReadonlyArray<{ value: string; n: number }>) =>
     .map(({ value, n }) => ({ value, count: n }))
 
 /**
- * The vendors, events and scenarios an audit has, each with its number of hits (runs for a
- * scenario), for the explorer's filters.
+ * The vendors, events, destination IDs and scenarios an audit has, each with its number of hits
+ * (runs for a scenario), for the explorer's filters.
  */
 export const listHitFilters = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -345,9 +352,10 @@ export const listHitFilters = createServerFn({ method: "GET" })
             .innerJoin(run, eq(run.id, hit.runId))
             .where(inAudit)
             .groupBy(column)
-        const [vendors, events, scenarios] = yield* Effect.all([
+        const [vendors, events, destinations, scenarios] = yield* Effect.all([
           grouped(hit.vendor),
           grouped(hit.event),
+          grouped(hit.destinationId),
           db
             .select({ value: run.scenario, n: count() })
             .from(run)
@@ -357,6 +365,7 @@ export const listHitFilters = createServerFn({ method: "GET" })
         return {
           vendors: countBy(vendors),
           events: countBy(events),
+          destinations: countBy(destinations),
           scenarios: countBy(scenarios),
         }
       }),
