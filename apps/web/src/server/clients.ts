@@ -12,6 +12,7 @@ import {
   atomically,
   Forbidden,
   Invalid,
+  isManager,
   isUuid,
   membership,
   NotFound,
@@ -21,12 +22,6 @@ import {
 } from "./server-fn"
 
 const AUDITS_PER_PAGE = 20
-
-/** The role is a comma-separated list, such as `member,admin`. */
-const isManager = (role: string) => {
-  const roles = role.split(",")
-  return roles.includes("owner") || roles.includes("admin")
-}
 
 const requireManager = (role: string) =>
   isManager(role)

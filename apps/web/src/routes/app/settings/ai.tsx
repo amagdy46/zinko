@@ -9,11 +9,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
+import { getAiPolicy, saveAiPolicy } from "@/server/ai-policy"
 import {
   clearLlmSettings,
   getLlmSettings,
@@ -22,7 +24,10 @@ import {
 } from "@/server/ai-settings"
 
 export const Route = createFileRoute("/app/settings/ai")({
-  loader: () => getLlmSettings(),
+  loader: async () => {
+    const settings = await getLlmSettings()
+    return { settings, policy: settings === null ? null : await getAiPolicy() }
+  },
   component: AiSettings,
 })
 
@@ -38,8 +43,137 @@ type ProviderId = (typeof providers)[number]["id"]
 const isProviderId = (value: string): value is ProviderId =>
   providers.some((provider) => provider.id === value)
 
+const SENT = [
+  "the rule's own text",
+  "pages as Page 1, Page 2",
+  "destination IDs in a vendor's known format",
+  "standard event names",
+  "cookie families by label",
+  "consent states and timing",
+  "counts",
+]
+
+const NEVER_SENT = [
+  "cookie values",
+  "click IDs",
+  "URLs and query strings",
+  "parameters",
+  "client IDs",
+  "request bodies",
+  "screenshots",
+  "page text",
+  "names and emails",
+  "your API key",
+]
+
+function Explanations({
+  policy,
+}: {
+  policy: { explanationsEnabled: boolean; includePagePaths: boolean; canManage: boolean }
+}) {
+  const router = useRouter()
+  const [enabled, setEnabled] = useState(policy.explanationsEnabled)
+  const [paths, setPaths] = useState(policy.includePagePaths)
+  const [saving, setSaving] = useState(false)
+  const dirty = enabled !== policy.explanationsEnabled || paths !== policy.includePagePaths
+
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setSaving(true)
+    const result = await saveAiPolicy({
+      data: { explanationsEnabled: enabled, includePagePaths: paths },
+    })
+    setSaving(false)
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    toast.success("Explanation settings saved")
+    await router.invalidate()
+  }
+
+  return (
+    <Card className="max-w-xl shadow-none">
+      <CardHeader>
+        <CardTitle>Explanations</CardTitle>
+        <CardDescription>
+          Optional text beside a finding that explains it in plain words. It never changes a
+          verdict, and nothing is sent unless you allow it here.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={save} className="space-y-4">
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="ai-explanations"
+              checked={enabled}
+              disabled={!policy.canManage || saving}
+              onCheckedChange={(value) => setEnabled(value === true)}
+              className="mt-1.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="ai-explanations" className="min-h-8">
+                Allow AI explanations
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Off by default. Members can ask for an explanation of a finding once this is on and
+                a key is set.
+              </p>
+            </div>
+          </div>
+          {enabled ? (
+            <div className="space-y-3 rounded-md border p-3 text-sm" data-testid="ai-disclosure">
+              <p>
+                When someone asks for an explanation, a reduced summary of the finding is sent to
+                the provider you configured above. Aliasing and redaction lower the exposure; they
+                are not a guarantee.
+              </p>
+              <div>
+                <p className="font-medium">Sent</p>
+                <p className="text-muted-foreground">{SENT.join(", ")}.</p>
+              </div>
+              <div>
+                <p className="font-medium">Never sent</p>
+                <p className="text-muted-foreground">{NEVER_SENT.join(", ")}.</p>
+              </div>
+            </div>
+          ) : null}
+          <div className="flex items-start gap-3">
+            <Checkbox
+              id="ai-paths"
+              checked={paths}
+              disabled={!policy.canManage || saving}
+              onCheckedChange={(value) => setPaths(value === true)}
+              className="mt-1.5"
+            />
+            <div className="space-y-1">
+              <Label htmlFor="ai-paths" className="min-h-8">
+                Include page paths in explanations
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Off by default. Pages are sent as Page 1, Page 2. If you turn this on, the path you
+                entered for each page is sent without its query string, exactly as written. Paths
+                can contain names or tokens, so check yours first.
+              </p>
+            </div>
+          </div>
+          {policy.canManage ? (
+            <Button type="submit" disabled={!dirty || saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Ask an owner or admin of this organization to change these settings.
+            </p>
+          )}
+        </form>
+      </CardContent>
+    </Card>
+  )
+}
+
 function AiSettings() {
-  const settings = Route.useLoaderData()
+  const { settings, policy } = Route.useLoaderData()
   const router = useRouter()
   const [pending, setPending] = useState<"save" | "test" | "remove" | null>(null)
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
@@ -103,140 +237,143 @@ function AiSettings() {
   }
 
   return (
-    <Card className="max-w-xl shadow-none">
-      <CardHeader>
-        <CardTitle>AI provider</CardTitle>
-        <CardDescription>
-          Bring your own key. It is encrypted before it is stored and never sent back to the
-          browser.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {configured ? (
-          <p className="text-sm" data-testid="ai-status">
-            <span className="font-medium">{settings.provider}</span> ·{" "}
-            <span className="font-mono break-all">{settings.model}</span>
-            {last4 === null ? (
-              ""
-            ) : (
-              <>
-                {" "}
-                <code className="font-mono">•••• {last4}</code>
-              </>
-            )}
+    <div className="space-y-6">
+      <Card className="max-w-xl shadow-none">
+        <CardHeader>
+          <CardTitle>AI provider</CardTitle>
+          <CardDescription>
+            Bring your own key. It is encrypted before it is stored and never sent back to the
+            browser.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {configured ? (
+            <p className="text-sm" data-testid="ai-status">
+              <span className="font-medium">{settings.provider}</span> ·{" "}
+              <span className="font-mono break-all">{settings.model}</span>
+              {last4 === null ? (
+                ""
+              ) : (
+                <>
+                  {" "}
+                  <code className="font-mono">•••• {last4}</code>
+                </>
+              )}
+            </p>
+          ) : (
+            <div
+              className="flex items-start gap-2 rounded-md border p-3 text-sm text-muted-foreground"
+              data-testid="ai-status"
+            >
+              <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+              <p>No key is set for this organization. Without a key, fix templates are used.</p>
+            </div>
+          )}
+          <p className="text-sm text-muted-foreground">
+            Rules decide pass or fail; the model only writes explanations.
           </p>
-        ) : (
-          <div
-            className="flex items-start gap-2 rounded-md border p-3 text-sm text-muted-foreground"
-            data-testid="ai-status"
-          >
-            <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-            <p>No key is set for this organization. Without a key, fix templates are used.</p>
-          </div>
-        )}
-        <p className="text-sm text-muted-foreground">
-          Rules decide pass or fail; the model only writes explanations.
-        </p>
-        {feedback === null ? null : (
-          <p
-            role={feedback.ok ? "status" : "alert"}
-            className={feedback.ok ? "text-sm text-status-pass" : "text-sm text-destructive"}
-          >
-            {feedback.message}
-          </p>
-        )}
-        {canManage ? (
-          <form onSubmit={save} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="ai-provider">Provider</Label>
-              <Select
-                value={provider}
-                disabled={pending !== null}
-                onValueChange={(value) => {
-                  if (isProviderId(value)) setProvider(value)
-                }}
-              >
-                <SelectTrigger id="ai-provider" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {providers.map(({ id, label }) => (
-                    <SelectItem key={id} value={id}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ai-model">Model</Label>
-              <Input
-                id="ai-model"
-                name="model"
-                required
-                defaultValue={settings.model ?? undefined}
-                placeholder={providers.find((p) => p.id === provider)?.model}
-                key={provider}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="ai-key">{configured ? "New API key" : "API key"}</Label>
-              <Input
-                id="ai-key"
-                name="apiKey"
-                type="password"
-                autoComplete="off"
-                placeholder={configured ? "Leave empty to keep the current key" : "sk-..."}
-              />
-            </div>
-            {needsUrl ? (
+          {feedback === null ? null : (
+            <p
+              role={feedback.ok ? "status" : "alert"}
+              className={feedback.ok ? "text-sm text-status-pass" : "text-sm text-destructive"}
+            >
+              {feedback.message}
+            </p>
+          )}
+          {canManage ? (
+            <form onSubmit={save} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="ai-base-url">Base URL</Label>
+                <Label htmlFor="ai-provider">Provider</Label>
+                <Select
+                  value={provider}
+                  disabled={pending !== null}
+                  onValueChange={(value) => {
+                    if (isProviderId(value)) setProvider(value)
+                  }}
+                >
+                  <SelectTrigger id="ai-provider" className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {providers.map(({ id, label }) => (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ai-model">Model</Label>
                 <Input
-                  id="ai-base-url"
-                  name="baseUrl"
-                  type="url"
-                  defaultValue={settings.baseUrl ?? undefined}
-                  placeholder={
-                    provider === "ollama"
-                      ? "http://localhost:11434/v1"
-                      : "https://api.openai.com/v1"
-                  }
+                  id="ai-model"
+                  name="model"
+                  required
+                  defaultValue={settings.model ?? undefined}
+                  placeholder={providers.find((p) => p.id === provider)?.model}
+                  key={provider}
                 />
               </div>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={pending !== null}>
-                {pending === "save" ? "Saving…" : "Save settings"}
-              </Button>
-              {configured ? (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={pending !== null}
-                    onClick={test}
-                  >
-                    {pending === "test" ? "Testing…" : "Test"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={pending !== null}
-                    onClick={clear}
-                  >
-                    {pending === "remove" ? "Removing…" : "Remove key"}
-                  </Button>
-                </>
+              <div className="space-y-2">
+                <Label htmlFor="ai-key">{configured ? "New API key" : "API key"}</Label>
+                <Input
+                  id="ai-key"
+                  name="apiKey"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={configured ? "Leave empty to keep the current key" : "sk-..."}
+                />
+              </div>
+              {needsUrl ? (
+                <div className="space-y-2">
+                  <Label htmlFor="ai-base-url">Base URL</Label>
+                  <Input
+                    id="ai-base-url"
+                    name="baseUrl"
+                    type="url"
+                    defaultValue={settings.baseUrl ?? undefined}
+                    placeholder={
+                      provider === "ollama"
+                        ? "http://localhost:11434/v1"
+                        : "https://api.openai.com/v1"
+                    }
+                  />
+                </div>
               ) : null}
-            </div>
-          </form>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Ask an owner or admin of this organization to change these settings.
-          </p>
-        )}
-      </CardContent>
-    </Card>
+              <div className="flex flex-wrap gap-2">
+                <Button type="submit" disabled={pending !== null}>
+                  {pending === "save" ? "Saving…" : "Save settings"}
+                </Button>
+                {configured ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={pending !== null}
+                      onClick={test}
+                    >
+                      {pending === "test" ? "Testing…" : "Test"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={pending !== null}
+                      onClick={clear}
+                    >
+                      {pending === "remove" ? "Removing…" : "Remove key"}
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Ask an owner or admin of this organization to change these settings.
+            </p>
+          )}
+        </CardContent>
+      </Card>
+      {policy === null ? null : <Explanations policy={policy} />}
+    </div>
   )
 }

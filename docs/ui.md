@@ -59,7 +59,7 @@ Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar 
 
 **Sign-in, sign-up, onboarding, invitations.** A narrow centred card with the brand mark, one sentence and the form. Onboarding creates the first organization ("Signed in as … · Sign out"). The invitation page names the organization and the role.
 
-**Settings.** Profile, Members (a table with avatar, role select for owners and admins, pending invitations with Copy link, an invite dialog) and AI (provider, model, the key's last four characters, test and remove).
+**Settings.** Profile, Members (a table with avatar, role select for owners and admins, pending invitations with Copy link, an invite dialog) and AI (provider, model, the key's last four characters, test and remove; an Explanations card with two checkboxes, off by default, "Allow AI explanations" with a disclosure of what is sent and never sent shown while it is on, and "Include page paths in explanations" with a warning that paths can contain names or tokens; read-only for members).
 
 ## Shared building blocks
 

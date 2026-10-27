@@ -57,6 +57,12 @@ export const read = <A, E, R extends Env>(effect: Effect.Effect<A, E, R>) =>
 export const membership = (session: Session) =>
   activeMembership(session).pipe(Effect.mapError(() => new NotFound({ message: "Not found" })))
 
+/** Owners and admins. The role is a comma-separated list, such as `member,admin`. */
+export const isManager = (role: string) => {
+  const roles = role.split(",")
+  return roles.includes("owner") || roles.includes("admin")
+}
+
 export const isUuid = (value: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)
 
