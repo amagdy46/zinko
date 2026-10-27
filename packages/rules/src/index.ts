@@ -22,10 +22,11 @@ import { tagErrors } from "./rules/hygiene/tag-errors.js"
 import type { CheckResult, Rule, RunInput } from "./types.js"
 
 export type { CheckResult, CheckStatus, DecodedHit, EvidenceRef, Rule, RunInput } from "./types.js"
-export { googleConsentFromCcm, isNonGoogle, withoutConsent } from "./consent-state.js"
-export { isAdOrAnalyticsCookie } from "./cookies.js"
+export { googleConsentFromCcm, isCcmRequest, isNonGoogle, withoutConsent } from "./consent-state.js"
+export { cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
 export { decodeHits } from "./decode.js"
 export { pushesByDocument } from "./documents.js"
+export { scrubPersonalData } from "./personal-data.js"
 
 /**
  * Stored with every check result, so results from older rules can be told apart. Raise it when a

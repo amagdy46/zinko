@@ -1,30 +1,10 @@
 import { distinct, documentRef, hitRef, vendorName } from "../../documents.js"
+import { decoded, hasEmail, INTERNATIONAL_PHONE } from "../../personal-data.js"
 import { fail, nonEmpty, pass } from "../../results.js"
 import type { DecodedHit, EvidenceRef, Rule } from "../../types.js"
 
 const id = "hygiene.pii-in-hits"
 
-/** Anything shaped like `local@domain`; `hasEmail` decides whether it is an address. */
-const EMAIL_CANDIDATE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+/g
-const HOST_NAME = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.([A-Za-z]{2,})$/
-const ASSET_EXTENSION = /^(?:png|jpe?g|gif|webp|svg|avif|ico)$/i
-
-/**
- * An email address: a candidate whose whole domain is a host name ending in a letter TLD. A file
- * name whose last extension is an asset's is not one, so retina assets such as `logo@2x.png` or
- * `logo@2x.dark.PNG` are left out.
- */
-function hasEmail(text: string): boolean {
-  for (const [candidate] of text.matchAll(EMAIL_CANDIDATE)) {
-    const domain = candidate.slice(candidate.indexOf("@") + 1).replace(/[.-]+$/, "")
-    const tld = HOST_NAME.exec(domain)?.[1]
-    if (tld !== undefined && !ASSET_EXTENSION.test(tld)) return true
-  }
-  return false
-}
-
-/** `+` and 8 to 15 digits, single spaces or dashes allowed between them. */
-const INTERNATIONAL_PHONE = /(?<![\w+])\+\d(?:[ -]?\d){7,14}(?!\d)/
 /** A value that is only a phone number's characters, with 6 to 15 digits. */
 const PHONE_LIKE = /^\+?[\d\s().-]+$/
 
@@ -43,22 +23,6 @@ function isPhoneName(name: string): boolean {
 function isPhoneValue(value: string): boolean {
   const digits = value.replace(/\D/g, "").length
   return PHONE_LIKE.test(value.trim()) && digits >= 6 && digits <= 15
-}
-
-/** URL-decoded, twice at most, since page URLs travel encoded inside hit URLs. */
-function decoded(text: string): string {
-  let current = text
-  for (let round = 0; round < 2; round += 1) {
-    let next: string
-    try {
-      next = decodeURIComponent(current)
-    } catch {
-      return current
-    }
-    if (next === current) return current
-    current = next
-  }
-  return current
 }
 
 function queryEntries(url: string): [string, string][] {

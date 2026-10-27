@@ -1,11 +1,29 @@
 import type { Cookie, CookieSnapshot } from "@repo/capture-contract"
 import type { EvidenceRef, RunInput } from "./types.js"
 
-const AD_OR_ANALYTICS = /^(_ga|_ga_.+|_gid|_gcl_.+|_fbp|_fbc|_ttp|_tt_.+|ttcsid.*|IDE|test_cookie)$/
+const FAMILIES: readonly (readonly [RegExp, string])[] = [
+  [/^_ga$/, "Google Analytics client cookie"],
+  [/^_ga_.+$/, "GA4 session cookie"],
+  [/^_gid$/, "Google Analytics daily cookie"],
+  [/^_gcl_.+$/, "Google Ads click cookie"],
+  [/^_fbp$/, "Meta browser cookie"],
+  [/^_fbc$/, "Meta click cookie"],
+  [/^(_ttp|_tt_.+|ttcsid.*)$/, "TikTok cookie"],
+  [/^(IDE|test_cookie)$/, "Google ad cookie"],
+]
+
+/**
+ * The fixed label of the ad or analytics cookie family a name belongs to, or `null` for any other
+ * cookie. The patterns accept arbitrary suffixes (`_gcl_<anything>`), so the label is what to show,
+ * never the name.
+ */
+export function cookieFamily(name: string): string | null {
+  return FAMILIES.find(([pattern]) => pattern.test(name))?.[1] ?? null
+}
 
 /** Google Analytics, Google Ads, Meta and TikTok cookies; consent banners' own cookies are not. */
 export function isAdOrAnalyticsCookie(name: string): boolean {
-  return AD_OR_ANALYTICS.test(name)
+  return cookieFamily(name) !== null
 }
 
 /** RFC 6265 §5.1.4: the cookie's path is the request path or a `/`-bounded prefix of it. */

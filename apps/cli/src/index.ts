@@ -10,10 +10,12 @@ import {
   isVendorHost,
   type JourneyStep,
 } from "@repo/capture-contract"
+import { buildDigest, buildExplainPrompt, evidenceHash, type FindingDigest } from "@repo/llm"
 import {
   RULES_VERSION,
   decodeHits,
   evaluateRun,
+  ruleById,
   type CheckResult,
   type DecodedHit,
 } from "@repo/rules"
@@ -34,6 +36,10 @@ capture options:
   --engine <url>                               Capture engine (default: http://localhost:8080)
   --block-vendors                              Answer vendor collection requests locally
   --rules                                      Run the checks on each scenario and list their results
+  --explain-digest                             Print, for each failing check, what an AI explanation would be given
+                                               (runs the checks; pages are aliases unless --page-paths)
+  --explain-prompt                             Like --explain-digest, but print the exact prompt the model would get
+  --page-paths                                 With --explain-digest or --explain-prompt: send each page's path as entered, not an alias
   --json                                       Print JSON instead of tables (with --rules, adds checks)
 
 --click and --goto run in the order given, at most 5 steps in total.
@@ -226,6 +232,66 @@ function renderChecks(checks: readonly CheckResult[]) {
   out("")
 }
 
+interface Digest {
+  ruleId: string
+  evidenceHash: string
+  digest: FindingDigest
+}
+
+// The same builder the app uses, fed with this one scenario's run: the CLI judges scenarios
+// independently, so its digest is not the audit-level digest.
+function digestsOf(
+  opts: ReturnType<typeof parseCapture>,
+  scenario: Scenario,
+  result: Result,
+  hits: DecodedHit[],
+  checks: readonly CheckResult[],
+): Promise<Digest[]> {
+  return Promise.all(
+    checks
+      .filter((check) => check.status === "fail")
+      .map(async (check) => {
+        const rule = ruleById(check.ruleId)
+        if (rule === undefined) throw new CliError(`Unknown rule ${check.ruleId}.`)
+        const digest = buildDigest(
+          {
+            ruleId: rule.id,
+            rulesVersions: [RULES_VERSION],
+            area: rule.area,
+            severity: rule.severity,
+            title: rule.title,
+            why: rule.why,
+            fix: rule.fix,
+            failingRuns: 1,
+            knownRuns: 1,
+          },
+          [
+            {
+              page: { index: 0, url: opts.url, start: true },
+              scenario,
+              viewport: opts.base.viewport,
+              journey: opts.base.journey.some((step) => step.action === "goto"),
+              capture: result,
+              hits,
+              evidence: check.evidence,
+            },
+          ],
+          { includePagePaths: opts.pagePaths },
+        )
+        return { ruleId: rule.id, evidenceHash: await evidenceHash(digest), digest }
+      }),
+  )
+}
+
+function renderDigests(scenario: Scenario, digests: readonly Digest[], prompt: boolean) {
+  out(`explain digests [${scenario}]${digests.length === 0 ? ": no failing check" : ""}`)
+  for (const { ruleId, evidenceHash: hash, digest } of digests) {
+    out(`-- ${ruleId}  policy ${digest.policyId}  evidence ${hash}`)
+    out(prompt ? buildExplainPrompt(digest) : JSON.stringify(digest, null, 2))
+  }
+  out("")
+}
+
 function isHttpUrl(value: string): boolean {
   if (!URL.canParse(value)) return false
   const { protocol, hostname } = new URL(value)
@@ -246,6 +312,9 @@ function parseCapture(argv: string[]) {
       "block-vendors": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
       rules: { type: "boolean", default: false },
+      "explain-digest": { type: "boolean", default: false },
+      "explain-prompt": { type: "boolean", default: false },
+      "page-paths": { type: "boolean", default: false },
     },
   })
   const [url] = positionals
@@ -295,6 +364,9 @@ function parseCapture(argv: string[]) {
     engine: values.engine,
     json: values.json,
     rules: values.rules,
+    explainDigest: values["explain-digest"] || values["explain-prompt"],
+    explainPrompt: values["explain-prompt"],
+    pagePaths: values["page-paths"],
   }
 }
 
@@ -316,18 +388,23 @@ async function runFrom(
     return cause instanceof Unreachable ? true : runFrom(opts, index + 1, true)
   }
   const { hits, undecoded } = decodeAll(result)
-  const checks = opts.rules
-    ? evaluateRun({
-        scenario,
-        viewport: opts.base.viewport,
-        pageUrl: opts.url,
-        siteHost: new URL(opts.url).hostname,
-        // as in an audit's journey runs, a journey navigates to other pages; clicks alone do not
-        journey: opts.base.journey.some((step) => step.action === "goto"),
-        capture: result,
-        hits,
-      })
-    : undefined
+  const checks =
+    opts.rules || opts.explainDigest
+      ? evaluateRun({
+          scenario,
+          viewport: opts.base.viewport,
+          pageUrl: opts.url,
+          siteHost: new URL(opts.url).hostname,
+          // as in an audit's journey runs, a journey navigates to other pages; clicks alone do not
+          journey: opts.base.journey.some((step) => step.action === "goto"),
+          capture: result,
+          hits,
+        })
+      : undefined
+  const digests =
+    opts.explainDigest && checks !== undefined
+      ? await digestsOf(opts, scenario, result, hits, checks)
+      : undefined
   if (opts.json) {
     const { engine, documents, consent, cookies, errors, complete, truncated } = result
     out(
@@ -344,6 +421,7 @@ async function runFrom(
           truncated,
           undecoded,
           ...(checks === undefined ? {} : { rulesVersion: RULES_VERSION, checks }),
+          ...(digests === undefined ? {} : { digests }),
         },
         null,
         2,
@@ -351,7 +429,8 @@ async function runFrom(
     )
   } else {
     renderText(opts.url, scenario, result, hits, undecoded)
-    if (checks !== undefined) renderChecks(checks)
+    if (opts.rules && checks !== undefined) renderChecks(checks)
+    if (digests !== undefined) renderDigests(scenario, digests, opts.explainPrompt)
   }
   return runFrom(opts, index + 1, failed || !result.complete)
 }

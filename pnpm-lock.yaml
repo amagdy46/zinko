@@ -356,6 +356,9 @@ importers:
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../../packages/capture-contract
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@repo/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -396,6 +399,9 @@ importers:
       '@repo/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@repo/llm':
+        specifier: workspace:*
+        version: link:../../packages/llm
       '@repo/rules':
         specifier: workspace:*
         version: link:../../packages/rules
@@ -572,6 +578,25 @@ importers:
       playwright:
         specifier: 1.64.1
         version: 1.64.1
+
+  packages/llm:
+    dependencies:
+      '@ovriq/zinko-decoders':
+        specifier: workspace:*
+        version: link:../decoders
+      '@repo/capture-contract':
+        specifier: workspace:*
+        version: link:../capture-contract
+      '@repo/rules':
+        specifier: workspace:*
+        version: link:../rules
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.5
+    devDependencies:
+      typescript:
+        specifier: 'catalog:'
+        version: 7.0.2
 
   packages/rules:
     dependencies:
