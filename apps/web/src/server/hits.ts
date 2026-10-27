@@ -112,12 +112,25 @@ const TimelineInput = Schema.Struct({
 
 const escapeLike = (text: string) => text.replace(/[\\%_]/g, (c) => `\\${c}`)
 
-const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
+const decoded = (text: string) => {
+  try {
+    return decodeURIComponent(text)
+  } catch {
+    return text
+  }
+}
+
+/** Stored parameters are percent-encoded, so a search matches as typed, encoded and decoded. */
+const likePatterns = (q: string) =>
+  [...new Set([q, encodeURIComponent(q), decoded(q)])].map((text) => `%${escapeLike(text)}%`)
+
+const decodeConsent =Schema.decodeUnknownOption(CaptureResult.fields.consent)
 
 /**
  * One page of an audit's hits and `dataLayer` pushes, interleaved by time. `runId`, `vendor`,
- * `event` and `scenario` take one value or several. Vendor, event and `q` (a case-insensitive
- * match on event, destination, ids and parameters) apply to hits only; `source` limits the page
+ * `event` and `scenario` take one value or several. Vendor and event apply to hits
+ * only. `q` is a case-insensitive match, as typed, percent-encoded and percent-decoded, on a hit's
+ * event, destination, ids and parameters and on a push's value; `source` limits the page
  * to hits (`network`) or pushes (`dataLayer`). Besides the page it returns the runs the filters
  * select with their consent action time, and the matched and total counts of each kind, whatever
  * page is loaded. Runs are reached through the audit.
@@ -145,20 +158,27 @@ export const listTimeline = createServerFn({ method: "GET" })
         if (scenarios.length > 0) inRun.push(inArray(run.scenario, [...scenarios]))
 
         const hitFilters: SQL[] = []
+        const pushFilters: SQL[] = []
         const vendors = many(data.vendor)
         if (vendors.length > 0) hitFilters.push(inArray(hit.vendor, [...vendors]))
         const events = many(data.event)
         if (events.length > 0) hitFilters.push(inArray(hit.event, [...events]))
         const q = data.q?.trim()
         if (q !== undefined && q !== "") {
-          const pattern = `%${escapeLike(q)}%`
+          const patterns = likePatterns(q)
           const match = or(
-            ilike(hit.event, pattern),
-            ilike(hit.destinationId, pattern),
-            sql`${hit.ids}::text ilike ${pattern}`,
-            sql`${hit.params}::text ilike ${pattern}`,
+            ...patterns.flatMap((pattern) => [
+              ilike(hit.event, pattern),
+              ilike(hit.destinationId, pattern),
+              sql`${hit.ids}::text ilike ${pattern}`,
+              sql`${hit.params}::text ilike ${pattern}`,
+            ]),
           )
           if (match !== undefined) hitFilters.push(match)
+          const pushMatch = or(
+            ...patterns.map((pattern) => sql`${datalayerPush.value}::text ilike ${pattern}`),
+          )
+          if (pushMatch !== undefined) pushFilters.push(pushMatch)
         }
 
         const hitWhere = [...inRun, eq(hit.orgId, orgId), ...hitFilters]
@@ -201,7 +221,7 @@ export const listTimeline = createServerFn({ method: "GET" })
                 )
                 .limit(PAGE_SIZE + 1)
 
-        const pushWhere = [...inRun, eq(datalayerPush.orgId, orgId)]
+        const pushWhere = [...inRun, eq(datalayerPush.orgId, orgId), ...pushFilters]
         const pushMatched = [...pushWhere]
         if (after !== undefined)
           pushWhere.push(
