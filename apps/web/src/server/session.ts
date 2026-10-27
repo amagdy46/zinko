@@ -17,7 +17,8 @@ export const getSession = createServerFn({ method: "GET" }).handler(() =>
 
 /**
  * What the app shell needs: the session and the organizations the user belongs to. A user who
- * belongs to organizations but has none active (for example after signing in again) gets the first one.
+ * belongs to organizations but has none active (for example after signing in again), or whose active
+ * one they were removed from, gets the first one. A user with none is sent to onboarding.
  */
 export const getAppState = createServerFn({ method: "GET" }).handler(() =>
   runtime.runPromise(
@@ -29,7 +30,8 @@ export const getAppState = createServerFn({ method: "GET" }).handler(() =>
       const organizations = yield* Effect.promise(() => auth.api.listOrganizations({ headers }))
       const first = organizations[0]
       let activeOrganizationId = session.activeOrganizationId
-      if (activeOrganizationId === null && first !== undefined) {
+      const stale = !organizations.some(({ id }) => id === activeOrganizationId)
+      if (stale && first !== undefined) {
         activeOrganizationId = first.id
         yield* Effect.promise(() =>
           auth.api.setActiveOrganization({ headers, body: { organizationId: first.id } }),

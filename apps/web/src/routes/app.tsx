@@ -2,6 +2,7 @@ import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
 import { Menu, Search, Settings, Users } from "lucide-react"
 import { useState } from "react"
 import { CommandPalette } from "@/components/command-palette"
+import { EmptyState } from "@/components/empty-state"
 import { LogoMark } from "@/components/logo"
 import { OrgSwitcher } from "@/components/org-switcher"
 import { Button } from "@/components/ui/button"
@@ -26,6 +27,17 @@ export const Route = createFileRoute("/app")({
     return state
   },
   component: AppShell,
+  notFoundComponent: () => (
+    <EmptyState
+      title="Page not found"
+      description="It may have moved, or it belongs to another organization."
+      action={
+        <Button asChild>
+          <Link to="/app/clients">Go to clients</Link>
+        </Button>
+      }
+    />
+  ),
 })
 
 const nav = [
