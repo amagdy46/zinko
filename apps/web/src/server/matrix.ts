@@ -10,8 +10,8 @@ const MatrixInput = Schema.Struct({ auditId: Schema.String, ...MatrixView.fields
 
 /**
  * The Tag matrix of one audit, one viewport: columns (scenarios, or pages for one scenario) with
- * exact run counts by coverage, one page of tag rows, and per tag and column the top events,
- * all counted on the server. The runs are reached through the
+ * exact run counts by coverage, one page of tag rows, and per tag and column the top events or
+ * the consent states of the hits, all counted on the server. The runs are reached through the
  * audit, so another organization's audit is a 404.
  */
 export const getTagMatrix = createServerFn({ method: "GET" })
@@ -24,7 +24,7 @@ export const getTagMatrix = createServerFn({ method: "GET" })
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const slice = yield* sliceOf(orgId, auditId, data)
         const tags = yield* tagsOf(orgId, slice, data.tagPage)
-        const cells = yield* cellsOf(orgId, slice, tags.rows)
+        const cells = yield* cellsOf(orgId, slice, tags.rows, data.mode)
         return {
           viewport: slice.viewport,
           viewports: slice.viewports,

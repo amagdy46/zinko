@@ -12,6 +12,7 @@ import {
   JOURNEY_PAGE,
   type MatrixColumn,
   type MatrixView,
+  type StateCount,
   type TagRow,
   TAGS_PER_PAGE,
   vendorRank,
@@ -234,10 +235,15 @@ const cellId = (vendor: string, destinationId: string, column: string) =>
 
 /**
  * Exact counts per tag and column in a few grouped queries: events (hits and distinct runs, the
- * top `EVENTS_PER_CELL` kept with the exact event total) and the hits and runs with hits by
- * coverage.
+ * top `EVENTS_PER_CELL` kept with the exact event total), the hits and runs with hits by
+ * coverage, and, for the consent view, the consent states of the hits before and after the choice.
  */
-export const cellsOf = (orgId: string, slice: MatrixSlice, rows: ReadonlyArray<TagRow>) =>
+export const cellsOf = (
+  orgId: string,
+  slice: MatrixSlice,
+  rows: ReadonlyArray<TagRow>,
+  mode: MatrixView["mode"],
+) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const runIds = slice.runs.map((r) => r.id)
@@ -260,19 +266,47 @@ export const cellsOf = (orgId: string, slice: MatrixSlice, rows: ReadonlyArray<T
       .innerJoin(run, eq(run.id, hit.runId))
       .where(filter)
       .groupBy(column, hit.vendor, hit.destinationId)
-    const events = yield* db
-      .select({
-        column,
-        vendor: hit.vendor,
-        destinationId: hit.destinationId,
-        event: hit.event,
-        hits: sql<number>`count(*)::int`,
-        runs: sql<number>`count(distinct ${hit.runId})::int`,
-      })
-      .from(hit)
-      .innerJoin(run, eq(run.id, hit.runId))
-      .where(filter)
-      .groupBy(column, hit.vendor, hit.destinationId, hit.event)
+    const events =
+      mode === "events"
+        ? yield* db
+            .select({
+              column,
+              vendor: hit.vendor,
+              destinationId: hit.destinationId,
+              event: hit.event,
+              hits: sql<number>`count(*)::int`,
+              runs: sql<number>`count(distinct ${hit.runId})::int`,
+            })
+            .from(hit)
+            .innerJoin(run, eq(run.id, hit.runId))
+            .where(filter)
+            .groupBy(column, hit.vendor, hit.destinationId, hit.event)
+        : []
+    const states =
+      mode === "consent"
+        ? yield* db
+            .select({
+              column,
+              vendor: hit.vendor,
+              destinationId: hit.destinationId,
+              after: hit.afterConsentAction,
+              adStorage: sql<string>`${hit.consent}->>'adStorage'`,
+              analyticsStorage: sql<string>`${hit.consent}->>'analyticsStorage'`,
+              hits: sql<number>`count(*)::int`,
+              runs: sql<number>`count(distinct ${hit.runId})::int`,
+            })
+            .from(hit)
+            .innerJoin(run, eq(run.id, hit.runId))
+            .where(filter)
+            .groupBy(
+              column,
+              hit.vendor,
+              hit.destinationId,
+              hit.afterConsentAction,
+              sql`${hit.consent}->>'adStorage'`,
+              sql`${hit.consent}->>'analyticsStorage'`,
+            )
+        : []
 
     for (const t of totals)
       cells[cellId(t.vendor, t.destinationId, t.column)] = {
@@ -280,6 +314,7 @@ export const cellsOf = (orgId: string, slice: MatrixSlice, rows: ReadonlyArray<T
         eventTotal: t.events,
         hits: t.hits,
         runsWithHits: { complete: t.complete, partial: t.partial },
+        ...(mode === "consent" ? { consent: { before: [], after: [] } } : {}),
       }
     for (const e of events.toSorted(
       (a, b) => b.runs - a.runs || b.hits - a.hits || compareText(a.event, b.event),
@@ -287,6 +322,21 @@ export const cellsOf = (orgId: string, slice: MatrixSlice, rows: ReadonlyArray<T
       const cell = cells[cellId(e.vendor, e.destinationId, e.column)]
       if (cell !== undefined && cell.events.length < EVENTS_PER_CELL)
         cell.events.push({ event: e.event, runs: e.runs, hits: e.hits })
+    }
+    for (const s of states.toSorted(
+      (a, b) =>
+        b.hits - a.hits ||
+        compareText(a.adStorage, b.adStorage) ||
+        compareText(a.analyticsStorage, b.analyticsStorage),
+    )) {
+      const bucket = cells[cellId(s.vendor, s.destinationId, s.column)]?.consent
+      const state: StateCount = {
+        adStorage: s.adStorage,
+        analyticsStorage: s.analyticsStorage,
+        hits: s.hits,
+        runs: s.runs,
+      }
+      if (bucket !== undefined) (s.after ? bucket.after : bucket.before).push(state)
     }
     return cells
   })

@@ -10,6 +10,7 @@ type Search = {
   by?: "page"
   page?: string
   scenario?: string
+  mode?: "consent"
   tagPage?: number
 }
 
@@ -21,6 +22,7 @@ export const Route = createFileRoute("/app/audits/$auditId/matrix")({
       by: view.by === "page" ? "page" : undefined,
       page: view.page,
       scenario: view.scenario,
+      mode: view.mode === "consent" ? "consent" : undefined,
       tagPage: view.tagPage > 1 ? view.tagPage : undefined,
     }
   },
@@ -43,6 +45,7 @@ function TagMatrixScreen() {
         by: next.by === "page" ? "page" : undefined,
         page: next.by === "scenario" && next.page !== "all" ? next.page : undefined,
         scenario: next.by === "page" ? next.scenario : undefined,
+        mode: next.mode === "consent" ? "consent" : undefined,
         tagPage: next.tagPage > 1 ? next.tagPage : undefined,
       },
     })
@@ -78,12 +81,12 @@ function TagMatrixScreen() {
       )
     return (
       <>
-        <TagMatrixTable auditId={auditId} matrix={matrix} />
+        <TagMatrixTable auditId={auditId} matrix={matrix} mode={view.mode} />
         <TagPager matrix={matrix} perPage={perPage} onPage={(tagPage) => change({ tagPage })} />
         <p className="max-w-prose text-xs text-muted-foreground">
-          {
-            "Fired means the page sent the request; requests were answered locally when that option was on. None seen is only said of complete runs."
-          }
+          {view.mode === "events"
+            ? "Fired means the page sent the request; requests were answered locally when that option was on. None seen is only said of complete runs."
+            : "These are the consent states the hits carried (Google's gcs and gcd signal), not the order of the consent default and update commands; the rule consent.default-after-tag checks that. Meta and TikTok hits carry no consent signal. A run whose choice was not seen has no state after the choice."}
         </p>
       </>
     )
@@ -91,14 +94,18 @@ function TagMatrixScreen() {
   return (
     <div className="min-w-0 space-y-4">
       <div className="space-y-1">
-        <h2 className="text-base font-medium">{"Which tags fired, on which events"}</h2>
+        <h2 className="text-base font-medium">
+          {view.mode === "events"
+            ? "Which tags fired, on which events"
+            : "Observed consent state before and after the choice"}
+        </h2>
         <p className="max-w-prose text-sm text-muted-foreground">
-          {
-            "Each cell counts the requests the page sent for a tag. n/m is the number of runs that had the event out of the column's runs."
-          }
+          {view.mode === "events"
+            ? "Each cell counts the requests the page sent for a tag. n/m is the number of runs that had the event out of the column's runs."
+            : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."}
         </p>
       </div>
-      <MatrixControls matrix={matrix} onChange={change} />
+      <MatrixControls matrix={matrix} mode={view.mode} onChange={change} />
       {body}
     </div>
   )

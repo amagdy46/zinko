@@ -14,6 +14,7 @@ export const MatrixView = Schema.Struct({
   by: Schema.Literals(["scenario", "page"]),
   page: Schema.optional(Schema.String.check(Schema.isMaxLength(2000))),
   scenario: Schema.optional(Short),
+  mode: Schema.Literals(["events", "consent"]),
   tagPage: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100_000 })),
 })
 export type MatrixView = typeof MatrixView.Type
@@ -27,6 +28,7 @@ export const matrixView = (search: Record<string, unknown>): MatrixView => ({
   by: decodeField(MatrixView.fields.by, search.by) ?? "scenario",
   page: decodeField(MatrixView.fields.page, search.page),
   scenario: decodeField(MatrixView.fields.scenario, search.scenario),
+  mode: decodeField(MatrixView.fields.mode, search.mode) ?? "events",
   tagPage: decodeField(MatrixView.fields.tagPage, Number(search.tagPage ?? 1)) ?? 1,
 })
 
@@ -55,11 +57,19 @@ export interface TagRow {
   destinationId: string
 }
 
+export interface StateCount {
+  adStorage: string
+  analyticsStorage: string
+  hits: number
+  runs: number
+}
+
 export interface ColumnCell {
   events: { event: string; runs: number; hits: number }[]
   eventTotal: number
   hits: number
   runsWithHits: { complete: number; partial: number }
+  consent?: { before: StateCount[]; after: StateCount[] }
 }
 
 export const cellKey = (row: TagRow, column: MatrixColumn) => `${row.key}|${column.key}`
@@ -105,6 +115,51 @@ export const coverageNote = (
   const seen = (cell?.runsWithHits.complete ?? 0) + (cell?.runsWithHits.partial ?? 0)
   return `from ${seen} of ${column.runs.total} runs; ${gaps(state.incomplete)}`
 }
+
+export const OUTCOME_NOTE: Record<string, string> = {
+  accepted: "Choice: accepted",
+  rejected: "Choice: rejected",
+  none: "No choice made",
+  "not-found": "Choice not seen (no banner found)",
+  "not-applied": "Choice not seen (did not take effect)",
+}
+
+/** Runs whose choice was seen to take effect: the only runs that have an "after the choice". */
+export const observedChoices = (column: MatrixColumn) =>
+  (column.outcomes.accepted ?? 0) + (column.outcomes.rejected ?? 0)
+
+export interface ConsentColumnCell {
+  before: StateCount[]
+  after: StateCount[] | "n/a"
+  mixed: { before: boolean; after: boolean }
+  signal: "google" | "none"
+  afterNotApplicable: number
+}
+
+/**
+ * The consent states a tag's hits carried across a column's runs. Meta and TikTok hits carry no
+ * consent signal. The after bucket is "n/a" when no run of the column had its choice observed;
+ * nothing is inferred from the action finishing.
+ */
+export const consentColumnCell = (
+  cell: ColumnCell | undefined,
+  column: MatrixColumn,
+  vendor: string,
+): ConsentColumnCell => {
+  const before = cell?.consent?.before ?? []
+  const after = cell?.consent?.after ?? []
+  const observed = observedChoices(column)
+  const known = Object.values(column.outcomes).reduce((sum, n) => sum + n, 0)
+  return {
+    before,
+    after: observed === 0 ? "n/a" : after,
+    mixed: { before: before.length > 1, after: after.length > 1 },
+    signal: vendor === "ga4" || vendor === "google-ads" ? "google" : "none",
+    afterNotApplicable: known - observed,
+  }
+}
+
+export const stateLabel = (state: StateCount) => `${state.adStorage} / ${state.analyticsStorage}`
 
 const VENDOR_NAMES: Record<string, string> = {
   ga4: "Google Analytics 4",

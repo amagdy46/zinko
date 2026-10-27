@@ -28,10 +28,15 @@ import {
   cellKey,
   cellState,
   type ColumnCell,
+  consentColumnCell,
   coverageNote,
   JOURNEY_PAGE,
   type MatrixColumn,
   type MatrixView,
+  observedChoices,
+  OUTCOME_NOTE,
+  type StateCount,
+  stateLabel,
   type TagRow,
   vendorName,
 } from "@/lib/tag-matrix"
@@ -54,11 +59,15 @@ const COVERAGE_WORD: Record<string, string> = {
 
 const CHIPS_COLLAPSED = 4
 
+const sum = (states: ReadonlyArray<StateCount>) => states.reduce((total, s) => total + s.hits, 0)
+
 export function MatrixControls({
   matrix,
+  mode,
   onChange,
 }: {
   matrix: Matrix
+  mode: MatrixView["mode"]
   onChange: (patch: Partial<MatrixView>) => void
 }) {
   return (
@@ -125,11 +134,32 @@ export function MatrixControls({
           </SelectContent>
         </Select>
       )}
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        size="sm"
+        aria-label="What to show"
+        value={mode}
+        onValueChange={(next) => {
+          if (next === "events" || next === "consent") onChange({ mode: next })
+        }}
+      >
+        <ToggleGroupItem value="events">Events</ToggleGroupItem>
+        <ToggleGroupItem value="consent">Consent state</ToggleGroupItem>
+      </ToggleGroup>
     </div>
   )
 }
 
-export function TagMatrixTable({ auditId, matrix }: { auditId: string; matrix: Matrix }) {
+export function TagMatrixTable({
+  auditId,
+  matrix,
+  mode,
+}: {
+  auditId: string
+  matrix: Matrix
+  mode: MatrixView["mode"]
+}) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const toggle = (key: string) =>
     setExpanded((before) => {
@@ -146,7 +176,7 @@ export function TagMatrixTable({ auditId, matrix }: { auditId: string; matrix: M
           </TableHead>
           {matrix.columns.map((column) => (
             <TableHead key={column.key} className="min-w-48 border-b align-top whitespace-normal">
-              <ColumnHeader column={column} />
+              <ColumnHeader column={column} mode={mode} />
             </TableHead>
           ))}
         </TableRow>
@@ -158,18 +188,20 @@ export function TagMatrixTable({ auditId, matrix }: { auditId: string; matrix: M
             <TableRow key={row.key} className="hover:bg-transparent">
               <TableCell className="sticky left-0 z-10 border-b bg-background align-top whitespace-normal">
                 <div className="flex items-start gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8 shrink-0"
-                    aria-expanded={open}
-                    aria-label={`${open ? "Collapse" : "Expand"} ${row.destinationId}`}
-                    onClick={() => toggle(row.key)}
-                  >
-                    <ChevronDown
-                      className={cn("size-4 transition-transform", !open && "-rotate-90")}
-                    />
-                  </Button>
+                  {mode === "events" ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-8 shrink-0"
+                      aria-expanded={open}
+                      aria-label={`${open ? "Collapse" : "Expand"} ${row.destinationId}`}
+                      onClick={() => toggle(row.key)}
+                    >
+                      <ChevronDown
+                        className={cn("size-4 transition-transform", !open && "-rotate-90")}
+                      />
+                    </Button>
+                  ) : null}
                   <div className="min-w-0 py-1.5">
                     <p className="text-xs text-muted-foreground">{vendorName(row.vendor)}</p>
                     <p className="font-mono text-sm [overflow-wrap:anywhere]">
@@ -183,6 +215,7 @@ export function TagMatrixTable({ auditId, matrix }: { auditId: string; matrix: M
                   <MatrixCell
                     auditId={auditId}
                     matrix={matrix}
+                    mode={mode}
                     row={row}
                     column={column}
                     cell={matrix.cells[cellKey(row, column)]}
@@ -198,7 +231,7 @@ export function TagMatrixTable({ auditId, matrix }: { auditId: string; matrix: M
   )
 }
 
-function ColumnHeader({ column }: { column: MatrixColumn }) {
+function ColumnHeader({ column, mode }: { column: MatrixColumn; mode: MatrixView["mode"] }) {
   const { total, complete, partial, none } = column.runs
   const gaps = partial + none > 0
   return (
@@ -213,6 +246,20 @@ function ColumnHeader({ column }: { column: MatrixColumn }) {
             : ""}
         </span>
       </p>
+      {mode === "consent" ? (
+        <>
+          {Object.entries(column.outcomes).map(([outcome, n]) => (
+            <p key={outcome} className="text-xs text-muted-foreground">
+              {column.runs.total === 1
+                ? OUTCOME_NOTE[outcome]
+                : `${count(n, "run")}: ${OUTCOME_NOTE[outcome] ?? outcome}`}
+            </p>
+          ))}
+          {column.cmps.length > 0 ? (
+            <p className="text-xs text-muted-foreground">Banner: {column.cmps.join(", ")}</p>
+          ) : null}
+        </>
+      ) : null}
     </div>
   )
 }
@@ -290,6 +337,7 @@ function EventChips({
 function MatrixCell({
   auditId,
   matrix,
+  mode,
   row,
   column,
   cell,
@@ -297,6 +345,7 @@ function MatrixCell({
 }: {
   auditId: string
   matrix: Matrix
+  mode: MatrixView["mode"]
   row: TagRow
   column: MatrixColumn
   cell: ColumnCell | undefined
@@ -308,31 +357,116 @@ function MatrixCell({
     <CellPopover
       auditId={auditId}
       matrix={matrix}
+      mode={mode}
       row={row}
       column={column}
+      cell={cell}
       label={`${vendorName(row.vendor)} ${row.destinationId}, ${column.label}`}
     >
       <span className="flex w-full flex-col items-start gap-1">
         {state.state !== "fired" ? <StateLine state={state} note={note} /> : null}
-        {state.state === "fired" ? (
+        {state.state === "fired" && mode === "events" ? (
           <>
             <EventChips events={state.events} cell={cell} column={column} open={open} />
             <StateLine state={state} note={note} />
           </>
+        ) : null}
+        {state.state === "fired" && mode === "consent" ? (
+          <ConsentCell cell={cell} column={column} vendor={row.vendor} note={note} />
         ) : null}
       </span>
     </CellPopover>
   )
 }
 
+function Bucket({
+  title,
+  states,
+  signal,
+}: {
+  title: string
+  states: StateCount[] | "n/a"
+  signal: "google" | "none"
+}) {
+  return (
+    <span className="block">
+      <span className="block text-2xs text-muted-foreground uppercase">{title}</span>
+      <BucketStates states={states} signal={signal} />
+    </span>
+  )
+}
+
+function BucketStates({
+  states,
+  signal,
+}: {
+  states: StateCount[] | "n/a"
+  signal: "google" | "none"
+}) {
+  if (states === "n/a") return <span className="block text-xs text-muted-foreground">n/a</span>
+  if (states.length === 0)
+    return <span className="block text-xs text-muted-foreground">No hits</span>
+  if (signal === "none") return <span className="block text-xs">{count(sum(states), "hit")}</span>
+  return (
+    <>
+      {states.length > 1 ? (
+        <span className="inline-flex min-h-5 items-center rounded border px-1.5 text-2xs font-medium">
+          Mixed
+        </span>
+      ) : null}
+      {states.map((s) => (
+        <span key={stateLabel(s)} className="block font-mono text-xs">
+          {stateLabel(s)}: {s.hits}
+        </span>
+      ))}
+    </>
+  )
+}
+
+function ConsentCell({
+  cell,
+  column,
+  vendor,
+  note,
+}: {
+  cell: ColumnCell | undefined
+  column: MatrixColumn
+  vendor: string
+  note: string | null
+}) {
+  const consent = consentColumnCell(cell, column, vendor)
+  const observed = observedChoices(column)
+  return (
+    <>
+      {consent.signal === "none" ? (
+        <span className="text-xs text-muted-foreground">No consent signal on these hits</span>
+      ) : null}
+      <Bucket
+        title={observed === 0 ? "All hits (no choice seen)" : "Before the choice"}
+        states={consent.before}
+        signal={consent.signal}
+      />
+      <Bucket title="After the choice" states={consent.after} signal={consent.signal} />
+      {consent.afterNotApplicable > 0 && observed > 0 ? (
+        <span className="text-xs text-muted-foreground">
+          Choice not seen on {count(consent.afterNotApplicable, "run")}
+        </span>
+      ) : null}
+      {note === null ? null : <span className="text-xs text-muted-foreground">{note}</span>}
+    </>
+  )
+}
+
 function CellDetailBody({
   auditId,
   matrix,
+  mode,
   row,
   column,
 }: {
   auditId: string
   matrix: Matrix
+  mode: MatrixView["mode"]
   row: TagRow
   column: MatrixColumn
 }) {
@@ -346,6 +480,7 @@ function CellDetailBody({
         by: matrix.by,
         page: matrix.page,
         scenario: matrix.scenario,
+        mode,
         tagPage: 1,
         column: column.key,
         vendor: row.vendor,
@@ -362,7 +497,7 @@ function CellDetailBody({
     return () => {
       current = false
     }
-  }, [auditId, matrix.viewport, matrix.by, matrix.page, matrix.scenario, column.key, row])
+  }, [auditId, matrix.viewport, matrix.by, matrix.page, matrix.scenario, mode, column.key, row])
   if (detail === null) return <p className="text-xs text-muted-foreground">Loading…</p>
   if (detail === "failed")
     return (
@@ -414,23 +549,57 @@ const LINK_CLASS =
 
 function HitsLinks({
   auditId,
+  mode,
   row,
   column,
+  cell,
 }: {
   auditId: string
+  mode: MatrixView["mode"]
   row: TagRow
   column: MatrixColumn
+  cell: ColumnCell | undefined
 }) {
+  const search = (timing?: "before" | "after") => ({
+    runId: column.runIds,
+    vendor: row.vendor,
+    destinationId: row.destinationId,
+    source: "network" as const,
+    timing,
+  })
+  if (mode === "consent" && cell?.consent !== undefined) {
+    const before = sum(cell.consent.before)
+    const after = sum(cell.consent.after)
+    return (
+      <>
+        {before > 0 ? (
+          <Link
+            to="/app/audits/$auditId/hits"
+            params={{ auditId }}
+            search={search("before")}
+            className={LINK_CLASS}
+          >
+            Open {count(before, "hit")} before the choice
+          </Link>
+        ) : null}
+        {after > 0 ? (
+          <Link
+            to="/app/audits/$auditId/hits"
+            params={{ auditId }}
+            search={search("after")}
+            className={LINK_CLASS}
+          >
+            Open {count(after, "hit")} after the choice
+          </Link>
+        ) : null}
+      </>
+    )
+  }
   return (
     <Link
       to="/app/audits/$auditId/hits"
       params={{ auditId }}
-      search={{
-        runId: column.runIds,
-        vendor: row.vendor,
-        destinationId: row.destinationId,
-        source: "network",
-      }}
+      search={search()}
       className={LINK_CLASS}
     >
       Open in Hits
@@ -441,15 +610,19 @@ function HitsLinks({
 function CellPopover({
   auditId,
   matrix,
+  mode,
   row,
   column,
+  cell,
   label,
   children,
 }: {
   auditId: string
   matrix: Matrix
+  mode: MatrixView["mode"]
   row: TagRow
   column: MatrixColumn
+  cell: ColumnCell | undefined
   label: string
   children: React.ReactNode
 }) {
@@ -471,9 +644,9 @@ function CellPopover({
           </p>
           <p className="font-mono [overflow-wrap:anywhere]">{row.destinationId}</p>
         </div>
-        <CellDetailBody auditId={auditId} matrix={matrix} row={row} column={column} />
+        <CellDetailBody auditId={auditId} matrix={matrix} mode={mode} row={row} column={column} />
         <div className="flex flex-wrap gap-x-3 border-t pt-2">
-          <HitsLinks auditId={auditId} row={row} column={column} />
+          <HitsLinks auditId={auditId} mode={mode} row={row} column={column} cell={cell} />
         </div>
       </PopoverContent>
     </Popover>
