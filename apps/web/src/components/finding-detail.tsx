@@ -852,7 +852,7 @@ function TabBody({
             <Button
               key={refKey(r)}
               variant={r === ref ? "secondary" : "outline"}
-              size="xs"
+              size="sm"
               aria-pressed={r === ref}
               onClick={() => onPick(r)}
             >
