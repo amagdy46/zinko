@@ -85,7 +85,7 @@ function AuditPage() {
   }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const navClass =
-    "-mb-px border-b-2 border-transparent pt-1 pb-2 text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+    "shrink-0 border-b-2 border-transparent pt-1 pb-2 whitespace-nowrap text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
   return (
     <div className="min-w-0 space-y-6">
       <PageHeader
@@ -221,7 +221,7 @@ function AuditPage() {
           </ul>
         </div>
       ) : null}
-      <nav className="flex gap-4 border-b text-sm tabular-nums">
+      <nav className="flex gap-4 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums">
         <Link
           to="/app/audits/$auditId/overview"
           params={{ auditId: audit.id }}
@@ -244,6 +244,9 @@ function AuditPage() {
           className={navClass}
         >
           Findings {summary.evaluatedRuns === 0 ? "(not evaluated)" : findings}
+        </Link>
+        <Link to="/app/audits/$auditId/matrix" params={{ auditId: audit.id }} className={navClass}>
+          Tag matrix
         </Link>
         <Link to="/app/audits/$auditId/hits" params={{ auditId: audit.id }} className={navClass}>
           Hits {summary.hits}
