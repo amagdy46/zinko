@@ -42,6 +42,8 @@ const BAND_GLYPH: Record<Band, StatusMeaning> = {
 const SEVERITIES = ["critical", "warning", "info"] as const
 const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" } as const
 
+const rests = (n: number) => (n === 1 ? "rests" : "rest")
+
 function OverviewScreen() {
   const { audit } = auditRoute.useLoaderData()
   const { status, score, coverage, areas, triage, bannerUncertain, worst, tags } =
@@ -91,8 +93,8 @@ function OverviewScreen() {
         <Alert role="status" className="border-dashed" data-testid="banner-alert">
           <CircleDashed aria-hidden="true" />
           <AlertTitle className="line-clamp-none">
-            {count(score.uncertainty.bannerUncertainRuns, "failing consent check")} rest on an
-            undetected banner
+            {count(score.uncertainty.bannerUncertainRuns, "failing consent check")}{" "}
+            {rests(score.uncertainty.bannerUncertainRuns)} on an undetected banner
           </AlertTitle>
           <AlertDescription>
             <p>{BANNER_NOTE.summary}</p>
@@ -136,7 +138,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
         Failed on {worst.failingRuns} of {worst.knownRuns} runs where it could be checked, across{" "}
         {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
         {worst.bannerUncertainRuns > 0
-          ? ` ${count(worst.bannerUncertainRuns, "failing run")} rest on an undetected banner.`
+          ? ` ${count(worst.bannerUncertainRuns, "failing run")} ${rests(worst.bannerUncertainRuns)} on an undetected banner.`
           : ""}
       </p>
       <div className="space-y-1">
@@ -279,7 +281,7 @@ function ScoreBlock({
                   ? `${count(uncertainty.rules, "rule")} could not be checked, on ${count(uncertainty.runs, "run")}: ${uncertainty.ruleTitles.join(", ")}`
                   : null,
                 uncertainty.bannerUncertainRuns > 0
-                  ? `${count(uncertainty.bannerUncertainRuns, "failing consent check")} rest on an undetected banner`
+                  ? `${count(uncertainty.bannerUncertainRuns, "failing consent check")} ${rests(uncertainty.bannerUncertainRuns)} on an undetected banner`
                   : null,
               ]
                 .filter((part) => part !== null)
@@ -336,7 +338,7 @@ function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
                 <span className="block text-xs text-muted-foreground">
                   failed on {line.failing} of {line.known} runs it could be checked on
                   {line.bannerUncertain > 0
-                    ? `; ${count(line.bannerUncertain, "failing run")} rest on an undetected banner, counted in full`
+                    ? `; ${count(line.bannerUncertain, "failing run")} ${rests(line.bannerUncertain)} on an undetected banner, counted in full`
                     : ""}
                 </span>
               </span>
