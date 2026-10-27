@@ -157,7 +157,7 @@ function AuditPage() {
             <Link
               to="/app/audits/$auditId/findings"
               params={{ auditId: audit.id }}
-              className="underline underline-offset-4"
+              className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
             >
               {summary.evaluatedRuns === 0
                 ? "Not evaluated"
