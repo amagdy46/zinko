@@ -75,6 +75,13 @@ Overview and health score, the tag matrix, the report and share link, the `j`/`k
 - **Running, partial, failed:** progress header, failure strip with reasons, matrix glyphs. Built.
 - **Not evaluated, could not check:** distinct from clean. Built.
 - **No LLM key:** static fix text; a neutral row on the AI page. Built.
+- **Explanation** (finding detail, failing findings only; a "Could not check" finding has none). Built. Under "How to fix it", a section headed "Explanation":
+  - Explanations off for the organization: one neutral line ("AI explanations are switched off ...") and no text, with a link to Settings > AI for owners and admins and "Ask an owner or admin." for members.
+  - On, no key: "AI explanations need a key." with the same link or note; cached text written before the key was removed still shows, labelled with its model.
+  - On, key, nothing cached: a "What will be sent" collapsible (the policy line and the exact digest as text, with Copy) and the button "Explain with <model>". Nothing is sent before the click. Members may explain.
+  - Writing: the button disables and "Writing explanation" (`aria-live="polite"`) shows. When another member is writing the same input the section says so and polls `getExplanation` with backoff (2 s doubling to 15 s) until the text appears.
+  - Shown: summary, What we saw, Likely causes, Suggested steps (each with a where badge and one Copy), How to verify, and a footer with an "AI-written" badge, "Written by <model> (<provider>), <time>. Asked by <name>." and "The rule, not the model, decided this finding." The text is plain text: markup in an answer shows literally. Owners and admins get "Regenerate", or "Regenerate with <current model>" when the text came from another model.
+  - Failures are a destructive `Alert` with a plain message each: hourly limit (try again later, the button stays off), model did not answer in time, provider error, answer could not be used (nothing stored), and a refused request. Retry is the same button.
 - **Revoked share link:** not built (no sharing yet).
 
 ## Mockup

@@ -1,6 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronDown, CircleDashed } from "lucide-react"
+import { ChevronDown, CircleDashed, LoaderCircle } from "lucide-react"
 import { toast } from "sonner"
 import {
   ConsentTokens,
@@ -15,6 +15,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Dialog,
   DialogContent,
@@ -41,6 +42,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, runPage, scenarioLabel } from "@/lib/audit-labels"
+import { relativeTime } from "@/lib/format"
+import { cn } from "@/lib/utils"
+import { getAiPolicy } from "@/server/ai-policy"
+import { explainFinding, getExplanation } from "@/server/explain"
 import { getEvidence, getFinding, listFindings, setTriage } from "@/server/findings"
 
 export type FindingRow = Awaited<ReturnType<typeof listFindings>>["findings"][number]
@@ -344,6 +349,7 @@ export function FindingDetail({
                 ))}
               </ol>
             </section>
+            <ExplainSection auditId={auditId} ruleId={row.ruleId} />
           </>
         )}
         <Section title="Where it was seen">
@@ -417,6 +423,280 @@ export function FindingDetail({
         )}
       </div>
     </div>
+  )
+}
+
+type ExplainInfo = Awaited<ReturnType<typeof getExplanation>>
+type ExplainOutcome = Extract<Awaited<ReturnType<typeof explainFinding>>, { ok: true }>["value"]
+type ExplainFailed = Extract<ExplainOutcome, { ok: false }>
+type ExplainProblem = { reason: ExplainFailed["reason"] | "error"; message: string }
+
+const POLL_START_MS = 2000
+const POLL_MAX_MS = 15000
+
+const FAILURE_TITLE: Record<ExplainProblem["reason"], string> = {
+  off: "Explanations are switched off",
+  "no-key": "No API key",
+  limit: "Hourly limit reached",
+  "in-flight": "Already being written",
+  unreadable: "The answer could not be used",
+  timeout: "The model did not answer in time",
+  provider: "The provider returned an error",
+  error: "Could not explain",
+}
+
+const WHERE_LABEL = {
+  "tag manager": "Tag manager",
+  "consent banner": "Consent banner",
+  "site code": "Site code",
+  server: "Server",
+  other: "Other",
+} as const
+
+function SettingsLink({ canManage }: { canManage: boolean }) {
+  return canManage ? (
+    <Link
+      to="/app/settings/ai"
+      className="inline-flex h-8 items-center rounded-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      Open Settings &gt; AI
+    </Link>
+  ) : (
+    <span>Ask an owner or admin.</span>
+  )
+}
+
+/**
+ * The model explains a finding the rule already decided. It only runs after a click on Explain or
+ * Regenerate, and its text is shown as plain text.
+ */
+function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }) {
+  const [info, setInfo] = useState<Loaded<ExplainInfo>>({ state: "loading" })
+  const [canManage, setCanManage] = useState(false)
+  const [writing, setWriting] = useState(false)
+  const [problem, setProblem] = useState<ExplainProblem | null>(null)
+  const [disclosure, setDisclosure] = useState(false)
+  const [polls, setPolls] = useState(0)
+
+  const refetch = useCallback(
+    () =>
+      getExplanation({ data: { auditId, ruleId } })
+        .then((value) => setInfo({ state: "ready", value }))
+        .catch(() => setInfo({ state: "failed" })),
+    [auditId, ruleId],
+  )
+
+  useEffect(() => {
+    let current = true
+    getExplanation({ data: { auditId, ruleId } })
+      .then((value) => current && setInfo({ state: "ready", value }))
+      .catch(() => current && setInfo({ state: "failed" }))
+    getAiPolicy()
+      .then((policy) => current && setCanManage(policy.canManage))
+      .catch(() => current && setCanManage(false))
+    return () => {
+      current = false
+    }
+  }, [auditId, ruleId])
+
+  const waiting = info.state === "ready" && info.value.enabled && info.value.inFlight && !writing
+  useEffect(() => {
+    if (!waiting) return undefined
+    const timer = setTimeout(
+      () => {
+        void refetch().then(() => setPolls((n) => n + 1))
+      },
+      Math.min(POLL_START_MS * 2 ** polls, POLL_MAX_MS),
+    )
+    return () => clearTimeout(timer)
+  }, [waiting, polls, refetch])
+
+  async function generate(regenerate: boolean) {
+    setWriting(true)
+    setProblem(null)
+    setPolls(0)
+    try {
+      const result = await explainFinding({ data: { auditId, ruleId, regenerate } })
+      if (!result.ok) setProblem({ reason: "error", message: result.message })
+      else if (!result.value.ok) setProblem(result.value)
+      await refetch()
+    } catch {
+      setProblem({ reason: "error", message: "The explanation could not be requested." })
+    } finally {
+      setWriting(false)
+    }
+  }
+
+  const heading = (
+    <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+      Explanation
+    </h3>
+  )
+  if (info.state !== "ready")
+    return (
+      <section className="space-y-1" data-testid="explain">
+        {heading}
+        {info.state === "loading" ? (
+          <p className="text-muted-foreground">Loading</p>
+        ) : (
+          <p role="alert" className="text-destructive">
+            The explanation could not be loaded.
+          </p>
+        )}
+      </section>
+    )
+  const state = info.value
+  if (!state.enabled)
+    return (
+      <section className="space-y-1" data-testid="explain">
+        {heading}
+        <p className="text-muted-foreground">
+          AI explanations are switched off for this organization. The steps above are the
+          rule&apos;s standard steps. <SettingsLink canManage={canManage} />
+        </p>
+      </section>
+    )
+
+  const cached = state.cached
+  const pending = writing || state.inFlight
+  const stale =
+    cached !== null &&
+    state.current !== null &&
+    (cached.model !== state.current.model || cached.provider !== state.current.provider)
+  const mayAsk = state.canGenerate && (cached === null || state.canRegenerate)
+  let askLabel = `Explain with ${state.current?.model}`
+  if (cached !== null) askLabel = stale ? `Regenerate with ${state.current?.model}` : "Regenerate"
+  const written = cached === null ? null : relativeTime(cached.createdAt)
+
+  return (
+    <section className="space-y-2" data-testid="explain">
+      {heading}
+      {state.configured ? null : (
+        <p className="text-muted-foreground">
+          AI explanations need a key.{" "}
+          {cached === null
+            ? "The steps above are the rule's standard steps. "
+            : "The text below was written before it was removed and cannot be regenerated. "}
+          <SettingsLink canManage={canManage} />
+        </p>
+      )}
+      {cached === null || written === null ? null : (
+        <div className="space-y-3 rounded-md border p-3" data-testid="explanation">
+          <p className="font-medium">{cached.explanation.summary}</p>
+          {cached.explanation.whatWeSaw.length === 0 ? null : (
+            <div className="space-y-1">
+              <h4 className="text-xs font-medium text-muted-foreground">What we saw</h4>
+              <ul className="list-disc space-y-1 pl-5">
+                {cached.explanation.whatWeSaw.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {cached.explanation.likelyCauses.length === 0 ? null : (
+            <div className="space-y-1">
+              <h4 className="text-xs font-medium text-muted-foreground">Likely causes</h4>
+              <ul className="list-disc space-y-1 pl-5">
+                {cached.explanation.likelyCauses.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {cached.explanation.fixSteps.length === 0 ? null : (
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-medium text-muted-foreground">Suggested steps</h4>
+                <CopyButton
+                  value={cached.explanation.fixSteps
+                    .map((fix, i) => `${i + 1}. ${fix.step}`)
+                    .join("\n")}
+                  label="Copy suggested steps"
+                />
+              </div>
+              <ol className="list-decimal space-y-1 pl-5">
+                {cached.explanation.fixSteps.map((fix) => (
+                  <li key={fix.step}>
+                    {fix.step}{" "}
+                    <Badge variant="outline" className="align-middle">
+                      {WHERE_LABEL[fix.where]}
+                    </Badge>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          <div className="space-y-1">
+            <h4 className="text-xs font-medium text-muted-foreground">How to verify</h4>
+            <p>{cached.explanation.verify}</p>
+          </div>
+          <p className="text-xs text-muted-foreground" data-testid="explanation-footer">
+            <Badge variant="secondary" className="mr-1 align-middle">
+              AI-written
+            </Badge>
+            Written by {cached.model} ({cached.provider}),{" "}
+            <time dateTime={cached.createdAt.toISOString()} title={written.title}>
+              {written.text}
+            </time>
+            .{cached.createdByName === null ? "" : ` Asked by ${cached.createdByName}.`} Check it
+            against the evidence below. The rule, not the model, decided this finding.
+          </p>
+        </div>
+      )}
+      {mayAsk ? (
+        <Collapsible open={disclosure} onOpenChange={setDisclosure} className="space-y-1">
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="ghost" size="sm">
+              <ChevronDown aria-hidden="true" className={cn(disclosure && "rotate-180")} />
+              What will be sent
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {state.policyId === "paths"
+                ? "Page paths are included, without their query strings."
+                : "Pages are sent as aliases (Page 1, Page 2)."}{" "}
+              Exactly this is sent to {state.current?.provider} with instructions to explain it.
+              Cookie values, click ids, URLs and parameters never are.
+            </p>
+            <JsonView value={state.digest} />
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
+      {pending ? (
+        <p
+          aria-live="polite"
+          className="flex items-center gap-2 text-muted-foreground"
+          data-testid="explain-pending"
+        >
+          <LoaderCircle
+            aria-hidden="true"
+            className="size-4 animate-spin motion-reduce:animate-none"
+          />
+          {writing ? "Writing explanation" : "Another member is already writing this"}
+        </p>
+      ) : null}
+      {problem === null ? null : (
+        <Alert variant="destructive" data-testid="explain-error">
+          <AlertTitle>{FAILURE_TITLE[problem.reason]}</AlertTitle>
+          <AlertDescription>
+            <p>{problem.message}</p>
+          </AlertDescription>
+        </Alert>
+      )}
+      {mayAsk ? (
+        <Button
+          type="button"
+          variant={cached === null ? "default" : "outline"}
+          size="sm"
+          disabled={pending || problem?.reason === "limit"}
+          onClick={() => void generate(cached !== null)}
+          data-testid="explain-button"
+        >
+          {askLabel}
+        </Button>
+      ) : null}
+    </section>
   )
 }
 
