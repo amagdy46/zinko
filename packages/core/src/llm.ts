@@ -7,11 +7,14 @@ export type LlmProvider = (typeof llmProviders)[number]
 /** A provider request, or the storage around it, failed. */
 export class LlmError extends Data.TaggedError("LlmError")<{
   readonly operation: string
-  readonly cause: unknown
+  /** Server-side only. Provider errors can echo the API key, so the message never includes it. */
+  readonly cause?: unknown
+  /** The class of failure (`AuthenticationError`, `RateLimitError`, ...), safe to show. */
+  readonly reason?: string
 }> {
   override get message(): string {
-    const cause = this.cause instanceof Error ? `: ${this.cause.message}` : ""
-    return `LLM ${this.operation} failed${cause}`
+    const reason = this.reason === undefined ? "" : ` (${this.reason})`
+    return `LLM ${this.operation} failed${reason}`
   }
 }
 

@@ -3,7 +3,7 @@ import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai"
 import { OpenRouterClient, OpenRouterLanguageModel } from "@effect/ai-openrouter"
 import { LlmError, type LlmProvider } from "@repo/core/llm"
 import { Effect, Layer, type Redacted } from "effect"
-import { LanguageModel } from "effect/ai"
+import { AiError, LanguageModel } from "effect/ai"
 import { FetchHttpClient, type HttpClient } from "effect/http"
 
 export interface LlmSettings {
@@ -45,6 +45,10 @@ const providerLayers: Record<LlmProvider, (settings: LlmSettings) => ProviderLay
 export const makeLlmLayer = (settings: LlmSettings): Layer.Layer<LanguageModel.LanguageModel> =>
   providerLayers[settings.provider](settings).pipe(Layer.provide(FetchHttpClient.layer))
 
+/** Only the class of failure: the provider's own text can quote the API key back. */
+const providerFailure = (error: unknown) =>
+  AiError.isAiError(error) ? error.reason.name.split("/").pop() : "Unknown"
+
 /** One `generateText` call against `settings`. */
 export const generateWith = (settings: LlmSettings, prompt: string) =>
   LanguageModel.generateText({ prompt }).pipe(
@@ -52,5 +56,8 @@ export const generateWith = (settings: LlmSettings, prompt: string) =>
     // the layer depends on this call's settings, so it is built here rather than at an entry point
     // oxlint-disable-next-line effecttsgo/strict-effect-provide
     Effect.provide(makeLlmLayer(settings)),
-    Effect.mapError((cause) => new LlmError({ operation: "generateText", cause })),
+    Effect.mapError(
+      (error) => new LlmError({ operation: "generateText", reason: providerFailure(error) }),
+    ),
+    Effect.tapError((error) => Effect.log(`LLM generateText failed: ${error.reason}`)),
   )
