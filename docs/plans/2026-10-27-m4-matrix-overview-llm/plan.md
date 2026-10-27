@@ -1,6 +1,6 @@
 ---
 type: plan
-status: proposed
+status: implemented
 design: ../../vision.md
 ---
 
@@ -10,6 +10,12 @@ design: ../../vision.md
 **Approach:** The Overview, score and matrix are read models over rows M3 already writes (`finding`, `check_result`, `hit`, `run.consent`), computed on read by org-scoped server functions, so there is no new derived table and no workflow change. The score is a pure function in `apps/web/src/lib/health-score.ts`, so the page can print its own arithmetic. A new pure package `@repo/llm` builds a minimised evidence digest and the prompt and parses the answer; the call goes through a request-scoped model capability on the existing `Llm` service. Three new tables: `ai_policy` (the organization's switches), `explain_usage` (the spend ledger: atomic reservations and generation ownership, one row per provider attempt) and `finding_explanation` (the cache). The trade-off: the matrix and the score are computed per request instead of stored. The supported maximum is 168 runs ((20 pages + 1 journey) x 4 scenarios x 2 viewports, `AuditConfig` and `startAudit`), and Task 8 measures that with synthetic data before M4 is called done; if the targets are missed the fix is a narrower query or an index, not a new stored copy.
 
 Design sources: `docs/roadmap.md` (M4 row, "Left over from M3"), `docs/vision.md` (principle 2 "Rules decide, the LLM explains"; "Matrix, overview and LLM (M4)"), `docs/ui.md`, `docs/product.md`, `AGENTS.md`, and the code as of `bdf5c7d`: `packages/db/src/{audit,rules,ai}-schema.ts`, `packages/core/src/{llm,audit}.ts`, `apps/web/src/server/{findings,audit-data,audits,hits,llm,llm-provider,ai,ai-settings,auth-live,layers,org-access,server-fn}.ts`, `apps/web/src/workflows/Audit.ts`, `packages/rules/src/**`, `packages/decoders/src/providers/*`, `apps/web/src/routes/app/audits/*`, `apps/web/src/components/{finding-detail,run-matrix,evidence,status-glyph}.tsx`, `apps/cli/src/index.ts`. Revised on 2026-10-28 after review round 1 (`review-r1.md`) and again after round 2 (`review-r2.md`); "Review responses" at the end maps each point to the change. Tasks 1 and 2 are already being implemented on branch `m4/matrix-overview-llm` by another agent and their scope is not changed here; nothing in round 2 touches them (the Hits `runId` filter accepts up to 50 values, `MAX_VALUES` in `lib/hits-filter.ts`, which covers a column of at most 21 runs).
+
+## Execution status
+
+- Tasks 1 to 16 integrated locally on `m4/matrix-overview-llm` (2026-10-28), each verified in the browser or with `psql`/`zinko capture` by its own task. Task 16 swept every new screen at 390px and 1440px in both themes (168 view loads, no horizontal page scroll), ran the demo end to end on a fresh 28-run fixture audit (owner and member, Explain through an OpenAI-compatible stub) and measured `getExplanation` at the 168-run maximum: p50 161 ms, max 192 ms. Two small fixes came out of the sweep (verb agreement in the undetected-banner notes; 32px evidence buttons). The demo notes are "M4 demo" in `docs/vision.md`; what is left is "Left over from M4" in `docs/roadmap.md`.
+- Not done: the real-provider quality run (Task 13), a digest-cost measurement on real R2, token-based limits, banner detection under none and gpc, finding markers in matrix cells.
+- `seed-max.sql` in this folder reseeds the 168-run synthetic audit (`psql -v org=... -v site=... -v user=... -f seed-max.sql`).
 
 ## Global constraints
 
@@ -377,7 +383,7 @@ Demo data for browser checks (the M3 demo audits if present, otherwise run them 
 
 - [ ] Verify by: seed the audit (report row counts and the destination distribution), time each server function (20 calls, p50/p95 and payload sizes; measure the serialized response, not the query), run `EXPLAIN (ANALYZE, BUFFERS)` on the matrix aggregate and the overview queries and report the plans; open the Overview and the matrix on it at 390px and report responsiveness; add an index or lower a page size only if a target is missed, and re-measure. Keep the synthetic audit's id for Task 16 (or reseed it there from the saved script); delete it only after Task 16
 - [ ] `pnpm check && pnpm typecheck && pnpm build`
-- Result (2026-10-28): every target met with no index; numbers and plans in `docs/vision.md` ("Performance at the supported maximum"). The seed script is `/tmp/m4-seed-max.sql` (reseed for Task 16).
+- Result (2026-10-28): every target met with no index; numbers and plans in `docs/vision.md` ("Performance at the supported maximum"). The seed script is `seed-max.sql` in this folder.
 
 ### Task 9: `@repo/llm`: the digest, the disclosure policy and the dry-run CLI
 

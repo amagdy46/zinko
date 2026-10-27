@@ -5,6 +5,7 @@ Rules for AI agents (and humans) working in this repo. Read this before changing
 ## Layout
 
 - `packages/core`: service interfaces (`Context.Service` tags), tagged errors, schemas. No runtime wiring.
+- `packages/rules` (`@repo/rules`) judges a run; `packages/llm` (`@repo/llm`) is the pure digest, prompt and answer parser behind AI explanations. Both are built to `dist` and have no runtime wiring.
 - `apps/web/src/server/layers.ts`: the single place layers are composed into `AppLayer`.
 - `apps/web/src/server/runtime.ts`: runs an Effect against `AppLayer`; server functions go through it.
 - `apps/web/src/server.ts`: the Worker entry. Durable Object and Workflow classes are exported from here.
@@ -85,7 +86,7 @@ Zero errors and zero warnings are the bar.
 
 ## Database (Postgres, Drizzle)
 
-- Tables live in `packages/db/src/auth-schema.ts` (Better Auth), `ai-schema.ts` (`llm_credential`) `audit-schema.ts` (`client`, `site`, `audit`, `run`, `hit`, `datalayer_push`) and `rules-schema.ts` (`check_result`, `finding`, `finding_triage`); queries go through the `Database` service from `@repo/core`.
+- Tables live in `packages/db/src/auth-schema.ts` (Better Auth), `ai-schema.ts` (`llm_credential`), `explain-schema.ts` (`ai_policy`, `explain_usage`, `finding_explanation`), `audit-schema.ts` (`client`, `site`, `audit`, `run`, `hit`, `datalayer_push`) and `rules-schema.ts` (`check_result`, `finding`, `finding_triage`); queries go through the `Database` service from `@repo/core`.
 - Every audit table carries `org_id`; filter by `activeMembership(session).organizationId` and reach runs, hits, pushes, check results, findings and triage only through their audit, checked against the organization. An id from another organization is a 404, never a 403.
 - Foreign keys from audits upward are `on delete restrict`: clients and sites with audits are archived (`archived_at`), never deleted; deleting is allowed only without audits.
 - `hit` and `datalayer_push` have natural primary keys, `(run_id, request_id, batch_index)` and `(run_id, seq)`, and no `id`. Persisting a run deletes and reinserts its rows in one transaction with `created_at` taken from the run's `finished_at`, so a retry reproduces identical rows. Keep it that way: no `defaultNow()` or random ids in derived rows.

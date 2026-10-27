@@ -67,7 +67,7 @@ Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar 
 
 ## Not built yet
 
-Overview and health score, the tag matrix, the report and share link, the `j`/`k`/`e` shortcuts, audit compare, site settings, audit cancel and single-run retry.
+The report and share link, the `j`/`k`/`e` shortcuts, audit compare, site settings, audit cancel and single-run retry.
 
 ## States
 
