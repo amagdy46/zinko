@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { type FormEvent, useState } from "react"
+import { type FormEvent, type MouseEvent, useRef, useState } from "react"
 import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -55,6 +56,17 @@ function Members() {
   const [open, setOpen] = useState(false)
   const [link, setLink] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<{
+    kind: "remove" | "cancel"
+    id: string
+    who: string
+  } | null>(null)
+  const opener = useRef<HTMLElement | null>(null)
+
+  function ask(event: MouseEvent<HTMLElement>, next: NonNullable<typeof confirming>) {
+    opener.current = event.currentTarget
+    setConfirming(next)
+  }
 
   if (isPending)
     return (
@@ -115,7 +127,10 @@ function Members() {
       organizationId: org?.id,
     })
     if (error) toast.error(error.message ?? "Could not remove the member")
-    else await refetch()
+    else {
+      toast.success("Member removed")
+      await refetch()
+    }
     setBusy(null)
   }
 
@@ -123,7 +138,10 @@ function Members() {
     setBusy(invitationId)
     const { error } = await authClient.organization.cancelInvitation({ invitationId })
     if (error) toast.error(error.message ?? "Could not cancel the invitation")
-    else await refetch()
+    else {
+      toast.success("Invitation cancelled")
+      await refetch()
+    }
     setBusy(null)
   }
 
@@ -278,7 +296,9 @@ function Members() {
                       variant="ghost"
                       size="sm"
                       disabled={busy !== null}
-                      onClick={() => remove(member.id)}
+                      onClick={(event) =>
+                        ask(event, { kind: "remove", id: member.id, who: member.user.email })
+                      }
                     >
                       Remove
                     </Button>
@@ -321,7 +341,9 @@ function Members() {
                         variant="ghost"
                         size="sm"
                         disabled={busy !== null}
-                        onClick={() => cancel(invitation.id)}
+                        onClick={(event) =>
+                          ask(event, { kind: "cancel", id: invitation.id, who: invitation.email })
+                        }
                       >
                         Cancel
                       </Button>
@@ -332,6 +354,30 @@ function Members() {
             : null}
         </TableBody>
       </Table>
+      <ConfirmDialog
+        open={confirming !== null}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) setConfirming(null)
+        }}
+        label={confirming?.kind === "cancel" ? "Cancel invitation" : "Remove"}
+        variant="destructive"
+        title={
+          confirming?.kind === "cancel"
+            ? `Cancel the invitation for ${confirming.who}?`
+            : `Remove ${confirming?.who ?? "this member"}?`
+        }
+        description={
+          confirming?.kind === "cancel"
+            ? "The invitation link stops working."
+            : "They lose access to this organization's clients and audits."
+        }
+        returnFocus={opener}
+        onConfirm={async () => {
+          if (confirming === null) return
+          if (confirming.kind === "cancel") await cancel(confirming.id)
+          else await remove(confirming.id)
+        }}
+      />
     </section>
   )
 }
