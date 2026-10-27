@@ -124,7 +124,7 @@ const decoded = (text: string) => {
 const likePatterns = (q: string) =>
   [...new Set([q, encodeURIComponent(q), decoded(q)])].map((text) => `%${escapeLike(text)}%`)
 
-const decodeConsent =Schema.decodeUnknownOption(CaptureResult.fields.consent)
+const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 
 /**
  * One page of an audit's hits and `dataLayer` pushes, interleaved by time. `runId`, `vendor`,
