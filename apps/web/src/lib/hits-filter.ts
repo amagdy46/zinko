@@ -1,6 +1,7 @@
 import { Option, Schema } from "effect"
 
-const MAX_VALUE_LENGTH = 200
+/** The engine stores request URLs up to this long, and a destination ID is read from one. */
+const MAX_VALUE_LENGTH = 8192
 const MAX_VALUES = 50
 
 const Value = Schema.String.check(Schema.isMaxLength(MAX_VALUE_LENGTH))
@@ -13,7 +14,6 @@ export const FilterValues = Schema.Union([
 
 export const FilterText = Value
 
-const decodeValues = Schema.decodeUnknownOption(FilterValues)
 const decodeText = Schema.decodeUnknownOption(FilterText)
 
 const asText = (value: unknown) => {
@@ -25,11 +25,14 @@ const asText = (value: unknown) => {
 export const searchText = (value: unknown) =>
   Option.getOrUndefined(Option.flatMap(Option.fromUndefinedOr(asText(value)), decodeText))
 
-/** A URL parameter as one or several bounded values; anything out of bounds is dropped. */
+/**
+ * A URL parameter as one or several values. These are exact-match filters, so an out-of-bounds
+ * value is kept, not dropped: dropping it would widen the filter to everything. The server
+ * validates `FilterValues` and refuses it visibly.
+ */
 export const searchValues = (value: unknown) => {
   const normalized = Array.isArray(value)
     ? value.map(asText).filter((v) => v !== undefined)
     : asText(value)
-  if (Array.isArray(normalized) && normalized.length === 0) return undefined
-  return Option.getOrUndefined(Option.flatMap(Option.fromUndefinedOr(normalized), decodeValues))
+  return Array.isArray(normalized) && normalized.length === 0 ? undefined : normalized
 }
