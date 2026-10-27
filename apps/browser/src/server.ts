@@ -71,12 +71,10 @@ const capture = HttpRouter.add(
       const result = yield* Effect.promise(() => pending)
       return yield* HttpServerResponse.json(result).pipe(Effect.orDie)
     }).pipe(
-      Effect.catchTag("InvalidRequest", ({ message }) =>
-        rejected(400, { error: "InvalidRequest", message }),
-      ),
-      Effect.catchTag("PolicyDenied", ({ message }) =>
-        rejected(400, { error: "PolicyDenied", message }),
-      ),
+      Effect.catchTags({
+        InvalidRequest: ({ message }) => rejected(400, { error: "InvalidRequest", message }),
+        PolicyDenied: ({ message }) => rejected(400, { error: "PolicyDenied", message }),
+      }),
       Effect.ensuring(release),
     )
   }),
