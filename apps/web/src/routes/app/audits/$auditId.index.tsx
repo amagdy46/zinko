@@ -26,9 +26,9 @@ export const Route = createFileRoute("/app/audits/$auditId/")({
       search.view === undefined &&
       search.run === undefined &&
       !["queued", "running"].includes(data.audit.status) &&
-      data.findings.length > 0
+      data.summary.evaluatedRuns > 0
     )
-      throw redirect({ to: "/app/audits/$auditId/findings", params })
+      throw redirect({ to: "/app/audits/$auditId/overview", params })
   },
   component: RunsPage,
 })

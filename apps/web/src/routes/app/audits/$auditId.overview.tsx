@@ -1,5 +1,6 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { CircleDashed, Info } from "lucide-react"
+import { CopyButton } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
@@ -17,6 +18,7 @@ import {
 import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
+import { vendorName } from "@/lib/tag-matrix"
 import { getOverview } from "@/server/overview"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
@@ -42,7 +44,8 @@ const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" 
 
 function OverviewScreen() {
   const { audit } = auditRoute.useLoaderData()
-  const { status, score, coverage, areas, triage, bannerUncertain } = Route.useLoaderData()
+  const { status, score, coverage, areas, triage, bannerUncertain, worst, tags } =
+    Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
       <p className="text-sm text-muted-foreground" data-testid="overview-running">
@@ -100,8 +103,117 @@ function OverviewScreen() {
           </AlertDescription>
         </Alert>
       ) : null}
+      <WorstFinding auditId={audit.id} worst={worst} />
       <AreaCounts auditId={audit.id} areas={areas} />
+      <TagsSeen auditId={audit.id} tags={tags} />
     </div>
+  )
+}
+
+const focusRing = "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+
+function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["worst"] }) {
+  if (worst === null)
+    return (
+      <section aria-label="Worst finding" className="rounded-lg border bg-card p-4 text-sm">
+        <p className="flex items-center gap-2" data-testid="no-open-findings">
+          <StatusGlyph meaning="pass" />
+          No open failing findings
+        </p>
+      </section>
+    )
+  return (
+    <section
+      aria-label="Worst finding"
+      className="space-y-3 rounded-lg border bg-card p-4"
+      data-testid="worst-finding"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <SeverityBadge severity={worst.severity} />
+        <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Failed on {worst.failingRuns} of {worst.knownRuns} runs where it could be checked, across{" "}
+        {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
+        {worst.bannerUncertainRuns > 0
+          ? ` ${count(worst.bannerUncertainRuns, "failing run")} rest on an undetected banner.`
+          : ""}
+      </p>
+      <div className="space-y-1">
+        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Why it matters
+        </h3>
+        <p className="text-sm">{worst.why}</p>
+      </div>
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            How to fix it
+          </h3>
+          <CopyButton
+            value={worst.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+            label="Copy fix steps"
+          />
+        </div>
+        <ol className="list-decimal space-y-1 pl-5 text-sm">
+          {worst.fix.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </div>
+      <p className="text-sm">
+        <span className="text-muted-foreground">First failing run: </span>
+        {worst.message}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button asChild size="sm">
+          <Link
+            to="/app/audits/$auditId/findings"
+            params={{ auditId }}
+            search={{ finding: worst.ruleId }}
+          >
+            Open finding
+          </Link>
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <Link
+            to="/app/audits/$auditId/hits"
+            params={{ auditId }}
+            search={{ runId: worst.firstRunId }}
+          >
+            Open in Hits
+          </Link>
+        </Button>
+      </div>
+    </section>
+  )
+}
+
+function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }) {
+  return (
+    <section aria-label="Tags seen" className="space-y-2">
+      <h2 className="text-sm font-medium">Tags seen</h2>
+      {tags.length === 0 ? (
+        <p className="text-sm text-muted-foreground" data-testid="no-tags">
+          No tags were seen.
+        </p>
+      ) : (
+        <ul className="space-y-1 text-sm" data-testid="tags-seen">
+          {tags.map((tag) => (
+            <li key={tag.vendor}>
+              <Link
+                to="/app/audits/$auditId/matrix"
+                params={{ auditId }}
+                className={`inline-flex min-h-8 items-center rounded-md underline underline-offset-4 ${focusRing}`}
+              >
+                {vendorName(tag.vendor)}: {count(tag.destinations, "destination")},{" "}
+                {count(tag.events, "event")}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -265,7 +377,7 @@ function AreaCounts({ auditId, areas }: { auditId: string; areas: Overview["area
         to="/app/audits/$auditId/findings"
         params={{ auditId }}
         search={{ area, severity }}
-        className="inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 tabular-nums underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 tabular-nums underline underline-offset-4 ${focusRing}`}
       >
         {n}
       </Link>

@@ -390,3 +390,25 @@ export const cellDetailOf = (
       })),
     }
   })
+
+/**
+ * Per vendor, how many destinations and distinct events the whole audit's hits hold: the same
+ * (vendor, destination) pairs the matrix pages through, counted without building any cell.
+ */
+export const tagsSeenOf = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const rows = yield* db
+      .select({
+        vendor: hit.vendor,
+        destinations: sql<number>`count(distinct ${hit.destinationId})::int`,
+        events: sql<number>`count(distinct ${hit.event})::int`,
+      })
+      .from(hit)
+      .innerJoin(run, eq(run.id, hit.runId))
+      .where(and(eq(hit.orgId, orgId), eq(run.orgId, orgId), eq(run.auditId, auditId)))
+      .groupBy(hit.vendor)
+    return rows.toSorted(
+      (a, b) => vendorRank(a.vendor) - vendorRank(b.vendor) || compareText(a.vendor, b.vendor),
+    )
+  })

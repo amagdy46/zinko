@@ -71,10 +71,10 @@ function AuditPage() {
       toast(message, {
         id: `audit-finished-${audit.id}`,
         action: {
-          label: "Findings",
+          label: "Overview",
           onClick: () => {
             void router.navigate({
-              to: "/app/audits/$auditId/findings",
+              to: "/app/audits/$auditId/overview",
               params: { auditId: audit.id },
             })
           },
