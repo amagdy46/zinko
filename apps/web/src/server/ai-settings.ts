@@ -120,9 +120,9 @@ export const testLlmSettings = createServerFn({ method: "POST" }).handler(() =>
   runtime.runPromise(
     report(
       Effect.gen(function* () {
-        yield* manager
-        const llm = yield* Llm
-        return (yield* llm.generateText("Reply with the single word: ok")).slice(0, 200)
+        const orgId = yield* manager
+        const model = yield* (yield* Llm).forOrganization(orgId)
+        return (yield* model.generateText("Reply with the single word: ok")).slice(0, 200)
       }),
     ),
   ),

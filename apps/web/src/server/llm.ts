@@ -1,13 +1,19 @@
-import { Auth } from "@repo/core/Auth"
-import { Llm, LlmError, LlmNotConfigured, type LlmProvider, llmProviders } from "@repo/core/llm"
+import {
+  EXPLAIN_ATTEMPT_TIMEOUT_MS,
+  endpointId,
+  Llm,
+  LlmError,
+  LlmNotConfigured,
+  type LlmProvider,
+  llmProviders,
+} from "@repo/core/llm"
 import { decryptSecret, encryptSecret, loadEncryptionKey } from "@repo/core/llm-crypto"
 import { LlmCredentialStore } from "@repo/core/llm-store"
 import { DatabaseLayer } from "@repo/db"
 import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
 import { WorkerConfig } from "effect-cf"
-import { AuthLive } from "./auth-live"
 import { WorkerEnvLive } from "./cloudflare"
-import { generateWith, type LlmSettings } from "./llm-provider"
+import { generateWith, type LlmSettings, OLLAMA_URL } from "./llm-provider"
 import { LlmCredentialStoreLive } from "./llm-store"
 
 /** What the settings page may see: never the key, only its last four characters. */
@@ -121,26 +127,49 @@ const LlmCredentialsLive = Layer.effect(
   Layer.provide(WorkerEnvLive),
 )
 
+/** The endpoint a provider will actually call, for the identity: only `openai` and `ollama` take a custom one. */
+const endpointUrl = (settings: LlmSettings) => {
+  if (settings.provider === "ollama") return settings.baseUrl ?? OLLAMA_URL
+  if (settings.provider === "openai") return settings.baseUrl ?? ""
+  return ""
+}
+
 /**
- * `Llm` using the key the current organization saved in Settings > AI. Provides `LlmCredentials`
- * too (the settings server functions use it). Needs `Auth` to know whose organization is calling.
+ * `Llm` using the key an organization saved in Settings > AI. Provides `LlmCredentials` too (the
+ * settings server functions use it). `forOrganization` reads the settings once; the model it
+ * returns closes over them and never looks at the session or the database again.
  */
 export const LlmLive = Layer.effect(
   Llm,
   Effect.gen(function* () {
-    const auth = yield* Auth
     const credentials = yield* LlmCredentials
     return Llm.of({
-      generateText: (prompt) =>
+      forOrganization: (orgId) =>
         Effect.gen(function* () {
-          const session = yield* auth.currentSession.pipe(
-            Effect.mapError(() => new LlmNotConfigured({ message: "Sign in to use AI." })),
-          )
-          if (session.activeOrganizationId === null)
-            return yield* new LlmNotConfigured({ message: "Select an organization first." })
-          const settings = yield* credentials.resolve(session.activeOrganizationId)
-          return yield* generateWith(settings, prompt)
+          const settings = yield* credentials.resolve(orgId)
+          return {
+            identity: {
+              provider: settings.provider,
+              model: settings.model,
+              endpointId: yield* endpointId(settings.provider, endpointUrl(settings)),
+            },
+            generateText: (prompt) =>
+              generateWith(settings, prompt).pipe(
+                Effect.timeoutOrElse({
+                  duration: EXPLAIN_ATTEMPT_TIMEOUT_MS,
+                  orElse: () =>
+                    Effect.fail(
+                      new LlmError({
+                        operation: "generateText",
+                        cause: new Error(
+                          `the provider did not answer within ${EXPLAIN_ATTEMPT_TIMEOUT_MS / 1000} seconds`,
+                        ),
+                      }),
+                    ),
+                }),
+              ),
+          }
         }),
     })
   }),
-).pipe(Layer.provideMerge(LlmCredentialsLive), Layer.provide(AuthLive))
+).pipe(Layer.provideMerge(LlmCredentialsLive))
