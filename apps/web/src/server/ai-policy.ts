@@ -1,28 +1,10 @@
 import { Database } from "@repo/core/Database"
 import { aiPolicy } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
+import { aiPolicyOf } from "./ai-policy-data"
 import { requireSession } from "./require-session"
 import { Forbidden, isManager, membership, read, respond } from "./server-fn"
-
-/** What an organization without an `ai_policy` row gets: nothing leaves for a provider. */
-export const AI_POLICY_DEFAULTS = { explanationsEnabled: false, includePagePaths: false }
-
-/** The organization's AI switches; the defaults when it never saved any. */
-const aiPolicyOf = (orgId: string) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const [row] = yield* db
-      .select({
-        explanationsEnabled: aiPolicy.explanationsEnabled,
-        includePagePaths: aiPolicy.includePagePaths,
-      })
-      .from(aiPolicy)
-      .where(eq(aiPolicy.orgId, orgId))
-      .limit(1)
-    return row ?? AI_POLICY_DEFAULTS
-  })
 
 const SaveInput = Schema.Struct({
   explanationsEnabled: Schema.Boolean,

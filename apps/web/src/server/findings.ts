@@ -37,8 +37,8 @@ const EvidenceRef = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("push"), seq: Schema.Int }),
   Schema.Struct({ kind: Schema.Literal("document"), documentId: Schema.String }),
 ])
-const decodeEvidence = Schema.decodeUnknownEffect(Schema.Array(EvidenceRef))
-const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
+export const decodeEvidence = Schema.decodeUnknownEffect(Schema.Array(EvidenceRef))
+export const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 
 const MAX_REASON = 1000
 

@@ -5,6 +5,7 @@ import {
   LlmError,
   LlmNotConfigured,
   type LlmProvider,
+  LlmTimeout,
   llmProviders,
 } from "@repo/core/llm"
 import { decryptSecret, encryptSecret, loadEncryptionKey } from "@repo/core/llm-crypto"
@@ -158,14 +159,7 @@ export const LlmLive = Layer.effect(
                 Effect.timeoutOrElse({
                   duration: EXPLAIN_ATTEMPT_TIMEOUT_MS,
                   orElse: () =>
-                    Effect.fail(
-                      new LlmError({
-                        operation: "generateText",
-                        cause: new Error(
-                          `the provider did not answer within ${EXPLAIN_ATTEMPT_TIMEOUT_MS / 1000} seconds`,
-                        ),
-                      }),
-                    ),
+                    Effect.fail(new LlmTimeout({ timeoutMs: EXPLAIN_ATTEMPT_TIMEOUT_MS })),
                 }),
               ),
           }

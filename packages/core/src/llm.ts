@@ -15,6 +15,15 @@ export class LlmError extends Data.TaggedError("LlmError")<{
   }
 }
 
+/** The provider did not answer within `EXPLAIN_ATTEMPT_TIMEOUT_MS`; the request was cancelled. */
+export class LlmTimeout extends Data.TaggedError("LlmTimeout")<{
+  readonly timeoutMs: number
+}> {
+  override get message(): string {
+    return `The provider did not answer within ${this.timeoutMs / 1000} seconds.`
+  }
+}
+
 /** There is no usable model configuration for this call (no key set, or no organization selected). */
 export class LlmNotConfigured extends Data.TaggedError("LlmNotConfigured")<{
   readonly message: string
@@ -38,7 +47,7 @@ export interface LlmIdentity {
 export interface LlmModel {
   readonly identity: LlmIdentity
   /** One provider attempt, bounded by `EXPLAIN_ATTEMPT_TIMEOUT_MS`. */
-  readonly generateText: (prompt: string) => Effect.Effect<string, LlmError>
+  readonly generateText: (prompt: string) => Effect.Effect<string, LlmError | LlmTimeout>
 }
 
 /** First 16 hex digits of sha256 over the provider and the normalized endpoint URL (empty for a provider's default). */
