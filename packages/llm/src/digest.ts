@@ -13,6 +13,7 @@ import {
   type EvidenceRef,
 } from "@repo/rules"
 import { isKnownDestination, knownEvent, pushCommand, VENDOR_LABELS } from "./vocab.js"
+import { KNOWN_CMPS } from "./known-cmps.js"
 
 export const MAX_CASES = 5
 export const MAX_EVIDENCE = 8
@@ -102,7 +103,7 @@ export interface DigestRun {
 const SCENARIO_ORDER: readonly Scenario[] = ["none", "accept", "reject", "gpc"]
 const VIEWPORT_ORDER: readonly CaptureRequest["viewport"][] = ["desktop", "mobile"]
 const MAX_PATH_LENGTH = 200
-const MAX_CMP_LENGTH = 40
+const UNRECOGNISED_CMP = "an unrecognised CMP"
 
 /** Code unit order, the same in every runtime (unlike `localeCompare`). */
 function byText(a: string, b: string): number {
@@ -163,11 +164,8 @@ function timingOf(consent: CaptureResult["consent"], startedAt: number): Timing 
 }
 
 function cmpLabel(cmp: string | null): string | null {
-  const cleaned = cmp
-    ?.replace(/[^A-Za-z0-9 ._()-]/g, " ")
-    .trim()
-    .slice(0, MAX_CMP_LENGTH)
-  return cleaned === undefined || cleaned === "" ? null : cleaned
+  if (cmp === null || cmp === "") return null
+  return KNOWN_CMPS.has(cmp) ? cmp : UNRECOGNISED_CMP
 }
 
 function sameOrigin(a: string, b: string): boolean {
