@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
+import { count } from "@/lib/format"
 import { isOnSite, withoutCredentials } from "@/lib/site-url"
 import { startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
@@ -349,7 +350,7 @@ function NewAudit() {
           <ul className="hidden space-y-2 font-mono text-xs lg:block text-muted-foreground tabular-nums">
             {breakdown.lines.map((line) => (
               <li key={line.label}>
-                {line.label} = {line.runs} runs
+                {line.label} = {count(line.runs, "run")}
               </li>
             ))}
           </ul>
