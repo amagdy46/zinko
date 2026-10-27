@@ -82,7 +82,8 @@ export function CommandPalette({
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
-      if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
+      // Chrome autofill dispatches keydown events with no `key`, whatever the DOM typing says.
+      if (typeof event.key === "string" && event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault()
         toggle()
       }
