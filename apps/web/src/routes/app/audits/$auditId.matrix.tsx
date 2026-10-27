@@ -53,6 +53,12 @@ function TagMatrixScreen() {
   const perPage = TAGS_PER_PAGE[matrix.by]
   const neverCaptured = matrix.columns.every((column) => column.runs.none === column.runs.total)
   const uncaptured = matrix.columns.reduce((total, column) => total + column.runs.none, 0)
+  const partial = matrix.columns.reduce((total, column) => total + column.runs.partial, 0)
+  const incomplete = [
+    partial > 0 &&
+      `${count(partial, "run")} ${partial === 1 ? "was" : "were"} captured only in part`,
+    uncaptured > 0 && `${count(uncaptured, "run")} could not be captured`,
+  ].filter((part) => part !== false)
   const body = (() => {
     if (matrix.columns.length === 0)
       return (
@@ -73,8 +79,8 @@ function TagMatrixScreen() {
         <EmptyState
           title="No tags were seen"
           description={
-            uncaptured > 0
-              ? `No tag fired in the runs that were captured. ${count(uncaptured, "run")} could not be captured, so this is not a clean result.`
+            incomplete.length > 0
+              ? `No tag was seen in this selection, but ${incomplete.join(" and ")}, so the observation is incomplete and this is not a clean result.`
               : "No tag fired in this selection."
           }
         />
