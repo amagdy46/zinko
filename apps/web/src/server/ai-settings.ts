@@ -1,37 +1,22 @@
-import { Auth } from "@repo/core/Auth"
+import type { Session } from "@repo/core/Auth"
 import { Llm, LlmNotConfigured, llmProviders } from "@repo/core/llm"
 import { createServerFn } from "@tanstack/react-start"
-import { getRequestHeaders } from "@tanstack/react-start/server"
-import { Data, Effect, Option, Schema } from "effect"
-import { BetterAuth } from "./auth-live"
+import { Effect, Option, Schema } from "effect"
 import { LlmCredentials } from "./llm"
+import { requireSession } from "./require-session"
 import { runtime } from "./runtime"
+import { Forbidden, isManager, membership } from "./server-fn"
 
-class Forbidden extends Data.TaggedError("Forbidden")<{ readonly message: string }> {}
-
-/** The signed-in user's active organization and whether they may change its AI settings (owner or admin). */
-const currentOrganization = Effect.gen(function* () {
-  const auth = yield* Auth
-  const session = yield* auth.currentSession
-  const orgId = session.activeOrganizationId
-  if (orgId === null)
-    return yield* new LlmNotConfigured({ message: "Select an organization first." })
-  const betterAuth = yield* BetterAuth
-  const member = yield* Effect.promise(() =>
-    betterAuth.api.getActiveMember({ headers: getRequestHeaders() }),
-  )
-  const roles = member?.role.split(",") ?? []
-  return { orgId, canManage: roles.includes("owner") || roles.includes("admin") }
-})
-
-const manager = Effect.gen(function* () {
-  const org = yield* currentOrganization
-  if (!org.canManage)
-    return yield* new Forbidden({
-      message: "Only organization owners and admins can change AI settings.",
-    })
-  return org.orgId
-})
+/** The active organization and whether the caller may change its AI settings, read from one membership lookup. */
+const manager = (session: Session) =>
+  Effect.gen(function* () {
+    const { organizationId, role } = yield* membership(session)
+    if (!isManager(role))
+      return yield* new Forbidden({
+        message: "Only organization owners and admins can change AI settings.",
+      })
+    return organizationId
+  })
 
 /** User-facing failure: the message, never the cause (which may carry request details). */
 const report = <A, R>(effect: Effect.Effect<A, { readonly message: string }, R>) =>
@@ -66,31 +51,35 @@ const parseBaseUrl = (provider: string, value: string | undefined) =>
   })
 
 /** This organization's AI settings. The key never leaves the server: only its last four characters do (to managers). */
-export const getLlmSettings = createServerFn({ method: "GET" }).handler(() =>
-  runtime.runPromise(
-    Effect.gen(function* () {
-      const { orgId, canManage } = yield* currentOrganization
-      const credentials = yield* LlmCredentials
-      const summary = Option.getOrNull(yield* credentials.summary(orgId))
-      return {
-        canManage,
-        configured: summary !== null,
-        provider: summary?.provider ?? null,
-        model: summary?.model ?? null,
-        baseUrl: summary?.baseUrl ?? null,
-        last4: canManage ? (summary?.last4 ?? null) : null,
-      }
-    }).pipe(Effect.orElseSucceed(() => null)),
-  ),
-)
+export const getLlmSettings = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    runtime.runPromise(
+      Effect.gen(function* () {
+        const { organizationId, role } = yield* membership(context.session)
+        const canManage = isManager(role)
+        const credentials = yield* LlmCredentials
+        const summary = Option.getOrNull(yield* credentials.summary(organizationId))
+        return {
+          canManage,
+          configured: summary !== null,
+          provider: summary?.provider ?? null,
+          model: summary?.model ?? null,
+          baseUrl: summary?.baseUrl ?? null,
+          last4: canManage ? (summary?.last4 ?? null) : null,
+        }
+      }).pipe(Effect.orElseSucceed(() => null)),
+    ),
+  )
 
 export const saveLlmSettings = createServerFn({ method: "POST" })
+  .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveInput))
-  .handler(({ data }) =>
+  .handler(({ context, data }) =>
     runtime.runPromise(
       report(
         Effect.gen(function* () {
-          const orgId = yield* manager
+          const orgId = yield* manager(context.session)
           const credentials = yield* LlmCredentials
           const apiKey = data.apiKey?.trim()
           yield* credentials.save(orgId, {
@@ -104,26 +93,30 @@ export const saveLlmSettings = createServerFn({ method: "POST" })
     ),
   )
 
-export const clearLlmSettings = createServerFn({ method: "POST" }).handler(() =>
-  runtime.runPromise(
-    report(
-      Effect.gen(function* () {
-        const orgId = yield* manager
-        yield* (yield* LlmCredentials).clear(orgId)
-      }),
+export const clearLlmSettings = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    runtime.runPromise(
+      report(
+        Effect.gen(function* () {
+          const orgId = yield* manager(context.session)
+          yield* (yield* LlmCredentials).clear(orgId)
+        }),
+      ),
     ),
-  ),
-)
+  )
 
 /** Sends a one-word prompt with the saved key to check that it works. */
-export const testLlmSettings = createServerFn({ method: "POST" }).handler(() =>
-  runtime.runPromise(
-    report(
-      Effect.gen(function* () {
-        const orgId = yield* manager
-        const model = yield* (yield* Llm).forOrganization(orgId)
-        return (yield* model.generateText("Reply with the single word: ok")).slice(0, 200)
-      }),
+export const testLlmSettings = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    runtime.runPromise(
+      report(
+        Effect.gen(function* () {
+          const orgId = yield* manager(context.session)
+          const model = yield* (yield* Llm).forOrganization(orgId)
+          return (yield* model.generateText("Reply with the single word: ok")).slice(0, 200)
+        }),
+      ),
     ),
-  ),
-)
+  )
