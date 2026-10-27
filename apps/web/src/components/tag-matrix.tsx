@@ -111,8 +111,8 @@ export function MatrixControls({
           <SelectContent>
             <SelectItem value={ALL_PAGES}>All pages</SelectItem>
             {matrix.pages.map((page) => (
-              <SelectItem key={page} value={page}>
-                {page}
+              <SelectItem key={page.url} value={page.url}>
+                {page.label}
               </SelectItem>
             ))}
             {matrix.journey === null ? null : (

@@ -68,8 +68,26 @@ const estimateDuration = (runs: number) => {
 }
 
 export const pagePath = (pageUrl: string) => {
-  const { pathname, search } = new URL(pageUrl)
-  return pathname + search
+  const { pathname, search, hash } = new URL(pageUrl)
+  return pathname + search + hash
+}
+
+const withHost = (url: string) => new URL(url).host + pagePath(url)
+
+/**
+ * A readable label for each page URL: the path alone when no other page shares it, the host and
+ * path when only the host tells them apart, the whole URL otherwise. The URL stays the identity.
+ */
+export const pageLabels = (pageUrls: ReadonlyArray<string>) => {
+  const urls = [...new Set(pageUrls)]
+  const unique = (label: (url: string) => string, url: string) =>
+    urls.filter((other) => label(other) === label(url)).length === 1
+  return new Map(
+    urls.map((url) => {
+      if (unique(pagePath, url)) return [url, pagePath(url)]
+      return [url, unique(withHost, url) ? withHost(url) : url]
+    }),
+  )
 }
 
 /** The page a run captures; a journey run starts there and walks on through the key pages. */

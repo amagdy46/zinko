@@ -3,7 +3,7 @@ import { Database } from "@repo/core/Database"
 import { hit, run } from "@repo/db"
 import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
-import { pagePath, runPage, scenarioLabel } from "@/lib/audit-labels"
+import { pageLabels, scenarioLabel } from "@/lib/audit-labels"
 import {
   ALL_PAGES,
   type ColumnCell,
@@ -55,7 +55,7 @@ export interface MatrixSlice {
   viewport: string
   viewports: string[]
   scenarios: string[]
-  pages: string[]
+  pages: { url: string; label: string }[]
   journey: string | null
   by: MatrixView["by"]
   page: string
@@ -91,13 +91,19 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
         ? view.viewport
         : (viewports[0] ?? "desktop")
     const scenarios = [...new Set(rows.map((r) => r.scenario))].toSorted(byOrder(SCENARIO_ORDER))
-    const pages = [...new Set(rows.filter((r) => !r.journey).map((r) => pagePath(r.pageUrl)))]
+    const labels = pageLabels(rows.map((r) => r.pageUrl))
+    const labelOf = (r: { pageUrl: string; journey: boolean }) => {
+      const label = labels.get(r.pageUrl) ?? r.pageUrl
+      return r.journey ? `Journey from ${label}` : label
+    }
+    const pageUrls = [...new Set(rows.filter((r) => !r.journey).map((r) => r.pageUrl))]
+    const pages = pageUrls.map((url) => ({ url, label: labels.get(url) ?? url }))
     const journeyRun = rows.find((r) => r.journey)
-    const journey = journeyRun === undefined ? null : runPage(journeyRun)
+    const journey = journeyRun === undefined ? null : labelOf(journeyRun)
 
     const inViewport = rows.filter((r) => r.viewport === viewport)
     const wanted = view.page ?? ALL_PAGES
-    const knownPage = pages.includes(wanted) || (wanted === JOURNEY_PAGE && journey !== null)
+    const knownPage = pageUrls.includes(wanted) || (wanted === JOURNEY_PAGE && journey !== null)
     const page = knownPage ? wanted : ALL_PAGES
     const scenario =
       view.scenario !== undefined && scenarios.includes(view.scenario)
@@ -108,7 +114,7 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
       if (view.by === "page") return r.scenario === scenario
       if (page === JOURNEY_PAGE) return r.journey
       if (r.journey) return false
-      return page === ALL_PAGES || pagePath(r.pageUrl) === page
+      return page === ALL_PAGES || r.pageUrl === page
     })
     const keyOf = (r: (typeof rows)[number]) => {
       if (view.by === "scenario") return r.scenario
@@ -122,7 +128,7 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
         columnKey: keyOf(r),
         coverage: coverageOf(r.status),
         consentOutcome: consent?.outcome ?? null,
-        page: runPage(r),
+        page: labelOf(r),
         scenario: r.scenario,
       }
     })
