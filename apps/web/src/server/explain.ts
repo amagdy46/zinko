@@ -1,7 +1,7 @@
 import { Scenario } from "@repo/capture-contract"
-import { Llm, type LlmModel } from "@repo/core/llm"
+import { Llm, type LlmIdentity, type LlmModel } from "@repo/core/llm"
 import { Database } from "@repo/core/Database"
-import { checkResult, finding, hit, run } from "@repo/db"
+import { checkResult, finding, hit, member, run, user } from "@repo/db"
 import {
   buildDigest,
   buildExplainPrompt,
@@ -22,6 +22,7 @@ import {
   cachedFor,
   type CachedExplanation,
   findCached,
+  generationInFlight,
   keyHashOf,
   type LookupKey,
   MAX_ATTEMPTS,
@@ -32,7 +33,7 @@ import {
 import { decodeEvidence, decodeFix } from "./findings"
 import { decodeSeverity } from "./findings-data"
 import { requireSession } from "./require-session"
-import { Forbidden, Invalid, isManager, membership, NotFound, respond } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, NotFound, read, respond } from "./server-fn"
 
 const Viewport = Schema.Literals(["desktop", "mobile"])
 const Vendor = Schema.Literals(["ga4", "meta", "google-ads", "tiktok"])
@@ -390,6 +391,74 @@ export const explainFinding = createServerFn({ method: "POST" })
           model: model.value,
           regenerateSince: data.regenerate ? { at: previous?.createdAt ?? null } : null,
         })
+      }),
+    ),
+  )
+
+const who = (orgId: string, userId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const [actor] = yield* db
+      .select({ name: user.name })
+      .from(member)
+      .innerJoin(user, eq(user.id, member.userId))
+      .where(and(eq(member.organizationId, orgId), eq(member.userId, userId)))
+      .limit(1)
+    return actor?.name ?? null
+  })
+
+/**
+ * What the finding detail needs to offer an explanation. With explanations off it returns
+ * `enabled: false` and no digest and no text. The cached text is found without the organization's
+ * key and carries the provider and model that wrote it; `current` is the configuration Generate
+ * would use (`null` without a usable key). Same order of operations as `explainFinding`.
+ */
+export const getExplanation = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(FindingInput))
+  .handler(({ context, data }) =>
+    read(
+      Effect.gen(function* () {
+        const org = yield* authorize(context.session, data)
+        if (!org.policy.explanationsEnabled)
+          return {
+            enabled: false as const,
+            configured: false as const,
+            canGenerate: false as const,
+            canRegenerate: false as const,
+          }
+        const { digest, key } = yield* digestOf(
+          org.orgId,
+          org.auditId,
+          org.finding,
+          org.policy.includePagePaths,
+        )
+        const row = yield* findCached(key)
+        const model = yield* modelFor(org.orgId)
+        const current: Pick<LlmIdentity, "provider" | "model"> | null = Option.isSome(model)
+          ? { provider: model.value.identity.provider, model: model.value.identity.model }
+          : null
+        return {
+          enabled: true as const,
+          configured: current !== null,
+          canGenerate: current !== null,
+          canRegenerate: current !== null && isManager(org.role),
+          digest,
+          policyId: digest.policyId,
+          evidenceHash: key.evidenceHash,
+          current,
+          cached:
+            row === null
+              ? null
+              : {
+                  explanation: asExplanation(row),
+                  createdAt: row.createdAt,
+                  createdByName: yield* who(org.orgId, row.createdBy),
+                  provider: row.provider,
+                  model: row.model,
+                },
+          inFlight: yield* generationInFlight(org.orgId, yield* keyHashOf(key)),
+        }
       }),
     ),
   )
