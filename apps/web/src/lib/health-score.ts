@@ -11,6 +11,8 @@ export interface ScoreFinding {
   failingRuns: number
   /** Runs where the rule was pass or fail: could-not-check and not-applicable runs are not counted. */
   knownRuns: number
+  /** Failing runs under `none` whose banner was not detected, or could not be told. Shown, not discounted. */
+  bannerUncertainRuns: number
 }
 
 export interface Uncertainty {
@@ -18,6 +20,8 @@ export interface Uncertainty {
   runs: number
   rules: number
   ruleTitles: ReadonlyArray<string>
+  /** Failing banner-dependent checks (rule x run) whose banner detection is not `detected`. */
+  bannerUncertainRuns: number
 }
 
 export interface ScoreLine {
@@ -27,6 +31,7 @@ export interface ScoreLine {
   failing: number
   known: number
   points: number
+  bannerUncertain: number
 }
 
 export type Band = "critical" | "attention" | "minor" | "no-failures"
@@ -84,6 +89,7 @@ export function healthScore(input: {
       severity: f.severity,
       failing: f.failingRuns,
       known: f.knownRuns,
+      bannerUncertain: f.bannerUncertainRuns,
       points: WEIGHT[f.severity] * (0.5 + (0.5 * f.failingRuns) / f.knownRuns),
     }))
     .toSorted(
@@ -102,7 +108,10 @@ export function healthScore(input: {
     score: capped ? CRITICAL_CAP : rounded,
     band: worst === undefined ? "no-failures" : BAND_OF[worst],
     coverage: input.evaluatedRuns >= input.totalRuns ? "full" : "partial",
-    resolution: input.uncertainty.checks > 0 ? "unresolved" : "resolved",
+    resolution:
+      input.uncertainty.checks > 0 || input.uncertainty.bannerUncertainRuns > 0
+        ? "unresolved"
+        : "resolved",
     lines,
     total,
     capped,

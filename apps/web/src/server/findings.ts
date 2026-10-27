@@ -6,6 +6,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { auditInOrg, hitWithRequest, readCapture, runInAudit } from "./audit-data"
+import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import {
   checkTitleOf,
   decodeKind,
@@ -119,6 +120,7 @@ export const getFinding = createServerFn({ method: "GET" })
             ),
           )
           .orderBy(asc(run.ordinal))
+        const detection = yield* bannerDetection(orgId, auditId)
         return {
           finding: {
             ruleId: f.ruleId,
@@ -137,7 +139,14 @@ export const getFinding = createServerFn({ method: "GET" })
           checks: yield* Effect.forEach(checks, (check) =>
             decodeEvidence(check.evidence).pipe(
               Effect.orDie,
-              Effect.map((evidence) => ({ ...check, evidence })),
+              Effect.map((evidence) => ({
+                ...check,
+                evidence,
+                bannerDetection:
+                  check.status === "fail" && BANNER_DEPENDENT_RULES.includes(f.ruleId)
+                    ? (detection.get(check.runId) ?? null)
+                    : null,
+              })),
             ),
           ),
         }

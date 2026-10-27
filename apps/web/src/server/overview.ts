@@ -42,6 +42,9 @@ export const getOverview = createServerFn({ method: "GET" })
             totalRuns: coverage.totalRuns,
             versions: coverage.rulesVersions,
           }),
+          bannerUncertain: failing
+            .filter((f) => f.bannerUncertainRuns > 0)
+            .map((f) => ({ ruleId: f.ruleId, title: f.title, runs: f.bannerUncertainRuns })),
           areas: Object.fromEntries(areas),
           triage: {
             acceptedRisk: failing.filter((f) => f.triage.status === "accepted_risk").length,

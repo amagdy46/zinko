@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { AREAS, runPage, scenarioLabel } from "@/lib/audit-labels"
+import { AREAS, BANNER_NOTE, runPage, scenarioLabel } from "@/lib/audit-labels"
 import { getEvidence, getFinding, listFindings, setTriage } from "@/server/findings"
 
 export type FindingRow = Awaited<ReturnType<typeof listFindings>>["findings"][number]
@@ -292,6 +292,9 @@ export function FindingDetail({
     checks.find((c) => c.runId === pickedRun) ??
     checks.find((c) => c.status === "fail") ??
     checks[0]
+  const noted = (["not-detected", "unknown"] as const).filter((d) =>
+    checks.some((c) => c.bannerDetection === d),
+  )
   const reasons = [
     ...new Set(checks.filter((c) => c.status === "inconclusive").map((c) => c.message)),
   ]
@@ -344,6 +347,12 @@ export function FindingDetail({
           </>
         )}
         <Section title="Where it was seen">
+          {noted.map((detection) => (
+            <p key={detection} className="text-xs text-muted-foreground" data-testid="banner-note">
+              <StatusGlyph meaning="could-not-check" className="mr-1 inline align-text-bottom" />
+              {BANNER_NOTE[detection]} The finding keeps its severity.
+            </p>
+          ))}
           <Table className="text-xs" aria-label="Where it was seen">
             <TableHeader>
               <TableRow>
@@ -382,6 +391,14 @@ export function FindingDetail({
                   </TableCell>
                   <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
                     {c.message}
+                    {c.bannerDetection === "not-detected" || c.bannerDetection === "unknown" ? (
+                      <span className="mt-1 flex items-center gap-1 text-foreground">
+                        <StatusGlyph meaning="could-not-check" />
+                        {c.bannerDetection === "unknown"
+                          ? "Banner status unknown"
+                          : "Banner not detected"}
+                      </span>
+                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

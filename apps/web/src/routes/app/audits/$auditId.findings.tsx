@@ -579,7 +579,7 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
         <span className="block font-medium">{failing ? row.title : row.checkTitle}</span>
         <span className="block text-xs text-muted-foreground">
           {failing
-            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}${row.inconclusiveRuns > 0 ? ` · also could not check on ${count(row.inconclusiveRuns, "run")}` : ""}`
+            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}${row.inconclusiveRuns > 0 ? ` · also could not check on ${count(row.inconclusiveRuns, "run")}` : ""}${row.bannerUncertainRuns > 0 ? ` · banner not confirmed on ${count(row.bannerUncertainRuns, "run")}` : ""}`
             : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
         </span>
         {isLocalLimit(row) ? (

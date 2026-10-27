@@ -135,3 +135,12 @@ export const remainingTime = (remainingUnits: number, elapsed: number, totalUnit
   const minutes = (remainingUnits * SECONDS_PER_RUN) / 60
   return `${Math.max(1, Math.floor(minutes * 0.75))}–${Math.max(2, Math.ceil(minutes * 1.5))} minutes left`
 }
+
+export const BANNER_NOTE = {
+  "not-detected":
+    "Our scanner did not detect a consent banner on this page, so whether this is a breach depends on whether a banner exists for the visitor (it may not exist, may not be shown from our location, may load too slowly or may be one we cannot operate).",
+  unknown:
+    "Our scanner could not tell whether this page has a consent banner (the accept and reject runs of this page did not both finish), so whether this is a breach depends on whether a banner exists for the visitor.",
+  summary:
+    "Our scanner did not detect a consent banner on these pages, or could not tell whether there is one, so whether these are breaches depends on whether a banner exists for the visitor (it may not exist, may not be shown from our location, may load too slowly or may be one we cannot operate).",
+} as const

@@ -1,5 +1,5 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
-import { Info } from "lucide-react"
+import { CircleDashed, Info } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { AREAS } from "@/lib/audit-labels"
+import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
 import { getOverview } from "@/server/overview"
@@ -42,7 +42,7 @@ const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" 
 
 function OverviewScreen() {
   const { audit } = auditRoute.useLoaderData()
-  const { status, score, coverage, areas, triage } = Route.useLoaderData()
+  const { status, score, coverage, areas, triage, bannerUncertain } = Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
       <p className="text-sm text-muted-foreground" data-testid="overview-running">
@@ -81,6 +81,22 @@ function OverviewScreen() {
             The runs were evaluated with different versions of the rules (
             {score.versions.join(", ")}
             ). The checks and their wording can differ between them.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      {bannerUncertain.length > 0 ? (
+        <Alert role="status" className="border-dashed" data-testid="banner-alert">
+          <CircleDashed aria-hidden="true" />
+          <AlertTitle className="line-clamp-none">
+            {count(score.uncertainty.bannerUncertainRuns, "failing consent check")} rest on an
+            undetected banner
+          </AlertTitle>
+          <AlertDescription>
+            <p>{BANNER_NOTE.summary}</p>
+            <p>
+              The findings keep their severity and their weight in the score.{" "}
+              {bannerUncertain.map((f) => `${f.title} (${count(f.runs, "run")})`).join(", ")}.
+            </p>
           </AlertDescription>
         </Alert>
       ) : null}
@@ -145,9 +161,17 @@ function ScoreBlock({
           <li className="flex items-start gap-2" data-testid="unresolved-checks">
             <StatusGlyph meaning="could-not-check" className="mt-0.5" />
             <span>
-              Unresolved checks: {count(uncertainty.rules, "rule")} could not be checked, on{" "}
-              {count(uncertainty.runs, "run")}
-              {uncertainty.ruleTitles.length > 0 ? `: ${uncertainty.ruleTitles.join(", ")}` : ""}
+              Unresolved checks:{" "}
+              {[
+                uncertainty.checks > 0
+                  ? `${count(uncertainty.rules, "rule")} could not be checked, on ${count(uncertainty.runs, "run")}: ${uncertainty.ruleTitles.join(", ")}`
+                  : null,
+                uncertainty.bannerUncertainRuns > 0
+                  ? `${count(uncertainty.bannerUncertainRuns, "failing consent check")} rest on an undetected banner`
+                  : null,
+              ]
+                .filter((part) => part !== null)
+                .join(". ")}
             </span>
           </li>
         ) : null}
@@ -199,6 +223,9 @@ function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
                 {line.title}
                 <span className="block text-xs text-muted-foreground">
                   failed on {line.failing} of {line.known} runs it could be checked on
+                  {line.bannerUncertain > 0
+                    ? `; ${count(line.bannerUncertain, "failing run")} rest on an undetected banner, counted in full`
+                    : ""}
                 </span>
               </span>
               <span className="tabular-nums">−{line.points.toFixed(1)}</span>

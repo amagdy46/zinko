@@ -1,9 +1,10 @@
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
 import { ruleById } from "@repo/rules"
-import { and, asc, count, eq, sql } from "drizzle-orm"
+import { and, asc, count, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { AREAS } from "@/lib/audit-labels"
+import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import { NotFound } from "./server-fn"
 
 export const TriageStatus = Schema.Literals(["open", "accepted_risk", "fixed"])
@@ -100,6 +101,24 @@ export const findingsOf = (orgId: string, auditId: string) =>
       .innerJoin(run, eq(run.id, checkResult.runId))
       .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
       .groupBy(checkResult.ruleId, checkResult.status, checkResult.area, checkResult.checkTitle)
+    const failedDependent = yield* db
+      .select({ ruleId: checkResult.ruleId, runId: checkResult.runId })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+          eq(checkResult.status, "fail"),
+          inArray(checkResult.ruleId, [...BANNER_DEPENDENT_RULES]),
+        ),
+      )
+    const detection = yield* bannerDetection(orgId, auditId)
+    const bannerUncertain = new Map<string, number>()
+    for (const f of failedDependent)
+      if ((detection.get(f.runId) ?? "detected") !== "detected")
+        bannerUncertain.set(f.ruleId, (bannerUncertain.get(f.ruleId) ?? 0) + 1)
     const reasons = yield* db
       .select({
         ruleId: checkResult.ruleId,
@@ -168,6 +187,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
           rulesVersions: f.rulesVersions,
           failingRuns: f.failingRuns,
           knownRuns: knownRuns.get(f.ruleId) ?? 0,
+          bannerUncertainRuns: bannerUncertain.get(f.ruleId) ?? 0,
           inconclusiveRuns: f.inconclusiveRuns,
           runIds: f.runIds,
           pages: new Set(affected.map((r) => r.pageUrl)).size,
@@ -192,6 +212,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
         runs: unsureRuns.size,
         rules: unchecked.rules.size,
         ruleTitles: [...unchecked.titles].toSorted(),
+        bannerUncertainRuns: [...bannerUncertain.values()].reduce((sum, n) => sum + n, 0),
       },
       findings: findings.toSorted(
         (a, b) =>
