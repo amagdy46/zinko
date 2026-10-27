@@ -56,13 +56,13 @@ const SENT = [
 const NEVER_SENT = [
   "cookie values",
   "click IDs",
-  "URLs and query strings",
+  "full URLs and query strings",
   "parameters",
   "client IDs",
   "request bodies",
   "screenshots",
   "page text",
-  "names and emails",
+  "account or profile data",
   "your API key",
 ]
 
@@ -136,6 +136,15 @@ function Explanations({
                 <p className="font-medium">Never sent</p>
                 <p className="text-muted-foreground">{NEVER_SENT.join(", ")}.</p>
               </div>
+              {paths ? (
+                <div>
+                  <p className="font-medium">Page paths are on</p>
+                  <p className="text-muted-foreground">
+                    Paths are sent as you wrote them and may contain personal data such as names,
+                    emails or tokens.
+                  </p>
+                </div>
+              ) : null}
             </div>
           ) : null}
           <div className="flex items-start gap-3">
@@ -153,7 +162,8 @@ function Explanations({
               <p className="text-sm text-muted-foreground">
                 Off by default. Pages are sent as Page 1, Page 2. If you turn this on, the path you
                 entered for each page is sent without its query string, exactly as written. Paths
-                can contain names or tokens, so check yours first.
+                are not checked and may contain personal data such as names, emails or tokens, so
+                check yours first.
               </p>
             </div>
           </div>
