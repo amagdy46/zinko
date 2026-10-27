@@ -590,6 +590,9 @@ importers:
       '@repo/rules':
         specifier: workspace:*
         version: link:../rules
+      effect:
+        specifier: 'catalog:'
+        version: 4.0.5
     devDependencies:
       typescript:
         specifier: 'catalog:'

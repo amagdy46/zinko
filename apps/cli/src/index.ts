@@ -10,7 +10,7 @@ import {
   isVendorHost,
   type JourneyStep,
 } from "@repo/capture-contract"
-import { buildDigest, evidenceHash, type FindingDigest } from "@repo/llm"
+import { buildDigest, buildExplainPrompt, evidenceHash, type FindingDigest } from "@repo/llm"
 import {
   RULES_VERSION,
   decodeHits,
@@ -38,7 +38,8 @@ capture options:
   --rules                                      Run the checks on each scenario and list their results
   --explain-digest                             Print, for each failing check, what an AI explanation would be given
                                                (runs the checks; pages are aliases unless --page-paths)
-  --page-paths                                 With --explain-digest: send each page's path as entered, not an alias
+  --explain-prompt                             Like --explain-digest, but print the exact prompt the model would get
+  --page-paths                                 With --explain-digest or --explain-prompt: send each page's path as entered, not an alias
   --json                                       Print JSON instead of tables (with --rules, adds checks)
 
 --click and --goto run in the order given, at most 5 steps in total.
@@ -282,11 +283,11 @@ function digestsOf(
   )
 }
 
-function renderDigests(scenario: Scenario, digests: readonly Digest[]) {
+function renderDigests(scenario: Scenario, digests: readonly Digest[], prompt: boolean) {
   out(`explain digests [${scenario}]${digests.length === 0 ? ": no failing check" : ""}`)
   for (const { ruleId, evidenceHash: hash, digest } of digests) {
     out(`-- ${ruleId}  policy ${digest.policyId}  evidence ${hash}`)
-    out(JSON.stringify(digest, null, 2))
+    out(prompt ? buildExplainPrompt(digest) : JSON.stringify(digest, null, 2))
   }
   out("")
 }
@@ -312,6 +313,7 @@ function parseCapture(argv: string[]) {
       json: { type: "boolean", default: false },
       rules: { type: "boolean", default: false },
       "explain-digest": { type: "boolean", default: false },
+      "explain-prompt": { type: "boolean", default: false },
       "page-paths": { type: "boolean", default: false },
     },
   })
@@ -362,7 +364,8 @@ function parseCapture(argv: string[]) {
     engine: values.engine,
     json: values.json,
     rules: values.rules,
-    explainDigest: values["explain-digest"],
+    explainDigest: values["explain-digest"] || values["explain-prompt"],
+    explainPrompt: values["explain-prompt"],
     pagePaths: values["page-paths"],
   }
 }
@@ -427,7 +430,7 @@ async function runFrom(
   } else {
     renderText(opts.url, scenario, result, hits, undecoded)
     if (opts.rules && checks !== undefined) renderChecks(checks)
-    if (digests !== undefined) renderDigests(scenario, digests)
+    if (digests !== undefined) renderDigests(scenario, digests, opts.explainPrompt)
   }
   return runFrom(opts, index + 1, failed || !result.complete)
 }

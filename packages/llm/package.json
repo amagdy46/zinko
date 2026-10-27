@@ -15,7 +15,8 @@
   "dependencies": {
     "@ovriq/zinko-decoders": "workspace:*",
     "@repo/capture-contract": "workspace:*",
-    "@repo/rules": "workspace:*"
+    "@repo/rules": "workspace:*",
+    "effect": "catalog:"
   },
   "devDependencies": {
     "typescript": "catalog:"
