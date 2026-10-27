@@ -223,6 +223,13 @@ function AuditPage() {
       ) : null}
       <nav className="flex gap-4 border-b text-sm tabular-nums">
         <Link
+          to="/app/audits/$auditId/overview"
+          params={{ auditId: audit.id }}
+          className={navClass}
+        >
+          Overview
+        </Link>
+        <Link
           to="/app/audits/$auditId"
           params={{ auditId: audit.id }}
           search={{ view: "matrix" }}
