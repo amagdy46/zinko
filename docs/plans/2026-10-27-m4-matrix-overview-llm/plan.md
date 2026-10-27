@@ -377,6 +377,7 @@ Demo data for browser checks (the M3 demo audits if present, otherwise run them 
 
 - [ ] Verify by: seed the audit (report row counts and the destination distribution), time each server function (20 calls, p50/p95 and payload sizes; measure the serialized response, not the query), run `EXPLAIN (ANALYZE, BUFFERS)` on the matrix aggregate and the overview queries and report the plans; open the Overview and the matrix on it at 390px and report responsiveness; add an index or lower a page size only if a target is missed, and re-measure. Keep the synthetic audit's id for Task 16 (or reseed it there from the saved script); delete it only after Task 16
 - [ ] `pnpm check && pnpm typecheck && pnpm build`
+- Result (2026-10-28): every target met with no index; numbers and plans in `docs/vision.md` ("Performance at the supported maximum"). The seed script is `/tmp/m4-seed-max.sql` (reseed for Task 16).
 
 ### Task 9: `@repo/llm`: the digest, the disclosure policy and the dry-run CLI
 

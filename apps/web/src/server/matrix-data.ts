@@ -393,22 +393,33 @@ export const cellDetailOf = (
 
 /**
  * Per vendor, how many destinations and distinct events the whole audit's hits hold: the same
- * (vendor, destination) pairs the matrix pages through, counted without building any cell.
+ * (vendor, destination) pairs the matrix pages through, counted without building any cell. The
+ * database groups to distinct (vendor, destination, event) triples (a hash aggregate); counting
+ * `distinct` in SQL sorts every hit instead, which was twice as slow at 227k hits.
  */
 export const tagsSeenOf = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const rows = yield* db
-      .select({
-        vendor: hit.vendor,
-        destinations: sql<number>`count(distinct ${hit.destinationId})::int`,
-        events: sql<number>`count(distinct ${hit.event})::int`,
-      })
+    const triples = yield* db
+      .select({ vendor: hit.vendor, destinationId: hit.destinationId, event: hit.event })
       .from(hit)
       .innerJoin(run, eq(run.id, hit.runId))
       .where(and(eq(hit.orgId, orgId), eq(run.orgId, orgId), eq(run.auditId, auditId)))
-      .groupBy(hit.vendor)
-    return rows.toSorted(
-      (a, b) => vendorRank(a.vendor) - vendorRank(b.vendor) || compareText(a.vendor, b.vendor),
-    )
+      .groupBy(hit.vendor, hit.destinationId, hit.event)
+    const vendors = new Map<string, { destinations: Set<string>; events: Set<string> }>()
+    for (const t of triples) {
+      const seen = vendors.get(t.vendor) ?? { destinations: new Set(), events: new Set() }
+      seen.destinations.add(t.destinationId)
+      seen.events.add(t.event)
+      vendors.set(t.vendor, seen)
+    }
+    return [...vendors]
+      .map(([vendor, seen]) => ({
+        vendor,
+        destinations: seen.destinations.size,
+        events: seen.events.size,
+      }))
+      .toSorted(
+        (a, b) => vendorRank(a.vendor) - vendorRank(b.vendor) || compareText(a.vendor, b.vendor),
+      )
   })
