@@ -391,21 +391,26 @@ function Coverage({
 }) {
   const { runs } = coverage
   const summary = [
-    `${runs.failing} failing`,
+    `${runs.failing} with a failing check`,
     `${runs.couldNotCheck} could not check`,
     `${runs.passed} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`,
   ]
   if (full && !mixed)
     return (
       <p className="text-sm text-muted-foreground" data-testid="coverage">
-        All {count(coverage.totalRuns, "run")} evaluated: {summary.join(" · ")}
+        All {count(coverage.totalRuns, "run")} evaluated. By run: {summary.join(" · ")}
         {localLimit
           ? ". Expected: tracking requests are answered locally, so endpoint delivery is not checked."
           : ""}
       </p>
     )
   const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
-    { key: "failing", n: runs.failing, tone: "bg-sev-critical-solid", label: "failing" },
+    {
+      key: "failing",
+      n: runs.failing,
+      tone: "bg-sev-critical-solid",
+      label: "with a failing check",
+    },
     {
       key: "unsure",
       n: runs.couldNotCheck,

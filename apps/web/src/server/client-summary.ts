@@ -16,6 +16,8 @@ type Latest = {
   /** The health score; the lowest of the sites' when `sites` is more than 1. Null when not evaluated. */
   score: number | null
   sites: number
+  /** Runs in the audit the score comes from; the newest audit's when `sites` is more than 1. */
+  runs: number
   openFindings: { critical: number; warning: number; info: number }
 }
 
@@ -134,6 +136,7 @@ const latestOf = (
   incompleteRuns: detail.incomplete,
   score: score ?? null,
   sites: 1,
+  runs: detail.total,
   openFindings: { critical: detail.critical, warning: detail.warning, info: detail.info },
 })
 

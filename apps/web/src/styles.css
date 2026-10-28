@@ -163,3 +163,16 @@
     animation: none;
   }
 }
+
+/* A soft edge on the side of a scrolling container that still has content (a table wider than the screen). */
+@utility scroll-edges {
+  background:
+    linear-gradient(to right, var(--background), var(--background)) left center / 1.5rem 100%
+      no-repeat local,
+    linear-gradient(to left, var(--background), var(--background)) right center / 1.5rem 100%
+      no-repeat local,
+    linear-gradient(to right, color-mix(in oklab, var(--foreground) 22%, transparent), transparent)
+      left center / 0.75rem 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in oklab, var(--foreground) 22%, transparent), transparent)
+      right center / 0.75rem 100% no-repeat scroll;
+}

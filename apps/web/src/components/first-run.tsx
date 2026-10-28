@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
 import { StatusBadge } from "@/components/status-badge"
-import { count, relativeTime } from "@/lib/format"
+import { count, relativeTime, useTimeZone } from "@/lib/format"
 
 type Result = {
   createdAt: Date | string
@@ -13,10 +13,12 @@ type Result = {
   incompleteRuns: number
   score: number | null
   sites: number
+  runs: number
   openFindings: { critical: number; warning: number; info: number }
 }
 
 export function LastAudit({ latest, running }: { latest: Result | null; running: number }) {
+  const timeZone = useTimeZone()
   return (
     <div className="space-y-1 text-xs">
       {running > 0 ? (
@@ -28,13 +30,19 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
       {latest ? (
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={latest.status} />
-          <time title={relativeTime(latest.createdAt).title}>
+          <time title={relativeTime(latest.createdAt, timeZone).title}>
             {relativeTime(latest.createdAt).text}
           </time>
           {latest.score === null ? null : (
             <span className="font-medium tabular-nums">
               {latest.sites > 1 ? "Lowest " : ""}
               {latest.score}/100
+              {latest.sites === 1 ? (
+                <span className="font-normal text-muted-foreground">
+                  {" "}
+                  from {count(latest.runs, "run")}
+                </span>
+              ) : null}
             </span>
           )}
         </div>
@@ -96,15 +104,21 @@ export function FindingCounts({
 }: {
   counts: { critical: number; warning: number; info: number; couldNotCheck?: number }
 }) {
+  const shown = (["critical", "warning", "info"] as const).filter(
+    (severity) => counts[severity] > 0,
+  )
+  const unchecked = counts.couldNotCheck !== undefined && counts.couldNotCheck > 0
+  if (shown.length === 0 && !unchecked)
+    return <span className="text-xs text-muted-foreground">No open findings</span>
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums">
-      {(["critical", "warning", "info"] as const).map((severity) => (
+      {shown.map((severity) => (
         <span key={severity} className="inline-flex items-center gap-1">
           <StatusGlyph meaning={severity} />
           {counts[severity]} {severityLabel[severity]}
         </span>
       ))}
-      {counts.couldNotCheck !== undefined && counts.couldNotCheck > 0 ? (
+      {unchecked ? (
         <span className="inline-flex items-center gap-1">
           <StatusGlyph meaning="could-not-check" />
           {counts.couldNotCheck} could not check

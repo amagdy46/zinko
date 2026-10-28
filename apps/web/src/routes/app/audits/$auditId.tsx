@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-router"
 import { NotFound } from "@/components/not-found"
 import { useEffect, useRef, useState } from "react"
+import { ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
@@ -16,7 +17,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { remainingTime, runReason, scenarioLabel } from "@/lib/audit-labels"
-import { count, duration, shortDate } from "@/lib/format"
+import { count, duration, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
 import { getAudit } from "@/server/audits"
@@ -45,6 +46,7 @@ const REFETCH_DELAY_MS = 250
 function AuditPage() {
   const { audit, site, client, runs, summary } = Route.useLoaderData()
   const router = useRouter()
+  const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
   const refetch = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const previous = useRef({ id: audit.id, active })
@@ -78,17 +80,22 @@ function AuditPage() {
   const running = runs.filter((r) => r.status === "running").length
   const done = complete + partial + failed
   const start = audit.startedAt ?? audit.createdAt
-  const elapsed = Math.max(
-    0,
-    (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime(),
-  )
+  // An audit is queued, with no start time, until a capture engine takes its first run; later waits
+  // between runs show as no run running.
+  const waiting = active && running === 0 && done < runs.length
+  const elapsed =
+    audit.startedAt === null && active
+      ? 0
+      : Math.max(0, (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime())
   const units = (run: (typeof runs)[number]) =>
     run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1
   const workUnits = runs.reduce((total, run) => total + units(run), 0)
   const remainingUnits = runs
     .filter((run) => run.status === "pending" || run.status === "running")
     .reduce((total, run) => total + units(run), 0)
-  const left = remainingTime(remainingUnits, elapsed, workUnits)
+  const progressNote = waiting
+    ? "Waiting for a capture slot"
+    : remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
       const noun = findings === 1 ? "finding" : "findings"
@@ -154,7 +161,7 @@ function AuditPage() {
             { label: "Clients", to: "/app/clients" },
             { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
             { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-            { label: `Audit · ${shortDate(audit.createdAt)}` },
+            { label: `Audit · ${shortDate(audit.createdAt, timeZone)}` },
           ]}
           meta={
             <>
@@ -187,13 +194,21 @@ function AuditPage() {
         />
       ) : (
         <header className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <Link
+            to="/app/sites/$siteId"
+            params={{ siteId: site.id }}
+            className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+            {site.name}
+          </Link>
           <h1 className="text-base font-semibold tracking-tight">Audit of {site.name}</h1>
           <StatusBadge status={audit.status} />
           <span className="tabular-nums text-muted-foreground">{count(runs.length, "run")}</span>
           {findingsLink}
           <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
           <time dateTime={start.toISOString()} className="tabular-nums text-muted-foreground">
-            {start.toLocaleDateString()}
+            {shortDateTime(start, timeZone)}
           </time>
           {problems.length > 0 ? (
             <Link
@@ -221,7 +236,7 @@ function AuditPage() {
               {done} of {runs.length} runs
             </span>
             <span className="text-muted-foreground">{duration(elapsed)} elapsed</span>
-            {left ? <span className="text-muted-foreground">{left}</span> : null}
+            {progressNote ? <span className="text-muted-foreground">{progressNote}</span> : null}
             <span>{running} running</span>
             <span>{partial} partial</span>
             <span>{failed} failed</span>
@@ -235,7 +250,7 @@ function AuditPage() {
           </span>
           {findingsLink}
           <span>{duration(elapsed)}</span>
-          <time dateTime={start.toISOString()}>{start.toLocaleString()}</time>
+          <time dateTime={start.toISOString()}>{shortDateTime(start, timeZone)}</time>
         </p>
       ) : null}
       {audit.error ? (

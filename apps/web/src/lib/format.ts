@@ -1,24 +1,48 @@
+import { useHydrated } from "@/lib/use-hydrated"
+
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" })
-const fullDate = new Intl.DateTimeFormat("en", {
-  dateStyle: "full",
-  timeStyle: "long",
-  timeZone: "UTC",
-})
+const dayFormats = new Map<string, Intl.DateTimeFormat>()
 
-const shortDay = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-  timeZone: "UTC",
-})
+/**
+ * Dates reach the browser as instants. The server renders in UTC, so a date shows the UTC day until
+ * the page hydrates and `useTimeZone` switches to the reader's own zone.
+ */
+const dayFormat = (timeZone: string | undefined, time: boolean) => {
+  const key = `${timeZone ?? ""}|${time}`
+  let format = dayFormats.get(key)
+  if (format === undefined) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      ...(time ? { hour: "2-digit", minute: "2-digit", hour12: false } : {}),
+      timeZone,
+    })
+    dayFormats.set(key, format)
+  }
+  return format
+}
 
-/** "28 Oct 2026": unambiguous in every locale, unlike 10/28/2026. */
-export function shortDate(date: Date | string | number): string {
-  return shortDay.format(new Date(date))
+/** "28 Oct 2026": unambiguous in every locale, unlike 10/28/2026. The reader's day, not the UTC day. */
+export function shortDate(date: Date | string | number, timeZone?: string): string {
+  return dayFormat(timeZone, false).format(new Date(date))
+}
+
+/** "28 Oct 2026, 02:21": the one date-and-time format. */
+export function shortDateTime(date: Date | string | number, timeZone?: string): string {
+  return dayFormat(timeZone, true).format(new Date(date))
+}
+
+/** "UTC" while rendering on the server and during hydration, then the browser's own zone (undefined). */
+export function useTimeZone(): string | undefined {
+  return useHydrated() ? undefined : "UTC"
 }
 
 /** Use text as the label and title as its full date tooltip. */
-export function relativeTime(date: Date | string | number): { text: string; title: string } {
+export function relativeTime(
+  date: Date | string | number,
+  timeZone?: string,
+): { text: string; title: string } {
   const value = new Date(date)
   const seconds = (value.getTime() - Date.now()) / 1000
   const units = [
@@ -31,7 +55,10 @@ export function relativeTime(date: Date | string | number): { text: string; titl
     [1, "second"],
   ] as const
   const [size, unit] = units.find(([threshold]) => Math.abs(seconds) >= threshold) ?? [1, "second"]
-  return { text: relative.format(Math.round(seconds / size), unit), title: fullDate.format(value) }
+  return {
+    text: relative.format(Math.round(seconds / size), unit),
+    title: shortDateTime(value, timeZone),
+  }
 }
 
 export function duration(ms: number): string {
