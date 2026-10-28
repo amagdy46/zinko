@@ -3,7 +3,8 @@ import { Database } from "@repo/core/Database"
 import { site } from "@repo/db"
 import { notFound } from "@tanstack/react-router"
 import { and, eq } from "drizzle-orm"
-import { Data, Effect, type Layer } from "effect"
+import { Config, Data, Effect, Option, type Layer } from "effect"
+import { WorkerConfig } from "effect-cf"
 import type { AppLayer } from "./layers"
 import { activeMembership } from "./org-access"
 import { runtime } from "./runtime"
@@ -86,3 +87,10 @@ export const atomically = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
     const { db } = yield* Database
     return yield* db.$client.withTransaction(effect)
   })
+
+/** `ALLOW_PRIVATE_SITES` is set by infra/alchemy.run.ts on local dev stages only. */
+export const allowPrivateSites = Effect.gen(function* () {
+  const provider = yield* WorkerConfig.provider
+  const value = yield* Config.option(Config.String("ALLOW_PRIVATE_SITES")).parse(provider)
+  return Option.isSome(value) && value.value === "true"
+}).pipe(Effect.orDie)

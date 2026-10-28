@@ -5,10 +5,18 @@ import { audit, run, site, client, finding, findingTriage, checkResult } from "@
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, count, eq, countDistinct } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
-import { hasCredentials, isOnSite, withoutCredentials } from "@/lib/site-url"
+import { isPrivateHost } from "@repo/capture-contract"
+import {
+  canonicalHost,
+  hasCredentials,
+  isOnSite,
+  originHost,
+  withoutCredentials,
+} from "@/lib/site-url"
 import { triageJoin } from "./findings-data"
 import { requireSession } from "./require-session"
 import {
+  allowPrivateSites,
   atomically,
   Invalid,
   isUuid,
@@ -32,7 +40,7 @@ const decodeRunErrors = Schema.decodeUnknownOption(RunErrors)
  * The pages as `URL` writes them, each once: `http://LOCALHOST:4400/a` and `http://localhost:4400/a`
  * are one page. Every page must be on the site.
  */
-const normalizePages = (pages: ReadonlyArray<string>, siteHost: string) =>
+const normalizePages = (pages: ReadonlyArray<string>, target: { host: string; origin: string }) =>
   Effect.gen(function* () {
     const hrefs: string[] = []
     for (const page of pages) {
@@ -40,12 +48,67 @@ const normalizePages = (pages: ReadonlyArray<string>, siteHost: string) =>
         return yield* new Invalid({
           message: `${withoutCredentials(page)} is refused: URLs must not contain a username or password.`,
         })
-      if (!isOnSite(page, siteHost))
-        return yield* new Invalid({ message: `${page} is not on ${siteHost}.` })
+      if (!isOnSite(page, target))
+        return yield* new Invalid({ message: `${page} is not on ${originHost(target.origin)}.` })
       const { href } = new URL(page)
       if (!hrefs.includes(href)) hrefs.push(href)
     }
     return hrefs
+  })
+
+const PREFLIGHT_TIMEOUT_MS = 8_000
+const PREFLIGHT_MAX_REDIRECTS = 5
+
+/**
+ * Loads the start page once before an audit is created, so a dead address is reported on the form
+ * instead of as a full audit of failed runs. Redirects are followed by hand: every hop must stay on
+ * the site (same host rules and port as the pages) and, outside local dev, on a public host. A 404,
+ * 410 or 5xx answer is refused; 401, 403 and 429 are left to the capture, which names bot blocks.
+ * Messages start with the URL as typed so the form can show them under that field.
+ */
+const preflight = (typed: string, start: string, target: { host: string; origin: string }) =>
+  Effect.gen(function* () {
+    const allowPrivate = yield* allowPrivateSites
+    let url = start
+    for (let hop = 0; hop <= PREFLIGHT_MAX_REDIRECTS; hop++) {
+      const host = canonicalHost(url) ?? ""
+      if (isPrivateHost(host) && !allowPrivate)
+        return yield* new Invalid({
+          message: `${typed} is a private address and cannot be audited.`,
+        })
+      const response = yield* Effect.tryPromise({
+        try: (signal) =>
+          fetch(url, {
+            redirect: "manual",
+            headers: { accept: "text/html" },
+            signal: AbortSignal.any([signal, AbortSignal.timeout(PREFLIGHT_TIMEOUT_MS)]),
+          }),
+        catch: (cause) =>
+          new Invalid({
+            message:
+              cause instanceof DOMException && cause.name === "TimeoutError"
+                ? `${typed} did not answer within ${PREFLIGHT_TIMEOUT_MS / 1000} seconds. Check that the site is up.`
+                : `${typed} could not be reached. Check the address and that the site is up.`,
+          }),
+      })
+      yield* Effect.promise(() => response.body?.cancel() ?? Promise.resolve())
+      const location = response.headers.get("location")
+      if (response.status >= 300 && response.status < 400 && location !== null) {
+        const next = URL.canParse(location, url) ? new URL(location, url).href : undefined
+        if (next === undefined || !isOnSite(next, target))
+          return yield* new Invalid({
+            message: `${typed} redirects to another site (${next === undefined ? location : originHost(next)}). Start from the page that stays on ${originHost(target.origin)}.`,
+          })
+        url = next
+        continue
+      }
+      if (response.status === 404 || response.status === 410 || response.status >= 500)
+        return yield* new Invalid({
+          message: `${typed} returned ${response.status}${response.statusText === "" ? "" : ` (${response.statusText})`}. Use a page that loads.`,
+        })
+      return undefined
+    }
+    return yield* new Invalid({ message: `${typed} redirects too many times.` })
   })
 
 /** The URL each page is captured at: the test click IDs go on the start URL only. */
@@ -76,12 +139,19 @@ export const startAudit = createServerFn({ method: "POST" })
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const { db } = yield* Database
+        const checked = yield* siteInOrg(orgId, data.siteId)
+        if (checked.archivedAt !== null)
+          return yield* new Invalid({ message: "This site is archived." })
+        const [typedStart] = data.config.pages
+        const [normalizedStart] = yield* normalizePages(data.config.pages, checked)
+        if (typedStart !== undefined && normalizedStart !== undefined)
+          yield* preflight(typedStart, normalizedStart, checked)
         const auditId = yield* atomically(
           Effect.gen(function* () {
             const target = yield* siteInOrg(orgId, data.siteId, true)
             if (target.archivedAt !== null)
               return yield* new Invalid({ message: "This site is archived." })
-            const pages = yield* normalizePages(data.config.pages, target.host)
+            const pages = yield* normalizePages(data.config.pages, target)
             const config = { ...data.config, pages }
             const urls = yield* captureUrls(pages, config.clickIds)
             const [created] = yield* db

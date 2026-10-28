@@ -1,8 +1,10 @@
+import { NotFound } from "@/components/not-found"
 import type { Scenario } from "@repo/capture-contract"
 import { AuditConfig, JOURNEY_STEPS } from "@repo/core/audit"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
-import { type FormEvent, type ReactNode, useState } from "react"
+import { CircleHelp } from "lucide-react"
+import { type FormEvent, type ReactNode, useRef, useState } from "react"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -11,16 +13,17 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
-import { isOnSite, withoutCredentials } from "@/lib/site-url"
+import { isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
 import { startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
 
 export const Route = createFileRoute("/app/sites/$siteId_/audits/new")({
   loader: ({ params }) => getSite({ data: { id: params.siteId } }),
-  notFoundComponent: () => <p className="text-sm text-muted-foreground">Site not found.</p>,
+  notFoundComponent: () => <NotFound what="Site" />,
   component: NewAudit,
 })
 
@@ -30,9 +33,12 @@ const decodeConfig = Schema.decodeUnknownOption(AuditConfig)
 
 const VIEWPORTS = ["desktop", "mobile"] as const
 
-const urlError = (value: string, host: string) => {
+type SiteScope = { host: string; origin: string }
+
+const urlError = (value: string, site: SiteScope) => {
   if (!URL.canParse(value)) return "Enter a valid URL."
-  if (!isOnSite(value, host)) return `Use an http(s) URL on ${host} without credentials.`
+  if (!isOnSite(value, site))
+    return `Use an http(s) URL on ${originHost(site.origin)}, without a username or password.`
   return undefined
 }
 
@@ -51,8 +57,18 @@ function NewAudit() {
   const { site, lastConfig } = Route.useLoaderData()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
-  const [startUrl, setStartUrl] = useState(last?.pages[0] ?? site.origin)
-  const [pages, setPages] = useState(last?.pages.slice(1).join("\n") ?? "")
+  const [copied, setCopied] = useState(last !== null)
+  const [startUrl, setStartUrl] = useState(
+    last !== null && isOnSite(last.pages[0] ?? "", site)
+      ? (last.pages[0] ?? site.origin)
+      : site.origin,
+  )
+  const [pages, setPages] = useState(
+    last?.pages
+      .slice(1)
+      .filter((page) => isOnSite(page, site))
+      .join("\n") ?? "",
+  )
   const [scenarios, setScenarios] = useState<ReadonlyArray<Scenario>>(
     last?.scenarios ?? DEFAULT_SCENARIOS,
   )
@@ -64,16 +80,28 @@ function NewAudit() {
   const [blockVendorRequests, setBlockVendorRequests] = useState(last?.blockVendorRequests ?? true)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
+  const startRef = useRef<HTMLInputElement>(null)
+
+  function reset() {
+    setCopied(false)
+    setStartUrl(site.origin)
+    setPages("")
+    setScenarios(DEFAULT_SCENARIOS)
+    setViewports(["desktop"])
+    setClickIds(false)
+    setJourney(false)
+    setBlockVendorRequests(true)
+    setErrors({})
+  }
 
   const start = startUrl.trim()
-  const startError =
-    start === "" ? "Enter the page the audit starts from." : urlError(start, site.host)
+  const startError = start === "" ? "Enter the page the audit starts from." : urlError(start, site)
   const seen = new Set(startError === undefined ? [new URL(start).href] : [])
   const pageLines = pages
     .split("\n")
     .map((line, index) => {
       const value = line.trim()
-      let error = value === "" ? undefined : urlError(value, site.host)
+      let error = value === "" ? undefined : urlError(value, site)
       if (value !== "" && error === undefined) {
         const href = new URL(value).href
         if (seen.has(href)) error = "Duplicate URL. Each page is opened once."
@@ -138,7 +166,9 @@ function NewAudit() {
       return
     }
     setPending(false)
-    setErrors(errorFor(result.message, start, keyPages))
+    const failed = errorFor(result.message, start, keyPages)
+    setErrors(failed)
+    if (failed.startUrl !== undefined) startRef.current?.focus()
   }
 
   return (
@@ -152,10 +182,18 @@ function NewAudit() {
         description={
           <>
             Every page is opened per scenario and viewport. Pages must be on{" "}
-            <code>{site.host}</code>.
+            <code>{originHost(site.origin)}</code>.
           </>
         }
       />
+      {copied && (
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          Settings copied from your last audit.
+          <Button type="button" size="sm" variant="ghost" onClick={reset}>
+            Reset to defaults
+          </Button>
+        </p>
+      )}
       <form
         onSubmit={submit}
         className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]"
@@ -172,6 +210,7 @@ function NewAudit() {
               {(aria) => (
                 <Input
                   id="start-url"
+                  ref={startRef}
                   value={startUrl}
                   onChange={(event) => setStartUrl(event.target.value)}
                   className="font-mono text-sm"
@@ -216,7 +255,10 @@ function NewAudit() {
               className="space-y-2"
               aria-describedby={errors.scenarios === undefined ? undefined : "scenarios-error"}
             >
-              <legend className="text-sm font-medium">Consent scenarios</legend>
+              <legend className="flex items-center gap-1 text-sm font-medium">
+                Consent scenarios
+                <ScenarioHelp />
+              </legend>
               <div className="flex gap-1">
                 <Button
                   type="button"
@@ -280,13 +322,13 @@ function NewAudit() {
             <div className="space-y-3">
               <Toggle
                 label="Simulate an ad click"
-                help="Adds test click IDs (gclid, fbclid, ttclid) and UTMs to the start URL."
+                help="Click IDs (gclid, fbclid, ttclid) are the codes ad platforms add to a link when someone clicks an ad. This adds test ones and UTMs to the start URL, to check that the site keeps them and tags receive them."
                 checked={clickIds}
                 onChange={setClickIds}
               />
               <Toggle
-                label="Also walk through the key pages in one session"
-                help={`Adds a run per scenario and viewport that opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session so cookies carry over. Only the first ${JOURNEY_STEPS} are walked; needs at least one key page.`}
+                label="Also walk through the key pages as a journey"
+                help={`A journey opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session, like a visitor would, so cookies carry over. Adds one run per scenario and viewport; needs at least one key page.`}
                 checked={journey}
                 onChange={setJourney}
               />
@@ -325,7 +367,7 @@ function NewAudit() {
                 <CollapsibleContent className="pt-3">
                   <Toggle
                     label="Answer tracking requests locally"
-                    help="Test traffic stays out of the client's analytics."
+                    help="Tracking requests get a made-up reply instead of reaching the vendor, so test visits stay out of the client's analytics. They are still recorded and checked."
                     checked={blockVendorRequests}
                     onChange={setBlockVendorRequests}
                   />
@@ -336,14 +378,18 @@ function NewAudit() {
           <FieldError message={errors.form} />
         </div>
         <aside
-          className="sticky bottom-0 z-10 space-y-3 border-t bg-background py-4 lg:top-6 lg:rounded-lg lg:border lg:bg-card lg:p-4"
+          className="sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t bg-background py-3 lg:top-6 lg:block lg:space-y-3 lg:rounded-lg lg:border lg:bg-card lg:p-4"
           aria-label="Audit estimate"
         >
           <div aria-live="polite" data-testid="estimate">
-            <p className="text-2xl font-semibold tabular-nums">
+            <p className="text-base font-semibold tabular-nums lg:text-2xl">
               {breakdown.runs} {breakdown.runs === 1 ? "run" : "runs"}
+              <span className="font-normal text-muted-foreground lg:hidden">
+                {" · "}
+                {breakdown.runs === 0 ? "none yet" : breakdown.duration}
+              </span>
             </p>
-            <p className="text-sm text-muted-foreground">
+            <p className="hidden text-sm text-muted-foreground lg:block">
               {breakdown.runs === 0 ? "No runs yet" : breakdown.duration}
             </p>
           </div>
@@ -367,14 +413,14 @@ function NewAudit() {
           )}
           <Button
             type="submit"
-            className="w-full"
+            className="shrink-0 lg:w-full"
             disabled={pending || disabledReason !== undefined}
             aria-describedby={disabledReason === undefined ? undefined : "submit-reason"}
           >
-            {pending ? "Starting..." : "Start audit"}
+            {pending ? "Checking the start page..." : "Start audit"}
           </Button>
           {disabledReason !== undefined && (
-            <p id="submit-reason" className="text-xs text-muted-foreground">
+            <p id="submit-reason" className="w-full text-xs text-muted-foreground">
               {disabledReason}
             </p>
           )}
@@ -383,14 +429,42 @@ function NewAudit() {
               How is this estimated?
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-2 text-xs text-muted-foreground">
-              A page run averages 12.8 seconds. Journey runs include the start page and each walked
-              page: {breakdown.workUnits} page-run equivalents × 12.8 seconds. Actual time varies
-              with the site.
+              A page run takes about 7 seconds. Journey runs include the start page and each walked
+              page: {breakdown.workUnits} page-run equivalents × 7 seconds. Once the audit is
+              running, the time left is recalculated from how fast it actually goes.
             </CollapsibleContent>
           </Collapsible>
         </aside>
       </form>
     </div>
+  )
+}
+
+function ScenarioHelp() {
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="What the scenarios mean">
+          <CircleHelp />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-80 space-y-2 text-xs">
+        <p>
+          Each scenario loads the page with a different consent choice, then records what fires.
+        </p>
+        <dl className="space-y-2">
+          {SCENARIOS.map((scenario) => (
+            <div key={scenario.value}>
+              <dt className="font-medium">{scenario.label}</dt>
+              <dd className="text-muted-foreground">{scenario.hint}</dd>
+            </div>
+          ))}
+        </dl>
+        <p className="text-muted-foreground">
+          Run all four to compare what fires before a choice, after accepting and after rejecting.
+        </p>
+      </PopoverContent>
+    </Popover>
   )
 }
 

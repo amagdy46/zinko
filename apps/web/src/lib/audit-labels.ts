@@ -1,14 +1,22 @@
 import type { Scenario } from "@repo/capture-contract"
 import { count } from "@/lib/format"
 
-/** Mean wall time of one run, measured in Task 5 of the M2 plan. */
-const SECONDS_PER_RUN = 12.8
+/**
+ * Wall time of one page run (a journey run counts as one per page it loads). Audits of the fixture
+ * sites measured 6.3 to 6.8 s per unit (24 to 64 units each); real sites are slower than that, so
+ * this leans up. A running audit replaces it with its own pace (see `remainingTime`).
+ */
+const SECONDS_PER_RUN = 7
 
 export const SCENARIOS: ReadonlyArray<{ value: Scenario; label: string; hint: string }> = [
   { value: "none", label: "No interaction", hint: "Load the page and leave the banner alone" },
   { value: "accept", label: "Accept all", hint: "Click accept on the consent banner" },
   { value: "reject", label: "Reject all", hint: "Click reject on the consent banner" },
-  { value: "gpc", label: "Global Privacy Control", hint: "Send the GPC signal" },
+  {
+    value: "gpc",
+    label: "Global Privacy Control",
+    hint: "Send the browser setting that tells a site not to sell or share the visitor's data",
+  },
 ]
 
 export const AREAS: Readonly<Record<string, string>> = {
@@ -99,7 +107,7 @@ const ERROR_TEXT: Record<string, string> = {
   Timeout: "The page timed out",
   CmpNotFound: "Consent banner not found",
   ConsentNotApplied: "The consent choice was not seen to take effect",
-  Navigation: "Left the site",
+  Navigation: "Page did not load",
   JourneyStep: "A journey step failed",
   PolicyDenied: "Page refused",
   InvalidRequest: "Page refused",
@@ -125,7 +133,30 @@ export const runReason = (run: RunProblem): string | null => {
   const [first] = run.errors
   if (first === undefined)
     return run.status === "partial" ? "Some data is missing" : "The run failed"
+  if (first.code === "Navigation") return navigationReason(first.message)
   return ERROR_TEXT[first.code] ?? first.message
+}
+
+const NETWORK_ERRORS: ReadonlyArray<readonly [RegExp, string]> = [
+  [/ERR_CONNECTION_REFUSED/, "connection refused"],
+  [/ERR_NAME_NOT_RESOLVED/, "address not found"],
+  [/ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE|ERR_CONNECTION_CLOSED/, "no response from the server"],
+  [/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT|Timeout \d+ms exceeded/, "timed out"],
+  [/ERR_CERT|ERR_SSL/, "certificate problem"],
+]
+
+/**
+ * The engine's `Navigation` message is `<url>: <what happened>`: a refused hop names the host that
+ * is not allowed, a failed load carries the browser's `net::ERR_*` code.
+ */
+const navigationReason = (message: string) => {
+  const host = /(\S+) is not one of the allowed hosts/.exec(message)?.[1]
+  if (host !== undefined) return `Redirected to another site (${host})`
+  if (message.includes("popup blocked")) return "The page opened a pop-up to another site"
+  if (message.includes("not an http(s) page") || message.includes("carries credentials"))
+    return "Left the site"
+  const detail = NETWORK_ERRORS.find(([pattern]) => pattern.test(message))?.[1]
+  return detail === undefined ? "Page did not load" : `Page did not load (${detail})`
 }
 
 export const runDuration = (run: { startedAt: Date | null; finishedAt: Date | null }) =>
@@ -148,10 +179,21 @@ export const runMeaning = (status: string) => {
   }
 }
 
+/** How many phantom units at the estimate weigh into the pace, so the first runs do not swing it. */
+const PRIOR_UNITS = 3
+
+/**
+ * Time left from the audit's own pace: the elapsed time and the estimate's `PRIOR_UNITS` units
+ * spread over the units done so far. One figure, never a range.
+ */
 export const remainingTime = (remainingUnits: number, elapsed: number, totalUnits: number) => {
-  if (elapsed > totalUnits * SECONDS_PER_RUN * 1000 || remainingUnits === 0) return null
-  const minutes = (remainingUnits * SECONDS_PER_RUN) / 60
-  return `${Math.max(1, Math.floor(minutes * 0.75))}–${Math.max(2, Math.ceil(minutes * 1.5))} minutes left`
+  if (remainingUnits === 0) return null
+  const done = totalUnits - remainingUnits
+  const pace = (elapsed / 1000 + PRIOR_UNITS * SECONDS_PER_RUN) / (done + PRIOR_UNITS)
+  const seconds = remainingUnits * pace
+  if (seconds < 50) return "less than a minute left"
+  const minutes = Math.round(seconds / 60)
+  return `about ${minutes} ${minutes === 1 ? "minute" : "minutes"} left`
 }
 
 export const BANNER_NOTE = {
