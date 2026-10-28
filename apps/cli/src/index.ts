@@ -49,7 +49,9 @@ capture options:
 const DEFAULT_ENGINE = "http://localhost:8080"
 const SCENARIOS: readonly Scenario[] = ["none", "accept", "reject", "gpc"]
 const MAX_STEPS = 8
-const REQUEST_TIMEOUT_MS = 180_000
+// The engine's capture deadline is 60 s plus 15 s per step, at most 200 s (`LIMITS` in
+// apps/browser/src/capture.ts); the client waits that long plus time for the engine to answer.
+const requestTimeoutMs = (steps: number) => Math.min(60_000 + 15_000 * steps, 200_000) + 30_000
 
 const decodeResult = Schema.decodeUnknownSync(CaptureResult)
 const decodeRejected = Schema.decodeUnknownSync(CaptureRejected)
@@ -105,7 +107,7 @@ async function runScenario(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: AbortSignal.timeout(requestTimeoutMs(base.journey?.length ?? 0)),
     })
   } catch (cause) {
     const reason = cause instanceof Error ? (cause.cause ?? cause) : cause
