@@ -114,7 +114,9 @@ Each round an agent walks the product as a first-time consultant and the issues 
 
 | Version | Scope |
 |---|---|
-| v0.2 | GTM API, GA4 Admin and Meta connectors (configured vs fired), LinkedIn, agent-driven funnel discovery, regime-aware consent scoring (EU opt-in, US opt-out, GPC), a free public single-URL scan, Slides and Sheets exports |
-| v0.3 | Scheduled audits, volume-drop alerts, Slack and email notifications, an agency portfolio view across clients. **The cloud launches with billing (Polar or Stripe).** |
-| v0.4 | Tracking plan as YAML, drift detection, GitHub Action, typed code generation |
+| v0.2 | GTM API, GA4 Admin and Meta connectors (configured vs fired), LinkedIn, an AI banner interpreter for banners autoconsent cannot operate (the model proposes a click, a measured consent change confirms it), a read-only MCP server over audits, drafted report summaries and fix tickets (Explain policy and ledger), a funnel discovery spike that writes a replayable journey spec, regime-aware consent scoring (EU opt-in, US opt-out, GPC), a free public single-URL scan, Slides and Sheets exports |
+| v0.3 | Scheduled audits, volume-drop alerts, Slack and email notifications, an agency portfolio view across clients, funnel discovery if the spike's reliability holds, questions over hits that answer with the filter and counts, GTM change drafts (text or diff, never written to the container). **The cloud launches with billing (Polar or Stripe).** |
+| v0.4 | Tracking plan as YAML (MCP write tools only as proposals against it), drift detection, GitHub Action, typed code generation |
 | Later | Chrome extension, CLI parity, Shopify/CRM reconciliation |
+
+AI features follow `docs/research/2026-10-28-agent-features.md`: a model never decides a verdict, never writes to a client's systems and never receives raw hits, URLs or parameters. Grouping repeated findings (no model) can come earlier, as a UX item.
