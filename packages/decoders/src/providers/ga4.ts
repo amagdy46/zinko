@@ -1,3 +1,4 @@
+import { collectorOf } from "../collector.js"
 import { decodedBy } from "../collection.js"
 import { parseGcd } from "../gcd.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
@@ -59,6 +60,7 @@ function toHit(params: URLSearchParams, url: URL, batchIndex: number): Hit | nul
     ids,
     consent: parseGcs(params.get("gcs") ?? undefined),
     ...(gcd && { gcd }),
+    collector: collectorOf(url),
     host: url.host,
     url: url.href,
   }

@@ -2,7 +2,14 @@
   "endpoints": [
     {
       "methods": ["GET", "POST"],
-      "path": "/g/collect$",
+      "path": "/(g|r)/collect$",
+      "query": {
+        "v": "2"
+      }
+    },
+    {
+      "methods": ["GET", "POST"],
+      "path": "/c$",
       "query": {
         "v": "2"
       }

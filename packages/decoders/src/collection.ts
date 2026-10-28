@@ -25,7 +25,17 @@ export const COLLECTION_ENDPOINTS: readonly CollectionEndpoint[] = [
     vendor: "ga4",
     decoded: true,
     methods: HITS,
-    path: "/g/collect$",
+    path: "/(g|r)/collect$",
+    query: { v: "2" },
+  },
+  // The Google tag gateway's measurement hits. Google's docs do not name the path; two agency write-ups
+  // report GA4 hits named `c?` under the measurement path (`/<measurement-path>/c?v=2&tid=G-…`).
+  // Unconfirmed, so the decoder still needs `tid` and `en` before it calls the request a hit.
+  {
+    vendor: "ga4",
+    decoded: true,
+    methods: HITS,
+    path: "/c$",
     query: { v: "2" },
   },
   // gtag sends conversions to googleadservices.com and remarketing to google.com/rmkt/collect.

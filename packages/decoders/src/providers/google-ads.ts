@@ -1,3 +1,4 @@
+import { collectorOf } from "../collector.js"
 import { decodedBy } from "../collection.js"
 import { parseGcd } from "../gcd.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
@@ -64,6 +65,7 @@ export const googleAds: Decoder = {
         ids,
         consent: parseGcs(q.get("gcs")),
         ...(gcd && { gcd }),
+        collector: collectorOf(url),
         host: url.host,
         url: url.href,
       },

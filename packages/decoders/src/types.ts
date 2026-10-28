@@ -8,6 +8,9 @@ export interface RequestLike {
 
 export type Vendor = "ga4" | "meta" | "google-ads" | "tiktok"
 
+/** Who runs the endpoint a hit was sent to: Google's own hosts, or a first-party one (a server-side GTM container on a custom domain, or the Google tag gateway on the site's own path). */
+export type Collector = "google" | "first-party"
+
 export type ConsentState = "granted" | "denied" | "unknown"
 
 export type GcdState = "unset" | "granted" | "denied"
@@ -42,7 +45,13 @@ export interface Hit {
   consent: { adStorage: ConsentState; analyticsStorage: ConsentState; raw?: string }
   /** The request's parsed `gcd` (GA4 and Google Ads); absent when the request has none or it is not readable. */
   gcd?: Gcd
-  /** Host the hit was sent to. A non-Google host for GA4 usually means server-side GTM. */
+  /**
+   * Set on GA4 and Google Ads hits. `first-party` when the request has a Google tag's payload shape but went to a host that is not
+   * Google's, so the hit reached a collector the site runs or proxies. Decided by host, after the path
+   * and query have said the request is a hit.
+   */
+  collector?: Collector
+  /** Host the hit was sent to. */
   host: string
   url: string
 }
