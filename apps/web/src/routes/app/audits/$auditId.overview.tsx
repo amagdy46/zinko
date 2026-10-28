@@ -4,6 +4,7 @@ import { CopyButton, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { ScoreFigure } from "@/components/score-figure"
 import { SeverityBadge } from "@/components/severity"
+import { SectionHeading } from "@/components/section-heading"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -373,7 +374,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
 function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }) {
   return (
     <section aria-label="Tags seen" className="space-y-2">
-      <h2 className="text-base font-semibold">Tags seen</h2>
+      <SectionHeading title="Tags seen" />
       {tags.length === 0 ? (
         <p className="text-sm text-muted-foreground" data-testid="no-tags">
           No tags were seen.
@@ -678,7 +679,7 @@ function AreaStrip({
   )
   return (
     <section aria-label="Counts by area" className="space-y-3">
-      <h2 className="text-base font-semibold">Counts by area</h2>
+      <SectionHeading title="Counts by area" />
       {shown.length > 0 ? (
         <ul className="divide-y rounded-lg border bg-card">
           {shown.map(({ area, label, found }) => {
