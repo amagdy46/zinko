@@ -1,6 +1,6 @@
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, finding, findingTriage, run, site } from "@repo/db"
-import { and, count, desc, eq, inArray, lte, max, sql } from "drizzle-orm"
+import { and, count, desc, eq, inArray, lte, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import {
   healthScore,
@@ -183,12 +183,15 @@ export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
     const counts = yield* db
       .select({
         siteId: audit.siteId,
-        total: count(),
+        total: sql<number>`count(*) filter (where ${audit.kind} = 'full')`.mapWith(Number),
         running:
           sql<number>`count(*) filter (where ${audit.status} in ('queued', 'running'))`.mapWith(
             Number,
           ),
-        lastAuditAt: max(audit.createdAt),
+        lastAuditAt:
+          sql<Date | null>`max(${audit.createdAt}) filter (where ${audit.kind} = 'full')`.mapWith(
+            audit.createdAt,
+          ),
       })
       .from(audit)
       .where(scope)
@@ -201,7 +204,7 @@ export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
         status: audit.status,
       })
       .from(audit)
-      .where(and(scope, inArray(audit.status, [...SETTLED])))
+      .where(and(scope, eq(audit.kind, "full"), inArray(audit.status, [...SETTLED])))
       .orderBy(audit.siteId, desc(hasChecks), desc(audit.createdAt), desc(audit.id))
     const countsBySite = new Map(counts.map((c) => [c.siteId, c]))
     const lastBySite = new Map(lasts.map((l) => [l.siteId, l]))
@@ -325,6 +328,7 @@ export const trendsOf = (orgId: string, clientIds: readonly string[]) =>
           eq(audit.orgId, orgId),
           eq(site.orgId, orgId),
           inArray(site.clientId, [...clientIds]),
+          eq(audit.kind, "full"),
           inArray(audit.status, [...SETTLED]),
         ),
       )

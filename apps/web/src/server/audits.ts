@@ -1,18 +1,19 @@
-import { CaptureResult, MAX_URL_LENGTH } from "@repo/capture-contract"
-import { AuditConfig, Jobs, Storage, TEST_CLICK_IDS } from "@repo/core"
+import { CaptureResult } from "@repo/capture-contract"
+import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, run, site, client, finding, findingTriage, checkResult } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, count, eq, countDistinct } from "drizzle-orm"
+import { and, asc, count, eq, countDistinct, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
+import { canonicalHost, isOnSite, originHost } from "@/lib/site-url"
 import {
-  canonicalHost,
-  hasCredentials,
-  isOnSite,
-  originHost,
-  withoutCredentials,
-} from "@/lib/site-url"
+  createAudit,
+  evaluatedAudit,
+  launchAudit,
+  normalizePages,
+  rerunBaseline,
+} from "./audit-create"
 import { triageJoin } from "./findings-data"
 import { requireSession } from "./require-session"
 import {
@@ -35,26 +36,6 @@ const SEVERITIES = ["critical", "warning", "info"] as const
 const RunErrors = Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))
 const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 const decodeRunErrors = Schema.decodeUnknownOption(RunErrors)
-
-/**
- * The pages as `URL` writes them, each once: `http://LOCALHOST:4400/a` and `http://localhost:4400/a`
- * are one page. Every page must be on the site.
- */
-const normalizePages = (pages: ReadonlyArray<string>, target: { host: string; origin: string }) =>
-  Effect.gen(function* () {
-    const hrefs: string[] = []
-    for (const page of pages) {
-      if (hasCredentials(page))
-        return yield* new Invalid({
-          message: `${withoutCredentials(page)} is refused: URLs must not contain a username or password.`,
-        })
-      if (!isOnSite(page, target))
-        return yield* new Invalid({ message: `${page} is not on ${originHost(target.origin)}.` })
-      const { href } = new URL(page)
-      if (!hrefs.includes(href)) hrefs.push(href)
-    }
-    return hrefs
-  })
 
 const PREFLIGHT_TIMEOUT_MS = 8_000
 const PREFLIGHT_MAX_REDIRECTS = 5
@@ -111,23 +92,10 @@ const preflight = (typed: string, start: string, target: { host: string; origin:
     return yield* new Invalid({ message: `${typed} redirects too many times.` })
   })
 
-/** The URL each page is captured at: the test click IDs go on the start URL only. */
-const captureUrls = (pages: ReadonlyArray<string>, clickIds: boolean) =>
-  Effect.forEach(pages, (page, index) => {
-    const url = new URL(page)
-    if (index === 0 && clickIds)
-      for (const [name, value] of Object.entries(TEST_CLICK_IDS)) url.searchParams.set(name, value)
-    return url.href.length <= MAX_URL_LENGTH
-      ? Effect.succeed(url.href)
-      : Effect.fail(new Invalid({ message: `${page} is too long.` }))
-  })
-
 /**
- * Creates an audit of a site and starts its workflow. The audit and its runs (page × scenario ×
- * viewport, in that order, then with `journey` one journey run per scenario × viewport, when there
- * is a key page to walk to) are inserted together; the workflow instance is named by the audit
- * id, so the audit cannot be started twice. If the start fails, the audit is saved `failed` with
- * the reason and its id is still returned.
+ * Creates an audit of a site and starts its workflow (see `createAudit`). The new audit is
+ * compared with the site's latest evaluated full audit. If the start fails, the audit is saved
+ * `failed` with the reason and its id is still returned.
  */
 export const startAudit = createServerFn({ method: "POST" })
   .middleware([requireSession])
@@ -138,7 +106,6 @@ export const startAudit = createServerFn({ method: "POST" })
     mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
-        const { db } = yield* Database
         const checked = yield* siteInOrg(orgId, data.siteId)
         if (checked.archivedAt !== null)
           return yield* new Invalid({ message: "This site is archived." })
@@ -146,73 +113,162 @@ export const startAudit = createServerFn({ method: "POST" })
         const [normalizedStart] = yield* normalizePages(data.config.pages, checked)
         if (typedStart !== undefined && normalizedStart !== undefined)
           yield* preflight(typedStart, normalizedStart, checked)
-        const auditId = yield* atomically(
+        const auditId = yield* createAudit({
+          orgId,
+          userId,
+          siteId: checked.id,
+          config: data.config,
+          origin: { kind: "new" },
+        })
+        yield* launchAudit(auditId)
+        return { auditId }
+      }),
+    ),
+  )
+
+/** The stored audit a re-run copies: settled, a full audit, on a site that is not archived. */
+const rerunnable = (orgId: string, id: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    if (!isUuid(id)) return yield* new NotFound({ message: "Not found" })
+    const [found] = yield* db
+      .select({
+        siteId: audit.siteId,
+        status: audit.status,
+        kind: audit.kind,
+        config: audit.config,
+      })
+      .from(audit)
+      .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (found === undefined) return yield* new NotFound({ message: "Not found" })
+    const target = yield* siteInOrg(orgId, found.siteId)
+    const config = yield* Schema.decodeUnknownEffect(AuditConfig)(found.config).pipe(Effect.orDie)
+    let unavailable: string | null = null
+    if (found.status !== "complete" && found.status !== "partial")
+      unavailable = "Wait for this audit to finish before re-running it."
+    if (target.archivedAt !== null) unavailable = "This site is archived."
+    if (found.kind !== "full") unavailable = "A re-check cannot be re-run."
+    return { target, config, unavailable }
+  })
+
+/**
+ * What a re-run of an audit would do, read-only: its stored settings, the audit it would be
+ * compared with and why it is unavailable, if it is.
+ */
+export const previewRerun = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String })))
+  .handler(({ context, data }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const { target, config, unavailable } = yield* rerunnable(orgId, data.auditId)
+        const baseline = yield* rerunBaseline(orgId, target.id, data.auditId)
+        return {
+          config,
+          unavailable,
+          baseline: Option.getOrNull(baseline),
+        }
+      }),
+    ),
+  )
+
+/**
+ * Re-runs an audit with its stored settings, compared with it. The config is read from the stored
+ * audit and validated again; the client sends only the audit id.
+ */
+export const rerunAudit = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String })))
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId, userId } = yield* membership(context.session)
+        const { target, config, unavailable } = yield* rerunnable(orgId, data.auditId)
+        if (unavailable !== null) return yield* new Invalid({ message: unavailable })
+        const [typedStart] = config.pages
+        const [normalizedStart] = yield* normalizePages(config.pages, target)
+        if (typedStart !== undefined && normalizedStart !== undefined)
+          yield* preflight(typedStart, normalizedStart, target)
+        const auditId = yield* createAudit({
+          orgId,
+          userId,
+          siteId: target.id,
+          config,
+          origin: { kind: "rerun", auditId: data.auditId },
+        })
+        yield* launchAudit(auditId)
+        return { auditId }
+      }),
+    ),
+  )
+
+/**
+ * Makes `against` the audit's comparison baseline: an earlier evaluated full audit of the same
+ * site. Refused while the audit is queued or running, so the link cannot be moved around the
+ * one-re-run-per-baseline guard. The audit row is locked, the baseline row is held against a delete.
+ */
+export const setBaseline = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(
+    Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String, against: Schema.String })),
+  )
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const { db } = yield* Database
+        if (!isUuid(data.auditId) || !isUuid(data.against))
+          return yield* new NotFound({ message: "Not found" })
+        yield* atomically(
           Effect.gen(function* () {
-            const target = yield* siteInOrg(orgId, data.siteId, true)
-            if (target.archivedAt !== null)
-              return yield* new Invalid({ message: "This site is archived." })
-            const pages = yield* normalizePages(data.config.pages, target)
-            const config = { ...data.config, pages }
-            const urls = yield* captureUrls(pages, config.clickIds)
-            const [created] = yield* db
-              .insert(audit)
-              .values({ orgId, siteId: target.id, createdBy: userId, config, status: "queued" })
-              .returning({ id: audit.id })
-            if (created === undefined) return yield* new NotFound({ message: "Not found" })
-            const { scenarios, viewports } = config
-            // a journey run captures at the start URL and walks the key pages from there
-            const [startUrl] = urls
-            const runPages = [
-              ...urls.map((pageUrl) => ({ pageUrl, journey: false })),
-              ...(config.journey === true && urls.length > 1 && startUrl !== undefined
-                ? [{ pageUrl: startUrl, journey: true }]
-                : []),
-            ]
-            const runs = runPages.flatMap(({ pageUrl, journey }, p) =>
-              scenarios.flatMap((scenario, s) =>
-                viewports.map((viewport, v) => ({
-                  orgId,
-                  auditId: created.id,
-                  ordinal: (p * scenarios.length + s) * viewports.length + v,
-                  pageUrl,
-                  journey,
-                  scenario,
-                  viewport,
-                  status: "pending",
-                })),
-              ),
-            )
-            yield* db.insert(run).values(runs)
-            return created.id
+            const [mine] = yield* db
+              .select({
+                siteId: audit.siteId,
+                status: audit.status,
+                kind: audit.kind,
+                createdAt: audit.createdAt,
+              })
+              .from(audit)
+              .where(and(eq(audit.id, data.auditId), eq(audit.orgId, orgId)))
+              .limit(1)
+              .for("update")
+            if (mine === undefined) return yield* new NotFound({ message: "Not found" })
+            if (mine.kind !== "full")
+              return yield* new Invalid({ message: "A re-check has no baseline." })
+            if (mine.status === "queued" || mine.status === "running")
+              return yield* new Invalid({
+                message: "Wait for this audit to finish before changing its baseline.",
+              })
+            const [other] = yield* db
+              .select({
+                id: audit.id,
+                valid: sql<boolean>`${audit.kind} = 'full' and ${audit.status} in ('complete', 'partial') and ${audit.createdAt} < ${mine.createdAt} and ${evaluatedAudit(orgId)}`,
+              })
+              .from(audit)
+              .where(
+                and(
+                  eq(audit.id, data.against),
+                  eq(audit.orgId, orgId),
+                  eq(audit.siteId, mine.siteId),
+                ),
+              )
+              .limit(1)
+              .for("key share")
+            if (other === undefined) return yield* new NotFound({ message: "Not found" })
+            if (!other.valid)
+              return yield* new Invalid({
+                message: "The baseline must be an earlier evaluated audit of this site.",
+              })
+            yield* db
+              .update(audit)
+              .set({ baselineAuditId: other.id })
+              .where(and(eq(audit.id, data.auditId), eq(audit.orgId, orgId)))
+            return undefined
           }),
         )
-        const jobs = yield* Jobs
-        yield* jobs.start("audit", { auditId }, { id: auditId }).pipe(
-          Effect.flatMap((instance) =>
-            db.update(audit).set({ workflowId: instance.id }).where(eq(audit.id, auditId)),
-          ),
-          Effect.catchTag("JobError", (error) =>
-            Effect.gen(function* () {
-              // the call can fail (a timeout) after the instance was created; then it runs
-              const created = yield* jobs.status("audit", auditId).pipe(Effect.option)
-              if (Option.isSome(created))
-                return yield* db
-                  .update(audit)
-                  .set({ workflowId: auditId })
-                  .where(eq(audit.id, auditId))
-              yield* Effect.logError("Audit workflow did not start", error)
-              return yield* db
-                .update(audit)
-                .set({
-                  status: "failed",
-                  error: "The audit could not be started. Try again.",
-                  finishedAt: new Date(),
-                })
-                .where(eq(audit.id, auditId))
-            }),
-          ),
-        )
-        return { auditId }
+        return { auditId: data.auditId }
       }),
     ),
   )
@@ -233,7 +289,7 @@ export const getAudit = createServerFn({ method: "GET" })
         const [found] = yield* db
           .select({
             audit,
-            site: { id: site.id, name: site.name, host: site.host },
+            site: { id: site.id, name: site.name, host: site.host, archivedAt: site.archivedAt },
             client: { id: client.id, name: client.name },
           })
           .from(audit)
@@ -356,9 +412,15 @@ export const getAudit = createServerFn({ method: "GET" })
             createdAt: a.createdAt,
             startedAt: a.startedAt,
             finishedAt: a.finishedAt,
+            kind: a.kind,
             config,
           },
-          site: found.site,
+          site: {
+            id: found.site.id,
+            name: found.site.name,
+            host: found.site.host,
+            archived: found.site.archivedAt !== null,
+          },
           client: found.client,
           summary,
           findings: findings.filter((f) => f.kind === "fail"),

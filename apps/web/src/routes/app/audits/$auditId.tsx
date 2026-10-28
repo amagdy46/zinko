@@ -12,6 +12,8 @@ import { ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
+import { RerunDialog } from "@/components/rerun-dialog"
+import { Button } from "@/components/ui/button"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
@@ -165,6 +167,33 @@ function AuditPage() {
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
     { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
+  const rerunButton = useRef<HTMLButtonElement>(null)
+  const [rerunning, setRerunning] = useState(false)
+  let rerunHint: string | undefined
+  if (active) rerunHint = "Available when the audit has finished"
+  if (site.archived) rerunHint = "This site is archived"
+  const rerun =
+    audit.kind === "full" ? (
+      <>
+        <Button
+          ref={rerunButton}
+          variant="outline"
+          size="sm"
+          className="h-8"
+          disabled={active || site.archived}
+          title={rerunHint}
+          onClick={() => setRerunning(true)}
+        >
+          Re-run
+        </Button>
+        <RerunDialog
+          auditId={audit.id}
+          open={rerunning}
+          onOpenChange={setRerunning}
+          returnFocus={rerunButton}
+        />
+      </>
+    ) : null
   const shareLink =
     !active && summary.evaluatedRuns > 0 ? (
       <Link
@@ -230,7 +259,12 @@ function AuditPage() {
               ) : null}
             </>
           }
-          actions={shareLink}
+          actions={
+            <>
+              {rerun}
+              {shareLink}
+            </>
+          }
         />
       ) : (
         <header className="flex flex-col gap-x-3 gap-y-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-1">
@@ -280,6 +314,7 @@ function AuditPage() {
                 <span className="max-sm:hidden">· See why</span>
               </Link>
             ) : null}
+            {rerun}
             {shareLink}
           </div>
         </header>

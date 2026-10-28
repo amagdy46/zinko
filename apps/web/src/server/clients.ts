@@ -2,9 +2,10 @@ import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
+import { latestBaseline } from "./audit-create"
 import {
   auditDetails,
   clientSummary,
@@ -218,7 +219,13 @@ export const searchTargets = createServerFn({ method: "GET" })
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
-          .where(and(eq(audit.orgId, orgId), text === "" ? undefined : ilike(site.name, pattern)))
+          .where(
+            and(
+              eq(audit.orgId, orgId),
+              eq(audit.kind, "full"),
+              text === "" ? undefined : ilike(site.name, pattern),
+            ),
+          )
           .orderBy(desc(audit.createdAt))
           .limit(RECENT_AUDITS)
         const details = yield* auditDetails(
@@ -506,9 +513,10 @@ export const getSite = createServerFn({ method: "GET" })
         const [latest] = yield* db
           .select({ config: audit.config })
           .from(audit)
-          .where(and(eq(audit.siteId, found.id), eq(audit.orgId, orgId)))
+          .where(and(eq(audit.siteId, found.id), eq(audit.orgId, orgId), eq(audit.kind, "full")))
           .orderBy(desc(audit.createdAt))
           .limit(1)
+        const baseline = yield* latestBaseline(orgId, found.id)
         return {
           site: {
             id: found.id,
@@ -523,6 +531,7 @@ export const getSite = createServerFn({ method: "GET" })
             const summary = summaries.find((row) => row.id === a.id)
             return {
               id: a.id,
+              kind: a.kind,
               status: a.status,
               error: a.error,
               createdAt: a.createdAt,
@@ -551,6 +560,7 @@ export const getSite = createServerFn({ method: "GET" })
           page,
           hasMore: rows.length > AUDITS_PER_PAGE,
           lastConfig: latest?.config ?? null,
+          baseline: Option.getOrNull(baseline),
         }
       }),
     ),

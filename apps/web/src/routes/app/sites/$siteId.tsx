@@ -5,6 +5,7 @@ import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { RerunDialog } from "@/components/rerun-dialog"
 import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { PageContainer } from "@/components/page-container"
@@ -62,6 +63,9 @@ function SitePage() {
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [rerunOf, setRerunOf] = useState<string | null>(null)
+  const [rerunOpen, setRerunOpen] = useState(false)
+  const rerunButton = useRef<HTMLButtonElement>(null)
   const [urlError, setUrlError] = useState<string>()
   const timeZone = useTimeZone()
 
@@ -239,6 +243,9 @@ function SitePage() {
               <TableHead>Runs</TableHead>
               <TableHead>Score</TableHead>
               <TableHead>Findings</TableHead>
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -276,10 +283,35 @@ function SitePage() {
                 <TableCell>
                   <AuditFindings audit={a} />
                 </TableCell>
+                <TableCell className="text-right">
+                  {a.kind === "full" && (a.status === "complete" || a.status === "partial") ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="relative h-8"
+                      disabled={site.archived}
+                      onClick={(event) => {
+                        rerunButton.current = event.currentTarget
+                        setRerunOf(a.id)
+                        setRerunOpen(true)
+                      }}
+                    >
+                      Re-run
+                    </Button>
+                  ) : null}
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
+      )}
+      {rerunOf === null ? null : (
+        <RerunDialog
+          auditId={rerunOf}
+          open={rerunOpen}
+          onOpenChange={setRerunOpen}
+          returnFocus={rerunButton}
+        />
       )}
       {page > 0 || hasMore ? (
         <div className="flex gap-2">

@@ -1,4 +1,5 @@
 import {
+  type AnyPgColumn,
   boolean,
   index,
   integer,
@@ -71,8 +72,25 @@ export const audit = pgTable(
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** High-water mark of report versions: raised under the publication lock, never lowered. */
     reportVersionSeq: integer("report_version_seq").notNull().default(0),
+    /**
+     * The audit this one is compared with: same site, earlier, evaluated, `full`. A human act
+     * (Re-run, the New audit form, Make this the baseline); a deleted baseline falls back to none.
+     */
+    baselineAuditId: uuid("baseline_audit_id").references((): AnyPgColumn => audit.id, {
+      onDelete: "set null",
+    }),
+    /** `full` or `narrow` (a re-check of some pages for one rule). */
+    kind: text().notNull().default("full"),
+    narrowRuleId: text("narrow_rule_id"),
+    /** The `CellKey`s a re-check targets. */
+    narrowCells: jsonb("narrow_cells"),
+    /** `CellKey`s of runs executed only to detect the cookie banner for a re-check's targets. */
+    narrowCompanions: jsonb("narrow_companions"),
   },
-  (t) => [index("audit_org_site_created_idx").on(t.orgId, t.siteId, t.createdAt.desc())],
+  (t) => [
+    index("audit_org_site_created_idx").on(t.orgId, t.siteId, t.createdAt.desc()),
+    index("audit_org_baseline_idx").on(t.orgId, t.baselineAuditId),
+  ],
 )
 
 export const run = pgTable(
@@ -91,6 +109,8 @@ export const run = pgTable(
     viewport: text().notNull(),
     /** Walks from the page URL (the start URL) through the key pages in one browser context. */
     journey: boolean().notNull().default(false),
+    /** `target`, or for a re-check `companion` (banner detection) or `extra` (cross-product runs). */
+    role: text().notNull().default("target"),
     status: text().notNull(),
     engine: jsonb(),
     decoderVersion: text("decoder_version"),

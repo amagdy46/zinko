@@ -95,6 +95,10 @@ Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar 
 
 `PageHeader`, `SectionHeading` (title, optional line and trailing actions), `EmptyState` (a 40px glyph tile, title, line, an optional numbered "What happens next", the action at the bottom; the dashed edge is only for Not evaluated), `PageSkeleton` (the router's pending component after 300 ms), `StatusGlyph` (twelve meanings), `StatusBadge`, `SeverityBadge`, `CheckStatusBadge`, `lib/format.ts` (`relativeTime`, `duration`, `count`, `shortDate`: "28 Oct 2026", never the US form), the evidence primitives in `components/evidence.tsx` (`ConsentTokens`, `KeyValueTable`, `RequestView`, `JsonView`, `CopyButton`) and `ConfirmDialog`, `SettingsSection` (title and description on the left, controls on the right from `lg`; Profile, Members and AI use it). A controlled dialog or sheet opened from a button that is not its trigger restores focus itself in `onCloseAutoFocus` (run sheet, finding sheet, filters sheet, triage menu, palette, confirm dialog).
 
+### Re-run (M6)
+
+The audit header has **Re-run** (secondary, before Share report; disabled while the audit runs or the site is archived) and each settled row of the site history has a ghost **Re-run**. Both open one confirm dialog (`RerunDialog`): "12 runs, about 2 minutes, with the same settings. It will be compared with this audit." A refusal (cap of five active audits, a re-run already in progress) shows inside the dialog. Focus returns to the control that opened it. The New audit form says "Compared with the audit of <date>" when the site has an evaluated full audit.
+
 ## Not built yet
 
 The `j`/`k`/`e` shortcuts, audit compare, site settings, audit cancel and single-run retry.
