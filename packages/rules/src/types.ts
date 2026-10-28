@@ -21,6 +21,8 @@ export interface RunInput {
   viewport: CaptureRequest["viewport"]
   pageUrl: string
   siteHost: string
+  /** The hosts the owner declared belong to the site: the only hosts the rules treat as related. Empty for audits stored before. */
+  measuredHosts: readonly string[]
   journey: boolean
   capture: CaptureResult
   hits: readonly DecodedHit[]

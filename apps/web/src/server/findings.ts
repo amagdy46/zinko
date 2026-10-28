@@ -93,6 +93,7 @@ export const getFinding = createServerFn({ method: "GET" })
             scenario: run.scenario,
             viewport: run.viewport,
             journey: run.journey,
+            followHost: run.followHost,
             status: checkResult.status,
             message: checkResult.message,
             rulesVersion: checkResult.rulesVersion,

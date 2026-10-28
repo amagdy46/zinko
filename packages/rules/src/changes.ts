@@ -40,6 +40,9 @@ export const RULE_CHANGES: Readonly<Record<string, readonly string[]>> = {
   // `duplicates.purchase-on-reload`), which need no entry; 9: a purchase after the reload that
   // matches nothing earlier is inconclusive, where version 8 passed it
   "9": ["duplicates.purchase-on-reload"],
+  // 10 added `consent.lost-across-subdomain`; a document reached by following a link to another host
+  // is no longer a later page of `consent.not-persisted-across-navigation`
+  "10": ["consent.not-persisted-across-navigation"],
 }
 
 /**

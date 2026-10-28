@@ -35,6 +35,10 @@ export const defaults = {
   cmpBreaksAfterChoice: false, // the banner library's script answers 404 once the visitor's choice is stored
   ghostBanner: false, // once a choice is stored, banner markup is kept in the page but invisible (visibility hidden, as a CMP that animates out leaves it)
   reloadAfterChoice: false, // the banner library reloads the page 1.5 s after the first choice, as some CMPs do
+  consentScope: "host", // "host" | "domain": the banner library's cookie is host-only, or set for the parent of a www. or checkout. host
+  consentCookie: "cc_cookie", // the banner library's cookie name (anything else is a name no CMP list knows)
+  consentPath: "/", // "/" | "restricted": the banner library's cookie is limited to /<site>/thank-you
+  consentStorage: "cookie", // "cookie" | "localStorage": where the banner library keeps the choice
   cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
@@ -76,6 +80,11 @@ export const sites = {
   "consent-cmp-404": { cmpBreaksAfterChoice: true },
   "consent-ghost-banner": { ghostBanner: true },
   "consent-reload-after-choice": { reloadAfterChoice: true },
+  "consent-subdomain": {},
+  "consent-subdomain-shared": { consentScope: "domain" },
+  "consent-subdomain-renamed": { consentCookie: "zk_choice" },
+  "consent-subdomain-path": { consentScope: "domain", consentPath: "restricted" },
+  "consent-subdomain-storage": { consentStorage: "localStorage" },
   "consent-template-only": { consentDefault: "none", consentRestore: "never" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },

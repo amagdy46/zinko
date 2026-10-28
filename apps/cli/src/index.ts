@@ -433,6 +433,9 @@ async function runFrom(
           viewport: opts.base.viewport,
           pageUrl: opts.url,
           siteHost: new URL(opts.url).hostname,
+          measuredHosts: opts.base.journey.flatMap((step) =>
+            step.action === "follow" ? [step.host] : [],
+          ),
           journey: isJourney(opts.base.journey),
           capture: result,
           hits,

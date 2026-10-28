@@ -6,6 +6,7 @@ import { lostOnRedirect } from "./rules/clickids/lost-on-redirect.js"
 import { cookiesWithoutConsent } from "./rules/consent/cookies-without-consent.js"
 import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
+import { lostAcrossSubdomain } from "./rules/consent/lost-across-subdomain.js"
 import { modeClassified } from "./rules/consent/mode-classified.js"
 import { modeV2Incomplete } from "./rules/consent/mode-v2-incomplete.js"
 import { notPersistedAcrossNavigation } from "./rules/consent/not-persisted-across-navigation.js"
@@ -48,7 +49,7 @@ export { RULE_CHANGES, ruleChangedBetween, VOLATILE_RULES } from "./changes.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "9"
+export const RULES_VERSION = "10"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -59,6 +60,7 @@ export const rules: readonly Rule[] = [
   modeV2Incomplete,
   modeClassified,
   notPersistedAcrossNavigation,
+  lostAcrossSubdomain,
   cookieMissing,
   lostOnRedirect,
   lostAcrossNavigation,

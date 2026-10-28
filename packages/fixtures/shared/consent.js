@@ -6,9 +6,19 @@ function runBanner() {
   // consent-not-persisted: the previous document's choice is forgotten before the library reads it
   if (!window.zinkoConfig.consentPersist) document.cookie = "cc_cookie=; Max-Age=0; path=/"
   if (window.zinkoConfig.ghostBanner && document.cookie.includes("cc_cookie=")) addGhostBanner()
+  const cfg = window.zinkoConfig
+  // consent-subdomain-*: where the banner library keeps the choice
+  const parent = location.hostname.split(".").slice(1).join(".")
   window.CookieConsent.run({
     // headless captures set navigator.webdriver; the banner must still show
     hideFromBots: false,
+    cookie: {
+      name: cfg.consentCookie,
+      path:
+        cfg.consentPath === "restricted" ? `/${location.pathname.split("/")[1]}/thank-you` : "/",
+      ...(cfg.consentScope === "domain" && parent.includes(".") ? { domain: parent } : {}),
+      useLocalStorage: cfg.consentStorage === "localStorage",
+    },
     categories: {
       necessary: { enabled: true, readOnly: true },
       analytics: {},

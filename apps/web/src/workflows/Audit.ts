@@ -413,7 +413,8 @@ const captureRun = (auditId: string, runId: string, ordinal: number) =>
 const persist = (auditId: string, runId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const { run: current, host } = yield* loadRun(auditId, runId)
+    const { run: current, config, host } = yield* loadRun(auditId, runId)
+    const { measuredHosts } = yield* decodeConfig(config)
     if (current.captureKey === null || current.finishedAt === null)
       return yield* new AuditStateError({ message: `run ${runId} has no stored capture` })
     const result = yield* decodeStoredCapture(yield* readText(current.captureKey))
@@ -457,6 +458,7 @@ const persist = (auditId: string, runId: string) =>
       viewport,
       pageUrl: current.pageUrl,
       siteHost: host,
+      measuredHosts: measuredHosts ?? [],
       journey: current.journey,
       capture: result,
       hits: decoded,

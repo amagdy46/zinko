@@ -57,8 +57,12 @@ export const notPersistedAcrossNavigation: Rule = {
       )
     const { actionAt, outcome } = timeline
 
+    // another host is `consent.lost-across-subdomain`'s question: a `follow` is not a later page here
     const later = documents.filter(
-      (document) => document.navigation !== "start" && document.startedAt > actionAt,
+      (document) =>
+        document.navigation !== "start" &&
+        document.navigation !== "follow" &&
+        document.startedAt > actionAt,
     )
     // A step that failed or a deadline that cut the journey short leaves pages unvisited (a first
     // step that timed out, a reload refused because the page came from a POST).
