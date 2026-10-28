@@ -18,7 +18,7 @@
 | M2 | **Audit pipeline (done locally, 2026-10-20):** clients and sites CRUD, the New audit form, AuditWorkflow (step per page × scenario), AuditRoom Durable Object over WebSocket, hits in Postgres, artifacts in R2 | Run an audit from the UI, watch it progress, and browse the Hits explorer (done: the M2 demo in `docs/vision.md`) |
 | M3 | **Rules and findings (done locally, 2026-10-22):** `packages/rules` with the 19 v0.1 rules, journey runs, check results and findings in Postgres, and the Findings screen with its evidence panel | Audit a real client site and get correct findings with evidence (done on two public sites, with false positives found and noted: see "M3 demo" below) |
 | M4 | **Matrix, overview and LLM (done locally, 2026-10-28):** the Overview (score with its arithmetic, worst finding, tags seen), the Tag matrix (events and observed consent state, by scenario or page, paginated), banner detection uncertainty, Hits destination and timing filters, and `packages/llm` (BYOK keys, an organization policy that is off by default, spend-limited cached explanations) | A consultant-ready view of everything that fires where (done: the M4 demo in `docs/vision.md`) |
-| M5 | **Report:** branding settings, report page (one-page summary, scope, consent-scenario matrix, findings, an action plan grouped by who fixes it), consultant notes, a revocable share link to a dated snapshot, PDF through print, CSV audit register. Plan: `docs/plans/2026-10-28-m5-report/plan.md` | Send a white-label report to a client |
+| M5 | **Report (done locally, 2026-10-28):** branding settings, report page (one-page summary, scope, consent-scenario matrix, findings, an action plan grouped by who fixes it), consultant notes, a revocable share link to a dated snapshot, PDF through print, CSV audit register. Plan: `docs/plans/2026-10-28-m5-report/plan.md` | Send a white-label report to a client (done: the M5 demo in `docs/vision.md`) |
 | M6 | **Compare and polish:** re-run with diff (new, fixed, unchanged, regressed, verdict changed, not comparable when rules version or banner detection differ; accepted risks carry over), per-finding re-verify, a "what changed" summary, empty and partial states, docs, self-host guide, public demo instance | **v0.1 release:** a Show HN post and a "we audited N sites" write-up |
 
 ## UI refresh (done locally, 2026-10-24)
@@ -38,6 +38,23 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 - **Admission control:** done in the M3 leftovers (below).
 - **Cloudflare:** the Workflow, Durable Objects, R2 and the container have run only under `pnpm dev`; the container image and a deploy are still untried.
 - **A flaky navigation timeout:** one demo run hit `Page.goto` 30 s on a fixture page and passed on the next audit; the cause is not isolated.
+
+## Left over from M5
+
+- **Real Firefox print preview not run.** Playwright cannot print Firefox to PDF; its print-media layout was checked by screenshot only. Print the public page from Firefox by hand once.
+- **Distinct captures at 168 runs unmeasured.** The report build read one shared stored capture, so evidence rows were "not available" for all 19 findings and the cost of up to 19 distinct R2 reads per build is unknown; `getReportDraft` p95 was 383 ms without it.
+- **Transient storage failure on publish not exercised end to end.** The refusal ("Some evidence could not be read; try again") is coded but no storage outage was injected.
+- **Cloudflare rate-limit rule on `/r/*`** is not written or verified (the binding in `infra/alchemy.run.ts` is still an unverified spike); only the shape check, the uniform 404 and the one-indexed-lookup cost bound abuse.
+- **The public HTML is 237 KB for 19 findings** against a 250 KB budget; a longer report will pass it. Compression at the edge is assumed, not measured.
+- **The footer is not repeated on every printed page** (a fixed element lands at the top of pages 2 and later in Chromium; a margin box cannot carry author text). It closes the document; the page number is a margin box.
+- **A server-rendered PDF** is deferred with its prerequisites in `docs/vision.md`.
+- **First publication after a model change reads as a change.** `publication_hash` includes `modelVersion`, so an audit whose last snapshot is an older model version shows "Unpublished changes" once, and the next link publishes a new version.
+- **Report summary says "Could not check: n rules" without naming them**; Appendix A names them, the summary could list the first few.
+- **Inline links in the action plan are under 32 px** (text links inside wrapping lines, on paper); the app's own targets are 32 px.
+- **`/files/` without signature or expiry answers 400, with a wrong signature 403** (the plan expected 403 for both); neither leaks.
+- **A detailed report prints entered paths as typed**; nothing detects a name in a path (by design, see the disclosure dialog).
+- **Links opened by preview bots count as views.**
+- **M4 leftovers still open:** the Overview focus order reaches the audit content before the sidebar navigation; click IDs reach the start URL only.
 
 ## Left over from M4
 
