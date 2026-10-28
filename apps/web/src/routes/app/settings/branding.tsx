@@ -62,7 +62,7 @@ function CoverPreview({
           <img src={logoUrl} alt={name} className="max-h-14 max-w-40 object-contain" />
         )}
         <div>
-          <p className="text-xs text-muted-foreground">Tracking audit</p>
+          <p className="text-xs text-muted-foreground">Tracking &amp; consent audit</p>
           <p className="text-lg font-semibold">Client name</p>
           <p className="text-sm text-muted-foreground">shop.example</p>
         </div>

@@ -13,7 +13,7 @@ export function Scope({ model }: { model: ReportModel }) {
     <section
       id="scope"
       aria-label="Scope and method"
-      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
+      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Scope and method</h2>
       <p>
@@ -23,7 +23,7 @@ export function Scope({ model }: { model: ReportModel }) {
       </p>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
-          <h3 className="font-medium">Pages</h3>
+          <h3 className="font-semibold">Pages</h3>
           <ul className="space-y-0.5 sm:columns-2">
             {scope.pages.map((page) => (
               <li key={page}>{page}</li>
@@ -31,12 +31,12 @@ export function Scope({ model }: { model: ReportModel }) {
           </ul>
         </div>
         <div className="space-y-1">
-          <h3 className="font-medium">Viewports</h3>
+          <h3 className="font-semibold">Viewports</h3>
           <p>{scope.viewports.join(" and ")}</p>
         </div>
       </div>
       <div className="space-y-1">
-        <h3 className="font-medium">Consent scenarios</h3>
+        <h3 className="font-semibold">Consent scenarios</h3>
         <ul className="space-y-0.5">
           {scope.scenarios.map((scenario) => (
             <li key={scenario}>

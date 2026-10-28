@@ -30,6 +30,8 @@ export function ReportView({
   mode,
   controls,
   published,
+  standalone = false,
+  draft = mode === "consultant",
 }: {
   model: ReportModel
   logoSrc: string | null
@@ -37,13 +39,23 @@ export function ReportView({
   controls?: ReportControls
   /** Set for a published version: the cover says which one and when. */
   published?: { version: number; publishedAt: string }
+  /** The report is the whole page (a shared link), so the client's name is its h1; in the app it is an h2. */
+  standalone?: boolean
+  /** Show the Draft tag on the cover: the consultant's view, until the latest changes are published. */
+  draft?: boolean
 }) {
   return (
     <article
       data-accent={model.branding.accent}
       className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border bg-card text-card-foreground print:max-w-none print:overflow-visible print:rounded-none print:border-0"
     >
-      <Cover model={model} logoSrc={logoSrc} draft={mode === "consultant"} published={published} />
+      <Cover
+        model={model}
+        logoSrc={logoSrc}
+        draft={draft}
+        published={published}
+        standalone={standalone}
+      />
       <Summary model={model} actions={controls?.summary} />
       <Scope model={model} />
       <ConsentSummary model={model} />

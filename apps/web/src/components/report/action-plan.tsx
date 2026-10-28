@@ -1,5 +1,9 @@
+import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
 import { OWNER_LABELS, type ReportModel } from "@/lib/report-model"
+
+const LINK =
+  "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 
 /** What to fix, grouped by who usually fixes it; accepted risks and fixed findings are listed apart. */
 export function ActionPlan({ model }: { model: ReportModel }) {
@@ -8,7 +12,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
     <section
       id="plan"
       aria-label="Action plan"
-      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
+      className="space-y-4 px-8 py-8 text-sm leading-6 print:p-0 print:pt-6 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Action plan</h2>
       {model.actionPlan.length === 0 ? (
@@ -17,33 +21,44 @@ export function ActionPlan({ model }: { model: ReportModel }) {
           No open failing findings to act on.
         </p>
       ) : (
-        model.actionPlan.map((group) => (
-          <div key={group.owner ?? "none"} className="space-y-1.5">
-            <h3 className="font-medium">
-              {group.owner === null ? "Owner not assigned" : OWNER_LABELS[group.owner]}
-            </h3>
-            <ul className="space-y-1.5">
-              {group.items.map((item) => (
-                <li key={item.ruleId} className="flex items-start gap-2">
-                  <StatusGlyph meaning={item.severity} className="mt-0.5" />
-                  <span className="[overflow-wrap:anywhere]">
-                    <a
-                      href={`#finding-${item.ruleId}`}
-                      className="font-medium text-report-accent underline underline-offset-4"
-                    >
-                      {item.title}
-                    </a>
-                    <span className="text-muted-foreground">: {item.firstStep}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))
+        <>
+          <p className="max-w-[65ch] text-muted-foreground">
+            Work through each group from the top: the most serious come first.
+          </p>
+          {model.actionPlan.map((group) => (
+            <div key={group.owner ?? "none"} className="space-y-1.5">
+              <h3 className="font-semibold">
+                {group.owner === null ? "Owner not assigned" : OWNER_LABELS[group.owner]}
+              </h3>
+              <ol className="list-decimal space-y-2 pl-6 marker:text-muted-foreground marker:tabular-nums">
+                {group.items.map((item) => (
+                  <li key={item.ruleId} className="space-y-0.5 pl-1">
+                    <p className="flex flex-wrap items-center gap-2">
+                      <SeverityBadge severity={item.severity} />
+                      <a href={`#finding-${item.ruleId}`} className={`font-medium ${LINK}`}>
+                        {item.title}
+                      </a>
+                    </p>
+                    <p className="max-w-[65ch] [overflow-wrap:anywhere]">
+                      <span className="font-semibold">Ask for:</span> {item.firstStep}
+                    </p>
+                    <p className="max-w-[65ch] text-muted-foreground">
+                      <span className="font-semibold">Done when:</span> a re-run no longer fails
+                      this check.
+                    </p>
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+          <p className="keep-together max-w-[65ch] font-medium">
+            We recommend re-running the audit after the fixes, to confirm each one.
+          </p>
+        </>
       )}
       {set.length === 0 ? null : (
         <div className="space-y-1.5" data-testid="not-in-plan">
-          <h3 className="font-medium">Not in the plan</h3>
+          <h3 className="font-semibold">Not in the plan</h3>
           <ul className="space-y-1.5">
             {set.map((f) => (
               <li key={f.ruleId} className="flex items-start gap-2">
@@ -52,10 +67,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                   className="mt-0.5"
                 />
                 <span className="[overflow-wrap:anywhere]">
-                  <a
-                    href={`#finding-${f.ruleId}`}
-                    className="text-report-accent underline underline-offset-4"
-                  >
+                  <a href={`#finding-${f.ruleId}`} className={LINK}>
                     {f.title}
                   </a>
                   <span className="text-muted-foreground">

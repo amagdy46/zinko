@@ -89,6 +89,17 @@ export type ReportBuild =
 
 /** At most this many failing runs are tried, in run order, for a finding's one evidence item. */
 const EVIDENCE_CANDIDATES = 5
+/** "failed on 3 of 9 runs where it could be checked, on 1 page, in all 3 scenarios": pages and scenarios are those that failed. */
+const scopeLineOf = (
+  finding: { failingRuns: number; knownRuns: number },
+  pages: number,
+  scenarios: ReadonlyArray<string>,
+  configured: number,
+) => {
+  let where = `in ${scenarios.join(", ")}`
+  if (configured > 1 && scenarios.length === configured) where = `in all ${configured} scenarios`
+  return `failed on ${finding.failingRuns} of ${finding.knownRuns} runs where it could be checked, on ${plural(pages, "page")}, ${where}`
+}
 const VIEWPORT_WORDS = { desktop: "Desktop", mobile: "Mobile" } as const
 
 const viewportOf = (viewport: string) => (viewport === "mobile" ? "mobile" : "desktop")
@@ -487,7 +498,9 @@ export const buildReport = (orgId: string, auditId: string) =>
         .filter((scenario) => ids.some((id) => runById.get(id)?.scenario === scenario))
         .map(scenarioLabel)
 
-    const open = failing
+    const leftOutIds = new Set(findingEdits.filter((e) => e.hidden).map((e) => e.ruleId))
+    const detailed = failing.filter((f) => !leftOutIds.has(f.ruleId))
+    const open = detailed
       .filter((f) => f.triage.status === "open")
       .toSorted(
         (a, b) =>
@@ -503,7 +516,19 @@ export const buildReport = (orgId: string, auditId: string) =>
             ruleId: top.ruleId,
             severity: top.severity,
             title: top.title,
-            scopeLine: `failed on ${top.failingRuns} of ${top.knownRuns} runs where it could be checked, across ${plural(top.pages, "page")} (${scenarioLabels(failed.filter((f) => f.ruleId === top.ruleId).map((f) => f.runId)).join(", ")})`,
+            scopeLine: scopeLineOf(
+              top,
+              new Set(
+                failed
+                  .filter((f) => f.ruleId === top.ruleId)
+                  .flatMap((f) => {
+                    const r = runById.get(f.runId)
+                    return r === undefined ? [] : [pageIndexOf(config.pages, r.pageUrl)]
+                  }),
+              ).size,
+              scenarioLabels(failed.filter((f) => f.ruleId === top.ruleId).map((f) => f.runId)),
+              config.scenarios.length,
+            ),
           }
     const tally = (status: string) => failing.filter((f) => f.triage.status === status).length
     const bySeverity = (severity: string) => failing.filter((f) => f.severity === severity).length
@@ -514,6 +539,30 @@ export const buildReport = (orgId: string, auditId: string) =>
       unresolvedRules: unchecked.length,
       unresolvedRuns: new Set(unchecked.flatMap((f) => f.runIds)).size,
       bannerUncertainRuns: found.uncertainty.bannerUncertainRuns,
+    }
+    const blockedPages = new Set(summary.runHealth.brokenPages.map((p) => p.page))
+    const blockedRuns = new Set(
+      runs
+        .filter(
+          (r) =>
+            blockedPages.has(r.pageUrl) ||
+            (summary.runHealth.startFailed &&
+              startUrl !== undefined &&
+              pageIndexOf([startUrl], r.pageUrl) === 0),
+        )
+        .map((r) => r.id),
+    )
+    const isNever = (f: (typeof unchecked)[number]) =>
+      f.knownRuns === 0 && f.inconclusiveRuns >= coverage.evaluatedRuns
+    const isBlocked = (f: (typeof unchecked)[number]) =>
+      !isNever(f) && f.runIds.some((id) => blockedRuns.has(id))
+    const neverChecked = unchecked.filter(isNever)
+    const otherChecks = unchecked.filter((f) => !isNever(f) && !isBlocked(f))
+    const checkGaps = {
+      blockedRules: unchecked.filter(isBlocked).length,
+      neverChecked: neverChecked.map((f) => f.checkTitle).toSorted(byText),
+      otherRules: otherChecks.length,
+      otherRuns: new Set(otherChecks.flatMap((f) => f.runIds)).size,
     }
     const scoreCoverage = {
       checks: ruleStats.reduce((n, s) => n + s.n, 0),
@@ -683,8 +732,12 @@ export const buildReport = (orgId: string, auditId: string) =>
           fixed: tally("fixed"),
         },
         scoreCoverage,
-        headlines: headlinesOf(failing, {
-          ...coverage,
+        checkGaps,
+        headlines: headlinesOf(detailed, {
+          evaluatedRuns: coverage.evaluatedRuns,
+          totalRuns: coverage.totalRuns,
+          unresolvedRules: coverage.unresolvedRules,
+          leftOut: failing.length - detailed.length,
           partial: scoreCoverageOf(covered).state === "runs",
           tooLittle: tooLittleCaptured(covered),
         }),

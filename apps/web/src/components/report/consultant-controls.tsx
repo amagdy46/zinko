@@ -79,7 +79,13 @@ function Feedback({ error, warning }: { error: string | null; warning: string | 
 }
 
 /** "Edit summary": the consultant's own text replaces the generated headlines' lead. */
-export function EditSummary({ summary }: { summary: string | null }) {
+export function EditSummary({
+  summary,
+  headlines,
+}: {
+  summary: string | null
+  headlines: ReadonlyArray<string>
+}) {
   const { auditId } = useParams({ from: "/app/audits/$auditId/report" })
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(summary ?? "")
@@ -104,18 +110,28 @@ export function EditSummary({ summary }: { summary: string | null }) {
         <SheetHeader>
           <SheetTitle>Edit summary</SheetTitle>
           <SheetDescription>
-            Your text is shown as "Summary by" your agency, above the headlines Zinko generates from
-            the findings. Clear it to go back to the generated summary alone.
+            Your text opens the report as "Summary by" your agency; the sentences Zinko generates
+            from the findings follow the score. Clear it to go back to the generated summary alone.
           </SheetDescription>
         </SheetHeader>
-        <div className="space-y-2 px-4">
-          <Label htmlFor="report-summary">Summary</Label>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 px-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <Label htmlFor="report-summary">Summary</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setText(headlines.join("\n"))}
+            >
+              Start from the generated summary
+            </Button>
+          </div>
           <Textarea
             id="report-summary"
             value={text}
             onChange={(event) => setText(event.target.value)}
             maxLength={SUMMARY_MAX}
-            rows={10}
+            className="min-h-48 flex-1 resize-none"
           />
           <p className="text-xs text-muted-foreground">
             {text.length} of {SUMMARY_MAX} characters
@@ -257,7 +273,7 @@ function OwnerDialog({ auditId, finding }: { auditId: string; finding: ReportFin
   )
 }
 
-/** Note, owner and "leave out of the detail" for one finding; shown in the consultant's view only. */
+/** Note, owner and "hide detail, keep in score" for one finding; shown in the consultant's view only. */
 export function FindingActions({ finding, hidden }: { finding: ReportFinding; hidden: boolean }) {
   const { auditId } = useParams({ from: "/app/audits/$auditId/report" })
   const save = useSave(() => undefined)
@@ -275,14 +291,14 @@ export function FindingActions({ finding, hidden }: { finding: ReportFinding; hi
           )
         }
       >
-        {hidden ? "Show in the detail" : "Leave out of the detail"}
+        {hidden ? "Show detail again" : "Hide detail, keep in score"}
       </Button>
       <Feedback error={save.error} warning={null} />
     </div>
   )
 }
 
-/** The page-label choice: Standard prints aliases; Detailed prints the strings listed here. */
+/** "Show page addresses": Off prints Page 1, Page 2; On prints the strings listed here. */
 export function DisclosureDialog({
   auditId,
   detail,
@@ -314,7 +330,7 @@ export function DisclosureDialog({
     >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" data-testid="disclosure" className="max-sm:hidden">
-          Page labels: {detail === "standard" ? "Page 1, Page 2" : "paths and ad-platform IDs"}
+          Show page addresses: {detail === "standard" ? "Off" : "On"}
         </Button>
       </DialogTrigger>
       <DialogContent
@@ -326,32 +342,32 @@ export function DisclosureDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>How pages are named in this report</DialogTitle>
+          <DialogTitle>Show page addresses</DialogTitle>
           <DialogDescription>
             A page path can hold a name or a token, and no check can tell. Read the list below
-            before you switch it on.
+            before you switch it on. Google Analytics and Google Ads IDs print either way.
           </DialogDescription>
         </DialogHeader>
         <RadioGroup
           value={value}
           onValueChange={(next) => setValue(next === "detailed" ? "detailed" : "standard")}
-          aria-label="Page labels"
+          aria-label="Show page addresses"
         >
           <div className="flex items-start gap-2">
             <RadioGroupItem value="standard" id="detail-standard" className="mt-1" />
             <Label htmlFor="detail-standard" className="font-normal">
-              Page 1, Page 2: pages are numbered, no address is printed
+              Off: pages are numbered (Page 1, Page 2) and no address is printed
             </Label>
           </div>
           <div className="flex items-start gap-2">
             <RadioGroupItem value="detailed" id="detail-detailed" className="mt-1" />
             <Label htmlFor="detail-detailed" className="font-normal">
-              Print page paths and ad-platform IDs
+              On: print page paths and Meta and TikTok pixel IDs
             </Label>
           </div>
         </RadioGroup>
         <div className="space-y-2 text-sm" data-testid="disclosure-list">
-          <p className="font-medium">Exactly what Detailed prints</p>
+          <p className="font-medium">Exactly what On prints, beyond Off</p>
           <ul className="list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
             {disclosure.pages.map((page) => (
               <li key={page}>{page}</li>

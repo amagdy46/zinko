@@ -43,19 +43,19 @@ export function renderReportPage(input: {
       title={`${model.cover.clientName} · Tracking audit · ${model.branding.agencyName}`}
       stylesheet={input.stylesheet}
     >
+      <header className="mx-auto flex max-w-[210mm] flex-wrap items-center justify-between gap-3 p-4 pb-0 md:px-6 md:pt-6 print:hidden">
+        <p className="text-sm text-muted-foreground">
+          Prepared by {model.branding.agencyName} · Version {input.version}
+        </p>
+        <button
+          type="button"
+          id="print-report"
+          className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+        >
+          Save as PDF
+        </button>
+      </header>
       <main className="mx-auto max-w-[210mm] space-y-4 p-4 md:p-6 print:p-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
-          <p className="text-sm text-muted-foreground">
-            Prepared by {model.branding.agencyName} · Version {input.version}
-          </p>
-          <button
-            type="button"
-            id="print-report"
-            className="inline-flex h-8 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
-          >
-            Save as PDF
-          </button>
-        </div>
         {input.newerPublishedAt === null ? null : (
           <p
             role="note"
@@ -69,6 +69,7 @@ export function renderReportPage(input: {
           model={model}
           logoSrc={input.logoSrc}
           mode="client"
+          standalone
           published={{ version: input.version, publishedAt: input.publishedAt }}
         />
         <p className="text-xs text-muted-foreground print:hidden">

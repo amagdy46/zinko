@@ -129,7 +129,7 @@ function ReportScreen() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem className="min-h-8" onSelect={() => setLabelsOpen(true)}>
               <Tag />
-              Page labels
+              Show page addresses
             </DropdownMenuItem>
             <DropdownMenuItem className="min-h-8" onSelect={() => window.print()}>
               <Printer />
@@ -164,11 +164,20 @@ function ReportScreen() {
         model={draft.model}
         logoSrc={draft.logoUrl}
         mode={view}
+        draft={
+          view === "consultant" &&
+          (draft.versions.length === 0 || draft.consultant.changesSincePublished)
+        }
         controls={
           view === "client"
             ? undefined
             : {
-                summary: <EditSummary summary={draft.consultant.edits.summary} />,
+                summary: (
+                  <EditSummary
+                    summary={draft.consultant.edits.summary}
+                    headlines={draft.model.summary.headlines}
+                  />
+                ),
                 Finding: FindingActions,
                 hiddenFindings: draft.consultant.hiddenFindings,
               }

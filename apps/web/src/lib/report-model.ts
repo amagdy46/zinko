@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 2
+export const REPORT_MODEL_VERSION = 3
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -113,7 +113,7 @@ export const ReportFinding = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -160,6 +160,14 @@ export const ReportModel = Schema.Struct({
       fixed: Count,
     }),
     scoreCoverage: Schema.Struct({ checks: Count, unresolvedChecks: Count }),
+    /** The rules that could not be checked, by why: a page that did not load, no run at all, or some runs. */
+    checkGaps: Schema.Struct({
+      blockedRules: Count,
+      neverChecked: Schema.Array(Schema.String),
+      otherRules: Count,
+      /** Null when a snapshot from model version 1 did not record the runs. */
+      otherRuns: Schema.NullOr(Count),
+    }),
     headlines: Some(Schema.String),
     coverage: Schema.Struct({
       evaluatedRuns: Count,
@@ -250,6 +258,23 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
       },
     }
   },
+  2: (json) => {
+    if (!isRecord(json) || !isRecord(json.summary) || !isRecord(json.summary.coverage)) return json
+    const { summary } = json
+    const { unresolvedRules, unresolvedRuns } = json.summary.coverage
+    return {
+      ...json,
+      summary: {
+        ...summary,
+        checkGaps: {
+          blockedRules: 0,
+          neverChecked: [],
+          otherRules: unresolvedRules,
+          otherRuns: unresolvedRuns,
+        },
+      },
+    }
+  },
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{
@@ -322,15 +347,27 @@ export function actionPlanOf(findings: ReadonlyArray<ReportFinding>): ReportMode
   })
 }
 
-const dateFormat = new Intl.DateTimeFormat("en-GB", {
+const dayFormat = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",
   year: "numeric",
   timeZone: "UTC",
 })
+const timeFormat = new Intl.DateTimeFormat("en-GB", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "UTC",
+})
 
-/** "28 October 2026 (UTC)": the same on the server, in the browser and in print. */
-export const reportDate = (iso: string) => `${dateFormat.format(new Date(iso))} (UTC)`
+/**
+ * "28 October 2026, 13:21 UTC": the same on the server, in the browser and in print. The report has
+ * no reader's zone to use, so it says its own; the time lets a reader place it against their day.
+ */
+export const reportDate = (iso: string) => {
+  const date = new Date(iso)
+  return `${dayFormat.format(date)}, ${timeFormat.format(date)} UTC`
+}
 
 const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" } as const
 const MAX_FINDING_HEADLINES = 4
@@ -346,8 +383,9 @@ interface HeadlineFinding {
 
 /**
  * The summary's sentences, from stored finding titles and counts only: up to four about the open
- * failing findings (the fourth becomes "and n more" when there are more), then one line about
- * coverage. The same findings give the same sentences.
+ * failing findings the report details (the fourth becomes "and n more" when there are more), one
+ * about findings the author left out of the detail, then one about coverage. Findings that could not
+ * be checked are told apart in `checkGaps`, not here. The same findings give the same sentences.
  */
 export function headlinesOf(
   failing: ReadonlyArray<HeadlineFinding>,
@@ -355,19 +393,19 @@ export function headlinesOf(
     evaluatedRuns: number
     totalRuns: number
     unresolvedRules: number
-    unresolvedRuns: number
+    leftOut: number
     partial: boolean
     tooLittle: boolean
   },
 ): string[] {
   const open = failing.filter((f) => f.triage.status === "open").toSorted(byFindingOrder)
   const lines: string[] = []
-  if (failing.length === 0) {
+  if (failing.length === 0 && coverage.leftOut === 0) {
     let none = "No failing checks in the pages and scenarios this audit ran."
     if (coverage.tooLittle) none = "Too little was captured to say whether anything fails."
     else if (coverage.partial) none = "No failing checks in the runs that were captured."
     lines.push(none)
-  } else if (open.length === 0) {
+  } else if (failing.length > 0 && open.length === 0) {
     const accepted = failing.filter((f) => f.triage.status === "accepted_risk").length
     const fixed = failing.filter((f) => f.triage.status === "fixed").length
     const parts = [
@@ -383,14 +421,15 @@ export function headlinesOf(
       )
     if (open.length > shown) lines.push(`And ${open.length - shown} more open failing findings.`)
   }
+  if (coverage.leftOut > 0)
+    lines.push(
+      `${count(coverage.leftOut, "more finding")} ${coverage.leftOut === 1 ? "counts" : "count"} in the score but ${coverage.leftOut === 1 ? "is" : "are"} not detailed here.`,
+    )
   if (coverage.evaluatedRuns < coverage.totalRuns)
     lines.push(
       `Partly evaluated: ${coverage.evaluatedRuns} of ${coverage.totalRuns} runs have check results.`,
     )
-  else if (coverage.unresolvedRules > 0)
-    lines.push(
-      `${count(coverage.unresolvedRules, "rule")} could not be checked on ${count(coverage.unresolvedRuns, "run")}; unresolved checks are never counted as passes.`,
-    )
-  else lines.push(`All ${coverage.totalRuns} runs were evaluated and every check resolved.`)
+  else if (coverage.unresolvedRules === 0)
+    lines.push(`All ${coverage.totalRuns} runs were evaluated and every check resolved.`)
   return lines
 }
