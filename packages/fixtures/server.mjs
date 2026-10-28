@@ -64,6 +64,8 @@ function handle(req, res) {
     return send(res, 500, { "content-type": "text/plain" }, "collection endpoint failed")
   }
 
+  if (path.endsWith("/g/collect")) return send(res, 204, {}, "")
+
   const file = staticFiles[path]
   if (file) {
     return readFile(join(root, file[0]), "utf8").then((body) =>

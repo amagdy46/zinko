@@ -27,52 +27,62 @@
 
   if (cfg.consentDefault === "early")
     gtag("consent", "default", { ...denied, wait_for_update: 500 })
-  const gtagScript = document.createElement("script")
-  gtagScript.async = true
-  gtagScript.src = "https://www.googletagmanager.com/gtag/js?id=" + ID.ga4
-  document.head.appendChild(gtagScript)
-  gtag("js", new Date())
-  if (cfg.piiInUrl) {
-    const url = new URL(location.href)
-    url.searchParams.set("email", "jane.doe@example.com")
-    history.replaceState(null, "", url.search)
-  }
-  const ga4Config = {}
-  if (!cfg.ga4PageView) ga4Config.send_page_view = false
-  if (cfg.sgtm) ga4Config.transport_url = location.origin
-  if (cfg.locationOverride)
-    ga4Config.page_location = "https://staging.shop.example" + location.pathname
-  if (cfg.debugLeak) {
-    ga4Config.debug_mode = true
-    // the snippet GTM gives for a preview environment, left on the page after testing
-    void runSnippet(
-      "https://www.googletagmanager.com/gtm.js?id=" +
-        ID.gtm +
-        "&gtm_auth=ZinkoPreviewAuth01&gtm_preview=env-3&gtm_cookies_win=x",
-    )
-  }
-  gtag("config", ID.ga4, ga4Config)
-  if (cfg.secondGa4) gtag("config", ID.ga4Second)
-  gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
-  if (cfg.consentDefault === "late") gtag("consent", "default", denied)
+  let googleStarted = false
+  // Basic Consent Mode: the Google tag does not load until the visitor accepts something.
+  function startGoogle() {
+    if (googleStarted) return
+    googleStarted = true
+    const gtagScript = document.createElement("script")
+    gtagScript.async = true
+    gtagScript.src = "https://www.googletagmanager.com/gtag/js?id=" + ID.ga4
+    document.head.appendChild(gtagScript)
+    gtag("js", new Date())
+    if (cfg.piiInUrl) {
+      const url = new URL(location.href)
+      url.searchParams.set("email", "jane.doe@example.com")
+      history.replaceState(null, "", url.search)
+    }
+    const ga4Config = {}
+    if (!cfg.ga4PageView) ga4Config.send_page_view = false
+    if (cfg.sgtm) ga4Config.transport_url = location.origin
+    // The Google tag gateway keeps measurement under one first-party path; gtag appends /g/collect
+    if (cfg.ga4Collector === "gateway") ga4Config.transport_url = location.origin + "/metrics"
+    if (cfg.locationOverride)
+      ga4Config.page_location = "https://staging.shop.example" + location.pathname
+    if (cfg.debugLeak) {
+      ga4Config.debug_mode = true
+      // the snippet GTM gives for a preview environment, left on the page after testing
+      void runSnippet(
+        "https://www.googletagmanager.com/gtm.js?id=" +
+          ID.gtm +
+          "&gtm_auth=ZinkoPreviewAuth01&gtm_preview=env-3&gtm_cookies_win=x",
+      )
+    }
+    gtag("config", ID.ga4, ga4Config)
+    if (cfg.secondGa4) gtag("config", ID.ga4Second)
+    gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
+    if (cfg.consentDefault === "late") gtag("consent", "default", denied)
 
-  if (cfg.page === "product") {
-    gtag("event", "view_item", {
-      currency: "EUR",
-      value: 49.9,
-      items: [{ item_id: "SKU-1", item_name: "Zinko mug", price: 49.9 }],
-    })
+    if (cfg.page === "product") {
+      gtag("event", "view_item", {
+        currency: "EUR",
+        value: 49.9,
+        items: [{ item_id: "SKU-1", item_name: "Zinko mug", price: 49.9 }],
+      })
+    }
+    if (cfg.page === "home" && cfg.homeBatch) {
+      gtag("event", "view_promotion", { promotion_id: "P1" })
+      gtag("event", "view_item_list", { item_list_id: "featured" })
+      gtag("event", "select_promotion", { promotion_id: "P1" })
+    }
+    if (cfg.page === "thank-you") {
+      gtag("event", "purchase", trackedPurchase)
+      gtag("event", "conversion", { send_to: ID.ads + "/ZinkoConv01", ...trackedPurchase })
+      if (cfg.purchase === "twice")
+        setTimeout(() => gtag("event", "purchase", trackedPurchase), 1000)
+    }
   }
-  if (cfg.page === "home" && cfg.homeBatch) {
-    gtag("event", "view_promotion", { promotion_id: "P1" })
-    gtag("event", "view_item_list", { item_list_id: "featured" })
-    gtag("event", "select_promotion", { promotion_id: "P1" })
-  }
-  if (cfg.page === "thank-you") {
-    gtag("event", "purchase", trackedPurchase)
-    gtag("event", "conversion", { send_to: ID.ads + "/ZinkoConv01", ...trackedPurchase })
-    if (cfg.purchase === "twice") setTimeout(() => gtag("event", "purchase", trackedPurchase), 1000)
-  }
+  if (cfg.googleLoad === "immediate") startGoogle()
 
   function runSnippet(src) {
     return new Promise((resolve) => {
@@ -162,6 +172,31 @@
   if (cfg.meta === "immediate") void loadMeta()
   if (cfg.tiktok === "immediate") void loadTikTok()
 
+  // A second GA4 sender next to gtag: a plugin or a second container posting the same events to the
+  // site's own collector, shaped like a server-side GTM or tag gateway request.
+  if (cfg.ga4Collector === "both") {
+    setTimeout(() => {
+      const params = new URLSearchParams({
+        v: "2",
+        tid: ID.ga4,
+        cid: "1111111111.1700000000",
+        gcs: "G100",
+        dl: location.origin + location.pathname,
+        en: "page_view",
+      })
+      const send = (query) =>
+        void fetch("/metrics/g/collect?" + query, { method: "POST", keepalive: true })
+      send(params.toString())
+      if (cfg.page === "thank-you") {
+        params.set("en", "purchase")
+        params.set("ep.transaction_id", purchase.transaction_id)
+        params.set("epn.value", String(purchase.value))
+        params.set("cu", purchase.currency)
+        send(params.toString())
+      }
+    }, 1200)
+  }
+
   window.zinkoConsent = (analytics, marketing) => {
     const marketingState = marketing ? "granted" : "denied"
     gtag("consent", "update", {
@@ -172,6 +207,7 @@
         ad_personalization: marketingState,
       }),
     })
+    if (analytics || marketing) startGoogle()
     if (cfg.meta === "consent" && marketing) void loadMeta()
     if (cfg.meta === "delayed") setTimeout(() => void loadMeta(), 3000)
     if (cfg.tiktok === "consent" && marketing) void loadTikTok()
