@@ -151,19 +151,19 @@ export const candidateRunsOf = (
 export const digestRunOf = (candidate: CandidateRun, capture: CaptureResult) =>
   Effect.gen(function* () {
     const { run: r } = candidate
-    const shape = yield* decodeShape(r).pipe(Effect.orDie)
+    const shape = yield* decodeShape(r)
     const hits: DigestRun["hits"][number][] = []
     for (const row of candidate.hits) {
       const request = capture.requests.find((q) => q.id === row.requestId)
       if (request === undefined) continue
       hits.push({
-        vendor: yield* decodeVendor(row.vendor).pipe(Effect.orDie),
+        vendor: yield* decodeVendor(row.vendor),
         destinationId: row.destinationId,
         event: row.event,
         batchIndex: row.batchIndex,
         requestId: row.requestId,
         startedAt: request.startedAt,
-        consent: yield* decodeConsent(row.consent).pipe(Effect.orDie),
+        consent: yield* decodeConsent(row.consent),
       })
     }
     return {
@@ -174,4 +174,4 @@ export const digestRunOf = (candidate: CandidateRun, capture: CaptureResult) =>
       hits,
       evidence: candidate.evidence,
     } satisfies DigestRun
-  })
+  }).pipe(Effect.orDie)

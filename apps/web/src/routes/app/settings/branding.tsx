@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Check, Info } from "lucide-react"
 import { type ChangeEvent, type FormEvent, type ReactNode, useState } from "react"
 import { toast } from "sonner"
+import { pageTitle } from "@/lib/page-title"
 import { SettingsSection } from "@/components/settings-section"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -15,6 +16,7 @@ import { getBranding, saveBranding } from "@/server/branding"
 import { removeLogo, uploadLogo } from "@/server/branding-logo"
 
 export const Route = createFileRoute("/app/settings/branding")({
+  head: () => pageTitle("Branding", "Settings"),
   loader: () => getBranding(),
   component: BrandingSettings,
 })

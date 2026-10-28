@@ -160,6 +160,7 @@ export const ReportModel = Schema.Struct({
       evaluatedRuns: Count,
       totalRuns: Count,
       unresolvedRules: Count,
+      unresolvedRuns: Count,
       bannerUncertainRuns: Count,
     }),
     worst: Schema.NullOr(
@@ -314,13 +315,18 @@ export function headlinesOf(
     totalRuns: number
     unresolvedRules: number
     unresolvedRuns: number
+    partial: boolean
+    tooLittle: boolean
   },
 ): string[] {
   const open = failing.filter((f) => f.triage.status === "open").toSorted(byFindingOrder)
   const lines: string[] = []
-  if (failing.length === 0)
-    lines.push("No failing checks in the pages and scenarios this audit ran.")
-  else if (open.length === 0) {
+  if (failing.length === 0) {
+    let none = "No failing checks in the pages and scenarios this audit ran."
+    if (coverage.tooLittle) none = "Too little was captured to say whether anything fails."
+    else if (coverage.partial) none = "No failing checks in the runs that were captured."
+    lines.push(none)
+  } else if (open.length === 0) {
     const accepted = failing.filter((f) => f.triage.status === "accepted_risk").length
     const fixed = failing.filter((f) => f.triage.status === "fixed").length
     const parts = [
@@ -342,7 +348,7 @@ export function headlinesOf(
     )
   else if (coverage.unresolvedRules > 0)
     lines.push(
-      `${count(coverage.unresolvedRules, "check")} could not be resolved on ${count(coverage.unresolvedRuns, "run")}; unresolved checks are never counted as passes.`,
+      `${count(coverage.unresolvedRules, "rule")} could not be checked on ${count(coverage.unresolvedRuns, "run")}; unresolved checks are never counted as passes.`,
     )
   else lines.push(`All ${coverage.totalRuns} runs were evaluated and every check resolved.`)
   return lines

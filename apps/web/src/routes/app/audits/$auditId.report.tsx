@@ -11,11 +11,13 @@ import { Versions } from "@/components/report/versions"
 import { ReportView } from "@/components/report/report-view"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { getReportDraft } from "@/server/report"
 
 export const Route = createFileRoute("/app/audits/$auditId/report")({
   validateSearch: (search: Record<string, unknown>): { share?: 1 } =>
     search.share === 1 || search.share === "1" ? { share: 1 } : {},
+  head: ({ matches }: TitleContext) => auditTabTitle("Report", matches),
   loader: ({ params }) => getReportDraft({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   component: ReportScreen,

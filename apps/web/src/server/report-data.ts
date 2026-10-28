@@ -45,6 +45,7 @@ import { type CandidateRun, candidateRunsOf, digestRunOf } from "./digest-data"
 import { decodeFix } from "./findings"
 import { decodeOwner, decodeSeverity, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { coverageOf, decodeConsent } from "./matrix-data"
+import { scoreCoverage as scoreCoverageOf, tooLittleCaptured } from "@/lib/health-score"
 import { scoreSummaryOf } from "./score-summary"
 import { atomically, NotFound } from "./server-fn"
 
@@ -511,11 +512,26 @@ export const buildReport = (orgId: string, auditId: string) =>
           }
     const tally = (status: string) => failing.filter((f) => f.triage.status === status).length
     const bySeverity = (severity: string) => failing.filter((f) => f.severity === severity).length
+    const unchecked = found.findings.filter((f) => f.kind === "inconclusive")
     const coverage = {
       evaluatedRuns: found.coverage.evaluatedRuns,
       totalRuns: found.coverage.totalRuns,
-      unresolvedRules: found.uncertainty.rules,
+      unresolvedRules: unchecked.length,
+      unresolvedRuns: new Set(unchecked.flatMap((f) => f.runIds)).size,
       bannerUncertainRuns: found.uncertainty.bannerUncertainRuns,
+    }
+    const scoreCoverage = {
+      checks: ruleStats.reduce((n, s) => n + s.n, 0),
+      unresolvedChecks: ruleStats
+        .filter((s) => s.status === "inconclusive")
+        .reduce((n, s) => n + s.n, 0),
+    }
+    const covered = {
+      totalRuns: coverage.totalRuns,
+      evaluatedRuns: coverage.evaluatedRuns,
+      unfinishedRuns: summary.runHealth.unfinishedRuns,
+      ...scoreCoverage,
+      unauditedSites: 0,
     }
     const wordingOf = new Map(wording.map((w) => [w.ruleId, w]))
     const captures = new Map<string, CaptureRead>()
@@ -667,17 +683,16 @@ export const buildReport = (orgId: string, auditId: string) =>
           critical: bySeverity("critical"),
           warning: bySeverity("warning"),
           info: bySeverity("info"),
-          couldNotCheck: found.findings.filter((f) => f.inconclusiveRuns > 0).length,
+          couldNotCheck: unchecked.length,
           acceptedRisk: tally("accepted_risk"),
           fixed: tally("fixed"),
         },
-        scoreCoverage: {
-          checks: ruleStats.reduce((n, s) => n + s.n, 0),
-          unresolvedChecks: ruleStats
-            .filter((s) => s.status === "inconclusive")
-            .reduce((n, s) => n + s.n, 0),
-        },
-        headlines: headlinesOf(failing, { ...coverage, unresolvedRuns: found.uncertainty.runs }),
+        scoreCoverage,
+        headlines: headlinesOf(failing, {
+          ...coverage,
+          partial: scoreCoverageOf(covered).state === "runs",
+          tooLittle: tooLittleCaptured(covered),
+        }),
         coverage,
         worst,
       },
@@ -698,8 +713,7 @@ export const buildReport = (orgId: string, auditId: string) =>
         .toSorted((a, b) => byText(a.ruleId, b.ruleId)),
       actionPlan: actionPlanOf(findings),
       appendix: {
-        couldNotCheck: found.findings
-          .filter((f) => f.inconclusiveRuns > 0)
+        couldNotCheck: unchecked
           .map((f) => ({ ruleId: f.ruleId, checkTitle: f.checkTitle, runs: f.inconclusiveRuns }))
           .toSorted((a, b) => byText(a.checkTitle, b.checkTitle) || byText(a.ruleId, b.ruleId)),
         notEvaluated: runs

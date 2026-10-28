@@ -70,12 +70,13 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
         </div>
       </div>
       <ul className="space-y-1.5">
-        {score.uncertainty.checks > 0 ? (
+        {coverage.unresolvedRules > 0 ? (
           <li className="flex items-start gap-2" data-testid="unresolved-checks">
             <StatusGlyph meaning="could-not-check" className="mt-0.5" />
             <span>
-              Unresolved checks: {count(score.uncertainty.rules, "rule")} could not be checked, on{" "}
-              {count(score.uncertainty.runs, "run")}. They are never counted as passes.
+              Could not check: {count(coverage.unresolvedRules, "rule")}, on{" "}
+              {count(coverage.unresolvedRuns, "run")}. They are left out of the score, never counted
+              as passes.
             </span>
           </li>
         ) : null}
