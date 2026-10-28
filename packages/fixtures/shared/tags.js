@@ -184,16 +184,16 @@
         dl: location.origin + location.pathname,
         en: "page_view",
       })
-      const send = (query) =>
-        void fetch("/metrics/g/collect?" + query, { method: "POST", keepalive: true })
-      send(params.toString())
+      const queries = [params.toString()]
       if (cfg.page === "thank-you") {
         params.set("en", "purchase")
         params.set("ep.transaction_id", purchase.transaction_id)
         params.set("epn.value", String(purchase.value))
         params.set("cu", purchase.currency)
-        send(params.toString())
+        queries.push(params.toString())
       }
+      for (const query of queries)
+        void fetch("/metrics/g/collect?" + query, { method: "POST", keepalive: true })
     }, 1200)
   }
 

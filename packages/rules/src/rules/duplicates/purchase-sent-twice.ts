@@ -15,7 +15,10 @@ function purchaseKey(hit: DecodedHit): string {
   const order = transactionId(hit) ?? "(no transaction_id)"
   const label = hit.vendor === "google-ads" ? String(hit.params.label ?? "") : ""
   const which = hit.vendor === "ga4" || hit.vendor === "google-ads" ? order : hit.event
-  return [hit.documentId, hit.vendor, hit.destinationId, label, which].join(" ")
+  // A purchase sent once to Google and once to a first-party collector is duplicates.client-and-server-ga4's.
+  return [hit.documentId, hit.vendor, hit.collector ?? "", hit.destinationId, label, which].join(
+    " ",
+  )
 }
 
 /**

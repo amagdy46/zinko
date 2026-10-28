@@ -79,8 +79,8 @@ From `docs/research/2026-10-28-pain-points.md` and `docs/research/2026-10-28-com
 1. Done (rules v4): `consent.mode-v2-incomplete`: `gcd` leaves `ad_user_data` or `ad_personalization` unset where Ads signals are present (Google's 2026-06-15 change makes it matter more). Decoder change. The decoders now parse `gcd` per signal; fixture `consent-mode-v1`.
 2. Done (rules v4): `debug.preview-or-debug-leak`: `gtm_debug`, `gtm_preview`, `debug_mode` or test transaction ids in production hits. Built for `gtm_preview`, `gtm_auth`, `gtm_debug` on `/gtm.js`, GA4 `_dbg=1` and `debug_mode`; test transaction ids not built. Fixture `debug-leak`.
 3. Done (rules v4): `dedup.tiktok-eventid-missing`: the TikTok mirror of the Meta event-ID rule. Fixture `tiktok-no-eventid`; `clean` now sends TikTok event IDs.
-4. GA4 and Ads hits on first-party paths (Google tag gateway, sGTM) recognised by payload, then `duplicates.client-and-server-ga4`.
-5. `consent.mode-classified` (informational): basic or advanced consent mode, which explains modelled conversions.
+4. Done (rules v5, decoders v4): GA4 and Ads hits on first-party paths (Google tag gateway, sGTM) recognised by payload and marked `collector: first-party`, then `duplicates.client-and-server-ga4`. The gateway's real path shape is unconfirmed (see vision). Fixtures `ga4-gateway`, `ga4-client-and-server`.
+5. Done (rules v5): `consent.mode-classified` (informational, severity info, never fails): basic or advanced consent mode, which explains modelled conversions. Fixture `consent-mode-basic`; `clean` is the advanced case.
 6. With a reload step: `consent.not-persisted-across-navigation`, `duplicates.purchase-on-reload`.
 7. With cross-host journeys: `consent.lost-across-subdomain`, `clickid.crossdomain-linker-missing`.
 8. Request initiator (GTM, hardcoded, third-party script) as an annotation that feeds the report's "who fixes it".

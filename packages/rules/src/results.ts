@@ -1,10 +1,15 @@
 import type { CheckResult, EvidenceRef } from "./types.js"
 
-export const pass = (ruleId: string, message: string): CheckResult => ({
+/** Evidence, when given, shows what the verdict rests on (a rule that classifies rather than checks). */
+export const pass = (
+  ruleId: string,
+  message: string,
+  evidence: readonly EvidenceRef[] = [],
+): CheckResult => ({
   ruleId,
   status: "pass",
   message,
-  evidence: [],
+  evidence,
 })
 
 /** A failing check always cites evidence, so the list cannot be empty. */

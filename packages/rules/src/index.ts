@@ -6,6 +6,7 @@ import { lostOnRedirect } from "./rules/clickids/lost-on-redirect.js"
 import { cookiesWithoutConsent } from "./rules/consent/cookies-without-consent.js"
 import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
+import { modeClassified } from "./rules/consent/mode-classified.js"
 import { modeV2Incomplete } from "./rules/consent/mode-v2-incomplete.js"
 import { pixelAfterReject } from "./rules/consent/pixel-after-reject.js"
 import { pixelWithoutConsent } from "./rules/consent/pixel-without-consent.js"
@@ -15,6 +16,7 @@ import { purchaseMissingFields } from "./rules/coverage/purchase-missing-fields.
 import { metaEventIdMissing } from "./rules/dedup/meta-eventid-missing.js"
 import { metaEventIdReused } from "./rules/dedup/meta-eventid-reused.js"
 import { tiktokEventIdMissing } from "./rules/dedup/tiktok-eventid-missing.js"
+import { clientAndServerGa4 } from "./rules/duplicates/client-and-server-ga4.js"
 import { metaLoadedTwice } from "./rules/duplicates/meta-loaded-twice.js"
 import { multipleGa4Ids } from "./rules/duplicates/multiple-ga4-ids.js"
 import { purchaseSentTwice } from "./rules/duplicates/purchase-sent-twice.js"
@@ -35,7 +37,7 @@ export { scrubPersonalData } from "./personal-data.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "4"
+export const RULES_VERSION = "5"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -44,6 +46,7 @@ export const rules: readonly Rule[] = [
   googleWithoutDeniedState,
   defaultAfterTag,
   modeV2Incomplete,
+  modeClassified,
   cookieMissing,
   lostOnRedirect,
   lostAcrossNavigation,
@@ -60,6 +63,7 @@ export const rules: readonly Rule[] = [
   tagErrors,
   locationMismatch,
   previewOrDebugLeak,
+  clientAndServerGa4,
 ]
 
 const byId = new Map(rules.map((rule) => [rule.id, rule]))
