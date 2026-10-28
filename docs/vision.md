@@ -213,12 +213,19 @@ Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/pla
 
 ### Compare and polish (M6, v0.1 release)
 
+Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/plan.md) (proposed 2026-10-28, 16 tasks). A comparison is a pure function of two audits' derived rows, computed on read, cell by cell (page × scenario × viewport × journey); only the baseline link and the carried-over triage and report edits are stored. The workflow does not change. No tests, no new dependency.
+
 | Feature | How we build it | Status |
 |---|---|---|
-| Re-run and compare | Findings marked new, fixed or unchanged; diff every tag and every field (ObservePoint compares only 3 tags by default) | planned |
-| **"What changed" briefing** | A short summary at the top of a re-run's report (DataTrue's Briefing) | proposed |
-| **Tag disappeared** | Flag a tag that fired on the last run and is gone now (Elevar's missing-embed alert) | proposed |
-| Self-host guide, public demo | `alchemy deploy` to your own Cloudflare account | planned |
+| Re-run with the same settings | `rerunAudit` creates a normal audit from the stored config with `audit.baseline_audit_id` set to the audit re-run; the New audit form defaults the baseline to the site's latest evaluated audit. Guards: one re-run in progress per baseline, at most 5 active audits per organization. Admission is the existing per-capture FIFO, no priority | planned |
+| Compare tab | States per finding: new, regressed (fixed then back, over up to 10 earlier audits), unchanged (with narrowed, widened or moved spread), fixed (verified by the re-run), verdict changed (to or from Could not check), not comparable (rule changed between rules versions through a hand-kept `RULE_CHANGES`, rule added or removed, banner detection differs, no shared cell). Cells outside the common scope are listed, never counted as fixed or new. Network location is not recorded, so region differences cannot be detected | planned |
+| Tag diff | Disappeared, new, destination changed, events changed, per tag across the cells both runs captured completely (ObservePoint compares 3 tags; this compares every one) | planned |
+| Accepted risks and notes carry over | At audit creation, the baseline's accepted risks and report edits (note, leave out, owner) are copied by `rule_id` with `carried_from_audit_id`; "Fixed" triage marks are not (the re-run verifies or contradicts them) | planned |
+| Flaky verdicts | No double capture. Changes on volatile rules, rules that flip between audits, or resting on one run are labelled Low confidence, with **Re-run these pages** | planned |
+| Per-finding re-verify | **Verify fix**: a `narrow` audit of the pages and scenarios the finding failed on, excluded from latest-audit selection and score trends. Single-run retry in place is after v0.1 | planned |
+| **"What changed" briefing** | Up to six deterministic lines at the top of the re-run's Overview and in the report (`ReportModel.changes`, model version 4, `UPGRADES[3]`, a validator per leaf, no page names) (DataTrue's Briefing) | planned |
+| **Tag disappeared** | A tag on a compared cell before and gone now (Elevar's missing-embed alert) | planned |
+| Self-host guide, public demo | A deploy spike first (the container image and `alchemy deploy` are untried), then `docs/self-hosting.md`; a read-only demo stage seeded from a local run of the `drift` fixture, sign-up closed, mutations refused in one place | planned |
 
 ### v0.2: configured vs fired, funnels
 
