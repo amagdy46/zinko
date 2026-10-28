@@ -452,7 +452,7 @@ function Coverage({
       <p className="text-sm text-muted-foreground" data-testid="coverage">
         All {count(coverage.totalRuns, "run")} evaluated. By run: {summary.join(" · ")}
         {localLimit
-          ? ". Expected: tracking requests are answered locally, so endpoint delivery is not checked."
+          ? ". Tracking requests are answered locally, so endpoint delivery (tag errors) is not checked; it is left out of these counts and never counted as passed."
           : ""}
       </p>
     )
@@ -542,8 +542,8 @@ function Coverage({
         </TooltipProvider>
         {localLimit ? (
           <p className="text-xs">
-            Expected limitation: tracking requests are answered locally, so endpoint delivery is not
-            checked. That check is never counted as passed.
+            Tracking requests are answered locally, so endpoint delivery (tag errors) is not
+            checked. It is left out of the run counts above and never counted as passed.
           </p>
         ) : null}
         {coverage.couldNotCheckOnFailingRuns > 0 ? (

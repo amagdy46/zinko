@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { AuthCard } from "@/components/auth-card"
 import { Button } from "@/components/ui/button"
+import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { getSession } from "@/server/session"
@@ -22,6 +23,7 @@ function AcceptInvite() {
     error: string | null
   } | null>(null)
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
   const redirect = `/accept-invite/${id}`
   const current = loaded?.id === id ? loaded : null
   const invitation = current?.invitation ?? null
@@ -105,7 +107,7 @@ function AcceptInvite() {
       <Button
         className="w-full"
         onClick={accept}
-        disabled={pending || loading || invitation === null}
+        disabled={pending || loading || invitation === null || !hydrated}
       >
         {pending ? "Joining…" : "Accept invitation"}
       </Button>

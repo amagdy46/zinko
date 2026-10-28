@@ -66,6 +66,12 @@ export const triageJoin = and(
 )
 
 /**
+ * Vendor-side errors cannot be told while tracking requests are answered locally, which is how
+ * every local audit runs: that check is "could not check" on every run, by design.
+ */
+const LOCAL_LIMIT = sql<boolean>`(${checkResult.ruleId} = 'hygiene.tag-errors' and ${checkResult.status} = 'inconclusive' and ${checkResult.message} ~ 'answered (tracking requests )?locally')`
+
+/**
  * A re-check's findings, grouped from the check results of its target runs only. The stored
  * `finding` rows of a narrow audit were aggregated over its companion and extra runs too, so they
  * are not trusted.
@@ -186,7 +192,12 @@ export const findingsOf = (orgId: string, auditId: string) =>
       )
       .groupBy(checkResult.rulesVersion)
     const verdicts = yield* db
-      .select({ runId: checkResult.runId, status: checkResult.status, n: count() })
+      .select({
+        runId: checkResult.runId,
+        status: checkResult.status,
+        localLimit: LOCAL_LIMIT,
+        n: count(),
+      })
       .from(checkResult)
       .innerJoin(run, eq(run.id, checkResult.runId))
       .where(
@@ -197,7 +208,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
           eq(checkResult.orgId, orgId),
         ),
       )
-      .groupBy(checkResult.runId, checkResult.status)
+      .groupBy(checkResult.runId, checkResult.status, LOCAL_LIMIT)
     const outcomes = yield* db
       .select({
         ruleId: checkResult.ruleId,
@@ -279,13 +290,17 @@ export const findingsOf = (orgId: string, auditId: string) =>
     const unsureRuns = new Set(
       verdicts.filter((v) => v.status === "inconclusive").map((v) => v.runId),
     )
+    // the check that cannot run locally never decides a run's bucket, or no local run would read as passed
+    const unsureBesidesLocal = new Set(
+      verdicts.filter((v) => v.status === "inconclusive" && !v.localLimit).map((v) => v.runId),
+    )
     const checkedRuns = new Set(verdicts.map((v) => v.runId))
     const passingRuns = new Set(verdicts.filter((v) => v.status === "pass").map((v) => v.runId))
     let nothingApplied = 0
     const buckets = { failing: 0, couldNotCheck: 0, passed: 0, notEvaluated: 0 }
     for (const r of runs) {
       if (failingRuns.has(r.id)) buckets.failing += 1
-      else if (unsureRuns.has(r.id)) buckets.couldNotCheck += 1
+      else if (unsureBesidesLocal.has(r.id)) buckets.couldNotCheck += 1
       else if (checkedRuns.has(r.id)) {
         buckets.passed += 1
         if (!passingRuns.has(r.id)) nothingApplied += 1

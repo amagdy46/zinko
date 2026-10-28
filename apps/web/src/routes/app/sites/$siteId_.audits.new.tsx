@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
+import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { carryOverText } from "@/lib/carry-over"
@@ -96,6 +97,7 @@ function NewAuditForm() {
   const [blockVendorRequests, setBlockVendorRequests] = useState(last?.blockVendorRequests ?? true)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
   const startRef = useRef<HTMLInputElement>(null)
 
   function reset() {
@@ -468,7 +470,7 @@ function NewAuditForm() {
           <Button
             type="submit"
             className="h-10 shrink-0 lg:w-full"
-            disabled={pending || disabledReason !== undefined}
+            disabled={pending || !hydrated || disabledReason !== undefined}
             aria-describedby={disabledReason === undefined ? undefined : "submit-reason"}
           >
             {pending ? "Checking the start page..." : "Start audit"}

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { SettingsSection } from "@/components/settings-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
@@ -18,6 +19,7 @@ function Profile() {
   const { session } = Route.useRouteContext()
   const router = useRouter()
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
 
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -54,7 +56,7 @@ function Profile() {
           <Label htmlFor="profile-email">Email</Label>
           <Input id="profile-email" value={session.email} readOnly />
         </div>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending || !hydrated}>
           {pending ? "Saving…" : "Save profile"}
         </Button>
       </form>

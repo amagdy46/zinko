@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { pageTitle } from "@/lib/page-title"
+import { useHydrated } from "@/lib/use-hydrated"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 import { getSession } from "@/server/session"
@@ -33,6 +34,7 @@ function Onboarding() {
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -92,7 +94,7 @@ function Onboarding() {
             {error}
           </p>
         )}
-        <Button type="submit" className="w-full" disabled={pending}>
+        <Button type="submit" className="w-full" disabled={pending || !hydrated}>
           {pending ? "Creating organization…" : "Create organization"}
         </Button>
       </form>

@@ -28,6 +28,7 @@ export function ScoreFigure({
   score,
   coverage,
   band,
+  bandAllAccepted = false,
   size = "cell",
   className,
 }: {
@@ -35,6 +36,8 @@ export function ScoreFigure({
   coverage: ScoreCoverage
   /** Shown by `hero` only. */
   band?: Band
+  /** Every finding behind the band is an accepted risk: the headline still counts them, so say so. */
+  bandAllAccepted?: boolean
   size?: "hero" | "cell" | "inline"
   className?: string
 }) {
@@ -103,8 +106,9 @@ export function ScoreFigure({
       </div>
     )
   const caveated = band === "no-failures" && state !== "full"
-  const bandWord =
+  let bandWord =
     band === undefined || caveated ? "No failures in what was checked" : BAND_LABEL[band]
+  if (bandAllAccepted && band !== "no-failures") bandWord += " (accepted)"
   let glyph: StatusMeaning = band === undefined ? "partial" : BAND_GLYPH[band]
   if (state === "runs") glyph = "partial"
   else if (caveated) glyph = "could-not-check"
