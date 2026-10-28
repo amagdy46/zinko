@@ -310,7 +310,7 @@ The rest of the reference list (open-seo, Lighthouse CI, OpenStatus, Typewriter,
 - **`gcd` decoding:** sources disagree on the letter mapping, so any `gcd` rule stays heuristic until verified.
 - **Proposed features above:** decided in M3. Three outcomes, Google's wording and click IDs through redirects are in v0.1 and working; the approved vendor list per client moved to a later milestone (it needs client settings). GPC is in M1 and working.
 - **Region simulation:** emulate (headers, timezone, locale) or actually route through a region; emulation may not trigger server-side geo logic in CMPs.
-- **Deploy:** whether the deploy workflow becomes manual-only until Cloudflare secrets exist.
+- **Deploy:** the workflow is manual-only with a required `stage`, per-stage environments and a database-name guard (decision 0004, Part A). Open: the real deploy, container size and cold start, and the engine fallback, all behind owner gate Q13.
 
 ## Gaps in the research
 

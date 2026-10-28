@@ -1,0 +1,30 @@
+name: Image build
+
+# Builds the capture engine image to prove it builds and to record its size and build time.
+# No secrets, no registry login, nothing is pushed or uploaded.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build apps/browser
+        run: |
+          start=$(date +%s)
+          docker build -t zinko-engine apps/browser
+          echo "build seconds: $(( $(date +%s) - start ))"
+          docker image ls zinko-engine --format 'image size: {{.Size}}'
+      - name: Chromium starts and the server answers
+        run: |
+          docker run -d --name engine --memory 4g --cpus 0.5 -p 8080:8080 zinko-engine
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8080/health && exit 0
+            sleep 1
+          done
+          docker logs engine
+          exit 1

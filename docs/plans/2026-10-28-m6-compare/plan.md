@@ -616,3 +616,7 @@ Round 3 (GPT-6.1 Sol, high, `review-r3.md`): ready after fixes. Round 2 points 1
 ## Execution status
 
 Not started. Approved after review round 3 (rounds 1 and 2 revised it; rebased on `main` at `9a7d511`, which has no newer commits; M5's report model is at version 3). Implementation begins after a second review and the owner's answers to the gates that block a given task.
+
+### Task 1 Part A (2026-10-28, branch `m6/deploy-prep`)
+
+Done offline; Part B not started (gate Q13). Deviations: `docker info` fails for the user (not in the `docker` group, no podman or buildah), so the image was **not built or run**; `image-build.yml` was added instead and not triggered, and the per-limit memory and capture-time numbers are open. `alchemy plan` exists (and `deploy --dry-run`) but needs a valid token even for the diff, so the resource graph comes from the written list in decision 0004; a placeholder-token run reached Cloudflare's API and was rejected as unauthorized. The stage guard was proven with `alchemy plan` on two wrong stage and database pairs. Added a `destroy` input to `deploy.yml` (the PR-closed destroy job could no longer fire). Details: `docs/decisions/0004-first-deploy.md`.

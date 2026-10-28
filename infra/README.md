@@ -17,11 +17,8 @@ Copy `.env.example` to `.env` for local values (setup in [CONTRIBUTING.md](../CO
 
 ## CI
 
-`.github/workflows/deploy.yml` deploys stage `prod` on every push to `main`, a stage `pr-<number>`
-for each pull request, and destroys the PR stage when the PR closes. Add these repository secrets:
-`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ALCHEMY_PASSWORD`, `DATABASE_URL` (and
-`STORAGE_SIGNING_SECRET` with the storage extra, `BETTER_AUTH_SECRET` with auth; the auth add-on adds that one to the workflow itself). CI keeps Alchemy state in a Cloudflare-hosted
-store that the first deploy creates.
+`.github/workflows/deploy.yml` is manual (`workflow_dispatch`) and takes a required `stage` (no default) and a `destroy` checkbox. It runs in the GitHub environment of the same name, so each stage has its own secrets: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `ALCHEMY_PASSWORD`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `STORAGE_SIGNING_SECRET`, `LLM_ENCRYPTION_KEY`, `MAIL_FROM`. Stage `prod` is refused unless its environment has a required-reviewers rule (read with the repository secret `ENVIRONMENT_READ_TOKEN`). CI keeps Alchemy state in a Cloudflare-hosted store that the first deploy creates.
 
-Previews share one Postgres database (`DATABASE_URL`); run `pnpm db:migrate` against it before the
-first deploy. Per-PR database branches need a database provider such as Neon.
+Each stage needs its own Postgres database whose name contains the stage (`zinko_spike_m6` for `spike-m6`): `alchemy.run.ts` fails at plan time with `StageDatabaseMismatch` otherwise, and the workflow checks it earlier. Run `pnpm db:migrate` against that database with an explicit `DATABASE_URL` before the first deploy. Previews per PR are not wired; see `docs/decisions/0004-first-deploy.md`.
+
+`.github/workflows/image-build.yml` (manual, no secrets) builds `apps/browser` and starts it under 4 GiB and 0.5 vCPU.

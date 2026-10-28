@@ -1,39 +1,75 @@
 name: Deploy
 
-# Manual only until the Cloudflare secrets below exist: run it from the Actions tab to deploy stage `prod`.
-# To deploy on every push and give each PR its own `pr-<number>` stage again, restore these triggers:
-#   push: { branches: [main] }
-#   pull_request: { types: [opened, synchronize, reopened, closed] }
+# Manual only, one stage at a time: run it from the Actions tab and type the stage.
+# There is no default stage on purpose. Each stage has a GitHub environment of the same name
+# (Settings, Environments) that holds that stage's secrets, so `spike-m6` and `prod` never share one.
+# Stage rules: lowercase letters, digits and dashes; the stage's Postgres database must contain the
+# stage in its name (infra/alchemy.run.ts fails at plan time otherwise).
+# To deploy on every push or per PR again, restore the push/pull_request triggers and derive the stage
+# from the event (`pr-<number>`) with a `pr-<number>` environment for previews.
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: Stage to deploy (no default). Must match a GitHub environment of the same name.
+        required: true
+        type: string
+      destroy:
+        description: Destroy the stage instead of deploying it
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: deploy-${{ github.event.number || 'prod' }}
+  group: deploy-${{ inputs.stage }}
   cancel-in-progress: false
 
-env:
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  # Not read by alchemy 2.0.0-beta.83 itself (state encryption is managed by the Cloudflare state
-  # store); kept so a password-protecting release picks it up without a workflow change.
-  ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-  # Postgres only: the origin Hyperdrive connects to. Every PR preview shares this one database.
-  DATABASE_URL: ${{ secrets.DATABASE_URL }}
-  STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
-  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
-  LLM_ENCRYPTION_KEY: ${{ secrets.LLM_ENCRYPTION_KEY }}
-  MAIL_FROM: ${{ secrets.MAIL_FROM }}
-  CI: "true"
+permissions:
+  contents: read
 
 jobs:
-  deploy:
-    # fork PRs get no secrets
-    if: >-
-      github.event_name != 'pull_request' ||
-      (github.event.action != 'closed' &&
-        github.event.pull_request.head.repo.full_name == github.repository)
+  stage:
     runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    env:
+      ALCHEMY_STAGE: ${{ inputs.stage }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # Not read by alchemy 2.0.0-beta.83 itself (state encryption is managed by the Cloudflare state
+      # store); kept so a password-protecting release picks it up without a workflow change.
+      ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+      # This stage's own database; its name must contain the stage.
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      STORAGE_SIGNING_SECRET: ${{ secrets.STORAGE_SIGNING_SECRET }}
+      BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+      LLM_ENCRYPTION_KEY: ${{ secrets.LLM_ENCRYPTION_KEY }}
+      MAIL_FROM: ${{ secrets.MAIL_FROM }}
+      CI: "true"
     steps:
+      - name: Check the stage name
+        run: |
+          case "$ALCHEMY_STAGE" in
+            ''|*[!a-z0-9-]*|-*|*-) echo "Stage must be lowercase letters, digits and dashes: '$ALCHEMY_STAGE'" >&2; exit 1 ;;
+          esac
+      - name: Refuse prod without environment protection
+        if: inputs.stage == 'prod'
+        env:
+          GH_TOKEN: ${{ secrets.ENVIRONMENT_READ_TOKEN }}
+        run: |
+          # Fails closed: without a token that can read the environment, prod does not deploy.
+          rules=$(gh api "repos/${{ github.repository }}/environments/prod" --jq '[.protection_rules[] | select(.type == "required_reviewers")] | length')
+          if [ "${rules:-0}" -lt 1 ]; then
+            echo "The prod environment needs a required-reviewers protection rule" >&2
+            exit 1
+          fi
+      - name: Check the database name contains the stage
+        run: |
+          db=$(node -e 'process.stdout.write(new URL(process.env.DATABASE_URL).pathname.slice(1))')
+          squash() { printf '%s' "$1" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9'; }
+          case "$(squash "$db")" in
+            *"$(squash "$ALCHEMY_STAGE")"*) ;;
+            *) echo "Database '$db' does not contain stage '$ALCHEMY_STAGE'" >&2; exit 1 ;;
+          esac
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
@@ -42,24 +78,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Deploy
-        env:
-          ALCHEMY_STAGE: ${{ github.event_name != 'pull_request' && 'prod' || format('pr-{0}', github.event.number) }}
+        if: ${{ !inputs.destroy }}
         run: pnpm exec alchemy deploy infra/alchemy.run.ts --yes
-
-  destroy:
-    if: >-
-      github.event_name == 'pull_request' && github.event.action == 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Destroy the preview stage
-        env:
-          ALCHEMY_STAGE: pr-${{ github.event.number }}
+      - name: Destroy
+        if: ${{ inputs.destroy }}
         run: pnpm exec alchemy destroy infra/alchemy.run.ts --yes

@@ -1,8 +1,20 @@
 import * as Alchemy from "alchemy"
 import * as Cloudflare from "alchemy/Cloudflare"
 import * as Config from "effect/Config"
+import * as Data from "effect/Data"
 import * as Effect from "effect/Effect"
 import * as Redacted from "effect/Redacted"
+
+class StageDatabaseMismatch extends Data.TaggedError("StageDatabaseMismatch")<{
+  readonly stage: string
+  readonly database: string
+}> {
+  override get message() {
+    return `Stage "${this.stage}" would use database "${this.database}", whose name does not contain the stage. Name the database after the stage (for example zinko_${this.stage.replace(/[^a-z0-9]+/gi, "_")}) so one stage can never write to another stage's data.`
+  }
+}
+
+const squash = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "")
 
 /**
  * Infrastructure as Effects (Alchemy v2). Run it with:
@@ -23,6 +35,11 @@ export default Alchemy.Stack(
     state: process.env.CI ? Cloudflare.state() : Alchemy.localState(),
   },
   Effect.gen(function* () {
+    const stage = (yield* Alchemy.Stack).stage
+    // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
+    // named `dev` or `dev_<user>`; a deployed stage such as `devops` is never local.
+    const isDev =
+      (yield* Alchemy.AlchemyContext).dev && (stage === "dev" || stage.startsWith("dev_"))
     const databaseUrl = new URL(Redacted.value(yield* Config.Redacted("DATABASE_URL")))
     const origin = {
       scheme: "postgres",
@@ -32,6 +49,11 @@ export default Alchemy.Stack(
       user: decodeURIComponent(databaseUrl.username),
       password: Redacted.make(decodeURIComponent(databaseUrl.password)),
     } as const
+    // A deployed stage names its database after itself, so a spike or a preview can never be
+    // pointed at the shared or the production database.
+    if (!isDev && !squash(origin.database).includes(squash(stage))) {
+      return yield* Effect.die(new StageDatabaseMismatch({ stage, database: origin.database }))
+    }
     const hyperdrive = yield* Cloudflare.Hyperdrive.Connection("Hyperdrive", {
       origin,
       // `pnpm dev` only: the Docker Postgres has no TLS and the local Hyperdrive will not fall back
@@ -49,11 +71,6 @@ export default Alchemy.Stack(
     const auditWorkflow = Cloudflare.Workflow("Audit", { className: "Audit" })
     const auditRoom = Cloudflare.DurableObject("AuditRoom")
     const admissionGate = Cloudflare.DurableObject("AdmissionGate")
-    const stage = (yield* Alchemy.Stack).stage
-    // Local means `alchemy dev` (Alchemy's own flag, false for deploy and destroy) on a stage
-    // named `dev` or `dev_<user>`; a deployed stage such as `devops` is never local.
-    const isDev =
-      (yield* Alchemy.AlchemyContext).dev && (stage === "dev" || stage.startsWith("dev_"))
     // A capture engine started by hand (CONTRIBUTING.md). Only local runs honour it, so a
     // deployed Worker never talks to a URL from someone's .env.
     const browserUrl = isDev ? yield* Config.String("BROWSER_URL").pipe(Config.withDefault("")) : ""

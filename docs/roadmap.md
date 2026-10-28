@@ -36,7 +36,7 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 
 - **Parallel captures** for the 5-minute target: captures run one at a time per audit, 10.1 to 12.8 s per run, so 10 pages × 3 scenarios take about 5 to 6.4 minutes.
 - **Admission control:** done in the M3 leftovers (below).
-- **Cloudflare:** the Workflow, Durable Objects, R2 and the container have run only under `pnpm dev`; the container image and a deploy are still untried.
+- **Cloudflare:** the Workflow, Durable Objects, R2 and the container have run only under `pnpm dev`; the container image and a deploy are still untried. Offline preparation is done (2026-10-28, `docs/decisions/0004-first-deploy.md`: stage isolation, a database-name guard, a secret-free image-build workflow); the image build needs the docker group or CI, the deploy needs owner gate Q13.
 - **A flaky navigation timeout:** one demo run hit `Page.goto` 30 s on a fixture page and passed on the next audit; the cause is not isolated.
 
 ## Left over from M5
