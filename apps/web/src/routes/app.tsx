@@ -96,6 +96,12 @@ function AppShell() {
   const [findOpen, setFindOpen] = useState(false)
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
+      <a
+        href="#main"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:flex focus-visible:h-8 focus-visible:items-center focus-visible:rounded-md focus-visible:border focus-visible:bg-background focus-visible:px-3 focus-visible:text-sm focus-visible:font-medium focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        Skip to content
+      </a>
       <aside className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex">
         <SidebarContent onFind={() => setFindOpen(true)} />
       </aside>
@@ -126,7 +132,11 @@ function AppShell() {
           </Sheet>
           <LogoMark className="size-5" />
         </header>
-        <main className="min-w-0 flex-1 p-4 md:p-6">
+        <main
+          id="main"
+          tabIndex={-1}
+          className="min-w-0 flex-1 p-4 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset md:p-6"
+        >
           <Outlet />
         </main>
         <CommandPalette

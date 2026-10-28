@@ -33,7 +33,7 @@ Sidebar: organization switcher, Find… (⌘K), Clients, Settings, account menu
 └── Settings                      Profile · Members · AI
 ```
 
-Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar and closes on navigation. Each page opens with a `PageHeader` (breadcrumb, title, meta line, actions).
+Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar and closes on navigation. Each page opens with a `PageHeader` (breadcrumb, title, meta line, actions). Tab order is a "Skip to content" link (visible only on focus), the navigation, then `<main id="main">`, which the link focuses.
 
 ## Screens as built
 

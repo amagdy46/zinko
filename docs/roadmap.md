@@ -48,7 +48,6 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 - **Finding markers in matrix cells** are deferred (M5/M6).
 - **Digest cost on real R2.** 158 failing runs read in 161 ms p50 (192 ms max) locally from one cached file; measure with 158 distinct objects on R2 before relying on it.
 - **Click IDs reach the start URL only.** Rules that need them on a key page cannot be tested from a key page; a per-page option or a documented fixture start page would help.
-- **Keyboard order:** the shell puts the page content before the sidebar in the DOM; add a skip link or move the navigation first.
 - **Score weights, the 79 cap and the "Minor issues only" band** are provisional (plan open question 1); the score summarises one audit's pages and scenarios, not the site.
 - **Retention:** no TTL on `finding_explanation`; the 24 h ledger cleanup runs only when an organization reserves again.
 - Still open from M3 and not taken by M4: ads purchase detection, flaky verdict spread, vendor-side `hygiene.tag-errors`, build-before-check.
