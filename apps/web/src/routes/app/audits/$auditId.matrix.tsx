@@ -32,6 +32,25 @@ export const Route = createFileRoute("/app/audits/$auditId/matrix")({
   component: TagMatrixScreen,
 })
 
+function Legend({ mode }: { mode: MatrixView["mode"] }) {
+  return (
+    <p className="max-w-3xl text-sm text-muted-foreground">
+      <span className="font-medium text-foreground">How to read it. </span>
+      {mode === "events" ? (
+        "n/m is the runs that had the event out of the column's runs; ×n is the hits in a single run. None seen is only said of complete runs."
+      ) : (
+        <>
+          Ads is <span className="font-mono text-xs">ad_storage</span> and Analytics is{" "}
+          <span className="font-mono text-xs">analytics_storage</span>, as the hits carried them
+          (Google's gcs and gcd signal), not the order of the consent commands. Mixed means the
+          tag's hits carried more than one state. Meta and TikTok hits carry no consent signal. A
+          run whose choice was not seen has no state after the choice.
+        </>
+      )}
+    </p>
+  )
+}
+
 function TagMatrixScreen() {
   const matrix = Route.useLoaderData()
   const { auditId } = Route.useParams()
@@ -59,6 +78,7 @@ function TagMatrixScreen() {
       `${count(partial, "run")} ${partial === 1 ? "was" : "were"} captured only in part`,
     uncaptured > 0 && `${count(uncaptured, "run")} could not be captured`,
   ].filter((part) => part !== false)
+  const showsTable = matrix.columns.length > 0 && !neverCaptured && matrix.tagTotal > 0
   const body = (() => {
     if (matrix.columns.length === 0)
       return (
@@ -89,11 +109,6 @@ function TagMatrixScreen() {
       <>
         <TagMatrixTable auditId={auditId} matrix={matrix} mode={view.mode} />
         <TagPager matrix={matrix} perPage={perPage} onPage={(tagPage) => change({ tagPage })} />
-        <p className="max-w-prose text-xs text-muted-foreground">
-          {view.mode === "events"
-            ? "Fired means the page sent the request; requests were answered locally when that option was on. None seen is only said of complete runs."
-            : "These are the consent states the hits carried (Google's gcs and gcd signal), not the order of the consent default and update commands; the rule consent.default-after-tag checks that. Meta and TikTok hits carry no consent signal. A run whose choice was not seen has no state after the choice."}
-        </p>
       </>
     )
   })()
@@ -107,11 +122,12 @@ function TagMatrixScreen() {
         </h2>
         <p className="max-w-prose text-sm text-muted-foreground">
           {view.mode === "events"
-            ? "Each cell counts the requests the page sent for a tag. n/m is the number of runs that had the event out of the column's runs."
+            ? "Each cell counts the requests the page sent for a tag."
             : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."}
         </p>
       </div>
       <MatrixControls matrix={matrix} mode={view.mode} onChange={change} />
+      {showsTable ? <Legend mode={view.mode} /> : null}
       {body}
     </div>
   )

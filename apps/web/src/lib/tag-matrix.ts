@@ -46,6 +46,9 @@ export interface MatrixColumn {
   key: string
   label: string
   runIds: string[]
+  /** By page: the audited URL, which the label shortens; `clickIds` when it carries test click IDs. */
+  pageUrl?: string | undefined
+  clickIds: boolean
   runs: RunCounts
   /** Consent outcomes of the column's runs; a run with no stored consent is not counted. */
   outcomes: Record<string, number>
@@ -160,7 +163,12 @@ export const consentColumnCell = (
   }
 }
 
-export const stateLabel = (state: StateCount) => `${state.adStorage} / ${state.analyticsStorage}`
+/** The two consent fields named, so "denied / denied" is never a guess which is which. */
+export const consentWords = (adStorage: string, analyticsStorage: string) =>
+  `Ads ${adStorage} · Analytics ${analyticsStorage}`
+
+export const stateLabel = (state: StateCount) =>
+  consentWords(state.adStorage, state.analyticsStorage)
 
 const VENDOR_NAMES: Record<string, string> = {
   ga4: "Google Analytics 4",

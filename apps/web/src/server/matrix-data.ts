@@ -3,7 +3,8 @@ import { Database } from "@repo/core/Database"
 import { hit, run } from "@repo/db"
 import { and, asc, eq, inArray, or, type SQL, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
-import { pageLabels, scenarioLabel } from "@/lib/audit-labels"
+import { scenarioLabel } from "@/lib/audit-labels"
+import { hasClickIds, pathLabels } from "@/lib/page-label"
 import {
   ALL_PAGES,
   type ColumnCell,
@@ -48,6 +49,7 @@ export interface SliceRun {
   coverage: Coverage
   consentOutcome: string | null
   page: string
+  pageUrl: string
   scenario: string
 }
 
@@ -91,7 +93,7 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
         ? view.viewport
         : (viewports[0] ?? "desktop")
     const scenarios = [...new Set(rows.map((r) => r.scenario))].toSorted(byOrder(SCENARIO_ORDER))
-    const labels = pageLabels(rows.map((r) => r.pageUrl))
+    const labels = pathLabels(rows.map((r) => r.pageUrl))
     const labelOf = (r: { pageUrl: string; journey: boolean }) => {
       const label = labels.get(r.pageUrl) ?? r.pageUrl
       return r.journey ? `Journey from ${label}` : label
@@ -129,6 +131,7 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
         coverage: coverageOf(r.status),
         consentOutcome: consent?.outcome ?? null,
         page: labelOf(r),
+        pageUrl: r.pageUrl,
         scenario: r.scenario,
       }
     })
@@ -154,6 +157,8 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
           partial: inColumn.filter((r) => r.coverage === "partial").length,
           none: inColumn.filter((r) => r.coverage === "none").length,
         },
+        clickIds: view.by === "page" && first !== undefined && hasClickIds(first.pageUrl),
+        pageUrl: view.by === "page" ? first?.pageUrl : undefined,
         outcomes,
         cmps: [
           ...new Set(
@@ -322,8 +327,16 @@ export const cellsOf = (
         runsWithHits: { complete: t.complete, partial: t.partial },
         ...(mode === "consent" ? { consent: { before: [], after: [] } } : {}),
       }
+    // one order for a tag in every column: its busiest events first, then by name
+    const volume = new Map<string, number>()
+    for (const e of events) {
+      const key = `${e.vendor}|${e.destinationId}|${e.event}`
+      volume.set(key, (volume.get(key) ?? 0) + e.hits)
+    }
+    const volumeOf = (e: (typeof events)[number]) =>
+      volume.get(`${e.vendor}|${e.destinationId}|${e.event}`) ?? 0
     for (const e of events.toSorted(
-      (a, b) => b.runs - a.runs || b.hits - a.hits || compareText(a.event, b.event),
+      (a, b) => volumeOf(b) - volumeOf(a) || compareText(a.event, b.event),
     )) {
       const cell = cells[cellId(e.vendor, e.destinationId, e.column)]
       if (cell !== undefined && cell.events.length < EVENTS_PER_CELL)

@@ -1,5 +1,5 @@
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
-import { Ban, ChevronDown, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
 import { ConsentTokens, JsonView, KeyValueTable, RequestView, Section } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
@@ -17,8 +17,10 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { runPage, scenarioLabel } from "@/lib/audit-labels"
+import { scenarioLabel } from "@/lib/audit-labels"
 import { searchText, searchValues } from "@/lib/hits-filter"
+import { hasClickIds, runPageLabel } from "@/lib/page-label"
+import { consentWords } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
 import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
@@ -278,33 +280,56 @@ function OptionList({
 
 function FilterChip({
   label,
+  plural,
   options,
   selected,
   onChange,
 }: {
   label: string
+  plural: string
   options: ReadonlyArray<Choice>
   selected: ReadonlyArray<string>
   onChange: (next: string[]) => void
 }) {
   const names = selected.map((v) => options.find((o) => o.value === v)?.label ?? v)
+  const summarized = names.length > 2
+  const trigger = (
+    <Button
+      variant="outline"
+      size="sm"
+      className={cn(
+        "max-w-64",
+        selected.length === 0 ? "border-dashed text-muted-foreground" : "rounded-r-none",
+      )}
+    >
+      <span className="truncate">
+        {selected.length === 0
+          ? `+ ${label}`
+          : `${label}: ${summarized ? `${names.length} ${plural}` : names.join(", ")}`}
+      </span>
+    </Button>
+  )
   return (
     <div className="inline-flex items-center">
       <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className={cn(
-              "max-w-64",
-              selected.length === 0 ? "border-dashed text-muted-foreground" : "rounded-r-none",
-            )}
-          >
-            <span className="truncate">
-              {selected.length === 0 ? `+ ${label}` : `${label}: ${names.join(", ")}`}
-            </span>
-          </Button>
-        </PopoverTrigger>
+        {summarized ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-80">
+              <ul>
+                {names.map((name) => (
+                  <li key={name} className="break-words">
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+        )}
         <PopoverContent align="start" className="w-64 p-2">
           <OptionList label={label} options={options} selected={selected} onChange={onChange} />
         </PopoverContent>
@@ -325,8 +350,8 @@ function FilterChip({
 }
 
 const SOURCE_CHOICES: ReadonlyArray<Choice> = [
-  { value: "network", label: "Network" },
-  { value: "dataLayer", label: "dataLayer" },
+  { value: "network", label: "Network requests" },
+  { value: "dataLayer", label: "dataLayer pushes" },
 ]
 
 const TIMING_CHOICES: ReadonlyArray<Choice> = [
@@ -423,6 +448,7 @@ function HitsExplorer() {
   const groups = [
     {
       label: "Vendor",
+      plural: "vendors",
       selected: vendor,
       onChange: choose("vendor"),
       options: withSelected(
@@ -432,6 +458,7 @@ function HitsExplorer() {
     },
     {
       label: "Event",
+      plural: "events",
       selected: events,
       onChange: choose("event"),
       options: withSelected(
@@ -441,6 +468,7 @@ function HitsExplorer() {
     },
     {
       label: "Destination",
+      plural: "destinations",
       selected: destinations,
       onChange: choose("destinationId"),
       options: withSelected(
@@ -450,6 +478,7 @@ function HitsExplorer() {
     },
     {
       label: "Scenario",
+      plural: "scenarios",
       selected: scenario,
       onChange: choose("scenario"),
       options: withSelected(
@@ -463,24 +492,27 @@ function HitsExplorer() {
     },
     {
       label: "Source",
+      plural: "sources",
       selected: sources,
       onChange: choose("source"),
       options: [...SOURCE_CHOICES],
     },
     {
       label: "Timing",
+      plural: "timings",
       selected: timings,
       onChange: choose("timing"),
       options: [...TIMING_CHOICES],
     },
     {
       label: "Run",
+      plural: "runs",
       selected: runId,
       onChange: choose("runId"),
       options: withSelected(
         runs.map((r) => ({
           value: r.id,
-          label: `#${r.ordinal + 1} ${runPage(r)} · ${scenarioLabel(r.scenario)} · ${r.viewport}`,
+          label: `#${r.ordinal + 1} ${runPageLabel(r)} · ${scenarioLabel(r.scenario)} · ${r.viewport}`,
           count: r.hitCount,
         })),
         runId,
@@ -510,7 +542,7 @@ function HitsExplorer() {
     <TooltipProvider>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="relative min-w-0 flex-1 md:max-w-sm">
+          <div className="relative min-w-48 flex-1 md:max-w-sm">
             <Search
               aria-hidden="true"
               className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
@@ -688,12 +720,16 @@ function Timeline({
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <div className="min-w-0 space-y-2">
+        <p className="text-xs text-muted-foreground">
+          Time: ms since the capture started. Status: the HTTP status, or Answered locally. Consent:
+          Ads is ad_storage, Analytics is analytics_storage.
+        </p>
         <div className="max-h-[70svh] overflow-auto rounded-lg border">
           <table className="w-full min-w-max text-left font-mono text-xs" data-testid="timeline">
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
                 {singleRun ? null : <th className="hidden px-2 font-medium md:table-cell">Run</th>}
-                <th className="px-2 font-medium">t</th>
+                <th className="px-2 font-medium">Time</th>
                 <th className="px-2 font-medium">Vendor</th>
                 <th className="px-2 font-medium">Event</th>
                 <th className="px-2 font-medium">Status</th>
@@ -727,6 +763,7 @@ function Timeline({
                     <HitRow
                       key={row.key}
                       item={row.item}
+                      run={runLabels.get(row.item.runId)}
                       singleRun={singleRun}
                       isSelected={row.key === shown}
                       onSelect={() => setSelected(row.key)}
@@ -741,6 +778,7 @@ function Timeline({
                   <PushRow
                     key={row.key}
                     item={firstPush}
+                    run={runLabels.get(firstPush.runId)}
                     singleRun={singleRun}
                     group={grouped ? { count: row.items.length, to: lastPush.at, open } : undefined}
                     isSelected={!grouped && row.key === shown}
@@ -761,6 +799,7 @@ function Timeline({
                       <PushRow
                         key={`n:${itemKey(push)}`}
                         item={push}
+                        run={runLabels.get(push.runId)}
                         singleRun={singleRun}
                         nested
                         isSelected={itemKey(push) === shown}
@@ -852,19 +891,39 @@ function Timeline({
 
 const cellBase = "px-2 py-0 whitespace-nowrap"
 
-function RunCell({ ordinal, singleRun }: { ordinal: number; singleRun: boolean }) {
-  return singleRun ? null : (
-    <td className={cn(cellBase, "hidden text-muted-foreground md:table-cell")}>#{ordinal + 1}</td>
+function RunCell({
+  ordinal,
+  run,
+  singleRun,
+}: {
+  ordinal: number
+  run: RunInfo | undefined
+  singleRun: boolean
+}) {
+  if (singleRun) return null
+  return (
+    <td
+      className={cn(cellBase, "hidden max-w-56 truncate text-muted-foreground md:table-cell")}
+      title={run === undefined ? undefined : runTitle(run)}
+    >
+      #{ordinal + 1}
+      {run === undefined ? "" : ` ${runPageLabel(run)} · ${scenarioLabel(run.scenario)}`}
+    </td>
   )
 }
 
+const runTitle = (run: RunInfo) =>
+  `${run.pageUrl} · ${scenarioLabel(run.scenario)} · ${run.viewport}`
+
 function HitRow({
   item,
+  run,
   singleRun,
   isSelected,
   onSelect,
 }: {
   item: HitItem
+  run: RunInfo | undefined
   singleRun: boolean
   isSelected: boolean
   onSelect: () => void
@@ -881,7 +940,7 @@ function HitRow({
         isSelected && "bg-accent",
       )}
     >
-      <RunCell ordinal={item.ordinal} singleRun={singleRun} />
+      <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "tabular-nums")}>{thousands(item.at)} ms</td>
       <td className={cellBase}>{item.vendor}</td>
       <td className={cellBase}>
@@ -895,20 +954,13 @@ function HitRow({
       </td>
       <td className={cellBase}>
         {item.blocked ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="inline-flex" role="img" aria-label="Answered locally">
-                <Ban aria-hidden="true" className="size-3.5 text-muted-foreground" />
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>Answered locally, not sent to the vendor</TooltipContent>
-          </Tooltip>
+          <span title="Answered locally, not sent to the vendor">Answered locally</span>
         ) : (
-          <span className="tabular-nums">{item.status ?? "-"}</span>
+          <span className="tabular-nums">{item.status ?? "No status"}</span>
         )}
       </td>
       <td className={cellBase}>
-        <ConsentDots consent={item.consent} />
+        <ConsentText consent={item.consent} />
       </td>
       <td className={cn(cellBase, "hidden md:table-cell")}>{item.destinationId}</td>
       <td className="max-w-48 truncate px-2 py-0 text-muted-foreground">{preview(item)}</td>
@@ -916,39 +968,15 @@ function HitRow({
   )
 }
 
-function ConsentDots({ consent }: { consent: HitItem["consent"] }) {
-  return (
-    <span className="inline-flex gap-1">
-      {(
-        [
-          ["ad_storage", consent.adStorage],
-          ["analytics_storage", consent.analyticsStorage],
-        ] as const
-      ).map(([name, value]) => (
-        <Tooltip key={name}>
-          <TooltipTrigger asChild>
-            <span
-              role="img"
-              aria-label={`${name} ${value}`}
-              className={cn(
-                "size-2.5 rounded-full",
-                value === "granted" && "bg-status-pass-solid",
-                value === "denied" && "bg-sev-critical-solid",
-                value === "unknown" && "border border-muted-foreground/50",
-              )}
-            />
-          </TooltipTrigger>
-          <TooltipContent>
-            {name} {value}
-          </TooltipContent>
-        </Tooltip>
-      ))}
-    </span>
-  )
+function ConsentText({ consent }: { consent: HitItem["consent"] }) {
+  if (consent.adStorage === "unknown" && consent.analyticsStorage === "unknown")
+    return <span className="text-muted-foreground">No signal</span>
+  return <span>{consentWords(consent.adStorage, consent.analyticsStorage)}</span>
 }
 
 function PushRow({
   item,
+  run,
   singleRun,
   group,
   nested = false,
@@ -956,6 +984,7 @@ function PushRow({
   onSelect,
 }: {
   item: PushItem
+  run: RunInfo | undefined
   singleRun: boolean
   group?: { count: number; to: number; open: boolean }
   nested?: boolean
@@ -974,7 +1003,7 @@ function PushRow({
         isSelected && "bg-accent text-foreground",
       )}
     >
-      <RunCell ordinal={item.ordinal} singleRun={singleRun} />
+      <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "tabular-nums")}>
         {group ? `${thousands(item.at)}–${thousands(group.to)} ms` : `${thousands(item.at)} ms`}
       </td>
@@ -1020,7 +1049,14 @@ function Detail({
     <div className="space-y-3">
       {run === undefined ? null : (
         <p className="text-xs text-muted-foreground">
-          {runPage(run)} · {scenarioLabel(run.scenario)} · {run.viewport}
+          <span title={run.pageUrl}>{runPageLabel(run)}</span>
+          {hasClickIds(run.pageUrl) ? (
+            <Badge variant="secondary" className="mx-1">
+              + click IDs
+            </Badge>
+          ) : null}
+          {" · "}
+          {scenarioLabel(run.scenario)} · {run.viewport}
         </p>
       )}
       {item.kind === "push" ? (

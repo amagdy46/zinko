@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { useEffect, useState, useSyncExternalStore } from "react"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -257,7 +258,14 @@ function ColumnHeader({ column, mode }: { column: MatrixColumn; mode: MatrixView
   const gaps = partial + none > 0
   return (
     <div className="space-y-1 py-1 font-normal">
-      <p className="font-medium [overflow-wrap:anywhere]">{column.label}</p>
+      <p className="font-medium [overflow-wrap:anywhere]" title={column.pageUrl}>
+        {column.label}
+        {column.clickIds ? (
+          <Badge variant="secondary" className="ml-1.5 align-middle">
+            + click IDs
+          </Badge>
+        ) : null}
+      </p>
       <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
         {gaps ? <StatusGlyph meaning="partial" className="mt-0.5 size-3.5" /> : null}
         <span>
@@ -411,7 +419,7 @@ function Bucket({
 }) {
   return (
     <span className="block">
-      <span className="block text-2xs text-muted-foreground uppercase">{title}</span>
+      <span className="block text-2xs font-medium text-muted-foreground">{title}</span>
       <BucketStates states={states} signal={signal} />
     </span>
   )
@@ -424,7 +432,10 @@ function BucketStates({
   states: StateCount[] | "n/a"
   signal: "google" | "none"
 }) {
-  if (states === "n/a") return <span className="block text-xs text-muted-foreground">n/a</span>
+  if (states === "n/a")
+    return (
+      <span className="block text-xs text-muted-foreground">Not applicable, no choice seen</span>
+    )
   if (states.length === 0)
     return <span className="block text-xs text-muted-foreground">No hits</span>
   if (signal === "none") return <span className="block text-xs">{count(sum(states), "hit")}</span>
@@ -432,12 +443,12 @@ function BucketStates({
     <>
       {states.length > 1 ? (
         <span className="inline-flex min-h-5 items-center rounded border px-1.5 text-2xs font-medium">
-          Mixed
+          Mixed: {states.length} states
         </span>
       ) : null}
       {states.map((s) => (
-        <span key={stateLabel(s)} className="block font-mono text-xs">
-          {stateLabel(s)}: {s.hits}
+        <span key={stateLabel(s)} className="block text-xs">
+          {stateLabel(s)}: {count(s.hits, "hit")}
         </span>
       ))}
     </>
@@ -697,7 +708,7 @@ function CellPopover({
       <PopoverContent
         align="start"
         collisionPadding={16}
-        className="flex max-h-[min(32rem,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] flex-col gap-3 text-sm"
+        className="flex max-h-[min(60vh,var(--radix-popover-content-available-height))] w-96 max-w-[calc(100vw-2rem)] flex-col gap-3 text-sm"
       >
         {detail}
       </PopoverContent>
