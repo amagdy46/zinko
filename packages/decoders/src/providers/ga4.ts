@@ -1,4 +1,5 @@
 import { decodedBy } from "../collection.js"
+import { parseGcd } from "../gcd.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
 
 const ID_KEYS: Record<string, string> = {
@@ -44,6 +45,11 @@ function toHit(params: URLSearchParams, url: URL, batchIndex: number): Hit | nul
     if (v !== null && !(name in eventParams)) eventParams[name] = v
   }
 
+  // Set by GA4 DebugView (GTM preview, the GA debugger extension); `debug_mode` arrives as `ep.debug_mode`.
+  const dbg = params.get("_dbg")
+  if (dbg !== null) eventParams.debug_view = dbg
+
+  const gcd = parseGcd(params.get("gcd"))
   return {
     vendor: "ga4",
     destinationId,
@@ -52,6 +58,7 @@ function toHit(params: URLSearchParams, url: URL, batchIndex: number): Hit | nul
     params: eventParams,
     ids,
     consent: parseGcs(params.get("gcs") ?? undefined),
+    ...(gcd && { gcd }),
     host: url.host,
     url: url.href,
   }

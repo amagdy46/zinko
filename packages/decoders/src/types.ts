@@ -10,6 +10,23 @@ export type Vendor = "ga4" | "meta" | "google-ads" | "tiktok"
 
 export type ConsentState = "granted" | "denied" | "unknown"
 
+export type GcdState = "unset" | "granted" | "denied"
+
+/** One consent type in a `gcd` value: the state set by `default` and by a later `update`; `unset` when never set. */
+export interface GcdSignal {
+  default: GcdState
+  update: GcdState
+}
+
+/** Google's `gcd` parameter, read per signal. It covers `ad_user_data` and `ad_personalization`, which `gcs` does not. */
+export interface Gcd {
+  raw: string
+  adStorage: GcdSignal
+  analyticsStorage: GcdSignal
+  adUserData: GcdSignal
+  adPersonalization: GcdSignal
+}
+
 /** One tracking event decoded from a request. A single request can carry several (GA4 batching). */
 export interface Hit {
   vendor: Vendor
@@ -23,6 +40,8 @@ export interface Hit {
   /** Vendor-level identifiers (client ID, session ID, event ID, fbp/fbc...). */
   ids: Record<string, string>
   consent: { adStorage: ConsentState; analyticsStorage: ConsentState; raw?: string }
+  /** The request's parsed `gcd` (GA4 and Google Ads); absent when the request has none or it is not readable. */
+  gcd?: Gcd
   /** Host the hit was sent to. A non-Google host for GA4 usually means server-side GTM. */
   host: string
   url: string

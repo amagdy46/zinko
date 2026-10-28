@@ -1,4 +1,5 @@
 import { decodedBy } from "../collection.js"
+import { parseGcd } from "../gcd.js"
 import type { ConsentState, Decoder, Hit } from "../types.js"
 
 function accountId(url: URL): string | null {
@@ -52,6 +53,7 @@ export const googleAds: Decoder = {
     const gclid = q.get("gclaw")
     if (gclid) ids.gclid = gclid
 
+    const gcd = parseGcd(q.get("gcd"))
     return [
       {
         vendor: "google-ads",
@@ -61,6 +63,7 @@ export const googleAds: Decoder = {
         params,
         ids,
         consent: parseGcs(q.get("gcs")),
+        ...(gcd && { gcd }),
         host: url.host,
         url: url.href,
       },
