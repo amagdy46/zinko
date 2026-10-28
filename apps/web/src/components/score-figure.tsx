@@ -29,7 +29,8 @@ export function ScoreFigure({
   size?: "hero" | "cell" | "inline"
   className?: string
 }) {
-  const { full, notes } = scoreCoverage(coverage)
+  const { state, notes } = scoreCoverage(coverage)
+  const full = state !== "runs"
   const number = cn("tabular-nums", !full && "text-muted-foreground")
   if (size === "inline")
     return (
@@ -51,17 +52,22 @@ export function ScoreFigure({
           <span className="font-normal text-muted-foreground">/100</span>
         </p>
         {full ? null : (
-          <>
-            <p className="flex items-center gap-1.5 text-xs">
-              <StatusGlyph meaning="partial" className="size-3.5" />
-              Not fully checked
-            </p>
-            <p className="text-xs text-muted-foreground">{notes.join(" · ")}</p>
-          </>
+          <p className="flex items-center gap-1.5 text-xs">
+            <StatusGlyph meaning="partial" className="size-3.5" />
+            Not fully checked
+          </p>
+        )}
+        {notes.length === 0 ? null : (
+          <p className="text-xs text-muted-foreground">{notes.join(" · ")}</p>
         )}
       </div>
     )
-  const noFailures = band === "no-failures"
+  const caveated = band === "no-failures" && state !== "full"
+  const bandWord =
+    band === undefined || caveated ? "No failures in what was checked" : BAND_LABEL[band]
+  let glyph: StatusMeaning = band === undefined ? "partial" : BAND_GLYPH[band]
+  if (state === "runs") glyph = "partial"
+  else if (caveated) glyph = "could-not-check"
   return (
     <div className={cn("min-w-0 space-y-1", className)}>
       <p className="flex items-baseline gap-1.5" data-testid="score">
@@ -73,21 +79,19 @@ export function ScoreFigure({
           className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium"
           data-testid="band"
         >
-          <StatusGlyph meaning={full ? BAND_GLYPH[band] : "partial"} />
-          {full ? (
-            BAND_LABEL[band]
-          ) : (
+          <StatusGlyph meaning={glyph} />
+          {state === "runs" ? (
             <>
               Not fully checked
-              <span className="font-normal text-muted-foreground">
-                · {noFailures ? "No failures in what was checked" : BAND_LABEL[band]}
-              </span>
+              <span className="font-normal text-muted-foreground">· {bandWord}</span>
             </>
+          ) : (
+            bandWord
           )}
         </p>
       )}
       <p className="text-xs text-muted-foreground">
-        {full ? "All runs evaluated, every check resolved" : notes.join(" · ")}
+        {state === "full" ? "All runs evaluated, every check resolved" : notes.join(" · ")}
       </p>
     </div>
   )

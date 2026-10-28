@@ -139,18 +139,28 @@ export interface ScoreCoverage {
 }
 
 /**
- * A score is "full" only when every run was evaluated, none ended partial or failed and every
- * check resolved. Anything less is stated as exact counts, so the number is never read as more
- * than what was checked. Banner uncertainty is a caveat on failing findings, not on coverage.
+ * Two tiers. "runs": some run has no check results or ended partial or failed (which includes an
+ * incomplete audit), or a client site has no audit: the score covers less than was asked, so it is
+ * "Not fully checked". "checks": every run was evaluated but some checks could not be resolved;
+ * that is near-constant (hygiene.tag-errors cannot tell when vendor requests are answered
+ * locally), so it only adds a quiet count. "full": every check resolved. Banner uncertainty is a
+ * caveat on failing findings, not on coverage.
  */
-export function scoreCoverage(c: ScoreCoverage): { full: boolean; notes: ReadonlyArray<string> } {
-  const notes: string[] = []
+export function scoreCoverage(c: ScoreCoverage): {
+  state: "full" | "checks" | "runs"
+  notes: ReadonlyArray<string>
+} {
+  const runNotes: string[] = []
   if (c.evaluatedRuns < c.totalRuns)
-    notes.push(`${c.evaluatedRuns} of ${count(c.totalRuns, "run")} checked`)
-  if (c.unresolvedChecks > 0)
-    notes.push(`${c.checks - c.unresolvedChecks} of ${count(c.checks, "check")} resolved`)
+    runNotes.push(`${c.evaluatedRuns} of ${count(c.totalRuns, "run")} checked`)
   if (c.unfinishedRuns > 0 && c.evaluatedRuns >= c.totalRuns)
-    notes.push(`${count(c.unfinishedRuns, "run")} did not finish`)
-  if (c.unauditedSites > 0) notes.push(`${count(c.unauditedSites, "site")} not audited yet`)
-  return { full: notes.length === 0, notes }
+    runNotes.push(`${count(c.unfinishedRuns, "run")} did not finish`)
+  if (c.unauditedSites > 0) runNotes.push(`${count(c.unauditedSites, "site")} not audited yet`)
+  const checkNotes =
+    c.unresolvedChecks > 0
+      ? [`${c.checks - c.unresolvedChecks} of ${count(c.checks, "check")} resolved`]
+      : []
+  const notes = [...runNotes, ...checkNotes]
+  if (runNotes.length > 0) return { state: "runs", notes }
+  return { state: checkNotes.length > 0 ? "checks" : "full", notes }
 }

@@ -346,7 +346,7 @@ export const trendsOf = (orgId: string, clientIds: readonly string[]) =>
       if (score === undefined || detail === undefined) continue
       trends.set(clientId, [
         ...(trends.get(clientId) ?? []),
-        { score, full: scoreCoverage(coverageOfAudit(detail)).full },
+        { score, full: scoreCoverage(coverageOfAudit(detail)).state !== "runs" },
       ])
     }
     return trends
