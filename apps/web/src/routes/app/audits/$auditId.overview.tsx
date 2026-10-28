@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
+import { AREAS, BANNER_NOTE, pagePath } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
@@ -76,6 +76,13 @@ function OverviewScreen() {
         description="No run of this audit has check results: it ran before Zinko checked rules, or none of its runs was saved. Nothing can be said about its tracking, and it is not clean."
       />
     )
+  const brokenPages = runHealth.brokenPages
+    .map((p) => `${pagePath(p.page)}${p.reason === null ? "" : `: ${p.reason}`}`)
+    .join("; ")
+  let incompleteCause = `${runHealth.unfinishedRuns} of ${coverage.totalRuns} runs did not finish. `
+  if (runHealth.brokenPages.length > 0) incompleteCause = `Could not load ${brokenPages}. `
+  if (runHealth.startFailed)
+    incompleteCause = `The start page${runHealth.startPage === null ? "" : ` (${runHealth.startPage})`} could not be loaded${runHealth.startReason === null ? "" : `: ${runHealth.startReason}`}. `
   const scope = [
     count(audit.config.pages.length, "page"),
     count(audit.config.scenarios.length, "scenario"),
@@ -92,9 +99,7 @@ function OverviewScreen() {
           <StatusGlyph meaning="partial" />
           <AlertTitle className="line-clamp-none">This audit is incomplete</AlertTitle>
           <AlertDescription className="text-foreground">
-            {runHealth.startFailed
-              ? `The start page${runHealth.startPage === null ? "" : ` (${runHealth.startPage})`} could not be loaded${runHealth.startReason === null ? "" : `: ${runHealth.startReason}`}. `
-              : `${runHealth.unfinishedRuns} of ${coverage.totalRuns} runs did not finish. `}
+            {incompleteCause}
             The score below describes only what could be captured, so do not read it as the state of
             the site.
           </AlertDescription>

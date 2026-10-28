@@ -108,6 +108,7 @@ const ERROR_TEXT: Record<string, string> = {
   CmpNotFound: "Consent banner not found",
   ConsentNotApplied: "The consent choice was not seen to take effect",
   Navigation: "Page did not load",
+  HttpStatus: "Page returned an error",
   JourneyStep: "A journey step failed",
   PolicyDenied: "Page refused",
   InvalidRequest: "Page refused",
@@ -134,6 +135,7 @@ export const runReason = (run: RunProblem): string | null => {
   if (first === undefined)
     return run.status === "partial" ? "Some data is missing" : "The run failed"
   if (first.code === "Navigation") return navigationReason(first.message)
+  if (first.code === "HttpStatus") return httpStatusReason(first.message)
   return ERROR_TEXT[first.code] ?? first.message
 }
 
@@ -144,6 +146,27 @@ const NETWORK_ERRORS: ReadonlyArray<readonly [RegExp, string]> = [
   [/ERR_CONNECTION_TIMED_OUT|ERR_TIMED_OUT|Timeout \d+ms exceeded/, "timed out"],
   [/ERR_CERT|ERR_SSL/, "certificate problem"],
 ]
+
+const HTTP_STATUS_TEXT: Record<string, string> = {
+  "400": "Bad Request",
+  "401": "Unauthorized",
+  "403": "Forbidden",
+  "404": "Not Found",
+  "410": "Gone",
+  "429": "Too Many Requests",
+  "500": "Internal Server Error",
+  "502": "Bad Gateway",
+  "503": "Service Unavailable",
+  "504": "Gateway Timeout",
+}
+
+/** The engine's `HttpStatus` message is `<url>: HTTP <status>`. */
+const httpStatusReason = (message: string) => {
+  const status = /HTTP (\d{3})$/.exec(message)?.[1]
+  if (status === undefined) return "Page returned an error"
+  const text = HTTP_STATUS_TEXT[status]
+  return text === undefined ? `Page returned ${status}` : `Page returned ${status} (${text})`
+}
 
 /**
  * The engine's `Navigation` message is `<url>: <what happened>`: a refused hop names the host that

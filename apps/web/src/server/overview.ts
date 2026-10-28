@@ -19,7 +19,7 @@ const decodeErrors = Schema.decodeUnknownEffect(
   Schema.NullOr(Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))),
 )
 
-const LOAD_FAILURES = new Set(["Navigation", "Timeout"])
+const LOAD_FAILURES = new Set(["Navigation", "HttpStatus", "Timeout"])
 const withoutQuery = (url: string) => url.split("?")[0]
 
 /**
@@ -146,13 +146,20 @@ export const getOverview = createServerFn({ method: "GET" })
         const startRuns = runs.filter(
           (r) => startUrl !== undefined && withoutQuery(r.pageUrl) === withoutQuery(startUrl),
         )
-        const startFailed =
-          startRuns.length > 0 &&
-          startRuns.every(
-            (r) =>
-              r.status === "failed" ||
-              (r.status === "partial" && r.errors.some((e) => LOAD_FAILURES.has(e.code))),
-          )
+        const loadFailed = (r: (typeof runs)[number]) =>
+          r.status === "failed" ||
+          (r.status === "partial" && r.errors.some((e) => LOAD_FAILURES.has(e.code)))
+        const startFailed = startRuns.length > 0 && startRuns.every(loadFailed)
+        const pages = new Map<string, Array<(typeof runs)[number]>>()
+        for (const r of runs) {
+          const page = r.pageUrl.split("?")[0] ?? r.pageUrl
+          if (!startRuns.includes(r)) pages.set(page, [...(pages.get(page) ?? []), r])
+        }
+        const brokenPages = [...pages].flatMap(([page, [first, ...rest]]) =>
+          first !== undefined && [first, ...rest].every(loadFailed)
+            ? [{ page, reason: runReason(first) }]
+            : [],
+        )
         const unfinished = runs.filter((r) => r.status === "failed" || r.status === "partial")
         const withoutAcceptedScore = healthScore({
           findings: failing.filter((f) => f.triage.status !== "accepted_risk"),
@@ -166,8 +173,12 @@ export const getOverview = createServerFn({ method: "GET" })
             startFailed,
             startPage: startUrl ?? null,
             startReason: startFailed && startRuns[0] ? runReason(startRuns[0]) : null,
+            brokenPages,
             unfinishedRuns: unfinished.length,
-            incomplete: startFailed || (runs.length > 0 && unfinished.length * 2 >= runs.length),
+            incomplete:
+              startFailed ||
+              brokenPages.length > 0 ||
+              (runs.length > 0 && unfinished.length * 2 >= runs.length),
           },
           checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
           withoutAccepted: withoutAcceptedScore.evaluated ? withoutAcceptedScore.score : null,

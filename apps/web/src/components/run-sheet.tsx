@@ -194,7 +194,9 @@ export function RunSheet({
                 ))}
               {findings.some((finding) => finding.runIds.includes(run.id)) ? null : (
                 <p className="text-xs text-muted-foreground">
-                  No failing findings recorded for this run.
+                  {runReason(run) === null
+                    ? "No failing findings recorded for this run."
+                    : "Could not check: this run did not finish."}
                 </p>
               )}
             </div>
