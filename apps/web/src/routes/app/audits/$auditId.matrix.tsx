@@ -1,5 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router"
+import { CircleHelp } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
+import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { MatrixControls, TagMatrixTable, TagPager } from "@/components/tag-matrix"
 import { count } from "@/lib/format"
 import { type MatrixView, matrixView, TAGS_PER_PAGE } from "@/lib/tag-matrix"
@@ -34,20 +37,27 @@ export const Route = createFileRoute("/app/audits/$auditId/matrix")({
 
 function Legend({ mode }: { mode: MatrixView["mode"] }) {
   return (
-    <p className="max-w-3xl text-sm text-muted-foreground">
-      <span className="font-medium text-foreground">How to read it. </span>
-      {mode === "events" ? (
-        "n/m is the runs that had the event out of the column's runs; ×n is the hits in a single run. None seen is only said of complete runs."
-      ) : (
-        <>
-          Ads is <span className="font-mono text-xs">ad_storage</span> and Analytics is{" "}
-          <span className="font-mono text-xs">analytics_storage</span>, as the hits carried them
-          (Google's gcs and gcd signal), not the order of the consent commands. Mixed means the
-          tag's hits carried more than one state. Meta and TikTok hits carry no consent signal. A
-          run whose choice was not seen has no state after the choice.
-        </>
-      )}
-    </p>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button type="button" variant="outline" size="sm" className="shrink-0">
+          <CircleHelp aria-hidden="true" />
+          How to read it
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)] text-sm">
+        {mode === "events" ? (
+          "n/m is the runs that had the event out of the column's runs; ×n is the hits in a single run. None seen is only said of complete runs."
+        ) : (
+          <>
+            Ads is <span className="font-mono text-xs">ad_storage</span> and Analytics is{" "}
+            <span className="font-mono text-xs">analytics_storage</span>, as the hits carried them
+            (Google's gcs and gcd signal), not the order of the consent commands. Mixed means the
+            tag's hits carried more than one state. Meta and TikTok hits carry no consent signal. A
+            run whose choice was not seen has no state after the choice.
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   )
 }
 
@@ -114,20 +124,22 @@ function TagMatrixScreen() {
   })()
   return (
     <div className="min-w-0 space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-base font-medium">
-          {view.mode === "events"
-            ? "Which tags fired, on which events"
-            : "Observed consent state before and after the choice"}
-        </h2>
-        <p className="max-w-prose text-sm text-muted-foreground">
-          {view.mode === "events"
-            ? "Each cell counts the requests the page sent for a tag."
-            : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."}
-        </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <h2 className="text-base font-medium">
+            {view.mode === "events"
+              ? "Which tags fired, on which events"
+              : "Observed consent state before and after the choice"}
+          </h2>
+          <p className="max-w-prose text-sm text-muted-foreground">
+            {view.mode === "events"
+              ? "Each cell counts the requests the page sent for a tag."
+              : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."}
+          </p>
+        </div>
+        {showsTable ? <Legend mode={view.mode} /> : null}
       </div>
       <MatrixControls matrix={matrix} mode={view.mode} onChange={change} />
-      {showsTable ? <Legend mode={view.mode} /> : null}
       {body}
     </div>
   )

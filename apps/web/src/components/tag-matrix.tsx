@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router"
 import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
-import { useEffect, useState, useSyncExternalStore } from "react"
+import { type ReactNode, useEffect, useId, useState, useSyncExternalStore } from "react"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -93,82 +93,100 @@ export function MatrixControls({
   onChange: (patch: Partial<MatrixView>) => void
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-      {matrix.viewports.length > 1 ? (
+    <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+      <ControlGroup label="View">
+        {matrix.viewports.length > 1 ? (
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            aria-label="Viewport"
+            value={matrix.viewport}
+            onValueChange={(viewport) => {
+              if (viewport !== "") onChange({ viewport })
+            }}
+          >
+            {matrix.viewports.map((viewport) => (
+              <ToggleGroupItem key={viewport} value={viewport} className="capitalize">
+                {viewport}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        ) : null}
         <ToggleGroup
           type="single"
           variant="outline"
           size="sm"
-          aria-label="Viewport"
-          value={matrix.viewport}
-          onValueChange={(viewport) => {
-            if (viewport !== "") onChange({ viewport })
+          aria-label="Columns"
+          value={matrix.by}
+          onValueChange={(by) => {
+            if (by === "scenario" || by === "page") onChange({ by })
           }}
         >
-          {matrix.viewports.map((viewport) => (
-            <ToggleGroupItem key={viewport} value={viewport} className="capitalize">
-              {viewport}
-            </ToggleGroupItem>
-          ))}
+          <ToggleGroupItem value="scenario">By scenario</ToggleGroupItem>
+          <ToggleGroupItem value="page">By page</ToggleGroupItem>
         </ToggleGroup>
-      ) : null}
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        aria-label="Columns"
-        value={matrix.by}
-        onValueChange={(by) => {
-          if (by === "scenario" || by === "page") onChange({ by })
-        }}
-      >
-        <ToggleGroupItem value="scenario">By scenario</ToggleGroupItem>
-        <ToggleGroupItem value="page">By page</ToggleGroupItem>
-      </ToggleGroup>
-      {matrix.by === "scenario" ? (
-        <Select value={matrix.page} onValueChange={(page) => onChange({ page })}>
-          <SelectTrigger size="sm" aria-label="Pages" className="max-w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL_PAGES}>All pages</SelectItem>
-            {matrix.pages.map((page) => (
-              <SelectItem key={page.url} value={page.url}>
-                {page.label}
-              </SelectItem>
-            ))}
-            {matrix.journey === null ? null : (
-              <SelectItem value={JOURNEY_PAGE}>{matrix.journey}</SelectItem>
-            )}
-          </SelectContent>
-        </Select>
-      ) : (
-        <Select value={matrix.scenario} onValueChange={(scenario) => onChange({ scenario })}>
-          <SelectTrigger size="sm" aria-label="Scenario">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {matrix.scenarios.map((scenario) => (
-              <SelectItem key={scenario} value={scenario}>
-                {scenarioLabel(scenario)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      )}
-      <ToggleGroup
-        type="single"
-        variant="outline"
-        size="sm"
-        aria-label="What to show"
-        value={mode}
-        onValueChange={(next) => {
-          if (next === "events" || next === "consent") onChange({ mode: next })
-        }}
-      >
-        <ToggleGroupItem value="events">Events</ToggleGroupItem>
-        <ToggleGroupItem value="consent">Consent state</ToggleGroupItem>
-      </ToggleGroup>
+      </ControlGroup>
+      <ControlGroup label={matrix.by === "scenario" ? "Pages" : "Scenario"}>
+        {matrix.by === "scenario" ? (
+          <Select value={matrix.page} onValueChange={(page) => onChange({ page })}>
+            <SelectTrigger size="sm" aria-label="Pages" className="max-w-56">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_PAGES}>All pages</SelectItem>
+              {matrix.pages.map((page) => (
+                <SelectItem key={page.url} value={page.url}>
+                  {page.label}
+                </SelectItem>
+              ))}
+              {matrix.journey === null ? null : (
+                <SelectItem value={JOURNEY_PAGE}>{matrix.journey}</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        ) : (
+          <Select value={matrix.scenario} onValueChange={(scenario) => onChange({ scenario })}>
+            <SelectTrigger size="sm" aria-label="Scenario">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {matrix.scenarios.map((scenario) => (
+                <SelectItem key={scenario} value={scenario}>
+                  {scenarioLabel(scenario)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </ControlGroup>
+      <ControlGroup label="Show">
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          aria-label="What to show"
+          value={mode}
+          onValueChange={(next) => {
+            if (next === "events" || next === "consent") onChange({ mode: next })
+          }}
+        >
+          <ToggleGroupItem value="events">Events</ToggleGroupItem>
+          <ToggleGroupItem value="consent">Consent state</ToggleGroupItem>
+        </ToggleGroup>
+      </ControlGroup>
+    </div>
+  )
+}
+
+function ControlGroup({ label, children }: { label: string; children: ReactNode }) {
+  const id = useId()
+  return (
+    <div role="group" aria-labelledby={id} className="space-y-1.5">
+      <p id={id} className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+        {label}
+      </p>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
     </div>
   )
 }
@@ -208,7 +226,7 @@ export function TagMatrixTable({
           const open = expanded.has(row.key)
           return (
             <TableRow key={row.key} className="hover:bg-transparent">
-              <TableCell className="sticky left-0 z-10 border-b bg-background align-top whitespace-normal">
+              <TableCell className="sticky left-0 z-10 border-b bg-background py-3 align-top whitespace-normal">
                 <div className="flex items-start gap-1">
                   {mode === "events" ? (
                     <Button
@@ -233,7 +251,10 @@ export function TagMatrixTable({
                 </div>
               </TableCell>
               {matrix.columns.map((column) => (
-                <TableCell key={column.key} className="border-b p-1 align-top whitespace-normal">
+                <TableCell
+                  key={column.key}
+                  className="border-b px-1 py-2 align-top whitespace-normal"
+                >
                   <MatrixCell
                     auditId={auditId}
                     matrix={matrix}
