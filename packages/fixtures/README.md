@@ -219,3 +219,83 @@ Every other rule for the new sites is as in the baseline, including `hygiene.tag
   digits and nothing but phone punctuation; tokens, not substrings, so `hotel` is not `tel`.
 - The capture engine hides the page before the `end` snapshot, which makes gtag send what it holds; `inspect` does not, so
   it shows fewer GA4 hits than a capture (the held `purchase` under none and gpc, `user_engagement`).
+
+## Releases and scripted flakiness (M6)
+
+Two sites change on purpose so that the compare feature (M6) has audits of one site that differ. Both are
+**in memory on the fixture server and move only by an explicit POST**: loading a page, capturing and the New audit
+preflight never move anything, and restarting the server resets everything to release 0 and epoch 0. Every other
+site is static. An audit that wants a "changed since last time" pair captures, switches, and captures again.
+
+```sh
+curl -X POST 'localhost:4400/_release/drift?to=1'            # switch drift to release 1 (GET reads the current release)
+pnpm --filter @repo/fixtures release drift 1                 # the same, through FIXTURES_PORT (default 4400)
+curl -X POST 'localhost:4400/_flaky/script?site=flaky-meta&verdicts=fail,pass,fail,fail,pass'   # load a script, epoch back to 0
+curl -X POST 'localhost:4400/_flaky/next?site=flaky-meta'    # advance to the next epoch (GET /_flaky/state?site=flaky-meta reads it)
+```
+
+### `drift`: one site, three releases, the same URLs
+
+`/drift/`, `/drift/product` and `/drift/thank-you` always exist. Test IDs per release below; everything not named is
+the `clean` default.
+
+| Release | What the site does                                                                                                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **0**   | Meta fires on load (before any choice); TikTok loads after any choice (accept or reject); the purchase is sent twice; the page URL carries `?email=jane.doe@example.com`; GA4 `G-ZINKO00001`, `view_item` on `/product`; currency `EUR`. |
+| **1**   | Meta only after marketing consent; the purchase is sent once; the email in the URL is **unchanged**; **TikTok removed**; GA4 `G-ZINKO00002` (**destination changed**), `view_item` dropped (**events changed**); currency `eur`. |
+| **2**   | Release 1 with Meta firing on load again (**regressed**) and currency `EUR` again (**fixed**).                                                                                                                  |
+
+Expected rule results per release (scenarios `none`, `accept`, `reject`, `gpc`, desktop, `--block-vendors`; a rule not
+listed is `pass`, n.a. or the baseline's `hygiene.tag-errors` inconclusive, as `clean`):
+
+| Release | Rule                                  | Status | Where                                                                                                    |
+| ------- | ------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
+| 0       | `consent.pixel-without-consent`       | fail   | every page, all four scenarios (Meta `PageView` at about 0.6 s, before the click; under `gpc` the GPC signal was ignored) |
+| 0       | `consent.pixel-after-reject`          | fail   | reject, every page (TikTok loads after the click)                                                        |
+| 0       | `duplicates.purchase-sent-twice`      | fail   | `/thank-you`, all four scenarios                                                                         |
+| 0       | `hygiene.pii-in-hits`                 | fail   | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`)               |
+| 1       | `hygiene.pii-in-hits`                 | fail   | as release 0                                                                                             |
+| 1       | `coverage.invalid-currency`           | fail   | `/thank-you`, all four scenarios (as `bad-currency`)                                                     |
+| 2       | `consent.pixel-without-consent`       | fail   | as release 0                                                                                             |
+| 2       | `hygiene.pii-in-hits`                 | fail   | as release 0                                                                                             |
+
+Release 1 passes `consent.pixel-without-consent`, `consent.pixel-after-reject` and `duplicates.purchase-sent-twice`;
+release 2 passes `coverage.invalid-currency`, `consent.pixel-after-reject` (the only Meta hit is before the click) and
+`duplicates.purchase-sent-twice`.
+
+Tags a capture sees per release (vendor, destination: events; "all" means all four scenarios; events of the Google Ads
+remarketing hit follow `clean`):
+
+| Release | GA4                                                        | Meta `100000000000001`               | TikTok `ZINKOTT0001`            |
+| ------- | ---------------------------------------------------------- | ------------------------------------ | ------------------------------- |
+| 0       | `G-ZINKO00001`: `page_view`, `user_engagement`, `view_item` (`/product`), `purchase` (`/thank-you`), all | all scenarios                        | accept and reject (after click) |
+| 1       | `G-ZINKO00002`: as release 0 without `view_item`, all      | accept only                          | none                            |
+| 2       | `G-ZINKO00002`: as release 1, all                          | all scenarios (before any choice)    | none                            |
+
+Expected compare results per pair of audits of `drift` (each audit captured with the default config, all four scenarios;
+state per rule from `docs/plans/2026-10-28-m6-compare/plan.md`, "State rules"; the `D0` audit exists when D1 to D2 is read):
+
+| Pair    | Fixed                                                                                          | New                         | Regressed                       | Unchanged               | Tag changes                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------- |
+| D0 → D1 | `consent.pixel-without-consent`, `consent.pixel-after-reject`, `duplicates.purchase-sent-twice` | `coverage.invalid-currency` | none                            | `hygiene.pii-in-hits`   | TikTok disappeared; GA4 `G-ZINKO00001` → `G-ZINKO00002`; `view_item` dropped (GA4, and the Ads remarketing hit); Meta gone on none, reject and gpc |
+| D1 → D2 | `coverage.invalid-currency`                                                                    | none                        | `consent.pixel-without-consent` | `hygiene.pii-in-hits`   | Meta appears again on none, reject and gpc; nothing else                                        |
+| D0 → D2 | `consent.pixel-after-reject`, `duplicates.purchase-sent-twice`                                 | none (`coverage.invalid-currency` is not listed: it passes on both sides) | none | `consent.pixel-without-consent`, `hygiene.pii-in-hits` | TikTok disappeared; GA4 destination changed; `view_item` dropped |
+
+Without the `D0` audit (deleted, or not taken) the D1 → D2 regression reads **new**: its only witness is the older audit.
+
+### `flaky-meta`: a verdict that flips between audits
+
+`flaky-meta` is `clean` in an epoch whose verdict is `pass` and `meta-before-consent` in an epoch whose verdict is `fail`
+(Meta `PageView` on load). The verdict comes from a script, **not a counter**: the epoch is the index into the loaded
+list, only `POST /_flaky/next` advances it, and past the end of the list the last verdict stays. With no script loaded
+(and after a restart) the site is in epoch 0 with verdict `pass`.
+
+Script `fail,pass,fail,fail,pass`, expected per epoch (two captures in a row without `next` give the same result):
+
+| Epoch | Verdict | `consent.pixel-without-consent`                    | `consent.pixel-after-reject` | Everything else |
+| ----- | ------- | -------------------------------------------------- | ---------------------------- | --------------- |
+| 0     | fail    | fail, every page, none, accept, reject and gpc     | pass on reject               | as `clean`      |
+| 1     | pass    | pass (n.a. where Meta sends nothing)               | n.a. / pass                  | as `clean`      |
+| 2     | fail    | fail, as epoch 0                                   | pass on reject               | as `clean`      |
+| 3     | fail    | fail, as epoch 0                                   | pass on reject               | as `clean`      |
+| 4     | pass    | pass                                               | n.a. / pass                  | as `clean`      |
