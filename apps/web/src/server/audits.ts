@@ -259,10 +259,8 @@ export const setBaseline = createServerFn({ method: "POST" })
               .limit(1)
               .for("key share")
             if (other === undefined) return yield* new NotFound({ message: "Not found" })
-            if (!other.valid)
-              return yield* new Invalid({
-                message: "The baseline must be an earlier evaluated audit of this site.",
-              })
+            // a newer, narrow or unevaluated audit is as absent as another site's: one answer, a 404
+            if (!other.valid) return yield* new NotFound({ message: "Not found" })
             yield* db
               .update(audit)
               .set({ baselineAuditId: other.id })
