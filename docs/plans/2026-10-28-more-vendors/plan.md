@@ -32,7 +32,7 @@ Source grades: **P** = vendor documentation read for this plan. **S** = secondar
 Facts that shape the rules:
 
 - Snap's auto-made `@-…` dedup ID is not an explicit cross-channel event ID. A rule that only checks "present" would pass a hit that has no explicit ID to pair with a server event. Snap's docs also describe an order-ID fallback for purchases, so the wording says "no explicit event ID", never "cannot be deduplicated".
-- Microsoft is the only one of the five with a per-hit consent flag, so `consent.pixel-without-consent` cannot treat it like Meta: a UET hit with `asc=D` is the vendor honouring denied consent, like a denied Google ping. Needs Task 1 to confirm `asc` exists on the wire.
+- Microsoft may be the only one of the five with a per-hit consent flag. Only if Task 1 passes the consent-semantics gate (Decision 8: the flag exists on the wire and a denied hit sets no identifier cookie and carries no visitor ID) is a UET hit with `asc=D` treated like a denied Google ping; otherwise Microsoft is judged like Meta.
 - LinkedIn and Pinterest set their click-ID cookies themselves; whether a vendor tag stores the ID with no extra setup is exactly what `clickid.cookie-missing` asks, so each vendor's cookie name must be verified before it joins `CLICK_IDS`.
 - Zinko sees the browser side only; the server-side half of every dedup pair is invisible. The wording stays as `dedup.tiktok-eventid-missing` has it.
 
@@ -66,10 +66,13 @@ Task 0 makes capture safe: both engines answer the candidate hosts locally. Task
 
 ### Task 0: Egress and interception for the new hosts (before the spike)
 
+First capture the old baseline: every fixture in the README, `--scenario all --rules --block-vendors`, exact statuses saved under `docs/plans/2026-10-28-more-vendors/baseline/` (status lines only, no hit values). Task 2 and Task 6 diff against this baseline, taken before any production change.
+
+
 The collection copy lists request shapes, not every request to a vendor host. The host list and SDK exceptions know none of the five vendors, so an unlisted path, a matching or sync beacon, or an OPTIONS request would reach the network. Adding a host without its SDK exceptions would instead answer the scripts with 204 and stop the pixel loading.
 
 - Add the candidate hosts (collection hosts and SDK script hosts, see Open question 8) to `apps/browser/src/inject/vendors.json` and its mirror in `packages/capture-contract/src/index.ts`, with the SDK exceptions so the script files still load.
-- Add the candidate collection endpoints to the collection definitions and regenerate the copy. Extend the fixtures inspector (`packages/fixtures/inspect.mjs`) to recognise and print the new vendors and to answer them locally; today it sends them upstream.
+- Do not touch `COLLECTION_ENDPOINTS` or the `Vendor` union here: both change evaluation inputs (`isCollectionRequest` feeds `hygiene.tag-errors`) and belong to the versioned integration boundary (Task 4 with Tasks 5 and 6). Host interception already answers unknown vendor paths locally. Spike-specific endpoint matching, if needed, lives in the scratch capture script, not in production code. Extend the fixtures inspector (`packages/fixtures/inspect.mjs`) to recognise and print the new vendors and to answer them locally; today it sends them upstream.
 - Check Playwright and Scrapling separately. Do not infer parity from the shared JSON file.
 - The candidate list is refined in Task 1 from the dependency URLs actually observed; Task 1 repeats this check with the final list.
 
@@ -123,7 +126,7 @@ In `packages/fixtures/sites.mjs` and `shared/tags.js`, add config keys, all defa
 
 Verify: `node packages/fixtures/inspect.mjs <site> accept` and `reject` for each site (Task 0 made the inspector recognise the vendors); paste the vendor request lines and compare with the Task 2 rows. Re-run the baseline from Task 2 for the old fixtures and diff exact statuses.
 
-Click-ID inventory: `TEST_CLICK_IDS` in `@repo/core/audit` holds only gclid, fbclid and ttclid, and `audit-create.ts`, `page-match.ts` and `compare.ts` use it. Extend it with the supported vendors' IDs in valid synthetic form (a change to what an audit's toggle adds to the URL, so list it in the PR and check page matching and Compare for old audits). If the owner prefers not to, scope the feature instead: the new click IDs are covered only by a manually entered URL, and the plan and README say so.
+Click-ID inventory: `TEST_CLICK_IDS` in `@repo/core/audit` stays unchanged (gclid, fbclid, ttclid). `injectionOf` in `compare.ts` requires every entry of the current inventory, so widening it would change the cell identity of every old injected run (review r2, finding 1). In this plan the new vendors' click IDs are covered only by a manually entered URL that carries them; the README, the New audit hint and `docs/vision.md` say so. Widening the toggle is a later item that first teaches `injectionOf` the exact historical signatures.
 
 ### Task 4: Integration slice (decoders, endpoint copies, exhaustive consumers)
 
@@ -136,7 +139,7 @@ This is one checkable slice: it ends with the full check green. Widening `Vendor
 Decoders:
 
 `packages/decoders`: one file per vendor under `src/providers/`, shaped like `tiktok.ts` and `meta.ts`; add the ids to `Vendor`, the endpoints to `COLLECTION_ENDPOINTS` (decoded: true, with the non-event beacons, like TikTok's `pixel/act`, listed decoded: false), export in `index.ts`. Per hit: `destinationId`, `event` (LinkedIn: `PageView` or `conversion`), `ids` with `eventId` for the dedup ID in every vendor (so the rule is one code path), `ids.clickId`-style keys named per vendor (`lifatid`, `msclkid`, `epik`, `rdtcid`, `sccid`), `ids` for visitor IDs only where the report and digest ignore them, `params.page_location` from the page URL parameter (so `hygiene.pii-in-hits` and `hygiene.location-mismatch` work unchanged), Microsoft `consent.adStorage` from `asc`. Snap: set `ids.eventId` only when `client_dedup_id` does not start with `@-`, and set `ids.autoDedupId = "true"` otherwise so a rule can say why.
-Raise `DECODER_VERSION` to the next free number ("5" now). Build the decoders package, then run `node scripts/engine-endpoints.mjs --write` (in the decoders package) so the engines' copy matches, then format it.
+Raise `DECODER_VERSION` to the next free number ("5" now). The package build runs `tsc` and then fails on a stale endpoint copy, so emit with the compiler only, then write the copy, then format and run the full checks: `pnpm --filter @ovriq/zinko-decoders exec tsc -p tsconfig.build.json && node packages/decoders/scripts/engine-endpoints.mjs --write && pnpm format` (from the repository root; adjust the script path if it resolves relative to the package). Tasks 4, 5 and 6 are one versioned boundary: nothing between them is merged or released under the old `RULES_VERSION`. Remove any provisional coverage for a vendor deferred at the spike.
 
 Verify: `node apps/cli/dist/index.js decode '<hit-url>'` on each GET sample, paste the decoded hit. For a POST sample use the CLI's request-file/HAR input if it has one, else a one-off read-only call of `decode({ url, method, body })`. Then `capture <vendors-clean URL> --scenario accept --block-vendors` shows the five vendors' hits in the output.
 
@@ -168,6 +171,12 @@ Raise `RULES_VERSION` (the next free number at merge time; it is "11" now) once,
 Do not trust this list; derive it. Trace every changed decoder, helper and endpoint consumer, then run every fixture (and the saved captures of the two M3 sites, if available) through the old and new code: decode the stored raw requests with each version's decoder and evaluate with each version's rules. Calling two rule versions on the same pre-decoded hits misses decoder effects. Include a stored capture with an errored and a locally answered request to a new endpoint. List each rule whose status changed on any of them. A rule that only changes on captures with the new hosts is still listed, because a real site can have them. Record the diff in the PR.
 
 Also: hits stored by `persist` before the bump have no rows for the new vendors, and that stays so (Decision 6). Verify with a local audit finished before the change: its draft report, an existing share link and a Compare of old against a fresh audit of the same fixture all still render, the old audit's findings and stored versions are unchanged, and Compare shows the rules-version caveat and the decoder difference rather than new tags as site changes. Publish the final change inventory with the implementation.
+
+### Task 6a: Decoder-aware tag comparison
+
+Today `tagSideOf` (`server/compare-data.ts`) selects no decoder version, `TagRun` carries none and `diffTags` (`lib/tag-diff.ts`) compares stored triples only, so a tag that appears only because recognition widened shows as "New" in Compare and in the report's What changed (review r2, finding 2). Carry each run's decoder version into `TagRun`. When the two sides' decoder versions differ, a tag of a vendor the older decoder could not recognise is not a change: leave it out of the diff and count it under the existing decoder-difference notice ("n tags are new only because this version recognises more vendors"). Apply the same filter before `report-changes.ts` builds What changed. If this needs a new report field or notice value, raise `REPORT_MODEL_VERSION` with an `UPGRADES` step and a `LEAF_VALIDATORS` entry, and Task 8's no-model-change assumption no longer holds.
+
+Verify: an unchanged fixture captured under the old and new decoder shows no new tags (only the notice); a genuine tag addition with equal decoder versions still shows as New, in Compare and in a draft report.
 
 ### Task 7: UI vendor labels
 
@@ -207,7 +216,7 @@ Update `docs/vision.md` (decoders, the vendor table, the "LinkedIn decoder: plan
 
 1. **Wire shapes (Tasks 1, 2).** Pinterest, Reddit and Snap endpoints, all dedup parameter names except Snap's `client_dedup_id` and Microsoft's `event_id`/`eventId`, and the click-ID cookie names are not confirmed by a vendor document I could open. Search found no primary text for `alb.reddit.com`, `rp.gif`, `ct.pinterest.com/v3` or `tr.snapchat.com/p`; Reddit's help page and API docs returned 404 or were blocked. Task 1 decides.
 2. **`asc`.** Only one CMP vendor's guide names it. If the real tag sends something else (or nothing, and consent is expressed only by whether the tag loads), Microsoft is judged like Meta and the `uet-consent-denied` fixture is dropped.
-3. **LinkedIn browser-side dedup.** LinkedIn's CAPI schema has `eventId` "used for deduplication" and points to a deduplication page I did not read. The browser field may be in `lintrk('track', {conversion_id, event_id})` or may not exist for the Insight Tag at all. If it does not exist, LinkedIn leaves `dedup.ad-pixel-eventid-missing`.
+3. **LinkedIn browser-side dedup.** LinkedIn's CAPI schema has `eventId` "used for deduplication" and points to a deduplication page I did not read. The browser field may be in `lintrk('track', {conversion_id, event_id})` or may not exist for the Insight Tag at all. If it does not exist, `dedup.linkedin-eventid-missing` is not built.
 4. **Label for GA4.** The matrix says "Google Analytics 4"; everything else says "GA4". Unify on "GA4", or keep the long name in the matrix only? Also: can `@repo/rules` import `VENDOR_LABELS` from `@repo/llm`, or should the label map move into `@ovriq/zinko-decoders` (it owns the `Vendor` type, and both already depend on it)? Prefer the decoders package; needs the owner's call because it is a public package name.
 5. **Old audits.** Settled: Decision 6, no backfill.
 6. **One dedup rule or five.** Settled: Decision 3, per vendor.
@@ -234,3 +243,11 @@ Secondary: [Clickio on UET consent](https://docs.clickio.com/books/clickio-conse
 9. Per-vendor capability gates and valid synthetic IDs (Decision 8, Task 1); replay never replaces discovery; Snap wording softened; Microsoft `asc` exemption conditional.
 10. No backfill (Decision 6); Task 6 verifies old drafts, shares and old-vs-new Compare.
 11. Spike time-boxed with an exit list and re-estimate; Task 4 is one integration slice; build order and POST decoding stated; effort estimate added; verification uses local data only.
+
+## Changes after review r2
+
+1. Cell identity: `TEST_CLICK_IDS` stays unchanged; new click IDs only through manual URLs (Task 3).
+2. Decoder-aware tag comparison: new Task 6a, with a report model bump if it needs a field.
+3. Version boundary: baseline captured first in Task 0; Task 0 changes only host interception, SDK exceptions and the inspector; endpoints and `Vendor` move to the Task 4–6 boundary; deferred vendors leave no coverage.
+4. Decoder build: compiler-only emit, then the writer, then format.
+5. Editorial: the Microsoft consent sentence is conditional on the gate; the obsolete combined rule name is gone.
