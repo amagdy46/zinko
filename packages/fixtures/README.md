@@ -239,47 +239,47 @@ curl -X POST 'localhost:4400/_flaky/next?site=flaky-meta'    # advance to the ne
 `/drift/`, `/drift/product` and `/drift/thank-you` always exist. Test IDs per release below; everything not named is
 the `clean` default.
 
-| Release | What the site does                                                                                                                                                                                           |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Release | What the site does                                                                                                                                                                                                                       |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **0**   | Meta fires on load (before any choice); TikTok loads after any choice (accept or reject); the purchase is sent twice; the page URL carries `?email=jane.doe@example.com`; GA4 `G-ZINKO00001`, `view_item` on `/product`; currency `EUR`. |
-| **1**   | Meta only after marketing consent; the purchase is sent once; the email in the URL is **unchanged**; **TikTok removed**; GA4 `G-ZINKO00002` (**destination changed**), `view_item` dropped (**events changed**); currency `eur`. |
-| **2**   | Release 1 with Meta firing on load again (**regressed**) and currency `EUR` again (**fixed**).                                                                                                                  |
+| **1**   | Meta only after marketing consent; the purchase is sent once; the email in the URL is **unchanged**; **TikTok removed**; GA4 `G-ZINKO00002` (**destination changed**), `view_item` dropped (**events changed**); currency `eur`.         |
+| **2**   | Release 1 with Meta firing on load again (**regressed**) and currency `EUR` again (**fixed**).                                                                                                                                           |
 
 Expected rule results per release (scenarios `none`, `accept`, `reject`, `gpc`, desktop, `--block-vendors`; a rule not
 listed is `pass`, n.a. or the baseline's `hygiene.tag-errors` inconclusive, as `clean`):
 
-| Release | Rule                                  | Status | Where                                                                                                    |
-| ------- | ------------------------------------- | ------ | -------------------------------------------------------------------------------------------------------- |
-| 0       | `consent.pixel-without-consent`       | fail   | every page, all four scenarios (Meta `PageView` at about 0.6 s, before the click; under `gpc` the GPC signal was ignored) |
-| 0       | `consent.pixel-after-reject`          | fail   | reject, every page (TikTok loads after the click)                                                        |
-| 0       | `duplicates.purchase-sent-twice`      | fail   | `/thank-you`, all four scenarios                                                                         |
-| 0       | `hygiene.pii-in-hits`                 | fail   | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`)               |
-| 1       | `hygiene.pii-in-hits`                 | fail   | as release 0                                                                                             |
-| 1       | `coverage.invalid-currency`           | fail   | `/thank-you`, all four scenarios (as `bad-currency`)                                                     |
-| 2       | `consent.pixel-without-consent`       | fail   | as release 0                                                                                             |
-| 2       | `hygiene.pii-in-hits`                 | fail   | as release 0                                                                                             |
+| Release | Rule                             | Status | Where                                                                                                                     |
+| ------- | -------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------- |
+| 0       | `consent.pixel-without-consent`  | fail   | every page, all four scenarios (Meta `PageView` at about 0.6 s, before the click; under `gpc` the GPC signal was ignored) |
+| 0       | `consent.pixel-after-reject`     | fail   | reject, every page (TikTok loads after the click)                                                                         |
+| 0       | `duplicates.purchase-sent-twice` | fail   | `/thank-you`, all four scenarios                                                                                          |
+| 0       | `hygiene.pii-in-hits`            | fail   | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`)                                |
+| 1       | `hygiene.pii-in-hits`            | fail   | as release 0                                                                                                              |
+| 1       | `coverage.invalid-currency`      | fail   | `/thank-you`, all four scenarios (as `bad-currency`)                                                                      |
+| 2       | `consent.pixel-without-consent`  | fail   | as release 0                                                                                                              |
+| 2       | `hygiene.pii-in-hits`            | fail   | as release 0                                                                                                              |
 
 Release 1 passes `consent.pixel-without-consent`, `consent.pixel-after-reject` and `duplicates.purchase-sent-twice`;
 release 2 passes `coverage.invalid-currency`, `consent.pixel-after-reject` (the only Meta hit is before the click) and
 `duplicates.purchase-sent-twice`.
 
 Tags a capture sees per release (vendor, destination: events; "all" means all four scenarios; events of the Google Ads
-remarketing hit follow `clean`):
+remarketing hit, event `remarketing`, follow `clean` and do not change between releases; TikTok `Pageview`, plus `ViewContent` and `Purchase` on the page that has them):
 
-| Release | GA4                                                        | Meta `100000000000001`               | TikTok `ZINKOTT0001`            |
-| ------- | ---------------------------------------------------------- | ------------------------------------ | ------------------------------- |
-| 0       | `G-ZINKO00001`: `page_view`, `user_engagement`, `view_item` (`/product`), `purchase` (`/thank-you`), all | all scenarios                        | accept and reject (after click) |
-| 1       | `G-ZINKO00002`: as release 0 without `view_item`, all      | accept only                          | none                            |
-| 2       | `G-ZINKO00002`: as release 1, all                          | all scenarios (before any choice)    | none                            |
+| Release | GA4                                                                                                      | Meta `100000000000001`            | TikTok `ZINKOTT0001`            |
+| ------- | -------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------------------- |
+| 0       | `G-ZINKO00001`: `page_view`, `user_engagement`, `view_item` (`/product`), `purchase` (`/thank-you`), all | all scenarios                     | accept and reject (after click) |
+| 1       | `G-ZINKO00002`: as release 0 without `view_item`, all                                                    | accept only                       | none                            |
+| 2       | `G-ZINKO00002`: as release 1, all                                                                        | all scenarios (before any choice) | none                            |
 
 Expected compare results per pair of audits of `drift` (each audit captured with the default config, all four scenarios;
 state per rule from `docs/plans/2026-10-28-m6-compare/plan.md`, "State rules"; the `D0` audit exists when D1 to D2 is read):
 
-| Pair    | Fixed                                                                                          | New                         | Regressed                       | Unchanged               | Tag changes                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------- | ----------------------- | ----------------------------------------------------------------------------------------------- |
-| D0 → D1 | `consent.pixel-without-consent`, `consent.pixel-after-reject`, `duplicates.purchase-sent-twice` | `coverage.invalid-currency` | none                            | `hygiene.pii-in-hits`   | TikTok disappeared; GA4 `G-ZINKO00001` → `G-ZINKO00002`; `view_item` dropped (GA4, and the Ads remarketing hit); Meta gone on none, reject and gpc |
-| D1 → D2 | `coverage.invalid-currency`                                                                    | none                        | `consent.pixel-without-consent` | `hygiene.pii-in-hits`   | Meta appears again on none, reject and gpc; nothing else                                        |
-| D0 → D2 | `consent.pixel-after-reject`, `duplicates.purchase-sent-twice`                                 | none (`coverage.invalid-currency` is not listed: it passes on both sides) | none | `consent.pixel-without-consent`, `hygiene.pii-in-hits` | TikTok disappeared; GA4 destination changed; `view_item` dropped |
+| Pair    | Fixed                                                                                           | New                                                                       | Regressed                       | Unchanged                                              | Tag changes                                                                                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ------------------------------- | ------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| D0 → D1 | `consent.pixel-without-consent`, `consent.pixel-after-reject`, `duplicates.purchase-sent-twice` | `coverage.invalid-currency`                                               | none                            | `hygiene.pii-in-hits`                                  | TikTok disappeared; GA4 `G-ZINKO00001` → `G-ZINKO00002`; `view_item` dropped (GA4 only: the Ads hit is `remarketing` with or without it); Meta gone on none, reject and gpc |
+| D1 → D2 | `coverage.invalid-currency`                                                                     | none                                                                      | `consent.pixel-without-consent` | `hygiene.pii-in-hits`                                  | Meta appears again on none, reject and gpc; nothing else                                                                                                                    |
+| D0 → D2 | `consent.pixel-after-reject`, `duplicates.purchase-sent-twice`                                  | none (`coverage.invalid-currency` is not listed: it passes on both sides) | none                            | `consent.pixel-without-consent`, `hygiene.pii-in-hits` | TikTok disappeared; GA4 destination changed; `view_item` dropped                                                                                                            |
 
 Without the `D0` audit (deleted, or not taken) the D1 → D2 regression reads **new**: its only witness is the older audit.
 
@@ -292,10 +292,16 @@ list, only `POST /_flaky/next` advances it, and past the end of the list the las
 
 Script `fail,pass,fail,fail,pass`, expected per epoch (two captures in a row without `next` give the same result):
 
-| Epoch | Verdict | `consent.pixel-without-consent`                    | `consent.pixel-after-reject` | Everything else |
-| ----- | ------- | -------------------------------------------------- | ---------------------------- | --------------- |
-| 0     | fail    | fail, every page, none, accept, reject and gpc     | pass on reject               | as `clean`      |
-| 1     | pass    | pass (n.a. where Meta sends nothing)               | n.a. / pass                  | as `clean`      |
-| 2     | fail    | fail, as epoch 0                                   | pass on reject               | as `clean`      |
-| 3     | fail    | fail, as epoch 0                                   | pass on reject               | as `clean`      |
-| 4     | pass    | pass                                               | n.a. / pass                  | as `clean`      |
+| Epoch | Verdict | `consent.pixel-without-consent`                | `consent.pixel-after-reject` | Everything else |
+| ----- | ------- | ---------------------------------------------- | ---------------------------- | --------------- |
+| 0     | fail    | fail, every page, none, accept, reject and gpc | pass on reject               | as `clean`      |
+| 1     | pass    | pass (n.a. where Meta sends nothing)           | n.a. / pass                  | as `clean`      |
+| 2     | fail    | fail, as epoch 0                               | pass on reject               | as `clean`      |
+| 3     | fail    | fail, as epoch 0                               | pass on reject               | as `clean`      |
+| 4     | pass    | pass                                           | n.a. / pass                  | as `clean`      |
+
+Verified 2026-10-28 with `node apps/cli/dist/index.js capture <url> --scenario all --rules --block-vendors` on a private
+fixture server (`FIXTURES_PORT=4450`) against the shared engine: all three pages of `drift` at releases 0, 1 and 2 and the
+home page of `flaky-meta` over the script `fail,pass,fail,fail,pass` match the tables above (two captures in a row inside
+one epoch gave the same result), and `clean` (three pages), `meta-before-consent`, `bad-currency` and `multiple-ga4` are
+unchanged. `hygiene.tag-errors` is inconclusive everywhere, as the baseline.

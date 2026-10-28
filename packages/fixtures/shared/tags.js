@@ -2,7 +2,7 @@
 ;(() => {
   const cfg = window.zinkoConfig
   const ID = {
-    ga4: "G-ZINKO00001",
+    ga4: cfg.ga4Id ?? "G-ZINKO00001",
     ga4Second: "G-ZINKO00002",
     meta: "100000000000001",
     ads: "AW-100000001",
@@ -63,7 +63,7 @@
     gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
     if (cfg.consentDefault === "late") gtag("consent", "default", denied)
 
-    if (cfg.page === "product") {
+    if (cfg.page === "product" && cfg.productViewItem !== false) {
       gtag("event", "view_item", {
         currency: "EUR",
         value: 49.9,

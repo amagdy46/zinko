@@ -59,4 +59,26 @@ export const sites = {
   "consent-mode-basic": { googleLoad: "consent" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },
+  // Changes between audits only through an explicit POST (/_release, /_flaky); see README "Releases and scripted flakiness".
+  drift: {
+    releases: [
+      { meta: "immediate", tiktok: "after-choice", purchase: "twice", piiInUrl: true },
+      {
+        meta: "consent",
+        tiktok: "off",
+        piiInUrl: true,
+        ga4Id: "G-ZINKO00002",
+        productViewItem: false,
+        currency: "eur",
+      },
+      {
+        meta: "immediate",
+        tiktok: "off",
+        piiInUrl: true,
+        ga4Id: "G-ZINKO00002",
+        productViewItem: false,
+      },
+    ],
+  },
+  "flaky-meta": { flaky: { fail: { meta: "immediate" }, pass: {} } },
 }

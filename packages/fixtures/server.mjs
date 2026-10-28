@@ -22,6 +22,73 @@ const staticFiles = {
   ],
 }
 
+// Sites that change between audits keep their state here, so only an explicit POST moves them and a restart resets them.
+const releaseOf = new Map()
+const flakyOf = new Map()
+
+function flagsOf(name) {
+  const { releases, flaky, ...own } = sites[name]
+  let flags = { ...defaults, ...own }
+  if (releases) flags = { ...flags, ...releases[releaseOf.get(name) ?? 0] }
+  if (flaky) flags = { ...flags, ...flaky[flakyVerdict(name)] }
+  return flags
+}
+
+function flakyVerdict(name) {
+  const { verdicts, epoch } = flakyOf.get(name) ?? { verdicts: ["pass"], epoch: 0 }
+  return verdicts[Math.min(epoch, verdicts.length - 1)]
+}
+
+function sendJson(res, status, body) {
+  send(res, status, { "content-type": "application/json" }, JSON.stringify(body))
+}
+
+function handleControl(req, res, url) {
+  const path = url.pathname
+  const site = path.startsWith("/_release/")
+    ? path.slice("/_release/".length)
+    : url.searchParams.get("site")
+  const kind = path.startsWith("/_release/") ? "releases" : "flaky"
+  if (!site || !Object.hasOwn(sites, site) || !sites[site][kind]) {
+    return sendJson(res, 404, {
+      error: `no ${kind === "releases" ? "release" : "flaky"} site ${site}`,
+    })
+  }
+  const state = () =>
+    kind === "releases"
+      ? { site, release: releaseOf.get(site) ?? 0, releases: sites[site].releases.length }
+      : {
+          site,
+          ...(flakyOf.get(site) ?? { verdicts: ["pass"], epoch: 0 }),
+          verdict: flakyVerdict(site),
+        }
+
+  if (req.method === "GET" && (kind === "releases" || path === "/_flaky/state")) {
+    return sendJson(res, 200, state())
+  }
+  if (req.method !== "POST") return sendJson(res, 405, { error: "use POST to change state" })
+
+  if (kind === "releases") {
+    const to = Number(url.searchParams.get("to"))
+    if (!Number.isInteger(to) || to < 0 || to >= sites[site].releases.length) {
+      return sendJson(res, 400, { error: `?to= must be 0 to ${sites[site].releases.length - 1}` })
+    }
+    releaseOf.set(site, to)
+  } else if (path === "/_flaky/script") {
+    const verdicts = (url.searchParams.get("verdicts") ?? "").split(",")
+    if (!verdicts.every((verdict) => verdict === "pass" || verdict === "fail")) {
+      return sendJson(res, 400, { error: "?verdicts= is a comma list of pass and fail" })
+    }
+    flakyOf.set(site, { verdicts, epoch: 0 })
+  } else if (path === "/_flaky/next") {
+    const current = flakyOf.get(site) ?? { verdicts: ["pass"], epoch: 0 }
+    flakyOf.set(site, { ...current, epoch: current.epoch + 1 })
+  } else {
+    return sendJson(res, 404, { error: "not found" })
+  }
+  return sendJson(res, 200, state())
+}
+
 function send(res, status, headers, body) {
   res.writeHead(status, { "cache-control": "no-store", ...headers })
   res.end(body)
@@ -41,6 +108,10 @@ function handle(req, res) {
       { "content-type": "text/html; charset=utf-8" },
       `<h1>Zinko fixtures</h1><ul>${links}</ul>`,
     )
+  }
+
+  if (path.startsWith("/_release/") || path.startsWith("/_flaky/")) {
+    return handleControl(req, res, url)
   }
 
   if (path === "/r") {
@@ -83,7 +154,7 @@ function handle(req, res) {
   if (!Object.hasOwn(sites, name) || extra.length > 0) {
     return send(res, 404, { "content-type": "text/plain" }, "not found")
   }
-  const flags = { ...defaults, ...sites[name] }
+  const flags = flagsOf(name)
 
   if (rest === "go" && flags.adEntry) {
     return send(res, 302, { location: `/r?to=${encodeURIComponent(`/${name}/`)}` }, "")

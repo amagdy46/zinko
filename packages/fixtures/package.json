@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "serve": "node server.mjs",
-    "inspect": "node inspect.mjs"
+    "inspect": "node inspect.mjs",
+    "release": "node release.mjs"
   },
   "dependencies": {
     "@repo/capture-contract": "workspace:*"

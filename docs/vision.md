@@ -228,6 +228,18 @@ Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/p
 | Entry-point registry and mutation gate | `scripts/check-entry-points.mjs` (run by `pnpm check`, TypeScript 7 compiler API, syntax only, fail-closed) checks `ENTRY_POINTS` (`server/entry-points.ts`), per-route `<name>Meta` (path, methods, access) and `RUNTIME_ALLOWED`; every state-changing server function runs through `mutation` (the demo mode refuses there), no Effect runs outside the allowed files | built (M6 Task 15) |
 | Self-host guide, public demo | Deploy preparation offline first (image build without sudo, run locally, stage isolation), the real deploy only after the owner approves the account and budget; `docs/self-hosting.md` marked unverified until then. A local demo seed from the `drift` fixture; a hosted read-only demo (explicit mutation gate, deny-by-default auth, no capture engine) only if the owner decides to host one | planned |
 
+**Baseline numbers for compare (M6 Task 2, measured 2026-10-28 on unchanged code).** Synthetic stress data, not a real capture: `seed-max.sql` (one audit of 168 runs, 226,918 hits, 10,428 check results, 66 findings) plus `docs/plans/2026-10-28-m6-compare/seed-compare.sql`, which adds a CURRENT audit (copy of the baseline: 168 runs, 221,214 hits, 10,428 check results, 66 findings) and an OLDER audit (168 runs, 10,428 check results, no hits) of the same site and flips six rules between baseline and current (`syn.rule-01` and `-02` fixed, `-03` and `-04` new, `-05` regressed through the older audit, `-06` verdict changed), removes the tag `SYNTT0032`, changes the destination `G-SYN000000` to `G-SYN000900` and puts three accepted risks on both audits. Expected counts are in the script's header and matched what it printed. Local Postgres 18 (database `zinko_m6_x`), dev server, warm, one warm-up call dropped, then 20 calls of the serialized server-function response over HTTP with a session cookie (`GET /_serverFn/...`); p95 is the nearest rank (the 19th of 20); latency is the whole round trip. On the CURRENT audit:
+
+| Call | p50 | p95 | max | Response |
+|---|---|---|---|---|
+| `getOverview` | 172 ms | 183 ms | 200 ms | 24.6 KB |
+| `listFindings` (the Findings tab) | 67 ms | 78 ms | 86 ms | 194.4 KB |
+| `getReportDraft` | 394 ms | 418 ms | 422 ms | 162.9 KB |
+| `publishReport`, model unchanged (reuses the latest version) | 396 ms | 430 ms | 434 ms | 0.3 KB |
+| `publishReport`, a new version each call (the summary edited between calls) | 395 ms | 414 ms | 454 ms | 0.3 KB |
+
+On the BASELINE audit (same data without the flips): `getOverview` 161 / 171 ms, `listFindings` 59 / 65 ms, `getReportDraft` 389 / 438 ms, `publishReport` 386 / 426 ms (reuse) and 388 / 427 ms (new version). Two things to carry into Tasks 10, 11 and 12: the unchanged report draft is **already 162.9 KB** against the 165 KB budget for the draft with `changes`, so `changes` must fit in about 2 KB or the budget moves (decide in Task 11, measured); and publishing costs about the same as building the draft (the model build dominates), so `publishReport` with `changes` should be read against the 1800 ms / 2800 ms targets with that in mind.
+
 ### v0.2: configured vs fired, funnels
 
 | Feature | How we build it | Status |
