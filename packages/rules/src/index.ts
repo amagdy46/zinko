@@ -6,6 +6,7 @@ import { lostOnRedirect } from "./rules/clickids/lost-on-redirect.js"
 import { cookiesWithoutConsent } from "./rules/consent/cookies-without-consent.js"
 import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
+import { modeV2Incomplete } from "./rules/consent/mode-v2-incomplete.js"
 import { pixelAfterReject } from "./rules/consent/pixel-after-reject.js"
 import { pixelWithoutConsent } from "./rules/consent/pixel-without-consent.js"
 import { invalidCurrency } from "./rules/coverage/invalid-currency.js"
@@ -13,11 +14,13 @@ import { noPageView } from "./rules/coverage/no-page-view.js"
 import { purchaseMissingFields } from "./rules/coverage/purchase-missing-fields.js"
 import { metaEventIdMissing } from "./rules/dedup/meta-eventid-missing.js"
 import { metaEventIdReused } from "./rules/dedup/meta-eventid-reused.js"
+import { tiktokEventIdMissing } from "./rules/dedup/tiktok-eventid-missing.js"
 import { metaLoadedTwice } from "./rules/duplicates/meta-loaded-twice.js"
 import { multipleGa4Ids } from "./rules/duplicates/multiple-ga4-ids.js"
 import { purchaseSentTwice } from "./rules/duplicates/purchase-sent-twice.js"
 import { locationMismatch } from "./rules/hygiene/location-mismatch.js"
 import { piiInHits } from "./rules/hygiene/pii-in-hits.js"
+import { previewOrDebugLeak } from "./rules/hygiene/preview-or-debug-leak.js"
 import { tagErrors } from "./rules/hygiene/tag-errors.js"
 import type { CheckResult, Rule, RunInput } from "./types.js"
 
@@ -32,7 +35,7 @@ export { scrubPersonalData } from "./personal-data.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "3"
+export const RULES_VERSION = "4"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -40,6 +43,7 @@ export const rules: readonly Rule[] = [
   pixelAfterReject,
   googleWithoutDeniedState,
   defaultAfterTag,
+  modeV2Incomplete,
   cookieMissing,
   lostOnRedirect,
   lostAcrossNavigation,
@@ -51,9 +55,11 @@ export const rules: readonly Rule[] = [
   metaLoadedTwice,
   metaEventIdMissing,
   metaEventIdReused,
+  tiktokEventIdMissing,
   piiInHits,
   tagErrors,
   locationMismatch,
+  previewOrDebugLeak,
 ]
 
 const byId = new Map(rules.map((rule) => [rule.id, rule]))
