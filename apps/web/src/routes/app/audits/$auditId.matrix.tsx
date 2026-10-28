@@ -3,6 +3,7 @@ import { CircleHelp } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
 import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { SectionHeading } from "@/components/section-heading"
 import { MatrixControls, TagMatrixTable, TagPager } from "@/components/tag-matrix"
 import { count } from "@/lib/format"
 import { type MatrixView, matrixView, TAGS_PER_PAGE } from "@/lib/tag-matrix"
@@ -124,21 +125,19 @@ function TagMatrixScreen() {
   })()
   return (
     <div className="min-w-0 space-y-4">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 className="text-base font-medium">
-            {view.mode === "events"
-              ? "Which tags fired, on which events"
-              : "Observed consent state before and after the choice"}
-          </h2>
-          <p className="max-w-prose text-sm text-muted-foreground">
-            {view.mode === "events"
-              ? "Each cell counts the requests the page sent for a tag."
-              : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."}
-          </p>
-        </div>
-        {showsTable ? <Legend mode={view.mode} /> : null}
-      </div>
+      <SectionHeading
+        title={
+          view.mode === "events"
+            ? "Which tags fired, on which events"
+            : "Observed consent state before and after the choice"
+        }
+        description={
+          view.mode === "events"
+            ? "Each cell counts the requests the page sent for a tag."
+            : "The consent state each tag's hits carried, split at the visitor's choice. An update is never inferred from the choice completing."
+        }
+        actions={showsTable ? <Legend mode={view.mode} /> : undefined}
+      />
       <MatrixControls matrix={matrix} mode={view.mode} onChange={change} />
       {body}
     </div>
