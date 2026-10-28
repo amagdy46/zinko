@@ -1,5 +1,6 @@
 import { authRoute } from "./auth-route"
 import { auditRoomRoute } from "./audit-room-route"
+import { registerRoute } from "./register-route"
 import { reportRoute } from "./report-route"
 import { storageRoute } from "./storage-route"
 /** Handles a request outside the TanStack router (WebSocket upgrades, file downloads), or returns undefined. */
@@ -11,4 +12,5 @@ export const workerRoutes: ReadonlyArray<WorkerRoute> = [
   auditRoomRoute,
   storageRoute,
   reportRoute,
+  registerRoute,
 ]

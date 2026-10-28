@@ -1,7 +1,7 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronLeft, ChevronRight, ListFilter } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lucide-react"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { SeverityMark } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
@@ -232,6 +232,12 @@ function FindingsScreen() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Button asChild variant="outline" size="sm">
+                  <a href={`/api/audits/${audit.id}/register.csv`} download>
+                    <Download aria-hidden="true" />
+                    Export CSV
+                  </a>
+                </Button>
                 {filtered ? (
                   <Button
                     variant="ghost"

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
-import { Printer } from "lucide-react"
+import { Download, Printer } from "lucide-react"
 import { useState } from "react"
 import { EmptyState } from "@/components/empty-state"
 import {
@@ -68,6 +68,12 @@ function ReportScreen() {
         <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
           <Printer />
           Save as PDF
+        </Button>
+        <Button asChild variant="outline" size="sm">
+          <a href={`/api/audits/${auditId}/register.csv`} download>
+            <Download />
+            Export CSV
+          </a>
         </Button>
         {draft.canManageBranding ? (
           <Link
