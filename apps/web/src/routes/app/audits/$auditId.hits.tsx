@@ -28,11 +28,14 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { scenarioLabel } from "@/lib/audit-labels"
 import { searchText, searchValues } from "@/lib/hits-filter"
 import { hasClickIds, runPageLabel } from "@/lib/page-label"
+import { sharePending } from "@/lib/share-pending"
 import { consentWords, vendorName } from "@/lib/tag-matrix"
 import { selectableRow } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
-import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
+import { getHitDetail as fetchHitDetail, listHitFilters, listTimeline } from "@/server/hits"
+
+const getHitDetail = sharePending(fetchHitDetail)
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
 
@@ -682,6 +685,10 @@ function Timeline({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const runs = useMemo(() => new Map(first.runs.map((r) => [r.id, r])), [first.runs])
   const rows = useMemo(() => buildRows(items, runs, cursor === null), [items, runs, cursor])
+  // hits and dataLayer pushes, the two kinds the list interleaves, as the filters leave them
+  const matched =
+    (filterData.source === "dataLayer" ? 0 : first.counts.hits.matched) +
+    (filterData.source === "network" ? 0 : first.counts.pushes.matched)
   const shown = selected ?? (pinned && hitKey(pinned)) ?? ""
   const lastShown = useRef(shown)
   useEffect(() => {
@@ -756,7 +763,7 @@ function Timeline({
         </p>
         <div className="scroll-edges max-h-[70svh] overflow-auto rounded-lg border">
           <table
-            className="group/timeline w-full text-left font-mono text-xs"
+            className="group/timeline w-full text-left text-xs"
             data-testid="timeline"
             data-pane={paneOpen ? "open" : "closed"}
           >
@@ -856,7 +863,7 @@ function Timeline({
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span data-testid="timeline-count">
-            {thousands(items.length)} {items.length === 1 ? "item" : "items"} loaded
+            {thousands(items.length)} of {thousands(matched)} items loaded
           </span>
           {cursor === null ? null : (
             <Button variant="outline" size="sm" disabled={loading} onClick={() => void more()}>
@@ -941,12 +948,18 @@ function RunCell({
 }) {
   if (singleRun) return null
   return (
-    <td
-      className={cn(cellBase, "max-w-36 truncate text-muted-foreground md:max-w-56")}
-      title={run === undefined ? undefined : runTitle(run)}
-    >
-      #{ordinal + 1}
-      {run === undefined ? "" : ` ${runPageLabel(run)} · ${scenarioLabel(run.scenario)}`}
+    <td className={cn(cellBase, "text-muted-foreground")}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="block max-w-36 truncate md:max-w-56">
+            #{ordinal + 1}
+            {run === undefined ? "" : ` ${runPageLabel(run)} · ${scenarioLabel(run.scenario)}`}
+          </span>
+        </TooltipTrigger>
+        {run === undefined ? null : (
+          <TooltipContent className="max-w-80 break-words">{runTitle(run)}</TooltipContent>
+        )}
+      </Tooltip>
     </td>
   )
 }
@@ -974,16 +987,18 @@ function HitRow({
       data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
-      className={cn("h-7 border-t max-md:h-9", selectableRow)}
+      className={cn("h-8 border-t max-md:h-9", selectableRow)}
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
-      <td className={cn(cellBase, "hidden tabular-nums md:table-cell")}>{thousands(item.at)} ms</td>
+      <td className={cn(cellBase, "hidden font-mono tabular-nums md:table-cell")}>
+        {thousands(item.at)} ms
+      </td>
       <td className={cellBase}>{vendorName(item.vendor)}</td>
-      <td className={cellBase}>
+      <td className="p-0 whitespace-nowrap">
         <button
           type="button"
           title={item.event}
-          className="block max-w-40 truncate text-left font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="block h-8 max-w-40 truncate px-2 text-left font-mono leading-8 font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onSelect}
         >
           {item.event}
@@ -999,10 +1014,13 @@ function HitRow({
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
         <ConsentText consent={item.consent} />
       </td>
-      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>{item.destinationId}</td>
+      <td className={cn(cellBase, "hidden font-mono md:table-cell", paneHidden)}>
+        {item.destinationId}
+      </td>
       <td
+        title={preview(item)}
         className={cn(
-          "hidden max-w-0 truncate px-2 py-0 text-muted-foreground 2xl:table-cell",
+          "hidden max-w-0 truncate px-2 py-0 font-mono text-muted-foreground 2xl:table-cell",
           paneHidden,
         )}
       >
@@ -1043,21 +1061,24 @@ function PushRow({
       data-selected={isSelected}
       onClick={onSelect}
       className={cn(
-        "h-7 border-t text-muted-foreground max-md:h-9",
+        "h-8 border-t text-muted-foreground max-md:h-9",
         selectableRow,
         isSelected && "text-foreground",
       )}
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
-      <td className={cn(cellBase, "hidden tabular-nums md:table-cell")}>
+      <td className={cn(cellBase, "hidden font-mono tabular-nums md:table-cell")}>
         {group ? `${thousands(item.at)}–${thousands(group.to)} ms` : `${thousands(item.at)} ms`}
       </td>
       <td className={cellBase}>dataLayer</td>
-      <td className={cn(cellBase, nested && "pl-5")}>
+      <td className="p-0 whitespace-nowrap">
         <button
           type="button"
           aria-expanded={group?.open}
-          className="inline-flex items-center gap-1 text-left outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className={cn(
+            "inline-flex h-8 items-center gap-1 px-2 text-left font-mono outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            nested && "pl-5",
+          )}
           onClick={(event) => {
             event.stopPropagation()
             onSelect()
@@ -1076,7 +1097,10 @@ function PushRow({
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
-      <td className={cn("hidden max-w-0 truncate px-2 py-0 2xl:table-cell", paneHidden)}>
+      <td
+        title={preview(item)}
+        className={cn("hidden max-w-0 truncate px-2 py-0 font-mono 2xl:table-cell", paneHidden)}
+      >
         {preview(item)}
       </td>
     </tr>

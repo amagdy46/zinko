@@ -9,7 +9,6 @@ import {
   decodeHitColumns,
   type HitConsent,
   hitWithRequest,
-  type Ids,
   type Params,
   readCapture,
   runInAudit,
@@ -56,16 +55,12 @@ type TimelineItem =
       ordinal: number
       requestId: string
       batchIndex: number
-      documentId: string
       at: number
       vendor: string
       destinationId: string
       event: string
       params: typeof Params.Type
-      ids: typeof Ids.Type
       consent: typeof HitConsent.Type
-      host: string
-      url: string
       blocked: boolean
       status: number | null
       afterConsentAction: boolean
@@ -75,10 +70,23 @@ type TimelineItem =
       runId: string
       ordinal: number
       seq: number
-      documentId: string
       at: number
       value: Schema.Json
     }
+
+/** The row shows only the first few parameters, clipped; the detail loads the rest by hit. */
+const PREVIEW_PARAMS = 4
+const PREVIEW_CHARS = 120
+
+const previewOf = (params: typeof Params.Type): typeof Params.Type =>
+  Object.fromEntries(
+    Object.entries(params)
+      .slice(0, PREVIEW_PARAMS)
+      .map(([name, value]) => [
+        name,
+        typeof value === "string" ? value.slice(0, PREVIEW_CHARS) : value,
+      ]),
+  )
 
 const tupleOf = (item: TimelineItem): Cursor =>
   item.kind === "hit"
@@ -203,7 +211,6 @@ export const listTimeline = createServerFn({ method: "GET" })
                   ordinal: run.ordinal,
                   requestId: hit.requestId,
                   batchIndex: hit.batchIndex,
-                  documentId: hit.documentId,
                   at: hit.at,
                   vendor: hit.vendor,
                   destinationId: hit.destinationId,
@@ -211,8 +218,6 @@ export const listTimeline = createServerFn({ method: "GET" })
                   params: hit.params,
                   ids: hit.ids,
                   consent: hit.consent,
-                  host: hit.host,
-                  url: hit.url,
                   blocked: hit.blocked,
                   status: hit.status,
                   afterConsentAction: hit.afterConsentAction,
@@ -242,7 +247,6 @@ export const listTimeline = createServerFn({ method: "GET" })
                   runId: datalayerPush.runId,
                   ordinal: run.ordinal,
                   seq: datalayerPush.seq,
-                  documentId: datalayerPush.documentId,
                   at: datalayerPush.at,
                   value: datalayerPush.value,
                 })
@@ -284,13 +288,35 @@ export const listTimeline = createServerFn({ method: "GET" })
         const hits = yield* Effect.forEach(hitRows, (row) =>
           decodeHitColumns(row).pipe(
             Effect.orDie,
-            Effect.map((columns): TimelineItem => ({ ...row, ...columns, kind: "hit" })),
+            Effect.map((columns): TimelineItem => ({
+              kind: "hit",
+              runId: row.runId,
+              ordinal: row.ordinal,
+              requestId: row.requestId,
+              batchIndex: row.batchIndex,
+              at: row.at,
+              vendor: row.vendor,
+              destinationId: row.destinationId,
+              event: row.event,
+              params: previewOf(columns.params),
+              consent: columns.consent,
+              blocked: row.blocked,
+              status: row.status,
+              afterConsentAction: row.afterConsentAction,
+            })),
           ),
         )
         const pushes = yield* Effect.forEach(pushRows, (row) =>
           decodePushValue(row.value).pipe(
             Effect.orDie,
-            Effect.map((value): TimelineItem => ({ ...row, value, kind: "push" })),
+            Effect.map((value): TimelineItem => ({
+              kind: "push",
+              runId: row.runId,
+              ordinal: row.ordinal,
+              seq: row.seq,
+              at: row.at,
+              value,
+            })),
           ),
         )
         const merged = [...hits, ...pushes].toSorted((x, y) => compare(tupleOf(x), tupleOf(y)))

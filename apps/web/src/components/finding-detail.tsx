@@ -38,11 +38,22 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { count, relativeTime } from "@/lib/format"
+import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
-import { getAiPolicy } from "@/server/ai-policy"
-import { explainFinding, getExplanation } from "@/server/explain"
-import { getEvidence, getFinding, listFindings, setTriage } from "@/server/findings"
+import { getAiPolicy as fetchAiPolicy } from "@/server/ai-policy"
+import { explainFinding, getExplanation as fetchExplanation } from "@/server/explain"
+import {
+  getEvidence as fetchEvidence,
+  getFinding as fetchFinding,
+  listFindings,
+  setTriage,
+} from "@/server/findings"
+
+const getFinding = sharePending(fetchFinding)
+const getEvidence = sharePending(fetchEvidence)
+const getExplanation = sharePending(fetchExplanation)
+const getAiPolicy = sharePending(fetchAiPolicy)
 
 export type FindingRow = Awaited<ReturnType<typeof listFindings>>["findings"][number]
 export type Triage = FindingRow["triage"]["status"]
@@ -507,7 +518,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
     getExplanation({ data: { auditId, ruleId } })
       .then((value) => current && setInfo({ state: "ready", value }))
       .catch((error: unknown) => current && setInfo({ state: "failed", ...loadFailure(error) }))
-    getAiPolicy()
+    getAiPolicy(undefined)
       .then((policy) => current && setCanManage(policy.canManage))
       .catch(() => current && setCanManage(false))
     return () => {
