@@ -1,6 +1,13 @@
-import { createFileRoute, Link, Outlet, redirect } from "@tanstack/react-router"
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  redirect,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router"
 import { Menu, Search, Settings, Users } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CommandPalette } from "@/components/command-palette"
 import { LogoMark } from "@/components/logo"
 import { NotFound } from "@/components/not-found"
@@ -31,12 +38,13 @@ export const Route = createFileRoute("/app")({
 })
 
 const nav = [
-  { to: "/app/clients", label: "Clients", icon: Users },
-  { to: "/app/settings", label: "Settings", icon: Settings },
+  { to: "/app/clients", label: "Clients", icon: Users, sections: ["clients", "sites", "audits"] },
+  { to: "/app/settings", label: "Settings", icon: Settings, sections: ["settings"] },
 ] as const
 
 function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFind: () => void }) {
   const { session, organizations } = Route.useRouteContext()
+  const section = useRouterState({ select: (state) => state.location.pathname.split("/")[2] })
   return (
     <>
       <Link
@@ -63,12 +71,13 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
         <kbd className="hidden font-sans text-xs md:inline">⌘K</kbd>
       </button>
       <nav aria-label="Workspace" className="flex flex-1 flex-col gap-0.5">
-        {nav.map(({ to, label, icon: Icon }) => (
+        {nav.map(({ to, label, icon: Icon, sections }) => (
           <Link
             key={to}
             to={to}
             onClick={onNavigate}
-            className="last:mt-auto flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2 [&.active]:bg-accent [&.active]:font-medium [&.active]:text-accent-foreground"
+            aria-current={sections.some((name) => name === section) ? "page" : undefined}
+            className="last:mt-auto flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2 aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground"
           >
             <Icon className="size-4" />
             {label}
@@ -84,6 +93,20 @@ function AppShell() {
   const { session, organizations } = Route.useRouteContext()
   const [menuOpen, setMenuOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
+  const router = useRouter()
+  // A navigation replaces the page without a reload, so move focus to the new page's heading.
+  useEffect(
+    () =>
+      router.subscribe("onResolved", ({ pathChanged }) => {
+        if (!pathChanged) return
+        const main = document.getElementById("main")
+        const target = main?.querySelector<HTMLElement>("h1") ?? main
+        if (target === null || target === undefined) return
+        target.tabIndex = -1
+        target.focus({ preventScroll: true })
+      }),
+    [router],
+  )
   return (
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
       <a
@@ -125,7 +148,7 @@ function AppShell() {
         <main
           id="main"
           tabIndex={-1}
-          className="min-w-0 flex-1 p-4 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset md:p-6"
+          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-[3px] [&_h1:focus-visible]:ring-ring/50 [&_h1:focus-visible]:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset md:p-6"
         >
           <Outlet />
         </main>

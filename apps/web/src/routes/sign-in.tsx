@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
+import { useHydrated } from "@/lib/use-hydrated"
 import { redirectSearch, safeRedirect } from "@/lib/redirect"
 import { getSession } from "@/server/session"
 
@@ -21,6 +22,7 @@ function SignIn() {
   const { redirect: next } = Route.useSearch()
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const hydrated = useHydrated()
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -77,7 +79,7 @@ function SignIn() {
             {error}
           </p>
         )}
-        <Button type="submit" className="w-full" disabled={pending}>
+        <Button type="submit" className="w-full" disabled={pending || !hydrated}>
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>

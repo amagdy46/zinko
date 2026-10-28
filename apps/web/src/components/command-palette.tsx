@@ -21,7 +21,8 @@ import {
 } from "@/components/ui/command"
 import { useTheme } from "@/components/theme-provider"
 import { authClient } from "@/lib/auth-client"
-import { relativeTime } from "@/lib/format"
+import { StatusBadge } from "@/components/status-badge"
+import { shortDateTime, useTimeZone } from "@/lib/format"
 import { createClient, searchTargets } from "@/server/clients"
 
 interface Organization {
@@ -42,6 +43,7 @@ export function CommandPalette({
   activeId: string | null
 }) {
   const router = useRouter()
+  const timeZone = useTimeZone()
   const { setTheme } = useTheme()
   const [search, setSearch] = useState("")
   const [naming, setNaming] = useState(false)
@@ -51,6 +53,7 @@ export function CommandPalette({
   const input = useRef<HTMLInputElement>(null)
   const loaded = useRef(false)
   const opener = useRef<HTMLElement | null>(null)
+  const openedOn = useRef("")
   const query = naming ? "" : search.trim()
 
   useEffect(() => {
@@ -80,6 +83,7 @@ export function CommandPalette({
   function change(next: boolean) {
     if (next === open || (next && switching)) return
     if (next) {
+      openedOn.current = router.state.location.pathname
       opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     } else {
       setSearch("")
@@ -110,6 +114,8 @@ export function CommandPalette({
 
   function restoreFocus(event: Event) {
     event.preventDefault()
+    // the page changed under the palette: focus already moved to the new page's heading
+    if (router.state.location.pathname !== openedOn.current) return
     const back = opener.current?.isConnected
       ? opener.current
       : [...document.querySelectorAll<HTMLElement>("[data-find-return]")].find(
@@ -265,8 +271,14 @@ export function CommandPalette({
                   >
                     <ClipboardList />
                     <span className="truncate">{a.siteName}</span>
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {relativeTime(a.createdAt).text}
+                    <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
+                      <span className="hidden tabular-nums sm:inline">
+                        {shortDateTime(a.createdAt, timeZone)}
+                      </span>
+                      <StatusBadge status={a.status} />
+                      {a.score === null ? null : (
+                        <span className="tabular-nums">{a.score}/100</span>
+                      )}
                     </span>
                   </CommandItem>
                 ))}
