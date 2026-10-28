@@ -166,6 +166,10 @@ export const noticesOf = (c: Comparison) => {
     notices.push(
       `A consent choice was applied in one audit and not in the other for ${count(k.consentDiffersCells, "run")}.`,
     )
+  if (k.unevaluatedCellsNow > 0)
+    notices.push(
+      `${count(k.unevaluatedCellsNow, "run")} of this audit did not produce results, so what they would show is not in this comparison.`,
+    )
   if (k.unevaluatedCellsBefore > 0)
     notices.push(
       `${count(k.unevaluatedCellsBefore, "run")} of the earlier audit were not evaluated.`,

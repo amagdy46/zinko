@@ -159,6 +159,7 @@ export interface Comparability {
   bannerDiffersCells: number
   consentDiffersCells: number
   unevaluatedCellsBefore: number
+  unevaluatedCellsNow: number
   decoderVersionsDiffer: boolean
 }
 
@@ -477,6 +478,7 @@ export const compareAudits = (input: Input) => {
       bannerDiffers += 1
   }
   const checkedRuns = new Set(before.checks.map((c) => c.runId))
+  const checkedNow = new Set(now.checks.map((c) => c.runId))
 
   const candidates = new Set<string>()
   for (const rows of [before.checks, now.checks])
@@ -723,6 +725,7 @@ export const compareAudits = (input: Input) => {
     bannerDiffersCells: bannerDiffers,
     consentDiffersCells: consentDiffers,
     unevaluatedCellsBefore: before.runs.filter((r) => !checkedRuns.has(r.id)).length,
+    unevaluatedCellsNow: now.runs.filter((r) => !checkedNow.has(r.id)).length,
     decoderVersionsDiffer:
       decodersBefore.length !== decodersNow.length ||
       decodersBefore.some((d, i) => d !== decodersNow[i]),
