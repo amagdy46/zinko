@@ -23,7 +23,7 @@
   --destructive: oklch(0.52 0.2 25);
   --border: oklch(0.9 0.008 285);
   --input: oklch(0.62 0.012 285);
-  --ring: oklch(0.52 0.19 286 / 55%);
+  --ring: oklch(0.52 0.19 286);
   --sidebar: oklch(0.945 0.007 285);
   --sev-critical: oklch(0.47 0.19 25);
   --sev-critical-bg: oklch(0.965 0.02 25);
@@ -70,7 +70,7 @@
   --destructive: oklch(0.714 0.146 21);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 34%);
-  --ring: oklch(0.657 0.176 286 / 60%);
+  --ring: oklch(0.68 0.16 286);
   --sidebar: oklch(0.145 0.008 285);
   --sev-critical: oklch(0.79 0.12 21);
   --sev-critical-bg: oklch(0.714 0.146 21 / 13%);

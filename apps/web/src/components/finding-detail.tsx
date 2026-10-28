@@ -393,7 +393,7 @@ export function FindingDetail({
             </p>
           ))}
           <ul
-            className="max-h-36 divide-y overflow-y-auto rounded-md border text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="max-h-36 divide-y overflow-y-auto rounded-md border text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             aria-label="Where it was seen"
             tabIndex={0}
           >
@@ -407,7 +407,7 @@ export function FindingDetail({
                     setPickedRef(null)
                   }}
                   className={cn(
-                    "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
+                    "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
                     c.runId === check?.runId && "bg-accent shadow-[inset_2px_0_0_var(--primary)]",
                   )}
                 >
@@ -484,7 +484,7 @@ function SettingsLink({ canManage }: { canManage: boolean }) {
   return canManage ? (
     <Link
       to="/app/settings/ai"
-      className="inline-flex h-8 items-center rounded-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="inline-flex h-8 items-center rounded-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       Open Settings &gt; AI
     </Link>

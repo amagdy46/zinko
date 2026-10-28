@@ -60,7 +60,7 @@ export function RunMatrix({
               onClick={() => onSelect(run.id)}
               aria-current={run.id === selectedId ? "true" : undefined}
               className={cn(
-                "flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                "flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
                 run.id === selectedId && "border-primary bg-accent hover:bg-accent",
               )}
             >
@@ -113,7 +113,7 @@ export function RunMatrix({
               <TableCell>
                 <button
                   type="button"
-                  className="min-h-8 max-w-64 text-left text-xs underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+                  className="min-h-8 max-w-64 text-left text-xs underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                 >
                   <RunPath run={run} />
                 </button>
@@ -290,7 +290,7 @@ function MatrixCell({
           aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${statusWord}, ${hits}${run.failing ? `, ${failingText(run)}` : ""}`}
           aria-current={selected ? "true" : undefined}
           className={cn(
-            "inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+            "inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
             selected && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
           )}
         >
