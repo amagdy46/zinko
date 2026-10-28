@@ -1,7 +1,15 @@
 import { createFileRoute, getRouteApi, useNavigate } from "@tanstack/react-router"
 import { ChevronDown, ChevronLeft, ChevronRight, ListFilter, Search, X } from "lucide-react"
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
-import { ConsentTokens, JsonView, KeyValueTable, RequestView, Section } from "@/components/evidence"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react"
+import {
+  ConsentTokens,
+  JsonView,
+  KeyValueTable,
+  LoadFailure,
+  loadFailure,
+  RequestView,
+  Section,
+} from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,7 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { scenarioLabel } from "@/lib/audit-labels"
 import { searchText, searchValues } from "@/lib/hits-filter"
 import { hasClickIds, runPageLabel } from "@/lib/page-label"
-import { consentWords } from "@/lib/tag-matrix"
+import { consentWords, vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
 import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
@@ -452,7 +460,11 @@ function HitsExplorer() {
       selected: vendor,
       onChange: choose("vendor"),
       options: withSelected(
-        filters.vendors.map((v) => ({ value: v.value, label: v.value, count: v.count })),
+        filters.vendors.map((v) => ({
+          value: v.value,
+          label: vendorName(v.value),
+          count: v.count,
+        })),
         vendor,
       ),
     },
@@ -717,15 +729,36 @@ function Timeline({
       <Detail auditId={auditId} item={target} run={runLabels.get(target.runId)} />
     )
 
+  const paneOpen = desktop && detail !== null
+  const pane =
+    detail === null ? null : (
+      <aside
+        aria-label="Hit detail"
+        tabIndex={0}
+        className="sticky top-4 max-h-[calc(100svh-2rem)] overflow-y-auto rounded-lg border bg-card p-3 text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        {detail}
+      </aside>
+    )
+
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)] items-start gap-4",
+        paneOpen && "lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)]",
+      )}
+    >
       <div className="min-w-0 space-y-2">
         <p className="text-xs text-muted-foreground">
           Time: ms since the capture started. Status: the HTTP status, or Answered locally. Consent:
-          Ads is ad_storage, Analytics is analytics_storage.
+          Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in full.
         </p>
         <div className="max-h-[70svh] overflow-auto rounded-lg border">
-          <table className="w-full min-w-max text-left font-mono text-xs" data-testid="timeline">
+          <table
+            className="group/timeline w-full text-left font-mono text-xs"
+            data-testid="timeline"
+            data-pane={paneOpen ? "open" : "closed"}
+          >
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
                 {singleRun ? null : <th className="hidden px-2 font-medium md:table-cell">Run</th>}
@@ -734,8 +767,17 @@ function Timeline({
                 <th className="px-2 font-medium">Event</th>
                 <th className="px-2 font-medium">Status</th>
                 <th className="px-2 font-medium">Consent</th>
-                <th className="hidden px-2 font-medium md:table-cell">Destination</th>
-                <th className="px-2 font-medium">Key params</th>
+                <th className={cn("hidden px-2 font-medium md:table-cell", paneHidden)}>
+                  Destination
+                </th>
+                <th
+                  className={cn(
+                    "hidden w-full px-2 font-medium whitespace-nowrap 2xl:table-cell",
+                    paneHidden,
+                  )}
+                >
+                  Key params
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -828,14 +870,7 @@ function Timeline({
         </div>
       </div>
       {desktop ? (
-        <aside
-          aria-label="Hit detail"
-          className="sticky top-4 max-h-[calc(100svh-2rem)] overflow-y-auto rounded-lg border bg-card p-3 text-sm"
-        >
-          {detail ?? (
-            <p className="text-muted-foreground">Select a hit or a push to see it in full.</p>
-          )}
-        </aside>
+        pane
       ) : (
         <Sheet
           open={target !== undefined}
@@ -891,6 +926,9 @@ function Timeline({
 
 const cellBase = "px-2 py-0 whitespace-nowrap"
 
+/** The destination and key params columns make room for the detail pane; the pane repeats them. */
+const paneHidden = "group-data-[pane=open]/timeline:hidden!"
+
 function RunCell({
   ordinal,
   run,
@@ -942,11 +980,12 @@ function HitRow({
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "tabular-nums")}>{thousands(item.at)} ms</td>
-      <td className={cellBase}>{item.vendor}</td>
+      <td className={cellBase}>{vendorName(item.vendor)}</td>
       <td className={cellBase}>
         <button
           type="button"
-          className="text-left font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          title={item.event}
+          className="block max-w-40 truncate text-left font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
           onClick={onSelect}
         >
           {item.event}
@@ -962,8 +1001,15 @@ function HitRow({
       <td className={cellBase}>
         <ConsentText consent={item.consent} />
       </td>
-      <td className={cn(cellBase, "hidden md:table-cell")}>{item.destinationId}</td>
-      <td className="max-w-48 truncate px-2 py-0 text-muted-foreground">{preview(item)}</td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>{item.destinationId}</td>
+      <td
+        className={cn(
+          "hidden max-w-0 truncate px-2 py-0 text-muted-foreground 2xl:table-cell",
+          paneHidden,
+        )}
+      >
+        {preview(item)}
+      </td>
     </tr>
   )
 }
@@ -1030,8 +1076,10 @@ function PushRow({
       </td>
       <td className={cellBase}>-</td>
       <td className={cellBase}>-</td>
-      <td className={cn(cellBase, "hidden md:table-cell")}>-</td>
-      <td className="max-w-48 truncate px-2 py-0">{preview(item)}</td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
+      <td className={cn("hidden max-w-0 truncate px-2 py-0 2xl:table-cell", paneHidden)}>
+        {preview(item)}
+      </td>
     </tr>
   )
 }
@@ -1079,30 +1127,37 @@ function Detail({
 function HitDetail({ auditId, hit }: { auditId: string; hit: HitRef }) {
   const [detail, setDetail] = useState<
     | { state: "loading" }
-    | { state: "failed" }
+    | { state: "failed"; gone: boolean }
     | { state: "ready"; value: Awaited<ReturnType<typeof getHitDetail>> }
   >({ state: "loading" })
 
+  const load = useCallback(
+    () =>
+      getHitDetail({
+        data: { auditId, runId: hit.runId, requestId: hit.requestId, batchIndex: hit.batchIndex },
+      })
+        .then((value) => setDetail({ state: "ready", value }))
+        .catch((error: unknown) => setDetail({ state: "failed", ...loadFailure(error) })),
+    [auditId, hit.runId, hit.requestId, hit.batchIndex],
+  )
+
   useEffect(() => {
-    let current = true
-    getHitDetail({
-      data: { auditId, runId: hit.runId, requestId: hit.requestId, batchIndex: hit.batchIndex },
-    })
-      .then((value) => current && setDetail({ state: "ready", value }))
-      .catch(() => current && setDetail({ state: "failed" }))
-    return () => {
-      current = false
-    }
-  }, [auditId, hit.runId, hit.requestId, hit.batchIndex])
+    void load()
+  }, [load])
 
   return (
     <>
       <div aria-live="polite">
         {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
         {detail.state === "failed" ? (
-          <p role="alert" className="text-destructive">
-            This hit could not be loaded.
-          </p>
+          <LoadFailure
+            what="This hit"
+            gone={detail.gone}
+            onRetry={() => {
+              setDetail({ state: "loading" })
+              void load()
+            }}
+          />
         ) : null}
       </div>
       {detail.state === "ready" ? (
@@ -1123,7 +1178,7 @@ function HitFacts({
     <>
       <div className="space-y-1">
         <h2 className="font-medium">
-          {hit.vendor} · {hit.event}
+          {vendorName(hit.vendor)} · {hit.event}
         </h2>
         <p className="text-xs text-muted-foreground">
           {hit.destinationId} · {thousands(hit.at)} ms · {hit.host}

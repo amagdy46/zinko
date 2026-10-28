@@ -1,6 +1,6 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ChevronDown, CircleDashed, Info } from "lucide-react"
-import { CopyButton } from "@/components/evidence"
+import { CopyButton, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { AREAS, BANNER_NOTE, pagePath } from "@/lib/audit-labels"
+import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
@@ -32,6 +32,7 @@ export const Route = createFileRoute("/app/audits/$auditId/overview")({
 })
 
 type Overview = Awaited<ReturnType<typeof getOverview>>
+type AuditRun = ReturnType<typeof auditRoute.useLoaderData>["runs"][number]
 type Scored = Extract<HealthScore, { evaluated: true }>
 
 const BAND_GLYPH: Record<Band, StatusMeaning> = {
@@ -49,7 +50,7 @@ const PURCHASE_FIELDS_RULE = "coverage.purchase-missing-fields"
 const rests = (n: number) => (n === 1 ? "rests" : "rest")
 
 function OverviewScreen() {
-  const { audit } = auditRoute.useLoaderData()
+  const { audit, runs } = auditRoute.useLoaderData()
   const {
     status,
     score,
@@ -90,21 +91,7 @@ function OverviewScreen() {
   ].join(" × ")
   return (
     <div className="min-w-0 space-y-6">
-      {runHealth.incomplete ? (
-        <Alert
-          role="status"
-          className="border-sev-warning-border bg-sev-warning-bg"
-          data-testid="incomplete-audit"
-        >
-          <StatusGlyph meaning="partial" />
-          <AlertTitle className="line-clamp-none">This audit is incomplete</AlertTitle>
-          <AlertDescription className="text-foreground">
-            {incompleteCause}
-            The score below describes only what could be captured, so do not read it as the state of
-            the site.
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <RunsBanner auditId={audit.id} runs={runs} runHealth={runHealth} cause={incompleteCause} />
       <ScoreBlock
         score={score}
         withoutAccepted={withoutAccepted}
@@ -149,6 +136,90 @@ function OverviewScreen() {
       <AreaCounts auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
     </div>
+  )
+}
+
+/** The one notice for runs that did not finish: what it means for the score, runs behind a disclosure. */
+function RunsBanner({
+  auditId,
+  runs,
+  runHealth,
+  cause,
+}: {
+  auditId: string
+  runs: ReadonlyArray<AuditRun>
+  runHealth: Overview["runHealth"]
+  /** Why the audit is incomplete: the start page, a key page that did not load, or unfinished runs. */
+  cause: string
+}) {
+  const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
+  if (problems.length === 0 && !runHealth.incomplete) return null
+  const failed = problems.filter((r) => r.status === "failed").length
+  const partial = problems.length - failed
+  const split = [failed > 0 && `${failed} failed`, partial > 0 && `${partial} partial`]
+    .filter(Boolean)
+    .join(", ")
+  const critical = failed > 0 || runHealth.startFailed
+  return (
+    <Alert
+      role="status"
+      className={cn(
+        critical
+          ? "border-sev-critical-border bg-sev-critical-bg"
+          : "border-sev-warning-border bg-sev-warning-bg",
+      )}
+      data-testid={runHealth.incomplete ? "incomplete-audit" : "unfinished-runs"}
+    >
+      <StatusGlyph meaning={critical ? "failed" : "partial"} />
+      <AlertTitle className="line-clamp-none">
+        {runHealth.incomplete
+          ? "This audit is incomplete"
+          : `${problems.length} of ${runs.length} runs could not finish (${split})`}
+      </AlertTitle>
+      <AlertDescription className="text-foreground">
+        <p>
+          {runHealth.incomplete
+            ? `${cause}The score below describes only what could be captured, so do not read it as the state of the site.`
+            : "Their results are missing or incomplete."}
+        </p>
+        {problems.length > 0 ? (
+          <Collapsible>
+            <CollapsibleTrigger
+              className={cn(
+                "group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium",
+                focusRing,
+              )}
+            >
+              See which runs
+              <ChevronDown
+                aria-hidden="true"
+                className="size-4 transition-transform group-data-[state=open]:rotate-180"
+              />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <ul className="space-y-1">
+                {problems.map((run) => (
+                  <li key={run.id}>
+                    <Link
+                      to="/app/audits/$auditId"
+                      params={{ auditId }}
+                      search={{ view: "matrix", run: run.id }}
+                      className={`flex items-start gap-2 rounded-sm py-1.5 underline-offset-4 hover:underline ${focusRing}`}
+                    >
+                      <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
+                      <span className="min-w-0 [overflow-wrap:anywhere]">
+                        <RunPath run={run} className="max-w-full" /> · {scenarioLabel(run.scenario)}{" "}
+                        · {run.viewport}: {runReason(run)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </CollapsibleContent>
+          </Collapsible>
+        ) : null}
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -322,7 +393,8 @@ function ScoreBlock({
           </PopoverTrigger>
           <PopoverContent
             align="start"
-            className="max-h-[min(36rem,80svh)] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            collisionPadding={16}
+            className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
           >
             <Arithmetic score={score} scope={scope} />
           </PopoverContent>

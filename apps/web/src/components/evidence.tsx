@@ -1,4 +1,5 @@
 import type { CapturedRequest } from "@repo/capture-contract"
+import { isNotFound } from "@tanstack/react-router"
 import { useState } from "react"
 import { ChevronDown, Copy } from "lucide-react"
 import { toast } from "sonner"
@@ -285,5 +286,34 @@ export function RunPath({
         </span>
       ) : null}
     </span>
+  )
+}
+
+/** Why a stored item did not load: a 404 means its capture is gone, anything else may pass. */
+export const loadFailure = (error: unknown) => ({ gone: isNotFound(error) })
+
+export function LoadFailure({
+  what,
+  gone,
+  onRetry,
+}: {
+  what: string
+  gone: boolean
+  onRetry: () => void
+}) {
+  if (gone)
+    return (
+      <p role="alert" className="text-destructive">
+        {what} is not available. Its stored capture is missing, so it cannot be shown again. Run a
+        new audit to see it.
+      </p>
+    )
+  return (
+    <div role="alert" className="flex flex-wrap items-center gap-2 text-destructive">
+      <span>{what} could not be loaded. The server did not answer; try again.</span>
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
   )
 }

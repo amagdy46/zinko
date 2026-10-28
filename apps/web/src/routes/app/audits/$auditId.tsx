@@ -229,41 +229,14 @@ function AuditPage() {
         </div>
       ) : null}
       {overview && !active ? (
-        <div className="grid grid-cols-2 gap-y-4 divide-x text-sm lg:grid-cols-4">
-          <div className="pr-4">
-            <p className="text-xs text-muted-foreground">Runs</p>
-            <p className="tabular-nums">
-              {runs.length}: {complete} captured, {partial} partial, {failed} failed
-            </p>
-            <div className="mt-2 flex h-1 overflow-hidden rounded-full" aria-hidden="true">
-              {runs.map((run) => (
-                <span key={run.id} className={`flex-1 ${barTone(run.status)}`} />
-              ))}
-            </div>
-          </div>
-          <div className="px-4">
-            <p className="text-xs text-muted-foreground">Findings</p>
-            {findingsLink}
-            {summary.findings.couldNotCheck > 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {summary.findings.couldNotCheck} could not check
-              </p>
-            ) : null}
-            <p className="text-xs text-muted-foreground">
-              {summary.evaluatedRuns} of {runs.length} runs evaluated
-            </p>
-          </div>
-          <div className="px-4">
-            <p className="text-xs text-muted-foreground">Duration</p>
-            <p className="font-mono tabular-nums">{duration(elapsed)}</p>
-          </div>
-          <div className="px-4">
-            <p className="text-xs text-muted-foreground">Started</p>
-            <time dateTime={start.toISOString()} className="tabular-nums">
-              {start.toLocaleString()}
-            </time>
-          </div>
-        </div>
+        <p className="flex flex-wrap items-center gap-x-4 text-sm tabular-nums text-muted-foreground">
+          <span>
+            {count(runs.length, "run")}: {complete} captured, {partial} partial, {failed} failed
+          </span>
+          {findingsLink}
+          <span>{duration(elapsed)}</span>
+          <time dateTime={start.toISOString()}>{start.toLocaleString()}</time>
+        </p>
       ) : null}
       {audit.error ? (
         <p
@@ -273,7 +246,7 @@ function AuditPage() {
           {audit.error}
         </p>
       ) : null}
-      {problems.length > 0 && full ? (
+      {problems.length > 0 && active ? (
         <div
           className={`space-y-2 rounded-md border p-3 text-sm ${failed > 0 ? "border-sev-critical-border bg-sev-critical-bg" : "border-sev-warning-border bg-sev-warning-bg"}`}
         >
@@ -316,17 +289,4 @@ function AuditPage() {
       <Outlet />
     </div>
   )
-}
-
-function barTone(status: string) {
-  switch (status) {
-    case "complete":
-      return "bg-muted-foreground/40"
-    case "partial":
-      return "bg-sev-warning-solid"
-    case "failed":
-      return "bg-sev-critical-solid"
-    default:
-      return "bg-muted"
-  }
 }

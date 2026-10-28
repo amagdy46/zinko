@@ -8,6 +8,8 @@ import {
   RunPath,
   JsonView,
   KeyValueTable,
+  LoadFailure,
+  loadFailure,
   RequestView,
   Section,
 } from "@/components/evidence"
@@ -36,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { count, relativeTime } from "@/lib/format"
+import { vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
 import { getAiPolicy } from "@/server/ai-policy"
 import { explainFinding, getExplanation } from "@/server/explain"
@@ -56,7 +59,10 @@ export const TRIAGE_LABEL: Record<Triage, string> = {
 
 const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" } as const
 
-type Loaded<T> = { state: "loading" } | { state: "failed" } | { state: "ready"; value: T }
+type Loaded<T> =
+  | { state: "loading" }
+  | { state: "failed"; gone: boolean }
+  | { state: "ready"; value: T }
 
 const shortDate = (date: Date) =>
   date.toLocaleDateString("en", { day: "numeric", month: "short", year: "numeric" })
@@ -204,7 +210,7 @@ export function FindingDetail({
     () =>
       getFinding({ data: { auditId, ruleId: row.ruleId } })
         .then((value) => setDetail({ state: "ready", value }))
-        .catch(() => setDetail({ state: "failed" })),
+        .catch((error: unknown) => setDetail({ state: "failed", ...loadFailure(error) })),
     [auditId, row.ruleId],
   )
 
@@ -212,7 +218,7 @@ export function FindingDetail({
     let current = true
     getFinding({ data: { auditId, ruleId: row.ruleId } })
       .then((value) => current && setDetail({ state: "ready", value }))
-      .catch(() => current && setDetail({ state: "failed" }))
+      .catch((error: unknown) => current && setDetail({ state: "failed", ...loadFailure(error) }))
     return () => {
       current = false
     }
@@ -289,9 +295,14 @@ export function FindingDetail({
         <div aria-live="polite" className="p-4 text-sm">
           {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
           {detail.state === "failed" ? (
-            <p role="alert" className="text-destructive">
-              This finding could not be loaded.
-            </p>
+            <LoadFailure
+              what="This finding"
+              gone={detail.gone}
+              onRetry={() => {
+                setDetail({ state: "loading" })
+                void load()
+              }}
+            />
           ) : null}
         </div>
       </div>
@@ -481,7 +492,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
     () =>
       getExplanation({ data: { auditId, ruleId } })
         .then((value) => setInfo({ state: "ready", value }))
-        .catch(() => setInfo({ state: "failed" })),
+        .catch((error: unknown) => setInfo({ state: "failed", ...loadFailure(error) })),
     [auditId, ruleId],
   )
 
@@ -489,7 +500,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
     let current = true
     getExplanation({ data: { auditId, ruleId } })
       .then((value) => current && setInfo({ state: "ready", value }))
-      .catch(() => current && setInfo({ state: "failed" }))
+      .catch((error: unknown) => current && setInfo({ state: "failed", ...loadFailure(error) }))
     getAiPolicy()
       .then((policy) => current && setCanManage(policy.canManage))
       .catch(() => current && setCanManage(false))
@@ -538,9 +549,14 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
         {info.state === "loading" ? (
           <p className="text-muted-foreground">Loading</p>
         ) : (
-          <p role="alert" className="text-destructive">
-            The explanation could not be loaded.
-          </p>
+          <LoadFailure
+            what="The explanation"
+            gone={info.gone}
+            onRetry={() => {
+              setInfo({ state: "loading" })
+              void refetch()
+            }}
+          />
         )}
       </section>
     )
@@ -725,12 +741,20 @@ const TAB_LABEL: Record<Tab, string> = {
   datalayer: "dataLayer",
 }
 
-const refLabel = (ref: Ref) => {
+/** A chip names what the evidence is; the raw request id is only a tooltip. */
+const refLabel = (ref: Ref, index: number) => {
+  if (ref.kind === "hit") return `Hit ${index + 1}`
+  if (ref.kind === "request") return `Request ${index + 1}`
+  if (ref.kind === "cookie") return `${ref.name} (${ref.label})`
+  if (ref.kind === "push") return `dataLayer push ${ref.seq}`
+  return "Page document"
+}
+
+const refDetail = (ref: Ref) => {
   if (ref.kind === "hit") return `${ref.requestId} #${ref.batchIndex}`
   if (ref.kind === "request") return ref.requestId
-  if (ref.kind === "cookie") return `${ref.name} (${ref.label})`
-  if (ref.kind === "push") return `push ${ref.seq}`
-  return `document ${ref.documentId}`
+  if (ref.kind === "document") return `document ${ref.documentId}`
+  return undefined
 }
 
 const refKey = (ref: Ref) => JSON.stringify(ref)
@@ -781,7 +805,7 @@ function Evidence({
           <TabsContent value={tab} className="space-y-2">
             <TabBody
               auditId={auditId}
-              runId={check.runId}
+              check={check}
               tab={tab}
               refs={refsOf(tab)}
               firstRef={first}
@@ -820,7 +844,7 @@ function OpenInHits({
 
 function TabBody({
   auditId,
-  runId,
+  check,
   tab,
   refs,
   firstRef,
@@ -829,7 +853,7 @@ function TabBody({
   screenshotUrl,
 }: {
   auditId: string
-  runId: string
+  check: Check
   tab: Tab
   refs: ReadonlyArray<Ref>
   firstRef: Ref | undefined
@@ -837,6 +861,7 @@ function TabBody({
   onPick: (ref: Ref) => void
   screenshotUrl: string | null
 }) {
+  const runId = check.runId
   if (tab === "screenshot")
     return (
       <Screenshot auditId={auditId} runId={runId} reference={firstRef} loaderUrl={screenshotUrl} />
@@ -845,21 +870,33 @@ function TabBody({
   if (ref === undefined) return null
   return (
     <>
+      <p className="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+        <RunPath run={check} className="max-w-full" />
+        <span>
+          {scenarioLabel(check.scenario)} · {check.viewport}
+        </span>
+      </p>
       <div className="flex flex-wrap items-center gap-1">
         {refs.length > 1 ? (
-          refs.map((r) => (
+          refs.map((r, i) => (
             <Button
               key={refKey(r)}
               variant={r === ref ? "secondary" : "outline"}
               size="sm"
               aria-pressed={r === ref}
+              title={refDetail(r)}
               onClick={() => onPick(r)}
             >
-              {refLabel(r)}
+              {refLabel(r, i)}
             </Button>
           ))
         ) : (
-          <span className="break-all font-mono text-xs text-muted-foreground">{refLabel(ref)}</span>
+          <span
+            title={refDetail(ref)}
+            className="break-all text-xs font-medium text-muted-foreground"
+          >
+            {refLabel(ref, 0)}
+          </span>
         )}
         <span className="ml-auto">
           <OpenInHits auditId={auditId} runId={runId} reference={ref} />
@@ -945,7 +982,7 @@ function HitFacts({ hit }: { hit: Extract<EvidenceResult, { kind: "hit" }>["hit"
     <div className="min-w-0 space-y-3">
       <div className="space-y-1">
         <p className="font-medium">
-          {hit.vendor} · {hit.event}
+          {vendorName(hit.vendor)} · {hit.event}
         </p>
         <p className="break-all text-xs text-muted-foreground">
           {hit.destinationId} · {hit.at} ms · {hit.host}
@@ -990,22 +1027,29 @@ function EvidenceView({
 }) {
   const [loaded, setLoaded] = useState<Loaded<EvidenceResult>>({ state: "loading" })
 
+  const load = useCallback(
+    () =>
+      getEvidence({ data: { auditId, runId, ref: reference } })
+        .then((value) => setLoaded({ state: "ready", value: value.evidence }))
+        .catch((error: unknown) => setLoaded({ state: "failed", ...loadFailure(error) })),
+    [auditId, runId, reference],
+  )
+
   useEffect(() => {
-    let current = true
-    getEvidence({ data: { auditId, runId, ref: reference } })
-      .then((value) => current && setLoaded({ state: "ready", value: value.evidence }))
-      .catch(() => current && setLoaded({ state: "failed" }))
-    return () => {
-      current = false
-    }
-  }, [auditId, runId, reference])
+    void load()
+  }, [load])
 
   if (loaded.state === "loading") return <p className="text-muted-foreground">Loading</p>
   if (loaded.state === "failed")
     return (
-      <p role="alert" className="text-destructive">
-        This evidence could not be loaded.
-      </p>
+      <LoadFailure
+        what="This evidence"
+        gone={loaded.gone}
+        onRetry={() => {
+          setLoaded({ state: "loading" })
+          void load()
+        }}
+      />
     )
   const evidence = loaded.value
   if (evidence.kind === "hit")
