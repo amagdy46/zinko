@@ -61,7 +61,7 @@ function OverviewScreen() {
     scoreCoverage,
     open,
   } = Route.useLoaderData()
-  const { briefing, recheck } = Route.useLoaderData()
+  const { briefing, recheck, bandAllAccepted } = Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
       <p className="text-sm text-muted-foreground" data-testid="overview-running">
@@ -88,6 +88,25 @@ function OverviewScreen() {
     count(audit.config.scenarios.length, "scenario"),
     audit.config.viewports.join(" and "),
   ].join(" × ")
+  if (recheck !== null)
+    return (
+      <div className="min-w-0 space-y-6">
+        <RecheckResult {...recheck} />
+        <Caveats
+          auditId={audit.id}
+          runs={runs}
+          runHealth={runHealth}
+          cause={incompleteCause}
+          score={score}
+          couldNotCheck={couldNotCheck}
+          bannerUncertain={bannerUncertain}
+          scored={false}
+        />
+        {worst === null ? null : (
+          <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
+        )}
+      </div>
+    )
   return (
     <div className="min-w-0 space-y-6">
       <ScoreBlock
@@ -100,11 +119,11 @@ function OverviewScreen() {
         triage={triage}
         auditId={audit.id}
         worst={worst}
+        bandAllAccepted={bandAllAccepted}
       />
       {briefing === null ? null : (
         <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
       )}
-      {recheck === null ? null : <RecheckResult {...recheck} />}
       <Caveats
         auditId={audit.id}
         runs={runs}
@@ -144,6 +163,7 @@ function Caveats({
   score,
   couldNotCheck,
   bannerUncertain,
+  scored = true,
 }: {
   auditId: string
   runs: ReadonlyArray<AuditRun>
@@ -153,6 +173,8 @@ function Caveats({
   score: Scored
   couldNotCheck: Overview["couldNotCheck"]
   bannerUncertain: Overview["bannerUncertain"]
+  /** False for a re-check, which has a result and no score. */
+  scored?: boolean
 }) {
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const failed = problems.filter((r) => r.status === "failed").length
@@ -177,7 +199,7 @@ function Caveats({
                     : `${problems.length} of ${runs.length} runs could not finish (${split}). `}
                 </span>
                 {runHealth.incomplete
-                  ? `${cause}The score describes only what could be captured, so do not read it as the state of the site.`
+                  ? `${cause}The ${scored ? "score" : "result"} describes only what could be captured, so do not read it as the state of the site.`
                   : "Their results are missing or incomplete."}
               </p>
               {problems.length > 0 ? (
@@ -297,7 +319,9 @@ function Caveats({
           ),
         }
       : null,
-  ].filter((item) => item !== null)
+  ]
+    .filter((item) => item !== null)
+    .filter((item) => scored || item.key === "runs")
   if (items.length === 0) return null
   return (
     <Collapsible
@@ -479,6 +503,7 @@ function ScoreBlock({
   triage,
   auditId,
   worst,
+  bandAllAccepted,
 }: {
   score: Scored
   scoreCoverage: Overview["scoreCoverage"]
@@ -489,12 +514,19 @@ function ScoreBlock({
   triage: Overview["triage"]
   auditId: string
   worst: Overview["worst"]
+  bandAllAccepted: boolean
 }) {
   return (
     <section aria-label="Score" className="space-y-4 rounded-lg border bg-card p-5">
       <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0 space-y-3">
-          <ScoreFigure size="hero" score={score.score} band={score.band} coverage={scoreCoverage} />
+          <ScoreFigure
+            size="hero"
+            score={score.score}
+            band={score.band}
+            bandAllAccepted={bandAllAccepted}
+            coverage={scoreCoverage}
+          />
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm">
@@ -612,13 +644,17 @@ function TriageNote({
   if (triage.acceptedRisk > 0 && withoutAccepted !== null)
     return (
       <p className="text-sm" data-testid="score-without-accepted">
-        <span className="font-medium tabular-nums">{withoutAccepted}</span> excluding{" "}
-        {count(triage.acceptedRisk, "accepted risk")}
-        <span className="text-muted-foreground">
-          {" "}
-          · {score} counting all findings
-          {triage.fixed > 0 ? `; ${triage.fixed} fixed still count` : ""}
-        </span>
+        The score of {score} counts all findings, including{" "}
+        {count(triage.acceptedRisk, "accepted risk")}. Without{" "}
+        {triage.acceptedRisk === 1 ? "it" : "them"}:{" "}
+        <span className="font-medium tabular-nums">{withoutAccepted}</span>.
+        {triage.fixed > 0 ? (
+          <span className="text-muted-foreground">
+            {" "}
+            {triage.fixed} fixed {triage.fixed === 1 ? "finding counts" : "findings count"} too: the
+            score describes this audit.
+          </span>
+        ) : null}
       </p>
     )
   if (triage.fixed > 0)

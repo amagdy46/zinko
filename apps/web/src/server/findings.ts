@@ -4,7 +4,7 @@ import { Database } from "@repo/core/Database"
 import { checkResult, findingTriage, member, run, user } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq, inArray } from "drizzle-orm"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { auditInOrg, hitWithRequest, readCapture, runInAudit } from "./audit-data"
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import {
@@ -17,6 +17,7 @@ import {
   triageOf,
   TriageStatus,
 } from "./findings-data"
+import { latestRecheckOf } from "./recheck-data"
 import { requireSession } from "./require-session"
 import { Invalid, membership, NotFound, read, mutation } from "./server-fn"
 
@@ -111,7 +112,9 @@ export const getFinding = createServerFn({ method: "GET" })
           )
           .orderBy(asc(run.ordinal))
         const detection = yield* bannerDetection(orgId, auditId)
+        const recheck = Option.getOrNull(yield* latestRecheckOf(orgId, auditId, f.ruleId))
         return {
+          recheck,
           finding: {
             ruleId: f.ruleId,
             kind: yield* decodeKind(f.kind).pipe(Effect.orDie),

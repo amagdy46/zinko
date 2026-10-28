@@ -1,5 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { GitCompareArrows } from "lucide-react"
+import { StatusGlyph } from "@/components/status-glyph"
+import { recheckVerdict } from "@/lib/compare-text"
 import { count, shortDate, useTimeZone } from "@/lib/format"
 
 /** "What changed" at the top of a re-run's Overview: a few lines, then the whole Compare tab. */
@@ -37,7 +39,9 @@ export function Briefing({
   )
 }
 
-/** The result of a re-check, in place of a briefing: a run that gave no verdict is never counted as a pass. */
+const VERDICT_GLYPH = { fixed: "pass", "still-fails": "fail", incomplete: "partial" } as const
+
+/** The result of a re-check, which leads its Overview: a run that gave no verdict is never counted as a pass. */
 export function RecheckResult({
   ruleId,
   title,
@@ -51,19 +55,24 @@ export function RecheckResult({
   determinateRuns: number
   runs: number
 }) {
-  const unknown = runs - determinateRuns
-  const coverage = `${determinateRuns} of ${count(runs, "run")} gave a complete result, ${unknown} could not be checked or did not finish`
-  let result = `It no longer fails on the ${count(runs, "run")} re-checked.`
-  if (failingRuns > 0) {
-    result = `It still fails on ${failingRuns} of the ${count(runs, "run")} re-checked.`
-    if (unknown > 0) result += ` Re-check incomplete: ${coverage}.`
-  } else if (unknown > 0) result = `Re-check incomplete: ${coverage}.`
+  const verdict = recheckVerdict({ failingRuns, determinateRuns, runs })
   return (
-    <section aria-labelledby="recheck-heading" className="space-y-1 rounded-lg border bg-card p-4">
+    <section
+      aria-labelledby="recheck-heading"
+      className="space-y-2 rounded-lg border bg-card p-5"
+      data-testid="recheck-result"
+    >
       <h2 id="recheck-heading" className="text-base font-semibold">
         Re-check of {title ?? ruleId}
       </h2>
-      <p className="text-sm">{result}</p>
+      <p className="flex items-center gap-2 text-lg font-semibold">
+        <StatusGlyph meaning={VERDICT_GLYPH[verdict.state]} />
+        {verdict.text}
+      </p>
+      <p className="text-sm text-muted-foreground">
+        A re-check covers {count(runs, "run")} for one check, so it has no score and does not
+        replace an audit of the site.
+      </p>
     </section>
   )
 }

@@ -16,6 +16,7 @@ import {
   rerunBaseline,
 } from "./audit-create"
 import { findingRowsOf } from "./findings-data"
+import { ruleTitleOf } from "./recheck-data"
 import { requireSession } from "./require-session"
 import {
   allowPrivateSites,
@@ -414,6 +415,10 @@ export const getAudit = createServerFn({ method: "GET" })
             startedAt: a.startedAt,
             finishedAt: a.finishedAt,
             kind: a.kind,
+            recheckTitle:
+              a.kind === "narrow" && a.narrowRuleId !== null
+                ? yield* ruleTitleOf(orgId, a.id, a.narrowRuleId)
+                : null,
             config,
           },
           site: {

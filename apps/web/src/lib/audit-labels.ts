@@ -1,5 +1,5 @@
 import type { Scenario } from "@repo/capture-contract"
-import { count } from "@/lib/format"
+import { count, shortDate } from "@/lib/format"
 
 /**
  * Wall time of one page run (a journey run counts as one per page it loads). Audits of the fixture
@@ -227,3 +227,33 @@ export const BANNER_NOTE = {
   summary:
     "Our scanner did not detect a consent banner on these pages, or could not tell whether there is one, so whether these are breaches depends on whether a banner exists for the visitor (it may not exist, may not be shown from our location, may load too slowly or may be one we cannot operate).",
 } as const
+
+/**
+ * What an audit is called wherever it is listed: a full audit by its site, day and size, a
+ * re-check by the check it re-checked. `pages` counts the start page and the key pages.
+ */
+export function auditTitle(
+  audit: {
+    kind: string
+    siteName: string
+    createdAt: Date | string
+    pages: number
+    recheckTitle: string | null
+  },
+  timeZone?: string,
+): string {
+  const day = shortDate(audit.createdAt, timeZone)
+  if (audit.kind === "narrow") return `Re-check of ${audit.recheckTitle ?? "one check"} · ${day}`
+  return `Audit of ${audit.siteName} · ${day} · ${count(audit.pages, "page")}`
+}
+
+/** The same without the day, for the browser tab: a time zone is not known while the head renders. */
+export const auditTabName = (audit: {
+  kind: string
+  siteName: string
+  pages: number
+  recheckTitle: string | null
+}): string =>
+  audit.kind === "narrow"
+    ? `Re-check of ${audit.recheckTitle ?? "one check"}`
+    : `Audit of ${audit.siteName} · ${count(audit.pages, "page")}`

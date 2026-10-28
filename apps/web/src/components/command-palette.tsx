@@ -23,7 +23,7 @@ import { useTheme } from "@/components/theme-provider"
 import { authClient } from "@/lib/auth-client"
 import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
-import { shortDateTime, useTimeZone } from "@/lib/format"
+import { count, shortDateTime, useTimeZone } from "@/lib/format"
 import { createClient, searchTargets } from "@/server/clients"
 
 interface Organization {
@@ -260,7 +260,7 @@ export function CommandPalette({
                 {audits.map((a) => (
                   <CommandItem
                     key={a.id}
-                    value={`audit ${a.siteName} ${a.id}`}
+                    value={`audit of ${a.siteName} ${a.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({
@@ -271,7 +271,12 @@ export function CommandPalette({
                     }
                   >
                     <ClipboardList />
-                    <span className="truncate">{a.siteName}</span>
+                    <span className="flex min-w-0 items-baseline gap-1">
+                      <span className="truncate">Audit of {a.siteName}</span>
+                      <span className="shrink-0 text-muted-foreground">
+                        · {count(a.pages, "page")}
+                      </span>
+                    </span>
                     <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
                       <span className="hidden tabular-nums sm:inline">
                         {shortDateTime(a.createdAt, timeZone)}

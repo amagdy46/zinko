@@ -1,7 +1,7 @@
 import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
+import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
@@ -216,6 +216,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             createdAt: audit.createdAt,
             status: audit.status,
             siteName: site.name,
+            pages: sql<number>`jsonb_array_length(${audit.config} -> 'pages')`.mapWith(Number),
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
@@ -239,6 +240,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             createdAt: a.createdAt,
             status: a.status,
             siteName: a.siteName,
+            pages: a.pages,
             coverage: coverageOf(details, a.id),
             score: SETTLED.some((status) => status === a.status)
               ? (scores.get(a.id) ?? null)
@@ -534,6 +536,8 @@ export const getSite = createServerFn({ method: "GET" })
               id: a.id,
               kind: a.kind,
               narrowRuleId: a.narrowRuleId,
+              pages: summary?.pages ?? 0,
+              recheckTitle: summary?.recheckTitle ?? null,
               hasBaseline: a.baselineAuditId !== null,
               status: a.status,
               error: a.error,

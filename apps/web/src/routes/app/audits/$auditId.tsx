@@ -19,7 +19,13 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { pageTitle } from "@/lib/page-title"
-import { remainingTime, runReason, scenarioLabel } from "@/lib/audit-labels"
+import {
+  auditTabName,
+  auditTitle,
+  remainingTime,
+  runReason,
+  scenarioLabel,
+} from "@/lib/audit-labels"
 import { count, duration, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
 import { tabLink } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
@@ -28,7 +34,17 @@ import { getAudit } from "@/server/audits"
 
 export const Route = createFileRoute("/app/audits/$auditId")({
   loader: ({ params }) => getAudit({ data: { id: params.auditId } }),
-  head: ({ loaderData }) => pageTitle(`Audit of ${loaderData?.site.name ?? ""}`.trim()),
+  head: ({ loaderData }) =>
+    pageTitle(
+      loaderData === undefined
+        ? "Audit"
+        : auditTabName({
+            kind: loaderData.audit.kind,
+            siteName: loaderData.site.name,
+            pages: loaderData.audit.config.pages.length,
+            recheckTitle: loaderData.audit.recheckTitle,
+          }),
+    ),
   notFoundComponent: () => <NotFound what="Audit" />,
   component: AuditPage,
 })
@@ -148,6 +164,14 @@ function AuditPage() {
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const full = overview || active
   const params = { auditId: audit.id }
+  const named = {
+    kind: audit.kind,
+    siteName: site.name,
+    pages: audit.config.pages.length,
+    recheckTitle: audit.recheckTitle,
+  }
+  const title = auditTitle({ ...named, createdAt: audit.createdAt }, timeZone)
+  const tabName = auditTabName(named)
   const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
     {
@@ -196,7 +220,7 @@ function AuditPage() {
       </>
     ) : null
   const shareLink =
-    !active && summary.evaluatedRuns > 0 ? (
+    audit.kind === "full" && !active && summary.evaluatedRuns > 0 ? (
       <Link
         to="/app/audits/$auditId/report"
         params={{ auditId: audit.id }}
@@ -225,12 +249,17 @@ function AuditPage() {
     >
       {full ? (
         <PageHeader
-          title={`Audit of ${site.name}`}
+          title={title}
           breadcrumb={[
             { label: "Clients", to: "/app/clients" },
             { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
             { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-            { label: `Audit · ${shortDate(audit.createdAt, timeZone)}` },
+            {
+              label:
+                audit.kind === "narrow"
+                  ? "Re-check"
+                  : `Audit · ${shortDate(audit.createdAt, timeZone)}`,
+            },
           ]}
           meta={
             <>
@@ -279,9 +308,7 @@ function AuditPage() {
               <ChevronLeft className="size-4" aria-hidden="true" />
               <span className="max-sm:sr-only">{site.name}</span>
             </Link>
-            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">
-              Audit of {site.name}
-            </h1>
+            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">{tabName}</h1>
             <StatusBadge status={toBadgeStatus(audit.status)} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 max-sm:pl-1">

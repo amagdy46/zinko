@@ -38,7 +38,8 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
-import { count, relativeTime } from "@/lib/format"
+import { recheckVerdict } from "@/lib/compare-text"
+import { count, relativeTime, shortDate as dayOf } from "@/lib/format"
 import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
@@ -96,6 +97,25 @@ function TriageLine({ triage }: { triage: FindingDetailData["triage"] }) {
             : `Carried over from the audit of ${shortDate(origin.at)}`}
         </span>
       )}
+    </p>
+  )
+}
+
+/** The newest re-check of this finding made since the audit, with its verdict and a way to open it. */
+function RecheckLine({ recheck }: { recheck: FindingDetailData["recheck"] }) {
+  if (recheck === null) return null
+  const verdict = recheckVerdict(recheck)
+  return (
+    <p className="flex flex-wrap items-center gap-x-1.5 text-sm" data-testid="recheck-line">
+      <span className="font-medium">Re-check, {dayOf(recheck.createdAt)}:</span>
+      {verdict.text}
+      <Link
+        to="/app/audits/$auditId/overview"
+        params={{ auditId: recheck.auditId }}
+        className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      >
+        View the re-check
+      </Link>
     </p>
   )
 }
@@ -185,13 +205,8 @@ function TriageMenu({
               aria-describedby="reason-hint"
               required
             />
-            {reason.trim() === "" ? (
-              <p id="reason-hint" className="text-xs text-muted-foreground">
-                A reason is required to accept a risk.
-              </p>
-            ) : null}
-            <p className="text-xs text-muted-foreground">
-              The reason is printed in client reports.
+            <p id="reason-hint" className="text-xs text-muted-foreground">
+              Add a reason; it is printed in client reports.
             </p>
             {error === null ? null : (
               <p role="alert" className="text-sm text-destructive">
@@ -317,7 +332,7 @@ export function FindingDetail({
             className="h-8"
             onClick={() => setVerifying(true)}
           >
-            Verify fix
+            Re-check this finding
           </Button>
           <RecheckDialog
             auditId={auditId}
@@ -389,6 +404,7 @@ export function FindingDetail({
         ) : (
           <>
             <TriageLine triage={detail.value.triage} />
+            <RecheckLine recheck={detail.value.recheck} />
             {finding.rulesVersions.length > 1 ? (
               <p className="text-xs text-muted-foreground">
                 Evaluated with rules versions {finding.rulesVersions.join(", ")}; the text below is

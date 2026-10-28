@@ -30,7 +30,7 @@ export function RecheckDialog({
   auditId: string
   ruleId: string
   against?: string
-  /** The wording of a fix check ("Verify fix") rather than of a change check. */
+  /** Opened from a finding ("Re-check this finding") rather than from a change in Compare ("Re-check these pages"). */
   verify: boolean
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -130,13 +130,12 @@ function RecheckBody({
       description = `${count(summary.runs, "run")}${extra}, ${summary.duration}, on the ${count(summary.pages, "page")} where this check ${verify ? "fails" : "changed"}.${dropped} The result is shown as a re-check of this audit, not as a new audit of the site.`
     }
   }
-  const action = verify ? "Verify fix" : "Re-check"
   const blocked = preview === null || preview.summary === null || preview.unavailable !== null
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{verify ? "Verify the fix?" : "Re-check these pages?"}</DialogTitle>
+        <DialogTitle>{verify ? "Re-check this finding?" : "Re-check these pages?"}</DialogTitle>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       {preview?.unavailable && preview.summary !== null ? (
@@ -154,7 +153,7 @@ function RecheckBody({
           Cancel
         </Button>
         <Button disabled={pending || blocked} onClick={() => void confirm()}>
-          {pending ? "Starting..." : action}
+          {pending ? "Starting..." : "Re-check"}
         </Button>
       </DialogFooter>
     </>

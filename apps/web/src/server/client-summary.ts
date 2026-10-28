@@ -40,6 +40,10 @@ export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
     return yield* db
       .select({
         id: audit.id,
+        pages: sql<number>`jsonb_array_length(${audit.config} -> 'pages')`.mapWith(Number),
+        recheckTitle: sql<
+          string | null
+        >`(select ${checkResult.title} from ${checkResult} join ${run} on ${run.id} = ${checkResult.runId} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId} and ${checkResult.ruleId} = ${audit.narrowRuleId} limit 1)`,
         total: sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)})`.mapWith(Number),
         finished:
           sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and ${run.status} in ('complete', 'partial', 'failed'))`.mapWith(

@@ -287,3 +287,21 @@ export const changesBriefing = (c: Comparison, tagsGone: ReadonlyArray<string>):
   )
   return lines.slice(0, 6)
 }
+
+/** What a finished re-check found, as one sentence; a run with no verdict is never counted as a pass. */
+export function recheckVerdict(r: { failingRuns: number; determinateRuns: number; runs: number }): {
+  state: "fixed" | "still-fails" | "incomplete"
+  text: string
+} {
+  const unknown = r.runs - r.determinateRuns
+  const coverage = `${r.determinateRuns} of ${count(r.runs, "run")} gave a complete result, ${unknown} could not be checked or did not finish`
+  if (r.failingRuns > 0) {
+    const text = `Still fails on ${r.failingRuns} of the ${count(r.runs, "run")} re-checked.`
+    return {
+      state: "still-fails",
+      text: unknown > 0 ? `${text} Re-check incomplete: ${coverage}.` : text,
+    }
+  }
+  if (unknown > 0) return { state: "incomplete", text: `Re-check incomplete: ${coverage}.` }
+  return { state: "fixed", text: `No longer fails on the ${count(r.runs, "run")} re-checked.` }
+}

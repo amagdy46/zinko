@@ -8,9 +8,12 @@ import { auditInOrg } from "./audit-data"
 import { briefingOf } from "./compare-data"
 import { findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
+import { ruleTitleOf, verdictOf } from "./recheck-data"
 import { requireSession } from "./require-session"
 import { scoreSummaryOf } from "./score-summary"
 import { membership, read } from "./server-fn"
+
+const SEVERITY_RANK = ["critical", "warning", "info"] as const
 
 const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 const decodeStartPage = Schema.decodeUnknownEffect(
@@ -51,15 +54,22 @@ export const getOverview = createServerFn({ method: "GET" })
         for (const f of failing) areaOf(f.area)[f.severity] += 1
         const unchecked = findings.filter((f) => f.kind === "inconclusive")
         for (const f of unchecked) areaOf(f.area).couldNotCheck += 1
+        const { db } = yield* Database
+        const [self] = yield* db
+          .select({ kind: audit.kind, ruleId: audit.narrowRuleId })
+          .from(audit)
+          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
         const top = failing
-          .filter((f) => f.triage.status === "open")
+          .filter(
+            (f) =>
+              f.triage.status === "open" && (self?.kind !== "narrow" || f.ruleId === self.ruleId),
+          )
           .toSorted(
             (a, b) =>
               SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
               b.failingRuns - a.failingRuns ||
               a.ruleId.localeCompare(b.ruleId),
           )[0]
-        const { db } = yield* Database
         let worst = null
         if (top !== undefined) {
           const { finding: stored } = yield* findingRowOf(orgId, auditId, top.ruleId)
@@ -155,43 +165,17 @@ export const getOverview = createServerFn({ method: "GET" })
           startUrl,
           reasonOf: runReason,
         })
+        const worstSeverity = SEVERITY_RANK.find((s) => failing.some((f) => f.severity === s))
         const briefing = yield* briefingOf(orgId, auditId)
-        const [self] = yield* db
-          .select({ kind: audit.kind, ruleId: audit.narrowRuleId })
-          .from(audit)
-          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
-        // a re-check's result: how many of the runs re-checked gave a verdict, and how many still fail
-        const [verdicts] =
+        const verdicts =
           self?.kind === "narrow" && self.ruleId !== null
-            ? yield* db
-                .select({
-                  failing:
-                    sql<number>`count(*) filter (where ${checkResult.status} = 'fail')`.mapWith(
-                      Number,
-                    ),
-                  determinate:
-                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable') and ${run.status} = 'complete')`.mapWith(
-                      Number,
-                    ),
-                })
-                .from(checkResult)
-                .innerJoin(run, eq(run.id, checkResult.runId))
-                .where(
-                  and(
-                    eq(run.auditId, auditId),
-                    eq(run.role, "target"),
-                    eq(run.orgId, orgId),
-                    eq(checkResult.orgId, orgId),
-                    eq(checkResult.ruleId, self.ruleId),
-                  ),
-                )
-            : []
-        const rechecked = findings.find((f) => f.ruleId === self?.ruleId)
+            ? yield* verdictOf(orgId, auditId, self.ruleId)
+            : undefined
         const recheck =
           self?.kind === "narrow" && self.ruleId !== null
             ? {
                 ruleId: self.ruleId,
-                title: rechecked?.title ?? null,
+                title: yield* ruleTitleOf(orgId, auditId, self.ruleId),
                 failingRuns: verdicts?.failing ?? 0,
                 determinateRuns: verdicts?.determinate ?? 0,
                 runs: coverage.totalRuns,
@@ -221,6 +205,11 @@ export const getOverview = createServerFn({ method: "GET" })
           },
           checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
           withoutAccepted: summary.withoutAccepted,
+          bandAllAccepted:
+            worstSeverity !== undefined &&
+            failing
+              .filter((f) => f.severity === worstSeverity)
+              .every((f) => f.triage.status === "accepted_risk"),
           worst,
           tags,
           status,

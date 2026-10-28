@@ -261,11 +261,16 @@ function SitePage() {
                       {shortDateTime(a.createdAt, timeZone)}
                     </time>
                   </Link>
+                  <span className="block text-xs text-muted-foreground">
+                    {a.kind === "narrow"
+                      ? `Re-check of ${a.recheckTitle ?? "one check"}`
+                      : count(a.pages, "page")}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <span className="flex flex-wrap items-center gap-1.5">
                     <StatusBadge status={toBadgeStatus(a.status)} />
-                    {a.kind === "narrow" ? <Badge variant="outline">Verification</Badge> : null}
+                    {a.kind === "narrow" ? <Badge variant="outline">Re-check</Badge> : null}
                   </span>
                 </TableCell>
                 <TableCell className="tabular-nums">
@@ -369,11 +374,7 @@ function AuditFindings({
     return <span className="text-xs text-muted-foreground">Checks are still to come</span>
   }
   if (audit.kind === "narrow") {
-    return (
-      <span className="text-xs text-muted-foreground">
-        Re-check of {audit.narrowRuleId ?? "one check"}
-      </span>
-    )
+    return <span className="text-xs text-muted-foreground">Not scored: it covers one check</span>
   }
   if (audit.findings === null) {
     return <span className="text-xs text-muted-foreground">Not evaluated</span>
