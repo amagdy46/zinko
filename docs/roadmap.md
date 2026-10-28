@@ -88,7 +88,7 @@ From `docs/research/2026-10-28-pain-points.md` and `docs/research/2026-10-28-com
 
 ## UX rounds
 
-Each round an agent walks the product as a first-time consultant and the issues are fixed in batches. Round 1 (2026-10-28): `docs/qa/2026-10-28-ux-sweep-r1.md`, 9 major, 18 minor, 9 polish, no blocker.
+Each round an agent walks the product as a first-time consultant and the issues are fixed in batches. Round 1 (2026-10-28): `docs/qa/2026-10-28-ux-sweep-r1.md`, 9 major, 18 minor, 9 polish, no blocker. Fixed in batches A to D. Round 2 (same day): `docs/qa/2026-10-28-ux-sweep-r2.md`, 33 of the round 1 items fixed or mostly fixed, 16 new (3 major: a 404 key page counted as captured, `https://` forced on localhost, a stale start URL error), fixed in batches E to G. Open for round 3: an incomplete audit with nothing captured still shows a large 100/100 beside "Incomplete"; the preflight checks hostnames, not resolved addresses (a public name pointing at a private IP passes; Workers refuse private IPs when deployed); captures stored before `HttpStatus` existed still show a 404 page as Captured.
 
 ## After v0.1
 
