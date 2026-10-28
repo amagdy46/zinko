@@ -33,6 +33,7 @@ export const defaults = {
   conflictOnReload: false, // 2 s after a reloaded document loads, a request whose gcs and gcd contradict each other
   cmpBreaksAfterChoice: false, // the banner library's script answers 404 once the visitor's choice is stored
   ghostBanner: false, // once a choice is stored, banner markup is kept in the page but invisible (visibility hidden, as a CMP that animates out leaves it)
+  reloadAfterChoice: false, // the banner library reloads the page 1.5 s after the first choice, as some CMPs do
   cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
@@ -71,6 +72,7 @@ export const sites = {
   "consent-conflict": { conflictOnReload: true },
   "consent-cmp-404": { cmpBreaksAfterChoice: true },
   "consent-ghost-banner": { ghostBanner: true },
+  "consent-reload-after-choice": { reloadAfterChoice: true },
   "consent-template-only": { consentDefault: "none", consentRestore: "never" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },

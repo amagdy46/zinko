@@ -540,7 +540,8 @@ const snapshot = async (label: Snapshot["label"]): Promise<Snapshot> => ({
 
 const checkpoint = async () => {
   await drainPage()
-  for (const document of documents.values()) emit({ type: "document", document })
+  for (const document of documents.values())
+    emit({ type: "document", document: withBanner(document) })
   if (dirty.size > 0) {
     const changed = [...dirty].flatMap((id) => requests.get(id) ?? [])
     for (const part of chunks(changed)) emit({ type: "requests", requests: part })
@@ -705,21 +706,36 @@ const failedScript = (documentId: string) =>
       (request.status === null || request.status >= 400),
   )
 
+type BannerState = NonNullable<Document["banner"]>
+// One window per main document, started when it commits and bound to its id.
+const bannerResults = new Map<string, BannerState>()
+const bannerWindows = new Map<string, Promise<void>>()
+
+/** Only a verified accept or reject gives a document a banner state. */
+const withBanner = (document: Document): Document => {
+  const result = bannerResults.get(document.id)
+  const verified = consent.outcome === "accepted" || consent.outcome === "rejected"
+  return result !== undefined && verified ? { ...document, banner: result } : document
+}
+
+const quietNow = () => inflight.size === 0 && Date.now() - lastActivity >= QUIET_MS
+
 /**
- * Whether the banner of the detected CMP is shown in a document loaded after the consent action.
- * Polls from the document's commit until the observation window has ended, for at least
- * `BANNER_MIN_MS` and at most `WINDOW_CAP_MS`. `shown` is sticky (the first poll that sees it
- * wins), `hidden` needs a definite no from a frame with the CMP detected and no yes, anything
- * else is `unknown`.
+ * Whether the banner of the detected CMP is shown in one document loaded after the consent action.
+ * Polls from the document's commit, at least `BANNER_MIN_MS` and until the network has been quiet
+ * (at most `WINDOW_CAP_MS`). `shown` is sticky (the first poll that sees it wins), `hidden` needs a
+ * definite no with the CMP shown to be there and no yes, anything else is `unknown`; so is a window
+ * a navigation interrupts, since what a poll then reads may belong to the next document.
  */
-const observeBanner = async (documentId: string, cmp: string, windowEnded: () => boolean) => {
+const observeBanner = async (documentId: string, cmp: string) => {
   const start = Date.now()
-  const poll = async (seenHidden: boolean): Promise<"shown" | "hidden" | "unknown"> => {
+  const poll = async (seenHidden: boolean): Promise<BannerState> => {
     const state = await probeBanner(cmp)
+    if (currentDocument !== documentId) return "unknown"
     if (state === true) return "shown"
     const hidden = seenHidden || state === false
     const elapsed = Date.now() - start
-    if (elapsed >= WINDOW_CAP_MS || (elapsed >= BANNER_MIN_MS && windowEnded()))
+    if (elapsed >= WINDOW_CAP_MS || (elapsed >= BANNER_MIN_MS && quietNow()))
       return hidden ? "hidden" : "unknown"
     await sleep(BANNER_POLL_MS)
     return poll(hidden)
@@ -727,9 +743,27 @@ const observeBanner = async (documentId: string, cmp: string, windowEnded: () =>
   const polled = await poll(false)
   // A script of the page that failed may be the consent platform: an absent banner proves nothing.
   const result = polled === "hidden" && failedScript(documentId) ? "unknown" : polled
-  const document = documents.get(documentId)
-  if (document !== undefined) documents.set(documentId, { ...document, banner: result })
+  bannerResults.set(documentId, result)
   log(`banner window ${documentId}: ${result} after ${Date.now() - start} ms`)
+}
+
+/** At a main document's commit: watch its banner, if it loaded after the consent action. */
+const watchBanner = (documentId: string) => {
+  const document = documents.get(documentId)
+  if (
+    consent.cmp === null ||
+    consent.actionAt === null ||
+    document === undefined ||
+    document.startedAt <= consent.actionAt ||
+    bannerWindows.has(documentId)
+  )
+    return
+  bannerWindows.set(
+    documentId,
+    observeBanner(documentId, consent.cmp).catch((cause: unknown) => {
+      log(`banner window: ${firstLine(cause)}`)
+    }),
+  )
 }
 
 type Verification = {
@@ -783,7 +817,6 @@ const settleConsent = () => {
   const state = verification
   if (state === undefined) return
   verification = undefined
-  watchMode = true
   const { action, cmp, bannerShown: shown, consentUpdate: seenUpdate } = state
   const evidence = [
     ...(shown === false ? ["banner-closed"] : []),
@@ -850,6 +883,8 @@ const runConsent = async (loadedAt: number) => {
   const document = currentDocument
   consent.actionAt = actionAt
   actionsSent += 1
+  // Documents loaded from here on (a CMP that reloads the page) get a watching autoconsent.
+  watchMode = true
   await found.frame.evaluate(`autoconsentReceiveMessage({ type: "${action}" })`)
   const result = await waitMessage((message) => message.type === `${action}Result`, CONSENT_STEP_MS)
   const done = await waitMessage((message) => message.type === "autoconsentDone", CONSENT_STEP_MS)
@@ -906,6 +941,8 @@ const runStep = async (
   const current = page
   if (current === undefined || leftSite !== undefined) return false
   const before = currentDocument
+  // Leaving a page ends its banner window, so let it finish first.
+  await (before === undefined ? undefined : bannerWindows.get(before))
   await flushBeacons()
   const held = await snapshot("document-end")
   await observeConsent()
@@ -948,16 +985,11 @@ const runStep = async (
     }
   }
   pendingNavigation = undefined
-  let windowEnded = false
-  const settled = observeWindow().then(() => {
-    windowEnded = true
-  })
-  const watched = consent.outcome === "accepted" || consent.outcome === "rejected"
   const banner =
-    watched && consent.cmp !== null && currentDocument !== undefined && currentDocument !== before
-      ? observeBanner(currentDocument, consent.cmp, () => windowEnded)
+    currentDocument !== undefined && currentDocument !== before
+      ? bannerWindows.get(currentDocument)
       : undefined
-  await Promise.all([settled, banner])
+  await Promise.all([observeWindow(), banner])
   if (step.action === "click" && currentDocument !== before)
     emit({ type: "cookies", snapshot: held })
   // A click can start an off-site navigation after `load` has already resolved.
@@ -967,6 +999,7 @@ const runStep = async (
 const finish = async () => {
   if (page === undefined) return
   settleConsent()
+  await Promise.all(bannerWindows.values())
   // After a refused navigation the page shows Chromium's error page: nothing to photograph.
   if (committed && leftSite === undefined) {
     try {
@@ -1083,6 +1116,10 @@ const run = async () => {
   await guardNavigations(page)
   context.on("page", refusePopup)
   page.on("pageerror", (cause) => log(`pageerror: ${firstLine(cause)}`))
+  page.on("framenavigated", (frame) => {
+    if (frame !== page?.mainFrame() || currentDocument === undefined) return
+    if (!frame.url().startsWith("chrome-error:")) watchBanner(currentDocument)
+  })
   const main = page.mainFrame()
   await page.exposeBinding("__zinkoDataLayer", ({ frame }, entry: unknown) => {
     if (frame === main) addDataLayer([entry])

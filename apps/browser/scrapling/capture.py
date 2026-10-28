@@ -258,6 +258,9 @@ class Capture:
         self.after_consent_taken = False
         # Once the choice is settled autoconsent only watches: it detects but hides and clicks nothing.
         self.watch_mode = False
+        # One banner window per main document, started when it commits and bound to its id.
+        self.banner_results: dict[str, str] = {}
+        self.banner_windows: dict[str, asyncio.Future] = {}
         self.actions_sent = 0
         # How the next top-level document is reached; a navigation no step asked for is a click.
         self.pending_navigation: str | None = None
@@ -704,7 +707,7 @@ class Capture:
     async def checkpoint(self) -> None:
         await self.drain_page()
         for doc in self.documents.values():
-            emit({"type": "document", "document": doc})
+            emit({"type": "document", "document": self.with_banner(doc)})
         if self.dirty:
             for part in chunks([self.requests[rid] for rid in sorted(self.dirty)]):
                 emit({"type": "requests", "requests": part})
@@ -842,33 +845,58 @@ class Capture:
             for r in self.requests.values()
         )
 
-    async def observe_banner(self, document_id: str, cmp: str, window_ended) -> None:
-        """Whether the banner of the detected CMP is shown in a document loaded after the consent action.
+    def with_banner(self, doc: dict) -> dict:
+        """Only a verified accept or reject gives a document a banner state."""
+        result = self.banner_results.get(doc["id"])
+        if result is not None and self.consent["outcome"] in ("accepted", "rejected"):
+            return {**doc, "banner": result}
+        return doc
 
-        Polls from the document's commit until the observation window has ended, for at least
-        `BANNER_MIN_S` and at most `WINDOW_CAP_S`. `shown` is sticky (the first poll that sees it
-        wins), `hidden` needs a definite no from a frame with the CMP detected and no yes, anything
-        else is `unknown`."""
+    def quiet_now(self) -> bool:
+        return not self.inflight and time.monotonic() - self.last_activity >= QUIET_S
+
+    async def observe_banner(self, document_id: str, cmp: str) -> None:
+        """Whether the banner of the detected CMP is shown in one document loaded after the consent action.
+
+        Polls from the document's commit, at least `BANNER_MIN_S` and until the network has been
+        quiet (at most `WINDOW_CAP_S`). `shown` is sticky (the first poll that sees it wins),
+        `hidden` needs a definite no with the CMP shown to be there and no yes, anything else is
+        `unknown`; so is a window a navigation interrupts, since what a poll then reads may belong
+        to the next document."""
         start = time.monotonic()
-        result = "unknown"
+        seen_hidden = False
         while True:
             state = await self.probe_banner(cmp)
+            if self.current_document != document_id:
+                result = "unknown"
+                break
             if state is True:
                 result = "shown"
                 break
-            if state is False:
-                result = "hidden"
+            seen_hidden = seen_hidden or state is False
             elapsed = time.monotonic() - start
-            if elapsed >= WINDOW_CAP_S or (elapsed >= BANNER_MIN_S and window_ended()):
+            if elapsed >= WINDOW_CAP_S or (elapsed >= BANNER_MIN_S and self.quiet_now()):
+                result = "hidden" if seen_hidden else "unknown"
                 break
             await asyncio.sleep(BANNER_POLL_S)
         # A script of the page that failed may be the consent platform: an absent banner proves nothing.
         if result == "hidden" and self.failed_script(document_id):
             result = "unknown"
-        document = self.documents.get(document_id)
-        if document is not None:
-            document["banner"] = result
+        self.banner_results[document_id] = result
         log(f"banner window {document_id}: {result} after {round((time.monotonic() - start) * 1000)} ms")
+
+    def watch_banner(self, document_id: str) -> None:
+        """At a main document's commit: watch its banner, if it loaded after the consent action."""
+        document = self.documents.get(document_id)
+        if (
+            self.consent["cmp"] is None
+            or self.consent["actionAt"] is None
+            or document is None
+            or document["startedAt"] <= self.consent["actionAt"]
+            or document_id in self.banner_windows
+        ):
+            return
+        self.banner_windows[document_id] = asyncio.ensure_future(self.observe_banner(document_id, self.consent["cmp"]))
 
     async def verify_choice(self, frame, document: str | None, deadline: float) -> None:
         """Watches for evidence that the choice took effect, the banner gone or a matching consent
@@ -893,7 +921,6 @@ class Capture:
         state, self.verification = self.verification, None
         if state is None:
             return
-        self.watch_mode = True
         action, cmp, shown, update = state["action"], state["cmp"], state["bannerShown"], state["consentUpdate"]
         evidence = [
             name
@@ -957,6 +984,8 @@ class Capture:
         document = self.current_document
         self.consent["actionAt"] = action_at
         self.actions_sent += 1
+        # Documents loaded from here on (a CMP that reloads the page) get a watching autoconsent.
+        self.watch_mode = True
         await found["frame"].evaluate(f"autoconsentReceiveMessage({{ type: '{action}' }})", isolated_context=False)
         result = await self.wait_message(lambda m: m.get("type") == f"{action}Result", CONSENT_STEP_S)
         done = await self.wait_message(lambda m: m.get("type") == "autoconsentDone", CONSENT_STEP_S)
@@ -1033,6 +1062,12 @@ class Capture:
         await self.guard_navigations()
         ctx.on("page", self.refuse_popup)
         self.page.on("pageerror", lambda exc: log(f"pageerror: {exc}"))
+
+        def on_commit(frame) -> None:
+            if frame == self.page.main_frame and self.current_document is not None and not frame.url.startswith("chrome-error:"):
+                self.watch_banner(self.current_document)
+
+        self.page.on("framenavigated", on_commit)
         await self.page.expose_binding("__zinkoDataLayer", self.on_data_layer)
         if self.block_vendors:
             await self.page.expose_binding("__zinkoBlockedSocket", self.on_blocked_socket)
@@ -1107,6 +1142,9 @@ class Capture:
         if self.left_site is not None:
             return False
         before = self.current_document
+        # Leaving a page ends its banner window, so let it finish first.
+        if before in self.banner_windows:
+            await self.banner_windows[before]
         await self.flush_beacons()
         held = await self.snapshot("document-end")
         await self.observe_consent()
@@ -1147,14 +1185,12 @@ class Capture:
                 self.error("JourneyStep", f"step {index + 1} click {step['selector']}: {exc}".split("\n")[0])
                 return False
         self.pending_navigation = None
-        window = asyncio.ensure_future(self.observe_window())
-        watched = self.consent["outcome"] in ("accepted", "rejected")
         banner = (
-            self.observe_banner(self.current_document, self.consent["cmp"], window.done)
-            if watched and self.consent["cmp"] is not None and self.current_document not in (None, before)
-            else asyncio.sleep(0)
+            self.banner_windows.get(self.current_document)
+            if self.current_document not in (None, before)
+            else None
         )
-        await asyncio.gather(window, banner)
+        await asyncio.gather(self.observe_window(), *([banner] if banner is not None else []))
         if step["action"] == "click" and self.current_document != before:
             emit({"type": "cookies", "snapshot": held})
         # A click can start an off-site navigation after `load` has already resolved.
@@ -1167,6 +1203,7 @@ class Capture:
         if self.verification is not None:
             self.verify_task.cancel()
             self.settle_consent()
+        await asyncio.gather(*self.banner_windows.values())
         # After a refused navigation the page shows Chromium's error page: nothing to photograph.
         if self.committed and self.left_site is None:
             try:

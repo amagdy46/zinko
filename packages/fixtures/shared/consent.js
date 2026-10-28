@@ -19,6 +19,7 @@ function runBanner() {
     },
     // onConsent also fires on every load while a stored choice is valid; onFirstConsent only once
     onFirstConsent: () => {
+      if (window.zinkoConfig.reloadAfterChoice) setTimeout(() => location.reload(), 1500)
       if (window.zinkoConfig.consentRestore === "never") reportConsent()
     },
     onConsent: () => {
