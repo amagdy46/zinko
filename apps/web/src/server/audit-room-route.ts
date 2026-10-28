@@ -16,12 +16,12 @@ const pattern = /^\/ws\/audits\/([^/]+)$/
  * Browsers attach cookies to cross-site WebSocket handshakes, so the page's origin must be the
  * app's own: the request URL's origin, or the configured `BETTER_AUTH_URL`.
  */
-const isAllowedOrigin = (request: Request, baseURL: string | undefined) => {
+const isAllowedOrigin = (request: Request, baseURL: unknown) => {
   const origin = request.headers.get("Origin")
   if (origin === null || origin === "null") return false
   return (
     origin === new URL(request.url).origin ||
-    (baseURL !== undefined && origin === new URL(baseURL).origin)
+    (typeof baseURL === "string" && origin === new URL(baseURL).origin)
   )
 }
 

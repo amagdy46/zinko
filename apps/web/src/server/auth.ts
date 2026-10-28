@@ -6,19 +6,28 @@ export interface AuthSettings {
   readonly database: NonNullable<BetterAuthOptions["database"]>
   readonly secret: string
   readonly baseURL: string | undefined
+  /** Local dev stages only: no fixed origin (Vite moves to the next free port), so trust any localhost port. */
+  readonly local: boolean
+}
+
+const localhostOrigins = {
+  allowedHosts: ["localhost:*", "127.0.0.1:*"],
+  protocol: "http" as const,
 }
 
 /**
  * Better Auth for one request scope (see auth-live.ts). `efforge add` appends plugins to the
  * `plugins` list, so keep the `plugins: [...]` array shape.
  */
-export const makeAuth = ({ database, secret, baseURL }: AuthSettings) =>
-  betterAuth({
+export const makeAuth = ({ database, secret, baseURL, local }: AuthSettings) => {
+  const origin = baseURL ?? (local ? localhostOrigins : undefined)
+  return betterAuth({
     database,
     secret,
-    ...(baseURL === undefined ? {} : { baseURL }),
+    ...(origin === undefined ? {} : { baseURL: origin }),
     emailAndPassword: { enabled: true },
     plugins: [/* efforge:auth-plugins */ organization({ sendInvitationEmail })],
   })
+}
 
 export type AuthInstance = ReturnType<typeof makeAuth>

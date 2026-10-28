@@ -73,7 +73,9 @@ export function useAuditRoom(
       clearTimeout(retry)
       clearInterval(ping)
       clearInterval(refresh)
-      ws?.close()
+      // closing a socket that is still connecting makes the browser log a warning
+      if (ws?.readyState === WebSocket.CONNECTING) ws.addEventListener("open", () => ws?.close())
+      else ws?.close()
     }
   }, [auditId, enabled])
 

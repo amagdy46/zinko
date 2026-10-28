@@ -14,14 +14,16 @@ const BetterAuthLive = Layer.effect(
   Effect.gen(function* () {
     const { database } = yield* AuthDatabase
     const provider = yield* WorkerConfig.provider
-    const { secret, baseURL } = yield* Effect.all({
+    const { secret, baseURL, local } = yield* Effect.all({
       secret: Config.Redacted("BETTER_AUTH_SECRET").parse(provider),
       baseURL: Config.option(Config.String("BETTER_AUTH_URL")).parse(provider),
+      local: Config.option(Config.String("ALLOW_PRIVATE_SITES")).parse(provider),
     })
     return makeAuth({
       database,
       secret: Redacted.value(secret),
       baseURL: Option.getOrUndefined(Option.filter(baseURL, (url) => url !== "")),
+      local: Option.contains(local, "true"),
     })
   }),
 ).pipe(Layer.provide(AuthDatabaseLayer), Layer.provide(WorkerEnvLive))
