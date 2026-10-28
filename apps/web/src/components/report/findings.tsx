@@ -82,7 +82,7 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
         role="region"
         aria-label="Evidence, scrolls sideways on a narrow screen"
         tabIndex={0}
-        className="scroll-edges hidden overflow-x-auto outline-none [--background:var(--card)] focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:block print:block print:overflow-visible"
+        className="scroll-edges hidden overflow-x-auto outline-none [--background:var(--card)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset sm:block print:block print:overflow-visible"
       >
         <table className="w-full min-w-[30rem] border-collapse text-left text-xs leading-5 print:min-w-0">
           <thead>

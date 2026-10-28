@@ -126,7 +126,7 @@ function Detail({
           to="/app/audits/$auditId/findings"
           params={{ auditId }}
           search={{ finding: finding.ruleId }}
-          className="inline-flex h-8 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="inline-flex h-8 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Open in Findings
         </Link>
@@ -142,7 +142,7 @@ function Detail({
           tabIndex={0}
           role="region"
           aria-label="Runs that changed"
-          className="overflow-x-auto rounded-md border outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="overflow-x-auto rounded-md border outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
         >
           <Table>
             <TableHeader>

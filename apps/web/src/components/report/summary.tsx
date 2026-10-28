@@ -8,7 +8,7 @@ import type { ReportModel } from "@/lib/report-model"
 import type { ReactNode } from "react"
 
 const LINK =
-  "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 function Headlines({ model, title }: { model: ReportModel; title: string }) {
   return (

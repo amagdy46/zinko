@@ -74,7 +74,7 @@ export function ReportIntro({
                 It prints your organization's name and no logo.{" "}
                 <Link
                   to="/app/settings/branding"
-                  className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                  className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
                   Add a logo and agency name
                 </Link>

@@ -143,7 +143,7 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
             <Label
               htmlFor="branding-logo"
               className={cn(
-                "inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-sm font-medium hover:bg-accent has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-ring/50",
+                "inline-flex h-8 cursor-pointer items-center rounded-md border px-3 text-sm font-medium hover:bg-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-background",
                 pending !== null && "pointer-events-none opacity-50",
               )}
             >
@@ -252,7 +252,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
                     className={cn(
                       "flex min-h-8 flex-col gap-1 rounded-md border p-2 text-sm",
                       "peer-checked:border-report-accent peer-checked:bg-accent",
-                      "peer-focus-visible:ring-[3px] peer-focus-visible:ring-ring/50",
+                      "peer-focus-visible:ring-2 peer-focus-visible:ring-ring peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background",
                       "peer-disabled:opacity-60",
                     )}
                   >

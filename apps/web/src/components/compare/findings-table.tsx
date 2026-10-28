@@ -33,7 +33,7 @@ function ChangeRow({
         type="button"
         onClick={(event) => onOpen(finding.ruleId, event.currentTarget)}
         data-rule={finding.ruleId}
-        className="flex min-h-12 w-full flex-col gap-1 border-b px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset"
+        className="flex min-h-12 w-full flex-col gap-1 border-b px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <ChangeBadge state={finding.state} />
@@ -101,7 +101,7 @@ function NotComparableGroup({
   const [open, setOpen] = useState(filtered)
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="space-y-2">
-      <CollapsibleTrigger className="flex h-8 w-full items-center justify-between gap-2 rounded-md text-left text-base font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+      <CollapsibleTrigger className="flex h-8 w-full items-center justify-between gap-2 rounded-md text-left text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         {heading}
         <ChevronDown
           aria-hidden="true"

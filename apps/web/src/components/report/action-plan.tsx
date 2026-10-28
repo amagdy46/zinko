@@ -3,7 +3,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { OWNER_LABELS, type ReportModel } from "@/lib/report-model"
 
 const LINK =
-  "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 /** What to fix, grouped by who usually fixes it; accepted risks and fixed findings are listed apart. */
 export function ActionPlan({ model }: { model: ReportModel }) {

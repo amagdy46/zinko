@@ -67,7 +67,7 @@ export function TagsSection({ auditId, against }: { auditId: string; against: st
   }, [open, auditId, against])
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="space-y-2">
-      <CollapsibleTrigger className="flex h-8 w-full items-center justify-between gap-2 rounded-md text-left text-base font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+      <CollapsibleTrigger className="flex h-8 w-full items-center justify-between gap-2 rounded-md text-left text-base font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
         Tags
         <ChevronDown
           aria-hidden="true"
@@ -120,7 +120,7 @@ function Diff({ diff }: { diff: TagDiff }) {
                   >
                     <p>{lineOf(c)}</p>
                     <details className="mt-1">
-                      <summary className="inline-flex min-h-8 cursor-pointer items-center rounded-sm text-muted-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                      <summary className="inline-flex min-h-8 cursor-pointer items-center rounded-sm text-muted-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                         Show runs
                         {c.cellsAffected > c.cells.length
                           ? ` (${c.cells.length} of ${c.cellsAffected})`

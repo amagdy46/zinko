@@ -116,7 +116,7 @@ function OverviewScreen() {
         <Link
           to="/app/audits/$auditId/report"
           params={{ auditId: audit.id }}
-          className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Open the report
         </Link>
