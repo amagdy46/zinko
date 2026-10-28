@@ -136,7 +136,7 @@ export const runDuration = (run: { startedAt: Date | null; finishedAt: Date | nu
 export const runMeaning = (status: string) => {
   switch (status) {
     case "complete":
-      return "pass"
+      return "captured"
     case "running":
       return "running"
     case "partial":

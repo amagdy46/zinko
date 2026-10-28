@@ -1,8 +1,8 @@
 import { Link } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
-import { type AuditRun, RunImage } from "@/components/run-matrix"
-import { StatusBadge } from "@/components/status-badge"
+import { RunPath } from "@/components/evidence"
+import { type AuditRun, RunImage, RunStatusBadge } from "@/components/run-matrix"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -11,7 +11,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet"
-import { runPage, runReason, runDuration, scenarioLabel } from "@/lib/audit-labels"
+import { runReason, runDuration, scenarioLabel } from "@/lib/audit-labels"
 import { duration } from "@/lib/format"
 
 type Finding = { ruleId: string; title: string; runIds: string[] }
@@ -93,7 +93,9 @@ export function RunSheet({
         }}
       >
         <SheetHeader className="pr-12">
-          <SheetTitle className="break-all">{run ? runPage(run) : "Run not found"}</SheetTitle>
+          <SheetTitle className="break-all">
+            {run ? <RunPath run={run} /> : "Run not found"}
+          </SheetTitle>
           <SheetDescription>
             {run ? `Run ${index + 1} of ${runs.length}` : "This run does not belong to this audit."}
           </SheetDescription>
@@ -114,7 +116,7 @@ export function RunSheet({
                 Next
                 <ChevronRight />
               </Button>
-              <StatusBadge status={run.status} />
+              <RunStatusBadge status={run.status} />
             </div>
             <RunImage run={run} />
             <dl className="grid grid-cols-2 gap-3 text-sm">

@@ -1,6 +1,8 @@
 import { useState } from "react"
 import type { getAudit } from "@/server/audits"
+import { RunPath } from "@/components/evidence"
 import { StatusBadge } from "@/components/status-badge"
+import { Badge } from "@/components/ui/badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
 import {
@@ -12,9 +14,29 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { runPage, runReason, runMeaning, runDuration, scenarioLabel } from "@/lib/audit-labels"
-import { duration } from "@/lib/format"
+import { runPageLabel } from "@/lib/page-label"
+import { duration, count } from "@/lib/format"
+import { cn } from "@/lib/utils"
 
 export type AuditRun = Awaited<ReturnType<typeof getAudit>>["runs"][number]
+
+const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" } as const
+
+/** "Complete" reads as "passed"; a run only says the page was recorded. */
+export function RunStatusBadge({ status }: { status: string }) {
+  if (status !== "complete") return <StatusBadge status={status} />
+  return (
+    <Badge variant="secondary" className="gap-1.5 bg-muted text-muted-foreground">
+      <StatusGlyph meaning="captured" />
+      Captured
+    </Badge>
+  )
+}
+
+const failingText = (run: AuditRun) =>
+  run.failing === null
+    ? null
+    : `${count(run.failing.count, "failing check")}, worst ${SEVERITY_WORD[run.failing.severity]}`
 
 export function RunMatrix({
   runs,
@@ -37,13 +59,19 @@ export function RunMatrix({
               onClick={() => onSelect(run.id)}
               className="flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <span className="max-w-full truncate font-mono text-xs">{runPage(run)}</span>
-              <StatusBadge status={run.status} />
+              <RunPath run={run} className="max-w-full text-xs" />
+              <RunStatusBadge status={run.status} />
               <span>
                 {scenarioLabel(run.scenario)} · {run.viewport}
               </span>
               <RunImage run={run} />
               <span className="font-mono tabular-nums">{run.hitCount} hits</span>
+              {run.failing ? (
+                <span className="flex items-center gap-1.5">
+                  <StatusGlyph meaning={run.failing.severity} />
+                  {failingText(run)}
+                </span>
+              ) : null}
               <span>{runReason(run)}</span>
             </button>
           </li>
@@ -55,29 +83,45 @@ export function RunMatrix({
       <Table>
         <TableHeader>
           <TableRow>
-            {["Page", "Scenario", "Viewport", "Status", "Hits", "Duration", "Reason"].map(
-              (label) => (
-                <TableHead key={label}>{label}</TableHead>
-              ),
-            )}
+            {[
+              "Page",
+              "Scenario",
+              "Viewport",
+              "Status",
+              "Failing",
+              "Hits",
+              "Duration",
+              "Reason",
+            ].map((label) => (
+              <TableHead key={label}>{label}</TableHead>
+            ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {runs.map((run) => (
-            <TableRow key={run.id}>
+            <TableRow key={run.id} onClick={() => onSelect(run.id)} className="cursor-pointer">
               <TableCell>
                 <button
                   type="button"
-                  onClick={() => onSelect(run.id)}
-                  className="min-h-8 max-w-64 truncate text-left font-mono text-xs underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+                  className="min-h-8 max-w-64 text-left text-xs underline-offset-4 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
                 >
-                  {runPage(run)}
+                  <RunPath run={run} />
                 </button>
               </TableCell>
               <TableCell>{scenarioLabel(run.scenario)}</TableCell>
               <TableCell>{run.viewport}</TableCell>
               <TableCell>
-                <StatusBadge status={run.status} />
+                <RunStatusBadge status={run.status} />
+              </TableCell>
+              <TableCell>
+                {run.failing ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <StatusGlyph meaning={run.failing.severity} />
+                    {failingText(run)}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
               </TableCell>
               <TableCell className="font-mono tabular-nums">{run.hitCount}</TableCell>
               <TableCell className="font-mono tabular-nums">
@@ -91,13 +135,14 @@ export function RunMatrix({
     )
   const pageKey = (run: AuditRun) => `${run.pageUrl}\0${run.journey}`
   const pages = [...new Map(runs.map((run) => [pageKey(run), run])).values()]
-  const count = (label: (run: AuditRun) => string, run: AuditRun) =>
+  const countOf = (label: (run: AuditRun) => string, run: AuditRun) =>
     pages.filter((other) => label(other) === label(run)).length
   const withHost = (run: AuditRun) => `${new URL(run.pageUrl).host}${runPage(run)}`
   const withUrl = (run: AuditRun) => (run.journey ? `Journey from ${run.pageUrl}` : run.pageUrl)
   const pageLabel = (run: AuditRun) => {
-    if (count(runPage, run) === 1) return runPage(run)
-    return count(withHost, run) === 1 ? withHost(run) : withUrl(run)
+    if (countOf(runPageLabel, run) === 1) return runPageLabel(run)
+    if (countOf(runPage, run) === 1) return runPage(run)
+    return countOf(withHost, run) === 1 ? withHost(run) : withUrl(run)
   }
   const viewports = [...new Set(runs.map((run) => run.viewport))]
   const scenarios = [...new Set(runs.map((run) => run.scenario))]
@@ -105,65 +150,76 @@ export function RunMatrix({
     runs.map((run) => [`${pageKey(run)}\0${run.viewport}\0${run.scenario}`, run]),
   )
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead rowSpan={2} className="sticky left-0 z-10 min-w-40 bg-background">
-            Page
-          </TableHead>
-          {viewports.map((viewport) => (
-            <TableHead key={viewport} colSpan={scenarios.length} className="text-center capitalize">
-              {viewport}
+    <div className="space-y-2">
+      <p className="text-xs text-muted-foreground">
+        <StatusGlyph meaning="captured" className="mr-1 inline align-text-bottom" />
+        Captured means the page was loaded and recorded. Open Findings for pass or fail. A cell
+        shows the worst failing severity with its number of failing checks, then the hits.
+      </p>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead rowSpan={2} className="sticky left-0 z-10 min-w-40 bg-background">
+              Page
             </TableHead>
-          ))}
-        </TableRow>
-        <TableRow>
-          {viewports.flatMap((viewport) =>
-            scenarios.map((scenario) => (
-              <TableHead key={`${viewport}-${scenario}`} className="min-w-32 text-center">
-                {scenarioLabel(scenario)}
-              </TableHead>
-            )),
-          )}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {pages.map((pageRun) => {
-          const page = pageLabel(pageRun)
-          return (
-            <TableRow key={pageKey(pageRun)}>
-              <TableCell
-                className="sticky left-0 z-10 max-w-64 truncate bg-background font-mono text-xs"
-                title={page}
+            {viewports.map((viewport) => (
+              <TableHead
+                key={viewport}
+                colSpan={scenarios.length}
+                className="text-center capitalize"
               >
-                {page}
-              </TableCell>
-              {viewports.flatMap((viewport) =>
-                scenarios.map((scenario) => {
-                  const run = cells.get(`${pageKey(pageRun)}\0${viewport}\0${scenario}`)
-                  return (
-                    <TableCell key={`${viewport}-${scenario}`} className="p-1 text-center">
-                      {run ? (
-                        <MatrixCell
-                          run={run}
-                          page={page}
-                          scenario={scenario}
-                          viewport={viewport}
-                          sheetOpen={sheetOpen}
-                          onSelect={onSelect}
-                        />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                  )
-                }),
-              )}
-            </TableRow>
-          )
-        })}
-      </TableBody>
-    </Table>
+                {viewport}
+              </TableHead>
+            ))}
+          </TableRow>
+          <TableRow>
+            {viewports.flatMap((viewport) =>
+              scenarios.map((scenario) => (
+                <TableHead key={`${viewport}-${scenario}`} className="min-w-32 text-center">
+                  {scenarioLabel(scenario)}
+                </TableHead>
+              )),
+            )}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {pages.map((pageRun) => {
+            const page = pageLabel(pageRun)
+            return (
+              <TableRow key={pageKey(pageRun)}>
+                <TableCell
+                  className="sticky left-0 z-10 max-w-64 truncate bg-background font-mono text-xs"
+                  title={page}
+                >
+                  {page}
+                </TableCell>
+                {viewports.flatMap((viewport) =>
+                  scenarios.map((scenario) => {
+                    const run = cells.get(`${pageKey(pageRun)}\0${viewport}\0${scenario}`)
+                    return (
+                      <TableCell key={`${viewport}-${scenario}`} className="p-1 text-center">
+                        {run ? (
+                          <MatrixCell
+                            run={run}
+                            page={page}
+                            scenario={scenario}
+                            viewport={viewport}
+                            sheetOpen={sheetOpen}
+                            onSelect={onSelect}
+                          />
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )
+                  }),
+                )}
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </div>
   )
 }
 
@@ -206,6 +262,9 @@ function MatrixCell({
   onSelect: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const settled = run.status !== "pending" && run.status !== "running"
+  const statusWord = { pending: "Queued", complete: "Captured" }[run.status] ?? run.status
+  const hits = settled ? `${run.hitCount} hits` : "—"
   return (
     <HoverCard open={open} onOpenChange={(next) => setOpen(next && !sheetOpen)}>
       <HoverCardTrigger asChild>
@@ -215,21 +274,43 @@ function MatrixCell({
             setOpen(false)
             onSelect(run.id)
           }}
-          aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${run.status === "pending" ? "Queued" : run.status}, ${run.hitCount} hits`}
-          className="inline-flex h-8 min-w-20 items-center justify-center gap-2 rounded-md px-2 hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${statusWord}, ${hits}${run.failing ? `, ${failingText(run)}` : ""}`}
+          className="inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         >
-          <StatusGlyph meaning={runMeaning(run.status)} />
-          <span className="font-mono text-xs tabular-nums">
-            {run.status === "pending" || run.status === "running" ? "—" : run.hitCount}
+          {run.failing && run.status === "complete" ? null : (
+            <StatusGlyph meaning={runMeaning(run.status)} />
+          )}
+          {run.failing ? (
+            <>
+              <StatusGlyph meaning={run.failing.severity} />
+              <span className="font-mono text-xs font-medium tabular-nums">
+                {run.failing.count}
+              </span>
+            </>
+          ) : null}
+          <span
+            className={cn(
+              "font-mono text-xs tabular-nums",
+              run.failing ? "text-muted-foreground" : "",
+              run.status === "complete" && run.hitCount === 0 && "font-medium text-sev-warning",
+            )}
+          >
+            {settled ? `${run.failing ? "· " : ""}${count(run.hitCount, "hit")}` : "—"}
           </span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent>
-        <StatusBadge status={run.status} />
+        <RunStatusBadge status={run.status} />
         <div className="my-2">
           <RunImage run={run} />
         </div>
-        <p className="text-xs">{runReason(run) ?? `${run.hitCount} hits`}</p>
+        {run.failing ? <p className="text-xs">{failingText(run)}</p> : null}
+        <p className="text-xs">
+          {runReason(run) ??
+            (run.status === "complete" && run.hitCount === 0
+              ? "Loaded, but no tracking requests were seen. Check that this is the page you meant."
+              : `${run.hitCount} hits`)}
+        </p>
       </HoverCardContent>
     </HoverCard>
   )

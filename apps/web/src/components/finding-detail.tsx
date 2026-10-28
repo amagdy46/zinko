@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import {
   ConsentTokens,
   CopyButton,
+  RunPath,
   JsonView,
   KeyValueTable,
   RequestView,
@@ -31,18 +32,10 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { AREAS, BANNER_NOTE, runPage, scenarioLabel } from "@/lib/audit-labels"
-import { relativeTime } from "@/lib/format"
+import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
+import { count, relativeTime } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { getAiPolicy } from "@/server/ai-policy"
 import { explainFinding, getExplanation } from "@/server/explain"
@@ -163,8 +156,14 @@ function TriageMenu({
               placeholder="Why is this acceptable?"
               maxLength={1000}
               rows={4}
+              aria-describedby="reason-hint"
               required
             />
+            {reason.trim() === "" ? (
+              <p id="reason-hint" className="text-xs text-muted-foreground">
+                A reason is required to accept a risk.
+              </p>
+            ) : null}
             {error === null ? null : (
               <p role="alert" className="text-sm text-destructive">
                 {error}
@@ -230,7 +229,12 @@ export function FindingDetail({
     try {
       const result = await setTriage({ data: { auditId, ruleId: row.ruleId, status, reason } })
       if (!result.ok) return result.message
-      toast.success(status === "open" ? "Reopened" : `Moved to ${TRIAGE_LABEL[status]}`)
+      toast.success(status === "open" ? "Reopened" : `Moved to ${TRIAGE_LABEL[status]}`, {
+        action:
+          previous === "open" && status !== "open"
+            ? { label: "Undo", onClick: () => void changeTriage("open") }
+            : undefined,
+      })
       await router.invalidate()
       await load()
       return null
@@ -243,6 +247,7 @@ export function FindingDetail({
 
   const couldNotCheck = row.kind === "inconclusive"
   const triage = detail.state === "ready" ? detail.value.triage : row.triage
+  const previous = triage.status
   const header = (
     <header className="sticky top-0 z-10 space-y-1 border-b bg-card px-4 py-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -353,49 +358,43 @@ export function FindingDetail({
           </>
         )}
         <Section title="Where it was seen">
+          {row.kind === "fail" && row.inconclusiveRuns > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              This check could not run on {count(row.inconclusiveRuns, "other run")}.
+            </p>
+          ) : null}
           {noted.map((detection) => (
             <p key={detection} className="text-xs text-muted-foreground" data-testid="banner-note">
               <StatusGlyph meaning="could-not-check" className="mr-1 inline align-text-bottom" />
               {BANNER_NOTE[detection]} The finding keeps its severity.
             </p>
           ))}
-          <Table className="text-xs" aria-label="Where it was seen">
-            <TableHeader>
-              <TableRow>
-                <TableHead>Page</TableHead>
-                <TableHead>Scenario</TableHead>
-                <TableHead>Viewport</TableHead>
-                <TableHead>Check</TableHead>
-                <TableHead>Message</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {checks.map((c) => (
-                <TableRow
-                  key={c.runId}
-                  data-testid="check"
-                  data-state={c.runId === check?.runId ? "selected" : undefined}
+          <ul className="divide-y rounded-md border text-xs" aria-label="Where it was seen">
+            {checks.map((c) => (
+              <li key={c.runId} data-testid="check">
+                <button
+                  type="button"
+                  aria-pressed={c.runId === check?.runId}
                   onClick={() => {
                     setPickedRun(c.runId)
                     setPickedRef(null)
                   }}
-                  className="cursor-pointer"
+                  className={cn(
+                    "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
+                    c.runId === check?.runId && "bg-muted",
+                  )}
                 >
-                  <TableCell className="min-w-28 max-w-48 whitespace-normal">
-                    <button
-                      type="button"
-                      aria-pressed={c.runId === check?.runId}
-                      className="break-all text-left font-mono outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-                    >
-                      {runPage(c)}
-                    </button>
-                  </TableCell>
-                  <TableCell>{scenarioLabel(c.scenario)}</TableCell>
-                  <TableCell>{c.viewport}</TableCell>
-                  <TableCell>
-                    <CheckStatusBadge status={c.status === "fail" ? "fail" : "inconclusive"} />
-                  </TableCell>
-                  <TableCell className="min-w-48 whitespace-normal text-muted-foreground">
+                  <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <RunPath run={c} className="max-w-full" />
+                    <span className="text-muted-foreground">
+                      {scenarioLabel(c.scenario)} · {c.viewport}
+                    </span>
+                    <CheckStatusBadge
+                      status={c.status === "fail" ? "fail" : "inconclusive"}
+                      className="ml-auto"
+                    />
+                  </span>
+                  <span className="text-muted-foreground [overflow-wrap:anywhere]">
                     {c.message}
                     {c.bannerDetection === "not-detected" || c.bannerDetection === "unknown" ? (
                       <span className="mt-1 flex items-center gap-1 text-foreground">
@@ -405,11 +404,11 @@ export function FindingDetail({
                           : "Banner not detected"}
                       </span>
                     ) : null}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         </Section>
         {check === undefined ? null : (
           <Evidence
@@ -767,8 +766,8 @@ function Evidence({
         }}
       >
         <TabsList>
-          {TABS.map((t) => (
-            <TabsTrigger key={t} value={t} disabled={!available(t)}>
+          {TABS.filter(available).map((t) => (
+            <TabsTrigger key={t} value={t}>
               {TAB_LABEL[t]}
               {t !== "screenshot" ? (
                 <span className="text-xs text-muted-foreground">{refsOf(t).length}</span>

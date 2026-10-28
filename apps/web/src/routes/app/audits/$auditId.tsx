@@ -1,13 +1,22 @@
-import { createFileRoute, Link, Outlet, useRouter } from "@tanstack/react-router"
+import {
+  createFileRoute,
+  Link,
+  type LinkProps,
+  Outlet,
+  useLocation,
+  useRouter,
+} from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
+import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
 import { StatusBadge } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import { remainingTime, runPage, runReason, scenarioLabel } from "@/lib/audit-labels"
-import { duration } from "@/lib/format"
+import { remainingTime, runReason, scenarioLabel } from "@/lib/audit-labels"
+import { count, duration } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
 import { getAudit } from "@/server/audits"
 
@@ -16,6 +25,18 @@ export const Route = createFileRoute("/app/audits/$auditId")({
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   component: AuditPage,
 })
+
+const SEVERITY_WORDS = [
+  ["critical", "Critical"],
+  ["warning", "Warning"],
+  ["info", "Info"],
+] as const
+
+/** "5 Critical, 1 Warning": the open findings by severity, skipping the empty ones. */
+const severitySplit = (open: { critical: number; warning: number; info: number }) =>
+  SEVERITY_WORDS.filter(([key]) => open[key] > 0)
+    .map(([key, word]) => `${open[key]} ${word}`)
+    .join(", ")
 
 const ACTIVE = new Set(["queued", "running"])
 const REFETCH_DELAY_MS = 250
@@ -41,7 +62,15 @@ function AuditPage() {
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [active])
+  const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
+  const openFindings = summary.open.critical + summary.open.warning + summary.open.info
+  let findingsText = `${openFindings} open: ${severitySplit(summary.open)}`
+  if (openFindings === 0) findingsText = "0 open"
+  if (summary.evaluatedRuns === 0) findingsText = "Not evaluated"
+  let findingsTab = `${openFindings}`
+  if (summary.evaluatedRuns === 0) findingsTab = "(not evaluated)"
+  if (active) findingsTab = "(in progress)"
   const complete = runs.filter((r) => r.status === "complete").length
   const partial = runs.filter((r) => r.status === "partial").length
   const failed = runs.filter((r) => r.status === "failed").length
@@ -84,47 +113,105 @@ function AuditPage() {
     previous.current = { id: audit.id, active }
   }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
+  const full = overview || active
+  const params = { auditId: audit.id }
+  const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
+    { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
+    {
+      label: `Runs ${runs.length}`,
+      link: {
+        to: "/app/audits/$auditId",
+        params,
+        search: { view: "matrix" },
+        activeOptions: { exact: true, includeSearch: false },
+      },
+    },
+    {
+      label: `Findings ${findingsTab}`,
+      link: { to: "/app/audits/$auditId/findings", params },
+    },
+    { label: "Tag matrix", link: { to: "/app/audits/$auditId/matrix", params } },
+    { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
+  ]
   const navClass =
     "shrink-0 border-b-2 border-transparent pt-1 pb-2 whitespace-nowrap text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
+  const findingsLink = (
+    <Link
+      to="/app/audits/$auditId/findings"
+      params={{ auditId: audit.id }}
+      className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+    >
+      {findingsText}
+    </Link>
+  )
   return (
-    <div className="min-w-0 space-y-6">
-      <PageHeader
-        title={`Audit of ${site.name}`}
-        breadcrumb={[
-          { label: "Clients", to: "/app/clients" },
-          { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
-          { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-          { label: `Audit · ${audit.createdAt.toLocaleDateString()}` },
-        ]}
-        meta={
-          <>
-            <StatusBadge status={audit.status} />
-            {active ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
-                      <span
-                        className={
-                          connected
-                            ? "size-2 rounded-full bg-primary"
-                            : "size-2 rounded-full border border-muted-foreground"
-                        }
-                      />
-                      {connected ? "Connected" : "Reconnecting"}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {connected
-                      ? "Connected to live audit progress"
-                      : "Reconnecting to live audit progress"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : null}
-          </>
-        }
-      />
+    <div className={cn("min-w-0", full ? "space-y-6" : "space-y-2")}>
+      {full ? (
+        <PageHeader
+          title={`Audit of ${site.name}`}
+          breadcrumb={[
+            { label: "Clients", to: "/app/clients" },
+            { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
+            { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
+            { label: `Audit · ${audit.createdAt.toLocaleDateString()}` },
+          ]}
+          meta={
+            <>
+              <StatusBadge status={audit.status} />
+              {active ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
+                        <span
+                          className={
+                            connected
+                              ? "size-2 rounded-full bg-primary"
+                              : "size-2 rounded-full border border-muted-foreground"
+                          }
+                        />
+                        {connected ? "Connected" : "Reconnecting"}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {connected
+                        ? "Connected to live audit progress"
+                        : "Reconnecting to live audit progress"}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : null}
+            </>
+          }
+        />
+      ) : (
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <h1 className="text-base font-semibold tracking-tight">Audit of {site.name}</h1>
+          <StatusBadge status={audit.status} />
+          <span className="tabular-nums text-muted-foreground">{count(runs.length, "run")}</span>
+          {findingsLink}
+          <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
+          <time dateTime={start.toISOString()} className="tabular-nums text-muted-foreground">
+            {start.toLocaleDateString()}
+          </time>
+          {problems.length > 0 ? (
+            <Link
+              to="/app/audits/$auditId"
+              params={{ auditId: audit.id }}
+              search={{ view: "list" }}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                failed > 0
+                  ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
+                  : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
+              )}
+            >
+              <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
+              {problems.length} of {runs.length} runs could not finish · See why
+            </Link>
+          ) : null}
+        </header>
+      )}
       {active ? (
         <div className="space-y-3">
           <Progress value={done} max={Math.max(1, runs.length)} aria-label="Finished runs" />
@@ -139,12 +226,13 @@ function AuditPage() {
             <span>{failed} failed</span>
           </div>
         </div>
-      ) : (
+      ) : null}
+      {overview && !active ? (
         <div className="grid grid-cols-2 gap-y-4 divide-x text-sm lg:grid-cols-4">
           <div className="pr-4">
             <p className="text-xs text-muted-foreground">Runs</p>
             <p className="tabular-nums">
-              {runs.length}: {complete} complete, {partial} partial, {failed} failed
+              {runs.length}: {complete} captured, {partial} partial, {failed} failed
             </p>
             <div className="mt-2 flex h-1 overflow-hidden rounded-full" aria-hidden="true">
               {runs.map((run) => (
@@ -154,15 +242,7 @@ function AuditPage() {
           </div>
           <div className="px-4">
             <p className="text-xs text-muted-foreground">Findings</p>
-            <Link
-              to="/app/audits/$auditId/findings"
-              params={{ auditId: audit.id }}
-              className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-            >
-              {summary.evaluatedRuns === 0
-                ? "Not evaluated"
-                : `${findings}: ${summary.findings.critical} critical`}
-            </Link>
+            {findingsLink}
             {summary.findings.couldNotCheck > 0 ? (
               <p className="text-xs text-muted-foreground">
                 {summary.findings.couldNotCheck} could not check
@@ -183,7 +263,7 @@ function AuditPage() {
             </time>
           </div>
         </div>
-      )}
+      ) : null}
       {audit.error ? (
         <p
           role="alert"
@@ -192,15 +272,19 @@ function AuditPage() {
           {audit.error}
         </p>
       ) : null}
-      {problems.length > 0 ? (
+      {problems.length > 0 && full ? (
         <div
           className={`space-y-2 rounded-md border p-3 text-sm ${failed > 0 ? "border-sev-critical-border bg-sev-critical-bg" : "border-sev-warning-border bg-sev-warning-bg"}`}
         >
           <h2 className="font-medium">
+            {problems.length} of {runs.length} runs could not finish
+            {" ("}
             {[failed > 0 && `${failed} failed`, partial > 0 && `${partial} partial`]
               .filter(Boolean)
-              .join(" · ")}
+              .join(", ")}
+            {")"}
           </h2>
+          <p className="text-xs">Their results are missing or incomplete. Open one to see why.</p>
           <ul className="space-y-1">
             {problems.map((run) => (
               <li key={run.id}>
@@ -212,8 +296,8 @@ function AuditPage() {
                 >
                   <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
                   <span className="min-w-0 [overflow-wrap:anywhere]">
-                    {runPage(run)} · {scenarioLabel(run.scenario)} · {run.viewport}:{" "}
-                    {runReason(run)}
+                    <RunPath run={run} className="max-w-full" /> · {scenarioLabel(run.scenario)} ·{" "}
+                    {run.viewport}: {runReason(run)}
                   </span>
                 </Link>
               </li>
@@ -222,35 +306,11 @@ function AuditPage() {
         </div>
       ) : null}
       <nav className="flex gap-4 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums">
-        <Link
-          to="/app/audits/$auditId/overview"
-          params={{ auditId: audit.id }}
-          className={navClass}
-        >
-          Overview
-        </Link>
-        <Link
-          to="/app/audits/$auditId"
-          params={{ auditId: audit.id }}
-          search={{ view: "matrix" }}
-          activeOptions={{ exact: true, includeSearch: false }}
-          className={navClass}
-        >
-          Runs {runs.length}
-        </Link>
-        <Link
-          to="/app/audits/$auditId/findings"
-          params={{ auditId: audit.id }}
-          className={navClass}
-        >
-          Findings {summary.evaluatedRuns === 0 ? "(not evaluated)" : findings}
-        </Link>
-        <Link to="/app/audits/$auditId/matrix" params={{ auditId: audit.id }} className={navClass}>
-          Tag matrix
-        </Link>
-        <Link to="/app/audits/$auditId/hits" params={{ auditId: audit.id }} className={navClass}>
-          Hits {summary.hits}
-        </Link>
+        {tabs.map((tab) => (
+          <Link key={tab.label} {...tab.link} className={navClass}>
+            {tab.label}
+          </Link>
+        ))}
       </nav>
       <Outlet />
     </div>
@@ -260,7 +320,7 @@ function AuditPage() {
 function barTone(status: string) {
   switch (status) {
     case "complete":
-      return "bg-status-pass-solid"
+      return "bg-muted-foreground/40"
     case "partial":
       return "bg-sev-warning-solid"
     case "failed":

@@ -1,6 +1,8 @@
 import {
   Circle,
+  CircleAlert,
   CircleCheck,
+  CircleDot,
   CircleDashed,
   CircleMinus,
   CircleX,
@@ -20,7 +22,8 @@ const meanings = {
   "not-applicable": { icon: CircleMinus, tone: "text-muted-foreground" },
   queued: { icon: Circle, tone: "text-muted-foreground" },
   running: { icon: LoaderCircle, tone: "animate-spin text-primary motion-reduce:animate-none" },
-  partial: { icon: Circle, tone: "text-sev-warning [&_circle]:[stroke-dasharray:31.4_31.4]" },
+  partial: { icon: CircleAlert, tone: "text-sev-warning" },
+  captured: { icon: CircleDot, tone: "text-muted-foreground" },
   failed: { icon: CircleX, tone: "text-sev-critical" },
   none: { icon: CircleMinus, tone: "text-muted-foreground" },
 } as const

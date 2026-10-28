@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { hasClickIds, runPageLabel } from "@/lib/page-label"
 import { cn } from "@/lib/utils"
 
 export function CopyButton({
@@ -264,5 +265,25 @@ function Pre({ children }: { children: string }) {
     <pre className="max-h-64 overflow-auto rounded-md bg-muted p-2 font-mono text-xs break-all whitespace-pre-wrap">
       {children}
     </pre>
+  )
+}
+
+/** A run's page as a path without its query; the full URL is the tooltip, test click IDs a tag. */
+export function RunPath({
+  run,
+  className,
+}: {
+  run: { pageUrl: string; journey: boolean }
+  className?: string
+}) {
+  return (
+    <span title={run.pageUrl} className={cn("inline-flex min-w-0 items-center gap-1.5", className)}>
+      <span className="min-w-0 truncate font-mono">{runPageLabel(run)}</span>
+      {hasClickIds(run.pageUrl) ? (
+        <span className="shrink-0 rounded-sm border px-1 text-[0.6875rem] text-muted-foreground">
+          + click IDs
+        </span>
+      ) : null}
+    </span>
   )
 }

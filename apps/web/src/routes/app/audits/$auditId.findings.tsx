@@ -154,7 +154,7 @@ function FindingsScreen() {
   const severityCount = (severity: Severity) => inTab.filter((f) => f.severity === severity).length
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 lg:flex lg:h-[calc(100dvh-8.5rem)] lg:flex-col">
       <Coverage
         coverage={coverage}
         full={full}
@@ -163,8 +163,12 @@ function FindingsScreen() {
         mixed={mixed}
         localLimit={couldNotCheck.some(isLocalLimit)}
       />
-      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-        <div className="min-w-0 space-y-4">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+        <div
+          tabIndex={0}
+          aria-label="Findings list"
+          className="min-w-0 space-y-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:min-h-0 lg:overflow-y-auto lg:pr-2"
+        >
           <Tabs
             value={triage}
             onValueChange={(next) => go({ triage: Option.getOrUndefined(decodeTriage(next)) })}
@@ -302,7 +306,8 @@ function FindingsScreen() {
         {below ? null : (
           <aside
             aria-label="Finding"
-            className="overflow-hidden rounded-lg border bg-card text-sm lg:sticky lg:top-4 lg:max-h-[calc(100svh-2rem)] lg:overflow-y-auto"
+            tabIndex={0}
+            className="overflow-hidden rounded-lg border bg-card text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:min-h-0 lg:overflow-y-auto"
           >
             {selected === undefined ? (
               <p className="p-4 text-muted-foreground">Select a finding to see its evidence.</p>
@@ -386,14 +391,14 @@ function Coverage({
 }) {
   const { runs } = coverage
   const summary = [
-    `${runs.failing} failing${coverage.couldNotCheckOnFailingRuns > 0 ? ` (${coverage.couldNotCheckOnFailingRuns} also could not check)` : ""}`,
+    `${runs.failing} failing`,
     `${runs.couldNotCheck} could not check`,
     `${runs.passed} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`,
   ]
   if (full && !mixed)
     return (
       <p className="text-sm text-muted-foreground" data-testid="coverage">
-        All {count(coverage.totalRuns, "run")} evaluated · {summary.join(" · ")}
+        All {count(coverage.totalRuns, "run")} evaluated: {summary.join(" · ")}
         {localLimit
           ? ". Expected: tracking requests are answered locally, so endpoint delivery is not checked."
           : ""}
@@ -579,7 +584,7 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
         <span className="block font-medium">{failing ? row.title : row.checkTitle}</span>
         <span className="block text-xs text-muted-foreground">
           {failing
-            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}${row.inconclusiveRuns > 0 ? ` · also could not check on ${count(row.inconclusiveRuns, "run")}` : ""}${row.bannerUncertainRuns > 0 ? ` · banner not confirmed on ${count(row.bannerUncertainRuns, "run")}` : ""}`
+            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}`
             : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
         </span>
         {isLocalLimit(row) ? (

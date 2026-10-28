@@ -1,11 +1,12 @@
 import { CaptureResult, MAX_URL_LENGTH } from "@repo/capture-contract"
 import { AuditConfig, Jobs, Storage, TEST_CLICK_IDS } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, run, site, client, finding, checkResult } from "@repo/db"
+import { audit, run, site, client, finding, findingTriage, checkResult } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, eq, countDistinct } from "drizzle-orm"
+import { and, asc, count, eq, countDistinct } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { hasCredentials, isOnSite, withoutCredentials } from "@/lib/site-url"
+import { triageJoin } from "./findings-data"
 import { requireSession } from "./require-session"
 import {
   atomically,
@@ -20,6 +21,8 @@ import {
 
 /** Long enough for one page load; the audit page refetches every 4 minutes while it is open. */
 const SCREENSHOT_URL_SECONDS = 5 * 60
+
+const SEVERITIES = ["critical", "warning", "info"] as const
 
 const RunErrors = Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))
 const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
@@ -178,6 +181,26 @@ export const getAudit = createServerFn({ method: "GET" })
           .where(and(eq(run.auditId, found.audit.id), eq(run.orgId, orgId)))
           .orderBy(asc(run.ordinal))
         const storage = yield* Storage
+        const failingChecks = yield* db
+          .select({ runId: checkResult.runId, severity: checkResult.severity, n: count() })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(
+            and(
+              eq(run.auditId, found.audit.id),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+              eq(checkResult.status, "fail"),
+            ),
+          )
+          .groupBy(checkResult.runId, checkResult.severity)
+        const failingOf = (runId: string) => {
+          const own = failingChecks.filter((c) => c.runId === runId)
+          const worst = SEVERITIES.find((s) => own.some((c) => c.severity === s))
+          return worst === undefined
+            ? null
+            : { severity: worst, count: own.reduce((total, c) => total + c.n, 0) }
+        }
         const runs = yield* Effect.forEach(rows, (r) =>
           Effect.gen(function* () {
             const screenshotUrl =
@@ -200,6 +223,7 @@ export const getAudit = createServerFn({ method: "GET" })
                 Option.map(decodeConsent(r.consent), (consent) => consent.outcome),
               ),
               hitCount: r.hitCount,
+              failing: failingOf(r.id),
               complete: r.complete,
               truncated: r.truncated,
               screenshotUrl,
@@ -215,8 +239,10 @@ export const getAudit = createServerFn({ method: "GET" })
             kind: finding.kind,
             severity: finding.severity,
             runIds: finding.runIds,
+            triage: findingTriage.status,
           })
           .from(finding)
+          .leftJoin(findingTriage, triageJoin)
           .where(and(eq(finding.auditId, found.audit.id), eq(finding.orgId, orgId)))
         const [evaluation] = yield* db
           .select({ total: countDistinct(checkResult.runId) })
@@ -229,6 +255,13 @@ export const getAudit = createServerFn({ method: "GET" })
               eq(checkResult.orgId, orgId),
             ),
           )
+        const openCount = (severity: string) =>
+          findings.filter(
+            (f) =>
+              f.kind === "fail" &&
+              f.severity === severity &&
+              (f.triage === null || f.triage === "open"),
+          ).length
         const summary = {
           hits: runs.reduce((total, row) => total + row.hitCount, 0),
           findings: {
@@ -236,6 +269,11 @@ export const getAudit = createServerFn({ method: "GET" })
             warning: findings.filter((f) => f.kind === "fail" && f.severity === "warning").length,
             info: findings.filter((f) => f.kind === "fail" && f.severity === "info").length,
             couldNotCheck: findings.filter((f) => f.kind === "inconclusive").length,
+          },
+          open: {
+            critical: openCount("critical"),
+            warning: openCount("warning"),
+            info: openCount("info"),
           },
           evaluatedRuns: evaluation?.total ?? 0,
         }
