@@ -2,8 +2,10 @@ import { useSyncExternalStore } from "react"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
+import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { count, relativeTime, useTimeZone } from "@/lib/format"
+import type { ScoreCoverage } from "@/lib/health-score"
 
 type Result = {
   createdAt: Date | string
@@ -12,6 +14,7 @@ type Result = {
   couldNotCheck: number
   incompleteRuns: number
   score: number | null
+  scoreCoverage: ScoreCoverage
   sites: number
   runs: number
   openFindings: { critical: number; warning: number; info: number }
@@ -33,23 +36,19 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
           <time title={relativeTime(latest.createdAt, timeZone).title}>
             {relativeTime(latest.createdAt).text}
           </time>
-          {latest.score === null ? null : (
-            <span className="font-medium tabular-nums">
-              {latest.sites > 1 ? "Lowest " : ""}
-              {latest.score}/100
-              {latest.sites === 1 ? (
-                <span className="font-normal text-muted-foreground">
-                  {" "}
-                  from {count(latest.runs, "run")}
-                </span>
-              ) : null}
-            </span>
-          )}
         </div>
       ) : (
         <span className="text-muted-foreground">Not audited</span>
       )}
-      {latest !== null && latest.incompleteRuns > 0 ? (
+      {latest === null || latest.score === null ? null : (
+        <div>
+          {latest.sites > 1 ? (
+            <p className="text-muted-foreground">Lowest of {latest.sites} sites</p>
+          ) : null}
+          <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} />
+        </div>
+      )}
+      {latest !== null && latest.incompleteRuns > 0 && latest.score === null ? (
         <p className="text-muted-foreground">
           {count(latest.incompleteRuns, "run")} could not finish
         </p>

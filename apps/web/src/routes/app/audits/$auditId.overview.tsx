@@ -1,25 +1,17 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
-import { ChevronDown, CircleDashed, Info } from "lucide-react"
+import { ChevronDown, Info } from "lucide-react"
 import { CopyButton, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
+import { ScoreFigure } from "@/components/score-figure"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
+import { CRITICAL_CAP, type HealthScore, WEIGHT } from "@/lib/health-score"
 import { vendorName } from "@/lib/tag-matrix"
 import { getOverview } from "@/server/overview"
 
@@ -34,13 +26,6 @@ export const Route = createFileRoute("/app/audits/$auditId/overview")({
 type Overview = Awaited<ReturnType<typeof getOverview>>
 type AuditRun = ReturnType<typeof auditRoute.useLoaderData>["runs"][number]
 type Scored = Extract<HealthScore, { evaluated: true }>
-
-const BAND_GLYPH: Record<Band, StatusMeaning> = {
-  critical: "critical",
-  attention: "warning",
-  minor: "info",
-  "no-failures": "pass",
-}
 
 const SEVERITIES = ["critical", "warning", "info"] as const
 const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" } as const
@@ -63,6 +48,8 @@ function OverviewScreen() {
     tags,
     withoutAccepted,
     runHealth,
+    scoreCoverage,
+    open,
   } = Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
@@ -92,139 +79,219 @@ function OverviewScreen() {
   ].join(" × ")
   return (
     <div className="min-w-0 space-y-6">
-      <RunsBanner auditId={audit.id} runs={runs} runHealth={runHealth} cause={incompleteCause} />
       <ScoreBlock
         score={score}
+        scoreCoverage={scoreCoverage}
+        open={open}
         withoutAccepted={withoutAccepted}
-        incomplete={runHealth.incomplete}
-        evaluated={coverage.evaluatedRuns}
-        totalRuns={coverage.totalRuns}
         scope={scope}
         triage={triage}
         auditId={audit.id}
         worst={worst}
       />
-      {score.mixedVersions ? (
-        <Alert
-          role="status"
-          className="border-sev-warning-border bg-sev-warning-bg"
-          data-testid="mixed-versions"
-        >
-          <AlertTitle className="line-clamp-none">Mixed rules versions</AlertTitle>
-          <AlertDescription className="text-foreground">
-            The runs were evaluated with different versions of the rules (
-            {score.versions.join(", ")}
-            ). The checks and their wording can differ between them.
-          </AlertDescription>
-        </Alert>
-      ) : null}
-      {bannerUncertain.length > 0 ? (
-        <Alert role="status" className="border-dashed" data-testid="banner-alert">
-          <CircleDashed aria-hidden="true" />
-          <AlertTitle className="line-clamp-none">
-            {count(score.uncertainty.bannerUncertainRuns, "failing consent check")}{" "}
-            {rests(score.uncertainty.bannerUncertainRuns)} on an undetected banner
-          </AlertTitle>
-          <AlertDescription>
-            <p>
-              {BANNER_NOTE.summary} The findings keep their severity and their weight in the score.
-            </p>
-            <p>{bannerUncertain.map((f) => `${f.title} (${count(f.runs, "run")})`).join(", ")}</p>
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <Caveats
+        auditId={audit.id}
+        runs={runs}
+        runHealth={runHealth}
+        cause={incompleteCause}
+        score={score}
+        bannerUncertain={bannerUncertain}
+      />
       <WorstFinding auditId={audit.id} worst={worst} />
-      <AreaCounts auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
+      <AreaStrip auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
     </div>
   )
 }
 
-/** The one notice for runs that did not finish: what it means for the score, runs behind a disclosure. */
-function RunsBanner({
+/**
+ * Everything that qualifies the score, in one disclosure: runs that did not finish (the list of
+ * runs), checks that could not run, an undetected consent banner, mixed rules versions. Open
+ * when the audit is incomplete, closed otherwise.
+ */
+function Caveats({
   auditId,
   runs,
   runHealth,
   cause,
+  score,
+  bannerUncertain,
 }: {
   auditId: string
   runs: ReadonlyArray<AuditRun>
   runHealth: Overview["runHealth"]
   /** Why the audit is incomplete: the start page, a key page that did not load, or unfinished runs. */
   cause: string
+  score: Scored
+  bannerUncertain: Overview["bannerUncertain"]
 }) {
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
-  if (problems.length === 0 && !runHealth.incomplete) return null
   const failed = problems.filter((r) => r.status === "failed").length
-  const partial = problems.length - failed
-  const split = [failed > 0 && `${failed} failed`, partial > 0 && `${partial} partial`]
+  const split = [
+    failed > 0 && `${failed} failed`,
+    problems.length - failed > 0 && `${problems.length - failed} partial`,
+  ]
     .filter(Boolean)
     .join(", ")
-  const critical = failed > 0 || runHealth.startFailed
-  return (
-    <Alert
-      role="status"
-      className={cn(
-        critical
-          ? "border-sev-critical-border bg-sev-critical-bg"
-          : "border-sev-warning-border bg-sev-warning-bg",
-      )}
-      data-testid={runHealth.incomplete ? "incomplete-audit" : "unfinished-runs"}
-    >
-      <StatusGlyph meaning={critical ? "failed" : "partial"} />
-      <AlertTitle className="line-clamp-none">
-        {runHealth.incomplete
-          ? "This audit is incomplete"
-          : `${problems.length} of ${runs.length} runs could not finish (${split})`}
-      </AlertTitle>
-      <AlertDescription className="text-foreground">
-        <p>
-          {runHealth.incomplete
-            ? `${cause}The score below describes only what could be captured, so do not read it as the state of the site.`
-            : "Their results are missing or incomplete."}
-        </p>
-        {problems.length > 0 ? (
-          <Collapsible>
-            <CollapsibleTrigger
-              className={cn(
-                "group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium",
-                focusRing,
-              )}
-            >
-              See which runs
-              <ChevronDown
-                aria-hidden="true"
-                className="size-4 transition-transform group-data-[state=open]:rotate-180"
-              />
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <ul className="space-y-1">
-                {problems.map((run) => (
-                  <li key={run.id}>
-                    <Link
-                      to="/app/audits/$auditId"
-                      params={{ auditId }}
-                      search={{ view: "matrix", run: run.id }}
-                      className={`flex items-start gap-2 rounded-sm py-1.5 underline-offset-4 hover:underline ${focusRing}`}
-                    >
-                      <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
-                      <span className="min-w-0 [overflow-wrap:anywhere]">
-                        <RunPath run={run} className="max-w-full" /> · {scenarioLabel(run.scenario)}{" "}
-                        · {run.viewport}: {runReason(run)}
-                      </span>
-                    </Link>
-                  </li>
+  const { uncertainty } = score
+  const items = [
+    problems.length > 0 || runHealth.incomplete
+      ? {
+          key: "runs",
+          node: (
+            <div data-testid={runHealth.incomplete ? "incomplete-audit" : "unfinished-runs"}>
+              <p>
+                <span className="font-medium">
+                  {runHealth.incomplete
+                    ? "This audit is incomplete. "
+                    : `${problems.length} of ${runs.length} runs could not finish (${split}). `}
+                </span>
+                {runHealth.incomplete
+                  ? `${cause}The score describes only what could be captured, so do not read it as the state of the site.`
+                  : "Their results are missing or incomplete."}
+              </p>
+              {problems.length > 0 ? (
+                <Collapsible>
+                  <CollapsibleTrigger
+                    className={cn(
+                      "group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium",
+                      focusRing,
+                    )}
+                  >
+                    See which runs
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="size-4 transition-transform group-data-[state=open]:rotate-180"
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <ul className="space-y-1">
+                      {problems.map((run) => (
+                        <li key={run.id}>
+                          <Link
+                            to="/app/audits/$auditId"
+                            params={{ auditId }}
+                            search={{ view: "matrix", run: run.id }}
+                            className={`flex items-start gap-2 rounded-sm py-1.5 underline-offset-4 hover:underline ${focusRing}`}
+                          >
+                            <StatusGlyph meaning={run.status === "failed" ? "failed" : "partial"} />
+                            <span className="min-w-0 [overflow-wrap:anywhere]">
+                              <RunPath run={run} className="max-w-full" /> ·{" "}
+                              {scenarioLabel(run.scenario)} · {run.viewport}: {runReason(run)}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : null}
+            </div>
+          ),
+        }
+      : null,
+    uncertainty.checks > 0
+      ? {
+          key: "unresolved",
+          node: (
+            <div data-testid="unresolved-checks">
+              <p>
+                <span className="font-medium">
+                  Could not check: {count(uncertainty.rules, "rule")}, on{" "}
+                  {count(uncertainty.runs, "run")}.{" "}
+                </span>
+                They are left out of the score, never counted as passes.
+              </p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
+                {uncertainty.ruleTitles.map((title) => (
+                  <li key={title}>{title}</li>
                 ))}
               </ul>
-            </CollapsibleContent>
-          </Collapsible>
-        ) : null}
-      </AlertDescription>
-    </Alert>
+            </div>
+          ),
+        }
+      : null,
+    bannerUncertain.length > 0
+      ? {
+          key: "banner",
+          node: (
+            <div data-testid="banner-alert">
+              <p>
+                <span className="font-medium">
+                  {count(uncertainty.bannerUncertainRuns, "failing consent check")}{" "}
+                  {rests(uncertainty.bannerUncertainRuns)} on an undetected banner.{" "}
+                </span>
+                {BANNER_NOTE.summary} The findings keep their severity and their weight in the
+                score.
+              </p>
+              <p className="text-muted-foreground">
+                {bannerUncertain.map((f) => `${f.title} (${count(f.runs, "run")})`).join(", ")}
+              </p>
+            </div>
+          ),
+        }
+      : null,
+    score.mixedVersions
+      ? {
+          key: "versions",
+          node: (
+            <p data-testid="mixed-versions">
+              <span className="font-medium">Mixed rules versions. </span>
+              The runs were evaluated with different versions of the rules (
+              {score.versions.join(", ")}
+              ). The checks and their wording can differ between them.
+            </p>
+          ),
+        }
+      : null,
+  ].filter((item) => item !== null)
+  if (items.length === 0) return null
+  return (
+    <Collapsible
+      defaultOpen={runHealth.incomplete}
+      className="rounded-lg border border-dashed"
+      data-testid="caveats"
+    >
+      <CollapsibleTrigger
+        className={cn(
+          "group flex min-h-10 w-full items-center gap-2 rounded-lg px-4 text-left text-sm font-medium",
+          focusRing,
+        )}
+      >
+        <StatusGlyph meaning="partial" />
+        {count(items.length, "caveat")}
+        <span className="font-normal text-muted-foreground">
+          {runHealth.incomplete ? "· read these before the score" : "· what qualifies the score"}
+        </span>
+        <ChevronDown
+          aria-hidden="true"
+          className="ml-auto size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+        />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="max-w-prose space-y-3 px-4 pb-4 text-sm">
+          {items.map((item) => (
+            <li key={item.key}>{item.node}</li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
 const focusRing = "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+
+/** A paragraph whose first sentence is the point (foreground) and the rest is support (muted). */
+function Lead({ text }: { text: string }) {
+  const end = text.search(/[.!?](\s|$)/) + 1
+  const first = end > 0 ? text.slice(0, end) : text
+  return (
+    <p className="max-w-prose text-sm">
+      {first}
+      <span className="text-muted-foreground">{text.slice(first.length)}</span>
+    </p>
+  )
+}
 
 function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["worst"] }) {
   if (worst === null)
@@ -246,7 +313,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
         <SeverityBadge severity={worst.severity} />
         <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className="max-w-prose text-sm text-muted-foreground">
         Failed on {worst.failingRuns} of {worst.knownRuns} runs where it could be checked, across{" "}
         {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
         {worst.bannerUncertainRuns > 0
@@ -257,7 +324,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
         <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Why it matters
         </h3>
-        <p className="text-sm">{worst.why}</p>
+        <Lead text={worst.why} />
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
@@ -269,13 +336,13 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
             label="Copy fix steps"
           />
         </div>
-        <ol className="list-decimal space-y-1 pl-5 text-sm">
+        <ol className="max-w-prose list-decimal space-y-1 pl-5 text-sm">
           {worst.fix.map((step) => (
             <li key={step}>{step}</li>
           ))}
         </ol>
       </div>
-      <p className="text-sm">
+      <p className="max-w-prose text-sm">
         <span className="text-muted-foreground">First failing run: </span>
         {worst.message}
       </p>
@@ -306,7 +373,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
 function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }) {
   return (
     <section aria-label="Tags seen" className="space-y-2">
-      <h2 className="text-sm font-medium">Tags seen</h2>
+      <h2 className="text-base font-semibold">Tags seen</h2>
       {tags.length === 0 ? (
         <p className="text-sm text-muted-foreground" data-testid="no-tags">
           No tags were seen.
@@ -333,78 +400,67 @@ function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }
 
 function ScoreBlock({
   score,
+  scoreCoverage,
+  open,
   withoutAccepted,
-  incomplete,
-  evaluated,
-  totalRuns,
   scope,
   triage,
   auditId,
   worst,
 }: {
   score: Scored
+  scoreCoverage: Overview["scoreCoverage"]
+  open: Overview["open"]
   withoutAccepted: number | null
-  incomplete: boolean
-  evaluated: number
-  totalRuns: number
   scope: string
   triage: Overview["triage"]
   auditId: string
   worst: Overview["worst"]
 }) {
-  const { uncertainty } = score
   return (
-    <section aria-label="Score" className="space-y-3 rounded-lg border bg-card p-4">
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        <p
-          className={cn(
-            "text-2xl font-semibold tabular-nums",
-            incomplete && "text-muted-foreground",
-          )}
-          data-testid="score"
-        >
-          {score.score}
-          <span className="text-sm font-normal text-muted-foreground"> / 100</span>
-        </p>
-        <p className="flex items-center gap-2 text-sm font-medium" data-testid="band">
-          {incomplete ? (
-            <>
-              <StatusGlyph meaning="partial" />
-              Incomplete
-              <span className="font-normal text-muted-foreground">· {BAND_LABEL[score.band]}</span>
-            </>
-          ) : (
-            <>
-              <StatusGlyph meaning={BAND_GLYPH[score.band]} />
-              {BAND_LABEL[score.band]}
-            </>
-          )}
-          {score.mixedVersions ? (
-            <span className="text-xs font-normal text-muted-foreground">
-              · mixed rules versions
-            </span>
-          ) : null}
-        </p>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm">
-              <Info aria-hidden="true" />
-              How this is scored
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            collisionPadding={16}
-            className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <Arithmetic score={score} scope={scope} />
-          </PopoverContent>
-        </Popover>
+    <section aria-label="Score" className="space-y-4 rounded-lg border bg-card p-5">
+      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 space-y-3">
+          <ScoreFigure size="hero" score={score.score} band={score.band} coverage={scoreCoverage} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Info aria-hidden="true" />
+                How this is scored
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              collisionPadding={16}
+              className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              <Arithmetic score={score} scope={scope} />
+            </PopoverContent>
+          </Popover>
+        </div>
+        <ul className="grid grid-cols-3 gap-2 md:w-[26rem]" aria-label="Open findings">
+          {(["critical", "warning"] as const).map((severity) => (
+            <StatTile
+              key={severity}
+              glyph={severity}
+              label={SEVERITY_LABEL[severity]}
+              n={open[severity]}
+              note="open"
+              to={{ auditId, search: { severity } }}
+            />
+          ))}
+          <StatTile
+            glyph="could-not-check"
+            label="Could not check"
+            n={score.uncertainty.rules}
+            note={score.uncertainty.rules === 1 ? "rule" : "rules"}
+          />
+        </ul>
       </div>
       <TriageNote triage={triage} score={score.score} withoutAccepted={withoutAccepted} />
       {worst === null ? null : (
         <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4 text-sm"
           data-testid="start-with"
         >
           <span className="text-muted-foreground">Start with</span>
@@ -421,50 +477,51 @@ function ScoreBlock({
           </Button>
         </div>
       )}
-      <ul className="space-y-1.5 text-sm">
-        {score.coverage === "partial" ? (
-          <li className="flex items-start gap-2" data-testid="partly-evaluated">
-            <StatusGlyph meaning="partial" className="mt-0.5" />
-            Partly evaluated: {evaluated} of {totalRuns} runs have check results
-          </li>
-        ) : null}
-        {uncertainty.checks > 0 ? (
-          <li data-testid="unresolved-checks">
-            <Collapsible>
-              <CollapsibleTrigger
-                className={cn(
-                  "group flex min-h-8 items-start gap-2 rounded-md text-left",
-                  focusRing,
-                )}
-              >
-                <StatusGlyph meaning="could-not-check" className="mt-0.5" />
-                <span>
-                  Could not check: {count(uncertainty.rules, "rule")}, on{" "}
-                  {count(uncertainty.runs, "run")}
-                </span>
-                <ChevronDown
-                  aria-hidden="true"
-                  className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
-                />
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <ul className="mt-1 list-disc space-y-0.5 pl-9 text-muted-foreground">
-                  {uncertainty.ruleTitles.map((title) => (
-                    <li key={title}>{title}</li>
-                  ))}
-                </ul>
-              </CollapsibleContent>
-            </Collapsible>
-          </li>
-        ) : null}
-        {score.coverage === "full" && score.resolution === "resolved" ? (
-          <li className="flex items-start gap-2" data-testid="fully-checked">
-            <StatusGlyph meaning="pass" className="mt-0.5" />
-            All {count(totalRuns, "run")} evaluated, every check resolved
-          </li>
-        ) : null}
-      </ul>
     </section>
+  )
+}
+
+function StatTile({
+  glyph,
+  label,
+  n,
+  note,
+  to,
+}: {
+  glyph: StatusMeaning
+  label: string
+  n: number
+  note: string
+  to?: { auditId: string; search: { severity: (typeof SEVERITIES)[number] } }
+}) {
+  const body = (
+    <>
+      <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+        <StatusGlyph meaning={glyph} />
+        {label}
+      </span>
+      <span className="mt-1 block text-2xl font-semibold leading-none tabular-nums">
+        {n}
+        <span className="ml-1.5 text-xs font-normal text-muted-foreground">{note}</span>
+      </span>
+    </>
+  )
+  const tile = "block min-h-16 min-w-0 rounded-md border bg-background px-3 py-2.5"
+  return (
+    <li className="min-w-0">
+      {to === undefined || n === 0 ? (
+        <div className={tile}>{body}</div>
+      ) : (
+        <Link
+          to="/app/audits/$auditId/findings"
+          params={{ auditId: to.auditId }}
+          search={to.search}
+          className={cn(tile, "hover:bg-accent", focusRing)}
+        >
+          {body}
+        </Link>
+      )}
+    </li>
   )
 }
 
@@ -584,7 +641,19 @@ function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
   )
 }
 
-function AreaCounts({
+const SEGMENTS = [
+  { key: "critical", label: "Critical", glyph: "critical", fill: "fill-sev-critical-solid" },
+  { key: "warning", label: "Warning", glyph: "warning", fill: "fill-sev-warning-solid" },
+  { key: "info", label: "Info", glyph: "info", fill: "fill-sev-info-solid" },
+  {
+    key: "couldNotCheck",
+    label: "Could not check",
+    glyph: "could-not-check",
+    fill: "fill-muted-foreground/40",
+  },
+] as const
+
+function AreaStrip({
   auditId,
   areas,
   checkedAreas,
@@ -593,69 +662,73 @@ function AreaCounts({
   areas: Overview["areas"]
   checkedAreas: Overview["checkedAreas"]
 }) {
-  const cell = (n: number, area: string, severity?: (typeof SEVERITIES)[number]) =>
-    n === 0 ? (
-      <span className="tabular-nums text-muted-foreground">0</span>
-    ) : (
-      <Link
-        to="/app/audits/$auditId/findings"
-        params={{ auditId }}
-        search={{ area, severity }}
-        className={`inline-flex h-8 min-w-8 items-center justify-center rounded-md px-2 tabular-nums underline underline-offset-4 ${focusRing}`}
-      >
-        {n}
-      </Link>
-    )
   const all = Object.entries(AREAS)
-  const shown = all.filter(([area]) => areas[area] !== undefined)
+  const shown = all.flatMap(([area, label]) => {
+    const found = areas[area]
+    return found === undefined ? [] : [{ area, label, found }]
+  })
   const quiet = all.filter(([area]) => areas[area] === undefined)
   const passed = quiet.filter(([area]) => (checkedAreas[area] ?? 0) > 0).map(([, label]) => label)
   const unchecked = quiet
     .filter(([area]) => (checkedAreas[area] ?? 0) === 0)
     .map(([, label]) => label)
+  const widest = Math.max(
+    1,
+    ...shown.map(({ found }) => SEGMENTS.reduce((n, seg) => n + found[seg.key], 0)),
+  )
   return (
-    <section aria-label="Counts by area" className="space-y-2">
-      <h2 className="text-sm font-medium">Counts by area</h2>
+    <section aria-label="Counts by area" className="space-y-3">
+      <h2 className="text-base font-semibold">Counts by area</h2>
       {shown.length > 0 ? (
-        <Table className="text-xs sm:text-sm">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="px-2 sm:px-3">Area</TableHead>
-              {SEVERITIES.map((s) => (
-                <TableHead key={s} className="px-2 text-right sm:px-3">
-                  <span className="inline-flex items-center gap-1.5">
-                    <StatusGlyph meaning={s} className="hidden sm:block" />
-                    {SEVERITY_LABEL[s]}
-                  </span>
-                </TableHead>
-              ))}
-              <TableHead className="px-2 text-right sm:px-3">
-                <span className="inline-flex items-center gap-1.5">
-                  <StatusGlyph meaning="could-not-check" className="hidden sm:block" />
-                  <span className="whitespace-normal">Could not check</span>
+        <ul className="divide-y rounded-lg border bg-card">
+          {shown.map(({ area, label, found }) => {
+            let offset = 0
+            return (
+              <li
+                key={area}
+                className="grid items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(6rem,1fr)_auto]"
+              >
+                <span className="text-sm font-medium">{label}</span>
+                <svg aria-hidden="true" className="h-2 w-full">
+                  <rect width="100%" height="100%" rx="4" className="fill-muted" />
+                  {SEGMENTS.map((seg) => {
+                    const x = (offset / widest) * 100
+                    offset += found[seg.key]
+                    return found[seg.key] === 0 ? null : (
+                      <rect
+                        key={seg.key}
+                        x={`${x}%`}
+                        width={`${(found[seg.key] / widest) * 100}%`}
+                        height="100%"
+                        className={cn(seg.fill, "stroke-card")}
+                        strokeWidth="1"
+                      />
+                    )
+                  })}
+                </svg>
+                <span className="flex flex-wrap gap-x-3 text-sm">
+                  {SEGMENTS.map((seg) =>
+                    found[seg.key] === 0 ? null : (
+                      <Link
+                        key={seg.key}
+                        to="/app/audits/$auditId/findings"
+                        params={{ auditId }}
+                        search={{
+                          area,
+                          severity: seg.key === "couldNotCheck" ? undefined : seg.key,
+                        }}
+                        className={`inline-flex min-h-8 items-center gap-1.5 rounded-md tabular-nums underline-offset-4 hover:underline ${focusRing}`}
+                      >
+                        <StatusGlyph meaning={seg.glyph} />
+                        {found[seg.key]} {seg.label}
+                      </Link>
+                    ),
+                  )}
                 </span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {shown.map(([area, label]) => {
-              const found = areas[area]
-              return (
-                <TableRow key={area}>
-                  <TableCell className="px-2 font-medium sm:px-3">{label}</TableCell>
-                  {SEVERITIES.map((s) => (
-                    <TableCell key={s} className="px-2 text-right sm:px-3">
-                      {cell(found?.[s] ?? 0, area, s)}
-                    </TableCell>
-                  ))}
-                  <TableCell className="px-2 text-right sm:px-3">
-                    {cell(found?.couldNotCheck ?? 0, area)}
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+              </li>
+            )
+          })}
+        </ul>
       ) : null}
       <ul className="space-y-1 text-sm text-muted-foreground" data-testid="quiet-areas">
         {passed.length > 0 ? (

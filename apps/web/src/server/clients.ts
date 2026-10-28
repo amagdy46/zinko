@@ -5,7 +5,15 @@ import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
-import { auditDetails, clientSummary, scoresOf, SETTLED, siteSummaries } from "./client-summary"
+import {
+  auditDetails,
+  clientSummary,
+  coverageOfAudit,
+  scoresOf,
+  SETTLED,
+  siteSummaries,
+  trendsOf,
+} from "./client-summary"
 import { requireSession } from "./require-session"
 import {
   allowPrivateSites,
@@ -108,6 +116,11 @@ const orArchiveInstead = <A, E, R>(what: string, effect: Effect.Effect<A, E, R>)
     ),
   )
 
+const coverageOf = (details: Effect.Success<ReturnType<typeof auditDetails>>, id: string) => {
+  const found = details.find((d) => d.id === id)
+  return found === undefined ? null : coverageOfAudit(found)
+}
+
 export const listClients = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .handler(({ context }) =>
@@ -128,6 +141,10 @@ export const listClients = createServerFn({ method: "GET" })
           orgId,
           sites.map((s) => s.id),
         )
+        const trends = yield* trendsOf(
+          orgId,
+          clients.map((c) => c.id),
+        )
         return clients.map((c) => {
           const owned = sites.filter((s) => s.clientId === c.id)
           const summary = clientSummary(
@@ -142,6 +159,7 @@ export const listClients = createServerFn({ method: "GET" })
             siteCount: owned.length,
             running: summary.running,
             latest: summary.latest,
+            trend: trends.get(c.id) ?? [],
           }
         })
       }),
@@ -214,6 +232,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             createdAt: a.createdAt,
             status: a.status,
             siteName: a.siteName,
+            coverage: coverageOf(details, a.id),
             score: SETTLED.some((status) => status === a.status)
               ? (scores.get(a.id) ?? null)
               : null,
@@ -515,6 +534,7 @@ export const getSite = createServerFn({ method: "GET" })
               score: SETTLED.some((status) => status === a.status)
                 ? (scores.get(a.id) ?? null)
                 : null,
+              coverage: coverageOf(summaries, a.id),
               findings:
                 summary === undefined ||
                 summary.evaluated === 0 ||

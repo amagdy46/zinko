@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
 import { EmptyState } from "@/components/empty-state"
+import { ScoreSparkline } from "@/components/score-figure"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -59,7 +60,7 @@ function Clients() {
     c.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
   )
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title="Clients"
         actions={
@@ -134,6 +135,7 @@ function Clients() {
               <TableHead>Sites</TableHead>
               <TableHead>Last audit</TableHead>
               <TableHead>Open findings</TableHead>
+              <TableHead>Last five scores</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -154,6 +156,9 @@ function Clients() {
                 </TableCell>
                 <TableCell>
                   <OpenFindings latest={c.latest} />
+                </TableCell>
+                <TableCell>
+                  <ScoreSparkline points={c.trend} />
                 </TableCell>
               </TableRow>
             ))}

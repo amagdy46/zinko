@@ -113,6 +113,11 @@ export const getOverview = createServerFn({ method: "GET" })
               sql<number>`count(distinct ${checkResult.ruleId}) filter (where ${checkResult.status} = 'pass')`.mapWith(
                 Number,
               ),
+            checks: sql<number>`count(*)`.mapWith(Number),
+            unresolved:
+              sql<number>`count(*) filter (where ${checkResult.status} = 'inconclusive')`.mapWith(
+                Number,
+              ),
           })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
@@ -161,6 +166,8 @@ export const getOverview = createServerFn({ method: "GET" })
             : [],
         )
         const unfinished = runs.filter((r) => r.status === "failed" || r.status === "partial")
+        const openOf = (severity: string) =>
+          failing.filter((f) => f.severity === severity && f.triage.status === "open").length
         const withoutAcceptedScore = healthScore({
           findings: failing.filter((f) => f.triage.status !== "accepted_risk"),
           uncertainty,
@@ -179,6 +186,19 @@ export const getOverview = createServerFn({ method: "GET" })
               startFailed ||
               brokenPages.length > 0 ||
               (runs.length > 0 && unfinished.length * 2 >= runs.length),
+          },
+          scoreCoverage: {
+            totalRuns: coverage.totalRuns,
+            evaluatedRuns: coverage.evaluatedRuns,
+            unfinishedRuns: unfinished.length,
+            checks: checked.reduce((n, c) => n + c.checks, 0),
+            unresolvedChecks: checked.reduce((n, c) => n + c.unresolved, 0),
+            unauditedSites: 0,
+          },
+          open: {
+            critical: openOf("critical"),
+            warning: openOf("warning"),
+            info: openOf("info"),
           },
           checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
           withoutAccepted: withoutAcceptedScore.evaluated ? withoutAcceptedScore.score : null,

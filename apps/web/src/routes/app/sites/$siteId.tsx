@@ -5,6 +5,7 @@ import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeading } from "@/components/section-heading"
@@ -90,7 +91,7 @@ function SitePage() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         title={site.name}
         breadcrumb={[
@@ -263,15 +264,10 @@ function SitePage() {
                   ) : null}
                 </TableCell>
                 <TableCell className="tabular-nums">
-                  {a.score === null ? (
+                  {a.score === null || a.coverage === null ? (
                     <span className="text-muted-foreground">–</span>
                   ) : (
-                    <>
-                      {a.score}/100
-                      <span className="block text-xs text-muted-foreground">
-                        from {count(a.runs.total, "run")}
-                      </span>
-                    </>
+                    <ScoreFigure score={a.score} coverage={a.coverage} />
                   )}
                 </TableCell>
                 <TableCell>

@@ -1,3 +1,5 @@
+import { count } from "./format"
+
 export const SCORE_VERSION = 2
 export const WEIGHT = { critical: 20, warning: 8, info: 2 } as const
 export const CRITICAL_CAP = 79
@@ -119,4 +121,36 @@ export function healthScore(input: {
     versions: input.versions,
     mixedVersions: input.versions.length > 1,
   }
+}
+
+/** What a score was computed from, in numbers every screen can obtain for an audit. */
+export interface ScoreCoverage {
+  totalRuns: number
+  /** Runs with check results. */
+  evaluatedRuns: number
+  /** Runs that ended partial or failed. */
+  unfinishedRuns: number
+  /** Check results stored (rule x run). */
+  checks: number
+  /** Check results that could not be resolved to pass, fail or not applicable. */
+  unresolvedChecks: number
+  /** Sites of a client with no scored audit; zero for a single audit or site. */
+  unauditedSites: number
+}
+
+/**
+ * A score is "full" only when every run was evaluated, none ended partial or failed and every
+ * check resolved. Anything less is stated as exact counts, so the number is never read as more
+ * than what was checked. Banner uncertainty is a caveat on failing findings, not on coverage.
+ */
+export function scoreCoverage(c: ScoreCoverage): { full: boolean; notes: ReadonlyArray<string> } {
+  const notes: string[] = []
+  if (c.evaluatedRuns < c.totalRuns)
+    notes.push(`${c.evaluatedRuns} of ${count(c.totalRuns, "run")} checked`)
+  if (c.unresolvedChecks > 0)
+    notes.push(`${c.checks - c.unresolvedChecks} of ${count(c.checks, "check")} resolved`)
+  if (c.unfinishedRuns > 0 && c.evaluatedRuns >= c.totalRuns)
+    notes.push(`${count(c.unfinishedRuns, "run")} did not finish`)
+  if (c.unauditedSites > 0) notes.push(`${count(c.unauditedSites, "site")} not audited yet`)
+  return { full: notes.length === 0, notes }
 }

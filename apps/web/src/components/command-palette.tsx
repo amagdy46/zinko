@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/command"
 import { useTheme } from "@/components/theme-provider"
 import { authClient } from "@/lib/auth-client"
+import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { shortDateTime, useTimeZone } from "@/lib/format"
 import { createClient, searchTargets } from "@/server/clients"
@@ -276,8 +277,8 @@ export function CommandPalette({
                         {shortDateTime(a.createdAt, timeZone)}
                       </span>
                       <StatusBadge status={toBadgeStatus(a.status)} />
-                      {a.score === null ? null : (
-                        <span className="tabular-nums">{a.score}/100</span>
+                      {a.score === null || a.coverage === null ? null : (
+                        <ScoreFigure score={a.score} coverage={a.coverage} size="inline" />
                       )}
                     </span>
                   </CommandItem>
