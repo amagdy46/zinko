@@ -291,6 +291,7 @@ const earlierFailureOf = (
   rowsBefore: RuleRows,
   currentVersions: readonly string[],
   input: Input,
+  nowRuns: ReadonlyMap<string, CellRun>,
 ): FindingChange["earlierFailure"] => {
   const eligible = new Set(
     failingNow.filter((cell) => {
@@ -299,11 +300,16 @@ const earlierFailureOf = (
     }),
   )
   for (const audit of input.history) {
-    const cellByRun = new Map(audit.runs.map((r) => [r.id, cellId(r.cell)]))
+    const runById = new Map(audit.runs.map((r) => [r.id, r]))
     for (const row of audit.checks) {
       if (row.ruleId !== ruleId || row.status !== "fail") continue
-      const cell = cellByRun.get(row.runId)
-      if (cell === undefined || !eligible.has(cell)) continue
+      const witness = runById.get(row.runId)
+      if (witness === undefined) continue
+      const cell = cellId(witness.cell)
+      const current = nowRuns.get(cell)
+      if (current === undefined || !eligible.has(cell)) continue
+      // a witness counts only when its consent choice and banner agree with the current run's
+      if (compatDiffers(ruleId, witness, current, input.bannerDependent) !== null) continue
       if (input.ruleChanged(ruleId, [row.rulesVersion, ...currentVersions])) continue
       return { auditId: audit.auditId, date: audit.date }
     }
@@ -447,7 +453,14 @@ export const compareAudits = (input: Input) => {
         if (unknown.length === failsNowCommon.length) state = "verdict_changed"
         else {
           if (unknown.length > 0) qualifier = "partly_unknown_before"
-          earlierFailure = earlierFailureOf(ruleId, failsNowCommon, rowsBefore, versions, input)
+          earlierFailure = earlierFailureOf(
+            ruleId,
+            failsNowCommon,
+            rowsBefore,
+            versions,
+            input,
+            n.runByCell,
+          )
           state = earlierFailure === null ? "new" : "regressed"
         }
       }

@@ -1,0 +1,9 @@
+# M6 code review 1, Tasks 3–8 (GPT-6.1 Sol, high) — verdict: fix first
+
+1. **Blocker — incompatible history can manufacture Regressed.** `lib/compare.ts:305`, `server/compare-data.ts:241`: history matches structural cells and rule versions but never checks consent or banner compatibility, and historical banner detection is skipped. Probe: historical banner-dependent failure with `not-detected`, baseline pass with `detected`, current failure with `detected` → Regressed. Fix: load historical compatibility and gate witnesses through the same compatibility check.
+2. **Should fix — the picker cap disables valid comparisons.** `compare-data.ts:297`: a stored or explicit `against` baseline outside the newest 50 candidates gives `no_baseline`. Fix: fetch and validate the selected baseline independently of the capped list and include it in the picker.
+3. **Should fix — non-failing verdict changes have empty detail tables.** `compare.ts:468`: `listed` holds only newly failing and baseline-failing cells; pass → inconclusive returns `verdict_changed` with `cellChanges=[]`, as do inconclusive → pass and unchanged inconclusive cells. Fix: include the common cells that establish these states before the payload caps.
+4. **Should fix — Regressed wording drops uncertainty.** `lib/compare-text.ts:103`: with baseline pass on A, inconclusive on B, no C and current failures on all three, the engine returns Regressed with `partly_unknown_before` and `outside=1`, but the UI says "it passed in the last audit". Fix: keep the qualifier, distinguish outside-scope failures, count before truncating `cellChanges`.
+5. **Should fix — new focus styles break AGENTS.md.** `components/compare/change-sheet.tsx:129` and the new comparison controls use translucent 3px rings without the gap. Fix: the solid 2px ring with a 2px background offset, or inset where clipped.
+
+Concurrency and performance inspected statically; the narrow result projection is due in Task 9.

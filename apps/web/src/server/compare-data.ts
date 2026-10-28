@@ -238,7 +238,7 @@ const historyOf = (
     for (const a of audits) {
       const config = yield* decodeConfig(a.config).pipe(Effect.orDie)
       const own = checks.filter((c) => auditOfRun.get(c.runId) === a.id)
-      const runs = (yield* cellRunsOf(orgId, a.id, config, false)).filter((r) =>
+      const runs = (yield* cellRunsOf(orgId, a.id, config, true)).filter((r) =>
         own.some((c) => c.runId === r.id),
       )
       history.push({ auditId: a.id, date: a.createdAt.toISOString(), runs, checks: own })
