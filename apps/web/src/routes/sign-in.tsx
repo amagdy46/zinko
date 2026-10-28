@@ -44,7 +44,7 @@ function SignIn() {
   return (
     <AuthCard
       title="Sign in"
-      description="Zinko checks what a website's tags and consent banner really do. Sign in to continue."
+      description="Sign in to continue. Zinko checks what a website's tags and consent banner really do."
       footer={
         <>
           No account yet?{" "}

@@ -50,10 +50,11 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
       <Link
         to="/"
         onClick={onNavigate}
-        className="flex size-8 items-center justify-center rounded-sm focus-visible:outline-ring focus-visible:outline-2"
+        className="flex h-9 items-center gap-2 rounded-md px-2 font-semibold focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
         aria-label="Zinko home"
       >
-        <LogoMark className="size-5" />
+        <LogoMark className="size-6" />
+        Zinko
       </Link>
       <OrgSwitcher
         organizations={organizations}
@@ -64,7 +65,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
         type="button"
         data-find-return
         onClick={onFind}
-        className="flex h-8 items-center gap-2 rounded-md border bg-background px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2"
+        className="flex h-9 items-center gap-2 rounded-md border bg-card px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Find…</span>
@@ -77,7 +78,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
             to={to}
             onClick={onNavigate}
             aria-current={sections.some((name) => name === section) ? "page" : undefined}
-            className="last:mt-auto flex h-8 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground focus-visible:outline-ring focus-visible:outline-2 aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground"
+            className="relative flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 last:mt-auto before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground aria-[current=page]:before:bg-primary"
           >
             <Icon className="size-4" />
             {label}
@@ -143,7 +144,10 @@ function AppShell() {
               />
             </SheetContent>
           </Sheet>
-          <LogoMark className="size-5" />
+          <span className="flex items-center gap-2 font-semibold">
+            <LogoMark className="size-6" />
+            Zinko
+          </span>
         </header>
         <main
           id="main"
