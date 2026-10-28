@@ -1,9 +1,9 @@
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, client, findingTriage, orgBranding, run, site } from "@repo/db"
+import { audit, checkResult, client, findingTriage, hit, orgBranding, run, site } from "@repo/db"
 import { canonicalJson } from "@repo/llm"
 import { and, asc, count, eq, max, sql } from "drizzle-orm"
-import { Effect, Schema } from "effect"
+import { Effect, Option, Schema } from "effect"
 import { SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
 import { count as plural } from "@/lib/format"
 import {
@@ -14,10 +14,12 @@ import {
   REPORT_MODEL_VERSION,
   type ReportModel,
 } from "@/lib/report-model"
-import { assertProjected, pageLabel, runReasonLabel } from "@/lib/report-projection"
+import { assertProjected, pageLabel, runReasonLabel, vendorLabel } from "@/lib/report-projection"
+import { vendorRank } from "@/lib/tag-matrix"
 import { brandingOf } from "./branding-data"
 import { auditInOrg } from "./audit-data"
 import { findingsOf, SEVERITY_ORDER } from "./findings-data"
+import { coverageOf, decodeConsent } from "./matrix-data"
 import { scoreSummaryOf } from "./score-summary"
 import { atomically, NotFound } from "./server-fn"
 
@@ -50,6 +52,97 @@ export type ReportBuild =
       consultant: ConsultantPayload
       stamp: ReportStamp
     }
+
+const KNOWN_VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
+
+/** The hit's vendor with every vendor the decoders do not know folded into one; literals keep select and group by identical. */
+const vendorSql = sql<string>`case when ${hit.vendor} in (${sql.raw(KNOWN_VENDORS.map((v) => `'${v}'`).join(", "))}) then ${hit.vendor} else 'other' end`
+
+/** A run whose choice was seen to take effect, with the moment of the click: only then are hits split before and after it. */
+const observedSql = sql`(${run.consent}->>'outcome' in ('accepted', 'rejected') and jsonb_typeof(${run.consent}->'actionAt') = 'number')`
+
+interface RunFacts {
+  scenario: string
+  status: string
+  consent: unknown
+}
+
+/**
+ * Vendor by scenario: for each scenario, how well it was captured (complete, partial or not at
+ * all), the outcomes of the choice, the runs and hits per vendor and, for runs whose choice was
+ * observed, the hits before and after it. A hit with `after_consent_action = false` is only
+ * "before the choice" on those runs: elsewhere there was no choice to be before.
+ */
+const consentSummaryOf = (
+  configured: ReadonlyArray<string>,
+  runs: ReadonlyArray<RunFacts>,
+  hitCells: ReadonlyArray<{
+    vendor: string
+    scenario: string
+    runsWithHits: number
+    hits: number
+    hitsBefore: number
+    hitsAfter: number
+  }>,
+): ReportModel["consent"] => {
+  const scenarios = SCENARIOS.map((s) => s.value).filter((s) => configured.includes(s))
+  const facts = new Map(
+    scenarios.map((scenario) => {
+      const inScenario = runs.filter((r) => r.scenario === scenario)
+      const consents = inScenario.map((r) => Option.getOrNull(decodeConsent(r.consent)))
+      const outcomes = new Map<string, number>()
+      for (const consent of consents)
+        if (consent !== null)
+          outcomes.set(consent.outcome, (outcomes.get(consent.outcome) ?? 0) + 1)
+      const coverages = inScenario.map((r) => coverageOf(r.status))
+      return [
+        scenario,
+        {
+          runs: {
+            total: inScenario.length,
+            complete: coverages.filter((c) => c === "complete").length,
+            partial: coverages.filter((c) => c === "partial").length,
+            none: coverages.filter((c) => c === "none").length,
+          },
+          outcomes: [...outcomes]
+            .map(([outcome, n]) => ({ outcome, runs: n }))
+            .toSorted((a, b) => byText(a.outcome, b.outcome)),
+          observed: consents.filter(
+            (c) =>
+              c !== null &&
+              (c.outcome === "accepted" || c.outcome === "rejected") &&
+              c.actionAt !== null,
+          ).length,
+        },
+      ] as const
+    }),
+  )
+  const vendors = [...new Set(hitCells.map((c) => c.vendor))].toSorted(
+    (a, b) => vendorRank(a) - vendorRank(b) || byText(a, b),
+  )
+  return {
+    scenarios: scenarios.map(scenarioLabel),
+    rows: vendors.map((vendor) => ({
+      vendor: vendorLabel(vendor),
+      cells: scenarios.map((scenario) => {
+        const cell = hitCells.find((c) => c.vendor === vendor && c.scenario === scenario)
+        const known = facts.get(scenario)
+        return {
+          scenario: scenarioLabel(scenario),
+          runs: known?.runs ?? { total: 0, complete: 0, partial: 0, none: 0 },
+          outcomes: known?.outcomes ?? [],
+          runsWithHits: cell?.runsWithHits ?? 0,
+          hits: cell?.hits ?? 0,
+          choice: {
+            observed: known?.observed ?? 0,
+            hitsBefore: cell?.hitsBefore ?? 0,
+            hitsAfter: cell?.hitsAfter ?? 0,
+          },
+        }
+      }),
+    })),
+  }
+}
 
 const byVersion = (a: string, b: string) => Number(a) - Number(b) || byText(a, b)
 
@@ -103,6 +196,7 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
             status: run.status,
             failure: run.failure,
             errors: run.errors,
+            consent: run.consent,
           })
           .from(run)
           .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
@@ -125,6 +219,25 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
               eq(checkResult.status, "fail"),
             ),
           )
+        const hitCells = yield* db
+          .select({
+            vendor: vendorSql,
+            scenario: run.scenario,
+            runsWithHits: sql<number>`count(distinct ${hit.runId})`.mapWith(Number),
+            hits: sql<number>`count(*)`.mapWith(Number),
+            hitsBefore:
+              sql<number>`count(*) filter (where ${observedSql} and not ${hit.afterConsentAction})`.mapWith(
+                Number,
+              ),
+            hitsAfter:
+              sql<number>`count(*) filter (where ${observedSql} and ${hit.afterConsentAction})`.mapWith(
+                Number,
+              ),
+          })
+          .from(hit)
+          .innerJoin(run, eq(run.id, hit.runId))
+          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId)))
+          .groupBy(vendorSql, run.scenario)
         const branding = yield* brandingOf(orgId)
         const [brandingRow] = yield* db
           .select({ updatedAt: orgBranding.updatedAt })
@@ -135,10 +248,10 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           .select({ updatedAt: max(findingTriage.updatedAt), rows: count() })
           .from(findingTriage)
           .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
-        return { head, config, found, runs, failed, branding, brandingRow, triage }
+        return { head, config, found, runs, failed, hitCells, branding, brandingRow, triage }
       }),
     )
-    const { head, config, found, runs, failed, branding } = read
+    const { head, config, found, runs, failed, hitCells, branding } = read
     if (head.status === "queued" || head.status === "running")
       return { available: false, reason: "running" } as const
     if (found.coverage.evaluatedRuns === 0)
@@ -262,7 +375,7 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         },
         mixedVersions: scored.mixedVersions,
       },
-      consent: { scenarios: [], rows: [] },
+      consent: consentSummaryOf(config.scenarios, runs, hitCells),
       findings: [],
       leftOut: [],
       actionPlan: [],

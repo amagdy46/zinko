@@ -1,5 +1,7 @@
 import type { ReportModel } from "@/lib/report-model"
+import { ConsentSummary } from "./consent-summary"
 import { Cover } from "./cover"
+import { Scope } from "./scope"
 import { Summary } from "./summary"
 
 /**
@@ -23,6 +25,8 @@ export function ReportView({
     >
       <Cover model={model} logoSrc={logoSrc} draft={mode === "consultant"} />
       <Summary model={model} />
+      <Scope model={model} />
+      <ConsentSummary model={model} />
     </article>
   )
 }

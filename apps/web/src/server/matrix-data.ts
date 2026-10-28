@@ -28,9 +28,9 @@ import {
 const SCENARIO_ORDER = ["none", "accept", "reject", "gpc"]
 const VIEWPORT_ORDER = ["desktop", "mobile"]
 
-const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
+export const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 
-const coverageOf = (status: string): Coverage => {
+export const coverageOf = (status: string): Coverage => {
   if (status === "complete") return "complete"
   return status === "partial" ? "partial" : "none"
 }

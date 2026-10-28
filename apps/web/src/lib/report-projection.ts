@@ -42,6 +42,10 @@ export function pageLabel(
   return `${prefix}Page ${index + 1}${index === 0 && !journey ? " (start page)" : ""}`
 }
 
+/** The name of a vendor as the report prints it; anything the decoders do not know is "Other vendor". */
+export const vendorLabel = (vendor: string): string =>
+  new Map<string, string>(Object.entries(VENDOR_LABELS)).get(vendor) ?? "Other vendor"
+
 const NO_REASON = "The run failed"
 const PARTIAL_REASON = "Some data is missing"
 
@@ -122,7 +126,7 @@ const PUSH_COMMANDS = ["consent default", "consent update", "config", "event", "
 
 const VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
 
-const vendorLabel = oneOf("vendorLabel", [...Object.values(VENDOR_LABELS), "Other vendor"])
+const vendorLabelValidator = oneOf("vendorLabel", [...Object.values(VENDOR_LABELS), "Other vendor"])
 const eventName: Validator = (v) => {
   if (v === "custom event") return null
   return typeof v === "string" && VENDORS.some((vendor) => knownEvent(vendor, v)) ? null : "event"
@@ -160,7 +164,7 @@ const finding = {
   evidence: absent,
   "evidence.caption": generated,
   "evidence.rows[].kind": oneOf("kind", ["hit", "request", "cookie", "push", "document"]),
-  "evidence.rows[].vendor": nullable(vendorLabel),
+  "evidence.rows[].vendor": nullable(vendorLabelValidator),
   "evidence.rows[].event": nullable(eventName),
   "evidence.rows[].destination": nullable(destination),
   "evidence.rows[].timing": nullable(
@@ -265,7 +269,7 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["method.runs.failed", count],
   ["method.mixedVersions", flag],
   ["consent.scenarios[]", oneOf("scenario", SCENARIO_LABELS)],
-  ["consent.rows[].vendor", vendorLabel],
+  ["consent.rows[].vendor", vendorLabelValidator],
   ["consent.rows[].cells[].scenario", oneOf("scenario", SCENARIO_LABELS)],
   ["consent.rows[].cells[].runs.total", count],
   ["consent.rows[].cells[].runs.complete", count],
