@@ -6,10 +6,12 @@ export function Cover({
   model,
   logoSrc,
   draft,
+  published,
 }: {
   model: ReportModel
   logoSrc: string | null
   draft: boolean
+  published?: { version: number; publishedAt: string }
 }) {
   const { branding, cover } = model
   const { scope } = cover
@@ -19,18 +21,29 @@ export function Cover({
       aria-label="Cover"
       className="space-y-8 border-t-8 border-report-accent px-8 py-10 print:p-0 print:pt-8"
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        {/* fetchPriority low keeps React from adding a <link rel="preload"> to the head, which would repeat the public logo URL (and its token) outside the img */}
+        <div className="flex min-w-0 max-w-full items-center gap-3">
           {logoSrc === null ? null : (
-            <img src={logoSrc} alt="" className="max-h-14 max-w-40 object-contain" />
+            <img
+              src={logoSrc}
+              alt=""
+              fetchPriority="low"
+              className="max-h-14 max-w-40 shrink-0 object-contain"
+            />
           )}
-          <p className="text-lg font-semibold">{branding.agencyName}</p>
+          <p className="min-w-0 text-lg font-semibold">{branding.agencyName}</p>
         </div>
         {draft ? (
           <span className="shrink-0 rounded-md border px-2 py-1 text-xs text-muted-foreground print:hidden">
             Draft
           </span>
         ) : null}
+        {published === undefined ? null : (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            Version {published.version}, published {reportDate(published.publishedAt)}
+          </span>
+        )}
       </div>
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">Tracking audit</p>

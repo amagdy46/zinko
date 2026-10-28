@@ -29,18 +29,21 @@ export function ReportView({
   logoSrc,
   mode,
   controls,
+  published,
 }: {
   model: ReportModel
   logoSrc: string | null
   mode: "consultant" | "client"
   controls?: ReportControls
+  /** Set for a published version: the cover says which one and when. */
+  published?: { version: number; publishedAt: string }
 }) {
   return (
     <article
       data-accent={model.branding.accent}
       className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border bg-card text-card-foreground print:max-w-none print:overflow-visible print:rounded-none print:border-0"
     >
-      <Cover model={model} logoSrc={logoSrc} draft={mode === "consultant"} />
+      <Cover model={model} logoSrc={logoSrc} draft={mode === "consultant"} published={published} />
       <Summary model={model} actions={controls?.summary} />
       <Scope model={model} />
       <ConsentSummary model={model} />
