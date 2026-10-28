@@ -3,7 +3,7 @@ import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, findingTriage, hit, run } from "@repo/db"
 import { ruleChangedBetween, VOLATILE_RULES } from "@repo/rules"
-import { and, desc, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import {
   type AuditRef,
@@ -575,7 +575,7 @@ export const briefingOf = (orgId: string, auditId: string) =>
 /**
  * A fingerprint of what the audit's comparison reads besides the audit itself, in order: the stored
  * baseline and when it finished, the earlier audits the regression history would search (ids and
- * finish times), the re-checks that came after (ids, rule, cells, finish times) and the baseline's
+ * finish times), every re-check that came after (ids, rule, state, cells, finish times) and the baseline's
  * triage rows as full-row text, `updated_at` included (the wording "Marked fixed on <date>" reads
  * it). A change in any of them can change what the report says, so publication re-reads on a
  * difference. Empty without a baseline.
@@ -599,10 +599,14 @@ export const comparisonStampOf = (orgId: string, auditId: string) =>
       .where(earlierAudits(orgId, own.siteId, own.baselineId))
       .orderBy(desc(audit.createdAt), desc(audit.id))
       .limit(HISTORY_AUDITS)
+    // Every re-check after the audit, whatever its rule or state and with no cap: a superset of
+    // what `confirmationsOf` selects (completed ones of the changed rules, newest 20), so a re-check
+    // that finishes while a report is published always changes the stamp.
     const rechecks = yield* db
       .select({
         id: audit.id,
         ruleId: audit.narrowRuleId,
+        status: audit.status,
         cells: audit.narrowCells,
         finishedAt: audit.finishedAt,
       })
@@ -615,8 +619,7 @@ export const comparisonStampOf = (orgId: string, auditId: string) =>
           sql`(${audit.createdAt}, ${audit.id}) > (select o.created_at, o.id from audit o where o.id = ${auditId})`,
         ),
       )
-      .orderBy(desc(audit.createdAt), desc(audit.id))
-      .limit(CONFIRMATION_AUDITS)
+      .orderBy(asc(audit.createdAt), asc(audit.id))
     const [triage] = yield* db
       .select({
         text: sql<string>`coalesce(string_agg(${findingTriage}::text, '|' order by ${findingTriage.ruleId}), '')`,
@@ -627,7 +630,7 @@ export const comparisonStampOf = (orgId: string, auditId: string) =>
       own.baselineId,
       baseline?.finishedAt?.toISOString() ?? null,
       earlier.map((a) => [a.id, a.finishedAt?.toISOString() ?? null]),
-      rechecks.map((a) => [a.id, a.ruleId, a.cells, a.finishedAt?.toISOString() ?? null]),
+      rechecks.map((a) => [a.id, a.ruleId, a.status, a.cells, a.finishedAt?.toISOString() ?? null]),
       triage?.text ?? "",
     ])
     const bytes = yield* Effect.promise(() =>
