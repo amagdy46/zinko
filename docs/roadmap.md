@@ -18,8 +18,8 @@
 | M2 | **Audit pipeline (done locally, 2026-10-20):** clients and sites CRUD, the New audit form, AuditWorkflow (step per page × scenario), AuditRoom Durable Object over WebSocket, hits in Postgres, artifacts in R2 | Run an audit from the UI, watch it progress, and browse the Hits explorer (done: the M2 demo in `docs/vision.md`) |
 | M3 | **Rules and findings (done locally, 2026-10-22):** `packages/rules` with the 19 v0.1 rules, journey runs, check results and findings in Postgres, and the Findings screen with its evidence panel | Audit a real client site and get correct findings with evidence (done on two public sites, with false positives found and noted: see "M3 demo" below) |
 | M4 | **Matrix, overview and LLM (done locally, 2026-10-28):** the Overview (score with its arithmetic, worst finding, tags seen), the Tag matrix (events and observed consent state, by scenario or page, paginated), banner detection uncertainty, Hits destination and timing filters, and `packages/llm` (BYOK keys, an organization policy that is off by default, spend-limited cached explanations) | A consultant-ready view of everything that fires where (done: the M4 demo in `docs/vision.md`) |
-| M5 | **Report:** branding settings, report page, share link, PDF | Send a white-label report to a client |
-| M6 | **Compare and polish:** re-run with diff, empty and partial states, docs, self-host guide, public demo instance | **v0.1 release:** a Show HN post and a "we audited N sites" write-up |
+| M5 | **Report:** branding settings, report page (one-page summary, scope, consent-scenario matrix, findings, an action plan grouped by who fixes it), consultant notes, a revocable share link to a dated snapshot, PDF through print, CSV audit register. Plan: `docs/plans/2026-10-28-m5-report/plan.md` | Send a white-label report to a client |
+| M6 | **Compare and polish:** re-run with diff (new, fixed, unchanged, regressed, verdict changed, not comparable when rules version or banner detection differ; accepted risks carry over), per-finding re-verify, a "what changed" summary, empty and partial states, docs, self-host guide, public demo instance | **v0.1 release:** a Show HN post and a "we audited N sites" write-up |
 
 ## UI refresh (done locally, 2026-10-24)
 
@@ -72,11 +72,29 @@ Two public sites, one audit each (start page and two key pages, four scenarios, 
 - **A fresh clone needs a build before `pnpm check`.** `check` type-checks workspace packages from their `dist` and the web app from the generated route tree, so it fails until `pnpm build` (and `pnpm typecheck`, which regenerates the routes) have run once. Make `check` build what it needs, or reorder the "Before you finish" command in `AGENTS.md`.
 - **Admission control, again.** Done (2026-10-22, `docs/decisions/0003-capture-admission.md`). With five audits queued, one had run no capture after 50 minutes (I started it again) while the engine sat idle between other audits' backoffs. Now an `AdmissionGate` Durable Object hands the engines to captures first come, first served (each capture joins the tail and releases its grant right after the capture is stored, before persistence; every browser attempt confirms its token, and a 5-minute lease recovers crashed holders), and wakes the next waiter with a workflow event. Short audits can finish before an earlier large one. First verified locally with the earlier per-audit version: one engine, five 3-run fixture audits (none, accept, reject; desktop) started at once. With that gate, all 15 captures ran back to back with 0.1–0.2 s between one ending and the next starting, in the order the audits reached the gate, and the engine answered no 429. All five finished 2 min 12 s after queueing, twice in a row. On `main` the same load finished after 27 s, 1:10, 2:10, 4:22 and 8:11. The engine was idle for about 5 min 50 s in all between backoffs (18 s, 35 s, 95 s and 203 s), and the first audit submitted ran last. Not yet tried with containers on Cloudflare.
 
+## Rules from research (2026-10-28)
+
+From `docs/research/2026-10-28-pain-points.md` and `docs/research/2026-10-28-competitors.md`. Ordered; the first five need no new capture capability and can run beside M5 and M6, each fixture-first per `AGENTS.md`.
+
+1. `consent.mode-v2-incomplete`: `gcd` leaves `ad_user_data` or `ad_personalization` unset where Ads signals are present (Google's 2026-06-15 change makes it matter more). Decoder change.
+2. `debug.preview-or-debug-leak`: `gtm_debug`, `gtm_preview`, `debug_mode` or test transaction ids in production hits.
+3. `dedup.tiktok-eventid-missing`: the TikTok mirror of the Meta event-ID rule.
+4. GA4 and Ads hits on first-party paths (Google tag gateway, sGTM) recognised by payload, then `duplicates.client-and-server-ga4`.
+5. `consent.mode-classified` (informational): basic or advanced consent mode, which explains modelled conversions.
+6. With a reload step: `consent.not-persisted-across-navigation`, `duplicates.purchase-on-reload`.
+7. With cross-host journeys: `consent.lost-across-subdomain`, `clickid.crossdomain-linker-missing`.
+8. Request initiator (GTM, hardcoded, third-party script) as an annotation that feeds the report's "who fixes it".
+9. Spikes: banner symmetry (first-layer reject), regional defaults from an EEA vantage point, more vendors (LinkedIn, Microsoft, Pinterest, Reddit, Snap).
+
+## UX rounds
+
+Each round an agent walks the product as a first-time consultant and the issues are fixed in batches. Round 1 (2026-10-28): `docs/qa/2026-10-28-ux-sweep-r1.md`, 9 major, 18 minor, 9 polish, no blocker.
+
 ## After v0.1
 
 | Version | Scope |
 |---|---|
-| v0.2 | GTM API, GA4 Admin and Meta connectors (configured vs fired), LinkedIn, agent-driven funnel discovery |
-| v0.3 | Scheduled audits, volume-drop alerts, Slack and email notifications. **The cloud launches with billing (Polar or Stripe).** |
+| v0.2 | GTM API, GA4 Admin and Meta connectors (configured vs fired), LinkedIn, agent-driven funnel discovery, regime-aware consent scoring (EU opt-in, US opt-out, GPC), a free public single-URL scan, Slides and Sheets exports |
+| v0.3 | Scheduled audits, volume-drop alerts, Slack and email notifications, an agency portfolio view across clients. **The cloud launches with billing (Polar or Stripe).** |
 | v0.4 | Tracking plan as YAML, drift detection, GitHub Action, typed code generation |
 | Later | Chrome extension, CLI parity, Shopify/CRM reconciliation |
