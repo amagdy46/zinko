@@ -35,6 +35,9 @@ export const defaults = {
   cmpBreaksAfterChoice: false, // the banner library's script answers 404 once the visitor's choice is stored
   ghostBanner: false, // once a choice is stored, banner markup is kept in the page but invisible (visibility hidden, as a CMP that animates out leaves it)
   reloadAfterChoice: false, // the banner library reloads the page 1.5 s after the first choice, as some CMPs do
+  forgetConsentOn: "", // a host name prefix (`pay.`): the banner library's cookie is removed on load there, so consent is lost on that host only
+  noAcceptOn: "", // a host name prefix (`pay.`): that host ignores an incoming linker parameter
+  gaCookie: "domain", // "domain" | "host": the `_ga` cookie is shared by the subdomains, or one per host (cookie_domain none)
   linker: "none", // "none" | "domains" | "no-accept" | "first-only": the Google tag's cross-domain linker towards the page's other host
   consentScope: "host", // "host" | "domain": the banner library's cookie is host-only, or set for the parent of a www. or checkout. host
   consentCookie: "cc_cookie", // the banner library's cookie name (anything else is a name no CMP list knows)
@@ -83,10 +86,18 @@ export const sites = {
   "consent-reload-after-choice": { reloadAfterChoice: true },
   "consent-subdomain": {},
   "consent-subdomain-shared": { consentScope: "domain" },
+  "consent-chain": { consentScope: "domain", forgetConsentOn: "pay." },
   "consent-subdomain-renamed": { consentCookie: "zk_choice" },
   "consent-subdomain-path": { consentScope: "domain", consentPath: "restricted" },
   "consent-subdomain-storage": { consentStorage: "localStorage" },
   "linker-missing": { consentDefault: "granted" },
+  "linker-chain": {
+    consentDefault: "granted",
+    gaCookie: "host",
+    linker: "domains",
+    noAcceptOn: "pay.",
+  },
+  "linker-subdomain": { consentDefault: "granted", gaCookie: "host" },
   "linker-set": { consentDefault: "granted", linker: "domains" },
   "linker-no-accept": { consentDefault: "granted", linker: "no-accept" },
   "linker-ads-only": { acceptGrants: "ads" },

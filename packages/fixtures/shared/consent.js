@@ -5,6 +5,9 @@ setTimeout(() => runBanner(), window.zinkoConfig.cmpDelay)
 function runBanner() {
   // consent-not-persisted: the previous document's choice is forgotten before the library reads it
   if (!window.zinkoConfig.consentPersist) document.cookie = "cc_cookie=; Max-Age=0; path=/"
+  const { forgetConsentOn } = window.zinkoConfig
+  if (forgetConsentOn !== "" && location.hostname.startsWith(forgetConsentOn))
+    document.cookie = `cc_cookie=; Max-Age=0; path=/; domain=${location.hostname.split(".").slice(1).join(".")}`
   if (window.zinkoConfig.ghostBanner && document.cookie.includes("cc_cookie=")) addGhostBanner()
   const cfg = window.zinkoConfig
   // consent-subdomain-*: where the banner library keeps the choice

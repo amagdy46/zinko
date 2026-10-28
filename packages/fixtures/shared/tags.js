@@ -87,10 +87,14 @@
           "&gtm_auth=ZinkoPreviewAuth01&gtm_preview=env-3&gtm_cookies_win=x",
       )
     }
+    if (cfg.gaCookie === "host") ga4Config.cookie_domain = "none"
     if (cfg.linker !== "none")
       ga4Config.linker = {
         domains: [otherHost],
-        ...(cfg.linker === "no-accept" ? { accept_incoming: false } : {}),
+        ...(cfg.linker === "no-accept" ||
+        (cfg.noAcceptOn !== "" && hostName.startsWith(cfg.noAcceptOn))
+          ? { accept_incoming: false }
+          : {}),
       }
     gtag("config", ID.ga4, ga4Config)
     if (cfg.secondGa4 === true || (cfg.secondGa4 === "source" && isSource))

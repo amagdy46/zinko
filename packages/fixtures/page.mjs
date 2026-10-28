@@ -14,6 +14,7 @@ function otherHost(host) {
   const [name = "", port] = host.split(":")
   const suffix = port === undefined ? "" : `:${port}`
   if (name.startsWith("www.")) return `checkout.${name.slice(4)}${suffix}`
+  if (name.startsWith("checkout.")) return `pay.${name.slice(9)}${suffix}`
   return name === "localhost" ? `127.0.0.1${suffix}` : undefined
 }
 

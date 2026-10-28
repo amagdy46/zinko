@@ -1,12 +1,19 @@
-import type { Cookie } from "@repo/capture-contract"
+import type { CapturedDocument, Cookie } from "@repo/capture-contract"
 import { consentTimeline } from "../../consent-state.js"
 import { consentCookieNames } from "../../cmp-storage.js"
 import { readableByScriptOn } from "../../cookies.js"
 import { documentRef } from "../../documents.js"
-import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
+import {
+  combineArrivals,
+  fail,
+  inconclusive,
+  nonEmpty,
+  notApplicable,
+  pass,
+} from "../../results.js"
 import { revert, SIGNALS, settledState, signalEvents } from "../../settled-signals.js"
 import type { Signal } from "../../settled-signals.js"
-import type { EvidenceRef, Rule, RunInput } from "../../types.js"
+import type { CheckResult, EvidenceRef, Rule, RunInput } from "../../types.js"
 
 const id = "consent.lost-across-subdomain"
 
@@ -57,9 +64,9 @@ export const lostAcrossSubdomain: Rule = {
         id,
         "this capture predates reload and follow metadata, so how each page was reached is unknown",
       )
-    const arrival = documents.find((document) => document.navigation === "follow")
+    const arrivals = documents.filter((document) => document.navigation === "follow")
     const cut = errors.find((error) => CUT_SHORT.has(error.code))
-    if (arrival === undefined)
+    if (arrivals.length === 0)
       return cut === undefined
         ? notApplicable(id, "no link to another host was followed")
         : inconclusive(id, `the run did not reach another host (${cut.code}: ${cut.message})`)
@@ -72,55 +79,63 @@ export const lostAcrossSubdomain: Rule = {
     if (timeline.outcome !== "accepted")
       return notApplicable(id, "only checked after the visitor accepted")
 
-    const host = hostOf(arrival.url)
-    if (!input.measuredHosts.includes(host))
-      return inconclusive(
-        id,
-        input.measuredHosts.length === 0
-          ? `arrived at ${host}, and no other host is declared for the site`
-          : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
-        [documentRef(arrival.id)],
-      )
+    const judge = (arrival: CapturedDocument): CheckResult => {
+      const host = hostOf(arrival.url)
+      if (!input.measuredHosts.includes(host))
+        return inconclusive(
+          id,
+          input.measuredHosts.length === 0
+            ? `arrived at ${host}, and no other host is declared for the site`
+            : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
+          [documentRef(arrival.id)],
+        )
 
-    // the signals the choice granted, read at the end of the page it was made on
-    const reference = documents.findLast((document) => document.startedAt <= timeline.actionAt)
-    const required: readonly Signal[] =
-      reference === undefined
-        ? []
-        : SIGNALS.filter(
-            (signal) => settledState(signalEvents(input, reference.id, signal)) === "granted",
-          )
+      // the signals the choice granted, read at the end of the page it was made on
+      const reference = documents.findLast((document) => document.startedAt <= timeline.actionAt)
+      const required: readonly Signal[] =
+        reference === undefined
+          ? []
+          : SIGNALS.filter(
+              (signal) => settledState(signalEvents(input, reference.id, signal)) === "granted",
+            )
 
-    const failures: string[] = []
-    const both = [documentRef(first.id), documentRef(arrival.id)]
-    const evidence: EvidenceRef[] = [...both]
-    const unresolved: string[] = []
-    if (arrival.banner === "shown") failures.push(`the banner was shown again on ${host}`)
-    else if (arrival.banner !== "hidden") unresolved.push(`whether the banner was shown on ${host}`)
-    const reverted: Signal[] = []
-    const unknown: Signal[] = []
-    for (const signal of required) {
-      const events = signalEvents(input, arrival.id, signal)
-      const proof = revert(events)
-      if (proof !== undefined) {
-        reverted.push(signal)
-        evidence.push(...proof)
-      } else if (settledState(events) !== "granted") unknown.push(signal)
+      const failures: string[] = []
+      const both = [documentRef(first.id), documentRef(arrival.id)]
+      const evidence: EvidenceRef[] = [...both]
+      const unresolved: string[] = []
+      if (arrival.banner === "shown") failures.push(`the banner was shown again on ${host}`)
+      else if (arrival.banner !== "hidden")
+        unresolved.push(`whether the banner was shown on ${host}`)
+      const reverted: Signal[] = []
+      const unknown: Signal[] = []
+      for (const signal of required) {
+        const events = signalEvents(input, arrival.id, signal)
+        const proof = revert(events)
+        if (proof !== undefined) {
+          reverted.push(signal)
+          evidence.push(...proof)
+        } else if (settledState(events) !== "granted") unknown.push(signal)
+      }
+      if (reverted.length > 0)
+        failures.push(`${reverted.join(", ")} went back to denied on ${host}`)
+      if (unknown.length > 0) unresolved.push(`${unknown.join(", ")} on ${host}`)
+
+      const cited = nonEmpty([
+        ...new Map(evidence.map((ref) => [JSON.stringify(ref), ref])).values(),
+      ])
+      if (cited !== null && failures.length > 0)
+        return fail(
+          id,
+          `${failures.join("; ")} after the visitor accepted${cause(input, first.id, arrival.url, arrival.banner === "shown")}`,
+          cited,
+        )
+      if (unresolved.length > 0)
+        return inconclusive(id, `could not tell ${unresolved.join("; ")}`, both)
+      const signals = required.length === 0 ? "" : ` and ${required.join(", ")} stayed granted`
+      return pass(id, `the banner stayed hidden on ${host}${signals}`, both)
     }
-    if (reverted.length > 0) failures.push(`${reverted.join(", ")} went back to denied on ${host}`)
-    if (unknown.length > 0) unresolved.push(`${unknown.join(", ")} on ${host}`)
-
-    const cited = nonEmpty([...new Map(evidence.map((ref) => [JSON.stringify(ref), ref])).values()])
-    if (cited !== null && failures.length > 0)
-      return fail(
-        id,
-        `${failures.join("; ")} after the visitor accepted${cause(input, first.id, arrival.url, arrival.banner === "shown")}`,
-        cited,
-      )
-    if (unresolved.length > 0)
-      return inconclusive(id, `could not tell ${unresolved.join("; ")}`, both)
-    const signals = required.length === 0 ? "" : ` and ${required.join(", ")} stayed granted`
-    return pass(id, `the banner stayed hidden on ${host}${signals}`, both)
+    // every followed link is judged: a failure on any of them fails the run
+    return combineArrivals(id, arrivals.map(judge))
   },
 }
 

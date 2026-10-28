@@ -1,8 +1,16 @@
 import { consentTimeline } from "../../consent-state.js"
 import { documentRef, hitRef } from "../../documents.js"
-import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
+import {
+  combineArrivals,
+  fail,
+  inconclusive,
+  nonEmpty,
+  notApplicable,
+  pass,
+} from "../../results.js"
 import { hitState } from "../../settled-signals.js"
-import type { DecodedHit, EvidenceRef, Rule } from "../../types.js"
+import type { CapturedDocument } from "@repo/capture-contract"
+import type { CheckResult, DecodedHit, EvidenceRef, Rule } from "../../types.js"
 
 const id = "clickid.crossdomain-linker-missing"
 
@@ -49,9 +57,9 @@ export const crossdomainLinkerMissing: Rule = {
         id,
         "this capture predates reload and follow metadata, so how each page was reached is unknown",
       )
-    const arrival = documents.find((document) => document.navigation === "follow")
+    const arrivals = documents.filter((document) => document.navigation === "follow")
     const cut = errors.find((error) => CUT_SHORT.has(error.code))
-    if (arrival === undefined)
+    if (arrivals.length === 0)
       return cut === undefined
         ? notApplicable(id, "no link to another host was followed")
         : inconclusive(id, `the run did not reach another host (${cut.code}: ${cut.message})`)
@@ -63,62 +71,68 @@ export const crossdomainLinkerMissing: Rule = {
       )
     if (timeline.outcome !== "accepted")
       return notApplicable(id, "only checked after the visitor accepted")
-    const host = hostOf(arrival.url)
-    if (!input.measuredHosts.includes(host))
-      return inconclusive(
-        id,
-        input.measuredHosts.length === 0
-          ? `arrived at ${host}, and no other host is declared for the site`
-          : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
-        [documentRef(arrival.id)],
-      )
-
-    const ga4 = input.hits.filter((hit) => hit.vendor === "ga4")
-    const destinations = [
-      ...new Set(ga4.filter((hit) => hit.documentId === first.id).map((hit) => hit.destinationId)),
-    ]
-    if (destinations.length === 0)
-      return inconclusive(id, "no Google Analytics 4 hit was sent on the first host", [
-        documentRef(first.id),
-      ])
-
-    const linked = [arrival.url, ...arrival.redirects].some(hasLinker)
-    const failures: string[] = []
-    const unresolved: string[] = []
-    const evidence: EvidenceRef[] = []
-    const passed: string[] = []
-    for (const destination of destinations) {
-      const of = (documentId: string) =>
-        ga4.filter((hit) => hit.documentId === documentId && hit.destinationId === destination)
-      const before = eligible(of(first.id))
-      const after = eligible(of(arrival.id))
-      if (before.sent.length === 0) {
-        unresolved.push(`${destination}: analytics storage was not granted on the first host`)
-      } else if (of(arrival.id).length === 0) {
-        unresolved.push(`${destination}: no hit on ${host}`)
-      } else if (after.sent.length === 0) {
-        unresolved.push(`${destination}: analytics storage was not granted on ${host}`)
-      } else if (before.ids.size !== 1 || after.ids.size !== 1) {
-        unresolved.push(`${destination}: no single client id on one of the hosts`)
-      } else if ([...before.ids][0] === [...after.ids][0]) {
-        passed.push(destination)
-      } else {
-        const [seen] = before.sent
-        const [arrived] = after.sent
-        if (seen !== undefined) evidence.push(hitRef(seen))
-        if (arrived !== undefined) evidence.push(hitRef(arrived))
-        failures.push(
-          linked
-            ? `${destination}: the link carried a linker parameter but ${host} did not adopt it`
-            : `${destination}: the visitor was counted as a new user on ${host}, with no linker parameter on the link`,
+    const judge = (arrival: CapturedDocument): CheckResult => {
+      const host = hostOf(arrival.url)
+      if (!input.measuredHosts.includes(host))
+        return inconclusive(
+          id,
+          input.measuredHosts.length === 0
+            ? `arrived at ${host}, and no other host is declared for the site`
+            : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
+          [documentRef(arrival.id)],
         )
+
+      const ga4 = input.hits.filter((hit) => hit.vendor === "ga4")
+      const destinations = [
+        ...new Set(
+          ga4.filter((hit) => hit.documentId === first.id).map((hit) => hit.destinationId),
+        ),
+      ]
+      if (destinations.length === 0)
+        return inconclusive(id, "no Google Analytics 4 hit was sent on the first host", [
+          documentRef(first.id),
+        ])
+
+      const linked = [arrival.url, ...arrival.redirects].some(hasLinker)
+      const failures: string[] = []
+      const unresolved: string[] = []
+      const evidence: EvidenceRef[] = []
+      const passed: string[] = []
+      for (const destination of destinations) {
+        const of = (documentId: string) =>
+          ga4.filter((hit) => hit.documentId === documentId && hit.destinationId === destination)
+        const before = eligible(of(first.id))
+        const after = eligible(of(arrival.id))
+        if (before.sent.length === 0) {
+          unresolved.push(`${destination}: analytics storage was not granted on the first host`)
+        } else if (of(arrival.id).length === 0) {
+          unresolved.push(`${destination}: no hit on ${host}`)
+        } else if (after.sent.length === 0) {
+          unresolved.push(`${destination}: analytics storage was not granted on ${host}`)
+        } else if (before.ids.size !== 1 || after.ids.size !== 1) {
+          unresolved.push(`${destination}: no single client id on one of the hosts`)
+        } else if ([...before.ids][0] === [...after.ids][0]) {
+          passed.push(destination)
+        } else {
+          const [seen] = before.sent
+          const [arrived] = after.sent
+          if (seen !== undefined) evidence.push(hitRef(seen))
+          if (arrived !== undefined) evidence.push(hitRef(arrived))
+          failures.push(
+            linked
+              ? `${destination}: the link carried a linker parameter but ${host} did not adopt it`
+              : `${destination}: the visitor was counted as a new user on ${host}, with no linker parameter on the link`,
+          )
+        }
       }
+      const refs = [documentRef(first.id), documentRef(arrival.id)]
+      const cited = nonEmpty([...refs, ...evidence])
+      if (cited !== null && failures.length > 0) return fail(id, failures.join("; "), cited)
+      if (unresolved.length > 0)
+        return inconclusive(id, `could not compare ${unresolved.join("; ")}`, refs)
+      return pass(id, `the client id carried over to ${host} for ${passed.join(", ")}`, refs)
     }
-    const refs = [documentRef(first.id), documentRef(arrival.id)]
-    const cited = nonEmpty([...refs, ...evidence])
-    if (cited !== null && failures.length > 0) return fail(id, failures.join("; "), cited)
-    if (unresolved.length > 0)
-      return inconclusive(id, `could not compare ${unresolved.join("; ")}`, refs)
-    return pass(id, `the client id carried over to ${host} for ${passed.join(", ")}`, refs)
+    // every followed link is judged: a failure on any of them fails the run
+    return combineArrivals(id, arrivals.map(judge))
   },
 }
