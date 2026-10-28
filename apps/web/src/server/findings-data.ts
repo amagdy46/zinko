@@ -57,7 +57,8 @@ export const triageJoin = and(
  * evaluated), so the four add up to `totalRuns`; `couldNotCheckOnFailingRuns` is how many of the
  * failing runs also had a check that could not run. `uncertainty` counts what could not be
  * checked from the check results, in three units: `checks` (rows), `runs` and `rules` (distinct),
- * a rule that also fails elsewhere included. `knownRuns` is the runs where a rule was pass or fail.
+ * a rule that also fails elsewhere included. "Could not check" in the UI means a finding of kind
+ * `inconclusive`: a rule that could not be checked on any run it flagged and failed on none. `knownRuns` is the runs where a rule was pass or fail.
  */
 export const findingsOf = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
@@ -71,7 +72,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
       .limit(1)
     if (current === undefined) return yield* new NotFound({ message: "Not found" })
     const runs = yield* db
-      .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario })
+      .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario, status: run.status })
       .from(run)
       .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
     const evaluated = yield* db
@@ -202,6 +203,11 @@ export const findingsOf = (orgId: string, auditId: string) =>
         totalRuns: runs.length,
         // a run's check results are written together, with one version
         evaluatedRuns: evaluated.reduce((sum, e) => sum + e.runs, 0),
+        // runs that ended partial or failed, whatever check results they have: the header's count
+        unfinishedRuns: runs.filter((r) => r.status === "partial" || r.status === "failed").length,
+        // evaluated runs that also finished: what "n of m runs evaluated" says
+        completeEvaluatedRuns: runs.filter((r) => r.status === "complete" && checkedRuns.has(r.id))
+          .length,
         runs: buckets,
         passedNothingApplied: nothingApplied,
         couldNotCheckOnFailingRuns: [...failingRuns].filter((id) => unsureRuns.has(id)).length,

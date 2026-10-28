@@ -31,7 +31,7 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
         </span>
       ) : null}
       {latest ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <StatusBadge status={toBadgeStatus(latest.status)} />
           <time title={relativeTime(latest.createdAt, timeZone).title}>
             {relativeTime(latest.createdAt).text}
@@ -41,12 +41,12 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
         <span className="text-muted-foreground">Not audited</span>
       )}
       {latest === null || latest.score === null ? null : (
-        <div>
+        <p className="flex items-center gap-1.5">
+          <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} size="inline" />
           {latest.sites > 1 ? (
-            <p className="text-muted-foreground">Lowest of {latest.sites} sites</p>
+            <span className="text-muted-foreground">· lowest of {latest.sites} sites</span>
           ) : null}
-          <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} />
-        </div>
+        </p>
       )}
       {latest !== null && latest.incompleteRuns > 0 && latest.score === null ? (
         <p className="text-muted-foreground">
@@ -61,7 +61,7 @@ const severityLabel = { critical: "Critical", warning: "Warning", info: "Info" }
 
 const gap = (latest: Result) =>
   latest.couldNotCheck > 0
-    ? `${count(latest.couldNotCheck, "check")} could not run`
+    ? `${count(latest.couldNotCheck, "rule")} could not be checked`
     : "not fully checked"
 
 function NoFindings({ latest, full }: { latest: Result; full: boolean }) {

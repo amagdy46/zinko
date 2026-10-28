@@ -59,7 +59,7 @@ export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
         warning: openCount(orgId, "warning"),
         info: openCount(orgId, "info"),
         couldNotCheck:
-          sql<number>`(select count(*) from ${finding} where ${finding.auditId} = ${audit.id} and ${finding.orgId} = ${orgId} and ${finding.inconclusiveRuns} > 0)`.mapWith(
+          sql<number>`(select count(*) from ${finding} where ${finding.auditId} = ${audit.id} and ${finding.orgId} = ${orgId} and ${finding.kind} = 'inconclusive')`.mapWith(
             Number,
           ),
       })

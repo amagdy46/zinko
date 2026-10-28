@@ -9,10 +9,13 @@ const BAND_GLYPH: Record<Band, StatusMeaning> = {
   "no-failures": "pass",
 }
 
+const NOT_ENOUGH = "Not enough was captured to score"
+
 /**
  * A health score and how much of it was checked. Below full coverage (see `scoreCoverage`) the
  * number is muted, "Not fully checked" and the exact counts follow it, and the band never reads as
- * a pass. Pure props in, markup out, so the report can reuse it.
+ * a pass. When half the runs or fewer were captured (evaluated and finished) the number is replaced by "—" and
+ * "Not enough was captured to score". Pure props in, markup out, so the report can reuse it.
  * `hero` is the large figure with its band; `cell` fits a table cell; `inline` is one line.
  */
 export function ScoreFigure({
@@ -32,6 +35,38 @@ export function ScoreFigure({
   const { state, notes } = scoreCoverage(coverage)
   const full = state !== "runs"
   const number = cn("tabular-nums", !full && "text-muted-foreground")
+  const captured = Math.min(coverage.evaluatedRuns, coverage.totalRuns - coverage.unfinishedRuns)
+  const sparse = captured * 2 <= coverage.totalRuns
+  if (sparse && size === "inline")
+    return (
+      <span className={cn("inline-flex items-center gap-1 text-muted-foreground", className)}>
+        —<span className="sr-only">{NOT_ENOUGH}</span>
+      </span>
+    )
+  if (sparse && size === "cell")
+    return (
+      <div className={cn("space-y-0.5", className)}>
+        <p className="text-sm font-medium text-muted-foreground">—</p>
+        <p className="text-xs">{NOT_ENOUGH}</p>
+        <p className="text-xs text-muted-foreground">{notes.join(" · ")}</p>
+      </div>
+    )
+  if (sparse)
+    return (
+      <div className={cn("min-w-0 space-y-1", className)}>
+        <p
+          className="text-5xl font-semibold tracking-tight text-muted-foreground"
+          data-testid="score"
+        >
+          —
+        </p>
+        <p className="flex items-center gap-2 text-sm font-medium" data-testid="band">
+          <StatusGlyph meaning="partial" />
+          {NOT_ENOUGH}
+        </p>
+        <p className="text-xs text-muted-foreground">{notes.join(" · ")}</p>
+      </div>
+    )
   if (size === "inline")
     return (
       <span className={cn("inline-flex items-center gap-1 tabular-nums", className)}>

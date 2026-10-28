@@ -33,6 +33,8 @@ const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" 
 
 const PURCHASE_FIELDS_RULE = "coverage.purchase-missing-fields"
 
+const CAVEAT_LIST = 5
+
 const rests = (n: number) => (n === 1 ? "rests" : "rest")
 
 function OverviewScreen() {
@@ -48,6 +50,7 @@ function OverviewScreen() {
     worst,
     tags,
     withoutAccepted,
+    couldNotCheck,
     runHealth,
     scoreCoverage,
     open,
@@ -83,6 +86,7 @@ function OverviewScreen() {
       <ScoreBlock
         score={score}
         scoreCoverage={scoreCoverage}
+        couldNotCheck={couldNotCheck.rules}
         open={open}
         withoutAccepted={withoutAccepted}
         scope={scope}
@@ -96,6 +100,7 @@ function OverviewScreen() {
         runHealth={runHealth}
         cause={incompleteCause}
         score={score}
+        couldNotCheck={couldNotCheck}
         bannerUncertain={bannerUncertain}
       />
       <WorstFinding auditId={audit.id} worst={worst} />
@@ -116,6 +121,7 @@ function Caveats({
   runHealth,
   cause,
   score,
+  couldNotCheck,
   bannerUncertain,
 }: {
   auditId: string
@@ -124,6 +130,7 @@ function Caveats({
   /** Why the audit is incomplete: the start page, a key page that did not load, or unfinished runs. */
   cause: string
   score: Scored
+  couldNotCheck: Overview["couldNotCheck"]
   bannerUncertain: Overview["bannerUncertain"]
 }) {
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
@@ -135,6 +142,7 @@ function Caveats({
     .filter(Boolean)
     .join(", ")
   const { uncertainty } = score
+  const unchecked = couldNotCheck.titles
   const items = [
     problems.length > 0 || runHealth.incomplete
       ? {
@@ -191,23 +199,46 @@ function Caveats({
           ),
         }
       : null,
-    uncertainty.checks > 0
+    couldNotCheck.rules > 0
       ? {
           key: "unresolved",
           node: (
             <div data-testid="unresolved-checks">
               <p>
                 <span className="font-medium">
-                  Could not check: {count(uncertainty.rules, "rule")}, on{" "}
-                  {count(uncertainty.runs, "run")}.{" "}
+                  Could not check: {count(couldNotCheck.rules, "rule")}, on{" "}
+                  {count(couldNotCheck.runs, "run")}.{" "}
                 </span>
                 They are left out of the score, never counted as passes.
               </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
-                {uncertainty.ruleTitles.map((title) => (
+                {unchecked.slice(0, CAVEAT_LIST).map((title) => (
                   <li key={title}>{title}</li>
                 ))}
               </ul>
+              {unchecked.length > CAVEAT_LIST ? (
+                <Collapsible>
+                  <CollapsibleTrigger
+                    className={cn(
+                      "group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium",
+                      focusRing,
+                    )}
+                  >
+                    and {unchecked.length - CAVEAT_LIST} more
+                    <ChevronDown
+                      aria-hidden="true"
+                      className="size-4 transition-transform group-data-[state=open]:rotate-180"
+                    />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
+                      {unchecked.slice(CAVEAT_LIST).map((title) => (
+                        <li key={title}>{title}</li>
+                      ))}
+                    </ul>
+                  </CollapsibleContent>
+                </Collapsible>
+              ) : null}
             </div>
           ),
         }
@@ -354,7 +385,7 @@ function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["wo
             params={{ auditId }}
             search={{ finding: worst.ruleId }}
           >
-            Open finding
+            Open in Findings
           </Link>
         </Button>
         <Button asChild variant="outline" size="sm">
@@ -402,6 +433,7 @@ function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }
 function ScoreBlock({
   score,
   scoreCoverage,
+  couldNotCheck,
   open,
   withoutAccepted,
   scope,
@@ -411,6 +443,7 @@ function ScoreBlock({
 }: {
   score: Scored
   scoreCoverage: Overview["scoreCoverage"]
+  couldNotCheck: number
   open: Overview["open"]
   withoutAccepted: number | null
   scope: string
@@ -453,8 +486,8 @@ function ScoreBlock({
           <StatTile
             glyph="could-not-check"
             label="Could not check"
-            n={score.uncertainty.rules}
-            note={score.uncertainty.rules === 1 ? "rule" : "rules"}
+            n={couldNotCheck}
+            note={couldNotCheck === 1 ? "rule" : "rules"}
           />
         </ul>
       </div>
@@ -629,9 +662,8 @@ function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
           </p>
           <p>
             Checks that could not run are left out of the shares, never counted as passes, and shown
-            as Could not check ({count(uncertainty.checks, "check")} on{" "}
-            {count(uncertainty.runs, "run")} for {count(uncertainty.rules, "rule")}). Triage does
-            not change the score. A rule that is wrong about one run still costs points.
+            as Could not check ({count(uncertainty.checks, "check")}). Triage does not change the
+            score. A rule that is wrong about one run still costs points.
           </p>
           <p>
             Score version {score.version}. Rules versions: {score.versions.join(", ")}.
@@ -687,7 +719,7 @@ function AreaStrip({
             return (
               <li
                 key={area}
-                className="grid items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(6rem,1fr)_auto]"
+                className="grid items-center gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[8rem_minmax(6rem,1fr)_minmax(0,19rem)]"
               >
                 <span className="text-sm font-medium">{label}</span>
                 <svg aria-hidden="true" className="h-2 w-full">

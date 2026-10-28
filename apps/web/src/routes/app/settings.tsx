@@ -1,5 +1,6 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 
+import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 
 export const Route = createFileRoute("/app/settings")({ component: SettingsLayout })
@@ -13,7 +14,7 @@ const tabs = [
 
 function SettingsLayout() {
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <PageContainer>
       <PageHeader title="Settings" description="Your profile and organization preferences." />
       <nav aria-label="Settings" className="flex gap-1 border-b">
         {tabs.map(({ to, label }) => (
@@ -28,6 +29,6 @@ function SettingsLayout() {
         ))}
       </nav>
       <Outlet />
-    </div>
+    </PageContainer>
   )
 }

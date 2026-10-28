@@ -51,7 +51,8 @@ export const getOverview = createServerFn({ method: "GET" })
           return found
         }
         for (const f of failing) areaOf(f.area)[f.severity] += 1
-        for (const f of findings) if (f.inconclusiveRuns > 0) areaOf(f.area).couldNotCheck += 1
+        const unchecked = findings.filter((f) => f.kind === "inconclusive")
+        for (const f of unchecked) areaOf(f.area).couldNotCheck += 1
         const top = failing
           .filter((f) => f.triage.status === "open")
           .toSorted(
@@ -199,6 +200,11 @@ export const getOverview = createServerFn({ method: "GET" })
             critical: openOf("critical"),
             warning: openOf("warning"),
             info: openOf("info"),
+          },
+          couldNotCheck: {
+            rules: unchecked.length,
+            runs: new Set(unchecked.flatMap((f) => f.runIds)).size,
+            titles: unchecked.map((f) => f.checkTitle).toSorted(),
           },
           checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
           withoutAccepted: withoutAcceptedScore.evaluated ? withoutAcceptedScore.score : null,

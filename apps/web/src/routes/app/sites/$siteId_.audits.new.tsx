@@ -5,6 +5,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { CircleHelp } from "lucide-react"
 import { type FormEvent, type ReactNode, useRef, useState } from "react"
+import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -182,7 +183,7 @@ function NewAuditForm() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <PageContainer>
       <PageHeader
         title="New audit"
         breadcrumb={[
@@ -197,9 +198,12 @@ function NewAuditForm() {
         }
       />
       {copied && (
-        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 rounded-md border bg-muted/40 px-3 py-1 text-sm"
+        >
           Settings copied from your last audit.
-          <Button type="button" size="sm" variant="ghost" onClick={reset}>
+          <Button type="button" size="sm" variant="link" className="px-0" onClick={reset}>
             Reset to defaults
           </Button>
         </p>
@@ -280,22 +284,24 @@ function NewAuditForm() {
                 Consent scenarios
                 <ScenarioHelp />
               </legend>
-              <div className="flex gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted-foreground">Presets</span>
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
                   onClick={() => setScenarios(SCENARIOS.map((scenario) => scenario.value))}
                 >
-                  All
+                  All four
                 </Button>
                 <Button
                   type="button"
                   size="sm"
-                  variant="ghost"
+                  variant="outline"
+                  title="Just the reject scenario: the quickest check that refusing stops the tags"
                   onClick={() => setScenarios(["reject"])}
                 >
-                  Only reject
+                  Reject only
                 </Button>
               </div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
@@ -458,7 +464,7 @@ function NewAuditForm() {
           </Collapsible>
         </aside>
       </form>
-    </div>
+    </PageContainer>
   )
 }
 

@@ -138,7 +138,7 @@ function FindingsScreen() {
   const selected = explicit ?? (below ? undefined : ordered[0])
   const position =
     selected === undefined ? -1 : ordered.findIndex((f) => f.ruleId === selected.ruleId)
-  const full = coverage.evaluatedRuns >= coverage.totalRuns
+  const full = coverage.evaluatedRuns >= coverage.totalRuns && coverage.unfinishedRuns === 0
   const missing = coverage.totalRuns - coverage.evaluatedRuns
   const mixed = coverage.rulesVersions.length > 1
   const filtered = severities.length > 0 || areas.length > 0
@@ -432,16 +432,23 @@ function Coverage({
       data-testid="coverage"
     >
       <AlertTitle className="line-clamp-none">
-        {coverage.evaluatedRuns} of {count(coverage.totalRuns, "run")} evaluated
+        {coverage.completeEvaluatedRuns} of {count(coverage.totalRuns, "run")} evaluated
+        {coverage.unfinishedRuns > 0 ? `; ${coverage.unfinishedRuns} did not finish` : ""}
       </AlertTitle>
       <AlertDescription className="text-foreground">
-        {full ? null : (
+        {missing === 0 ? null : (
           <p>
             {count(missing, "run")}{" "}
             {active ? "still to be checked" : `${missing === 1 ? "has" : "have"} no check results`},
             so what follows may be incomplete.
           </p>
         )}
+        {missing === 0 && coverage.unfinishedRuns > 0 ? (
+          <p>
+            {count(coverage.unfinishedRuns, "run")} did not finish, so their checks may be missing
+            and what follows may be incomplete.
+          </p>
+        ) : null}
         {mixed ? (
           <p data-testid="mixed-versions">
             The runs were evaluated with different versions of the rules (

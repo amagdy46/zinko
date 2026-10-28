@@ -4,6 +4,7 @@ import { toast } from "sonner"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
 import { EmptyState } from "@/components/empty-state"
 import { ScoreSparkline } from "@/components/score-figure"
+import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -60,7 +61,7 @@ function Clients() {
     c.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
   )
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <PageContainer>
       <PageHeader
         title="Clients"
         actions={
@@ -165,6 +166,6 @@ function Clients() {
           </TableBody>
         </Table>
       ) : null}
-    </div>
+    </PageContainer>
   )
 }

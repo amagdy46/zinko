@@ -68,9 +68,13 @@ function AuditPage() {
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
   const openFindings = summary.open.critical + summary.open.warning + summary.open.info
-  let findingsText = `${openFindings} open: ${severitySplit(summary.open)}`
-  if (openFindings === 0) findingsText = "0 open"
-  if (summary.evaluatedRuns === 0) findingsText = "Not evaluated"
+  let findingsText = `${openFindings} open`
+  let findingsSplit = `: ${severitySplit(summary.open)}`
+  if (openFindings === 0) findingsSplit = ""
+  if (summary.evaluatedRuns === 0) {
+    findingsText = "Not evaluated"
+    findingsSplit = ""
+  }
   let findingsTab = `${openFindings}`
   if (summary.evaluatedRuns === 0) findingsTab = "(not evaluated)"
   if (active) findingsTab = "(in progress)"
@@ -150,6 +154,7 @@ function AuditPage() {
       className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
     >
       {findingsText}
+      <span className="max-sm:sr-only">{findingsSplit}</span>
     </Link>
   )
   return (
@@ -214,7 +219,9 @@ function AuditPage() {
               {count(runs.length, "run")}
             </span>
             {findingsLink}
-            <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
+            <span className="tabular-nums text-muted-foreground max-sm:hidden">
+              {duration(elapsed)}
+            </span>
             <time
               dateTime={start.toISOString()}
               className="tabular-nums text-muted-foreground max-sm:hidden"
@@ -234,7 +241,8 @@ function AuditPage() {
                 )}
               >
                 <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
-                {problems.length} of {runs.length} runs could not finish · See why
+                {problems.length} of {runs.length} runs could not finish
+                <span className="max-sm:hidden">· See why</span>
               </Link>
             ) : null}
           </div>

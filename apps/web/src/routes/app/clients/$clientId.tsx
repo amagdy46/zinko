@@ -5,6 +5,7 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { Button } from "@/components/ui/button"
 import { MoreHorizontal } from "lucide-react"
+import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/empty-state"
 import { LastAudit, OpenFindings } from "@/components/first-run"
@@ -101,7 +102,7 @@ function ClientPage() {
     null,
   )
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <PageContainer>
       <PageHeader
         title={client.name}
         breadcrumb={[{ label: "Clients", to: "/app/clients" }, { label: client.name }]}
@@ -264,6 +265,6 @@ function ClientPage() {
           </TableBody>
         </Table>
       )}
-    </div>
+    </PageContainer>
   )
 }

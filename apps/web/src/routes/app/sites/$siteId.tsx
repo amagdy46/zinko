@@ -7,6 +7,7 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { ScoreFigure } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
+import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeading } from "@/components/section-heading"
 import { EmptyState } from "@/components/empty-state"
@@ -91,7 +92,7 @@ function SitePage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <PageContainer>
       <PageHeader
         title={site.name}
         breadcrumb={[
@@ -107,7 +108,7 @@ function SitePage() {
         meta={site.archived ? <Badge variant="secondary">Archived</Badge> : undefined}
         actions={
           <>
-            {!site.archived ? (
+            {!site.archived && audits.length > 0 ? (
               <Button asChild>
                 <Link to="/app/sites/$siteId/audits/new" params={{ siteId: site.id }}>
                   New audit
@@ -304,7 +305,7 @@ function SitePage() {
           ) : null}
         </div>
       ) : null}
-    </div>
+    </PageContainer>
   )
 }
 

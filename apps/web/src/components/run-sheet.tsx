@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
-import { ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
 import { RunPath } from "@/components/evidence"
 import { type AuditRun, RunImage, RunStatusBadge } from "@/components/run-matrix"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   Sheet,
   SheetContent,
@@ -140,14 +141,25 @@ export function RunSheet({
               <p className="rounded-md border p-3 text-sm">{runReason(run)}</p>
             ) : null}
             {run.errors.length > 0 ? (
-              <ul className="space-y-2 text-sm">
-                {run.errors.map((error) => (
-                  <li key={`${error.code}-${error.message}`} className="break-words">
-                    <span className="font-medium">{error.code}: </span>
-                    {error.message}
-                  </li>
-                ))}
-              </ul>
+              <Collapsible>
+                <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                  Technical details
+                  <ChevronDown
+                    aria-hidden="true"
+                    className="size-4 transition-transform group-data-[state=open]:rotate-180"
+                  />
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <ul className="space-y-2 text-sm">
+                    {run.errors.map((error) => (
+                      <li key={`${error.code}-${error.message}`} className="break-words">
+                        <span className="font-medium">{error.code}: </span>
+                        {error.message}
+                      </li>
+                    ))}
+                  </ul>
+                </CollapsibleContent>
+              </Collapsible>
             ) : null}
             <div className="space-y-2">
               <h3 className="text-sm font-medium">Same page and viewport</h3>
@@ -177,29 +189,33 @@ export function RunSheet({
                 Open in Hits
               </Link>
             </Button>
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium">Failing findings for this run</h3>
-              {findings
-                .filter((finding) => finding.runIds.includes(run.id))
-                .map((finding) => (
-                  <Link
-                    key={finding.ruleId}
-                    to="/app/audits/$auditId/findings"
-                    params={{ auditId }}
-                    search={{ finding: finding.ruleId }}
-                    className="block py-1.5 text-sm underline underline-offset-4"
-                  >
-                    {finding.title}
-                  </Link>
-                ))}
-              {findings.some((finding) => finding.runIds.includes(run.id)) ? null : (
-                <p className="text-xs text-muted-foreground">
-                  {runReason(run) === null
-                    ? "No failing findings recorded for this run."
-                    : "Could not check: this run did not finish."}
-                </p>
-              )}
-            </div>
+            {runReason(run) === null ? (
+              <div className="space-y-2">
+                <h3 className="text-sm font-medium">Failing findings for this run</h3>
+                {findings
+                  .filter((finding) => finding.runIds.includes(run.id))
+                  .map((finding) => (
+                    <Link
+                      key={finding.ruleId}
+                      to="/app/audits/$auditId/findings"
+                      params={{ auditId }}
+                      search={{ finding: finding.ruleId }}
+                      className="block py-1.5 text-sm underline underline-offset-4"
+                    >
+                      {finding.title}
+                    </Link>
+                  ))}
+                {findings.some((finding) => finding.runIds.includes(run.id)) ? null : (
+                  <p className="text-xs text-muted-foreground">
+                    No failing findings recorded for this run.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Could not check: this run did not finish.
+              </p>
+            )}
           </div>
         ) : null}
       </SheetContent>
