@@ -193,39 +193,51 @@ function AuditPage() {
           }
         />
       ) : (
-        <header className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-          <Link
-            to="/app/sites/$siteId"
-            params={{ siteId: site.id }}
-            className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-          >
-            <ChevronLeft className="size-4" aria-hidden="true" />
-            {site.name}
-          </Link>
-          <h1 className="text-base font-semibold tracking-tight">Audit of {site.name}</h1>
-          <StatusBadge status={toBadgeStatus(audit.status)} />
-          <span className="tabular-nums text-muted-foreground">{count(runs.length, "run")}</span>
-          {findingsLink}
-          <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
-          <time dateTime={start.toISOString()} className="tabular-nums text-muted-foreground">
-            {shortDateTime(start, timeZone)}
-          </time>
-          {problems.length > 0 ? (
+        <header className="flex flex-col gap-x-3 gap-y-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-1">
+          <div className="flex min-w-0 items-center gap-x-3">
             <Link
-              to="/app/audits/$auditId"
-              params={{ auditId: audit.id }}
-              search={{ view: "list" }}
-              className={cn(
-                "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-                failed > 0
-                  ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
-                  : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
-              )}
+              to="/app/sites/$siteId"
+              params={{ siteId: site.id }}
+              aria-label={`Back to ${site.name}`}
+              className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 max-sm:min-w-8 max-sm:justify-center"
             >
-              <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
-              {problems.length} of {runs.length} runs could not finish · See why
+              <ChevronLeft className="size-4" aria-hidden="true" />
+              <span className="max-sm:sr-only">{site.name}</span>
             </Link>
-          ) : null}
+            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">
+              Audit of {site.name}
+            </h1>
+            <StatusBadge status={toBadgeStatus(audit.status)} />
+          </div>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 max-sm:pl-1">
+            <span className="tabular-nums text-muted-foreground max-sm:hidden">
+              {count(runs.length, "run")}
+            </span>
+            {findingsLink}
+            <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
+            <time
+              dateTime={start.toISOString()}
+              className="tabular-nums text-muted-foreground max-sm:hidden"
+            >
+              {shortDateTime(start, timeZone)}
+            </time>
+            {problems.length > 0 ? (
+              <Link
+                to="/app/audits/$auditId"
+                params={{ auditId: audit.id }}
+                search={{ view: "list" }}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  failed > 0
+                    ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
+                    : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
+                )}
+              >
+                <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
+                {problems.length} of {runs.length} runs could not finish · See why
+              </Link>
+            ) : null}
+          </div>
         </header>
       )}
       {active ? (
@@ -294,9 +306,19 @@ function AuditPage() {
           </ul>
         </div>
       ) : null}
-      <nav className="flex gap-4 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums">
+      <nav
+        aria-label="Audit"
+        className="scroll-edges flex gap-4 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
+      >
         {tabs.map((tab) => (
-          <Link key={tab.label} {...tab.link} className={navClass}>
+          <Link
+            key={tab.label}
+            {...tab.link}
+            className={cn(
+              navClass,
+              "inline-flex min-h-8 items-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            )}
+          >
             {tab.label}
           </Link>
         ))}

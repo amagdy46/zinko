@@ -210,7 +210,11 @@ function NewAuditForm() {
         noValidate
       >
         <div className="min-w-0 space-y-6">
-          <FormSection title="Pages" help="Choose the landing page and key pages to check.">
+          <FormSection
+            number={1}
+            title="Pages"
+            help="Choose the landing page and key pages to check."
+          >
             <Field
               id="start-url"
               label="Start URL"
@@ -264,6 +268,7 @@ function NewAuditForm() {
             )}
           </FormSection>
           <FormSection
+            number={2}
             title="Scenarios and viewports"
             help="Compare consent choices across screen sizes."
           >
@@ -332,6 +337,7 @@ function NewAuditForm() {
             </fieldset>
           </FormSection>
           <FormSection
+            number={3}
             title="Options"
             help="Simulate an ad click or follow a journey in one session."
           >
@@ -429,7 +435,7 @@ function NewAuditForm() {
           )}
           <Button
             type="submit"
-            className="shrink-0 lg:w-full"
+            className="h-10 shrink-0 lg:w-full"
             disabled={pending || disabledReason !== undefined}
             aria-describedby={disabledReason === undefined ? undefined : "submit-reason"}
           >
@@ -485,18 +491,23 @@ function ScenarioHelp() {
 }
 
 function FormSection({
+  number,
   title,
   help,
   children,
 }: {
+  number: number
   title: string
   help: string
   children: ReactNode
 }) {
   return (
-    <section className="grid min-w-0 gap-4 border-t pt-6 lg:grid-cols-[14rem_1fr]">
+    <section className="grid min-w-0 gap-4 border-t pt-8 lg:grid-cols-[14rem_1fr]">
       <div className="space-y-1">
-        <h2 className="text-sm font-semibold">{title}</h2>
+        <h2 className="flex items-baseline gap-2 text-base font-semibold">
+          <span className="text-sm text-muted-foreground tabular-nums">{number}</span>
+          {title}
+        </h2>
         <p className="text-xs text-muted-foreground">{help}</p>
       </div>
       <div className="min-w-0 space-y-4">{children}</div>
