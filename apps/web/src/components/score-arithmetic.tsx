@@ -1,16 +1,8 @@
 import { SeverityBadge } from "@/components/severity"
-import type { StatusMeaning } from "@/components/status-glyph"
 import { count } from "@/lib/format"
-import { type Band, CRITICAL_CAP, type HealthScore, WEIGHT } from "@/lib/health-score"
+import { CRITICAL_CAP, type HealthScore, WEIGHT } from "@/lib/health-score"
 
 type Scored = Extract<HealthScore, { evaluated: true }>
-
-export const BAND_GLYPH: Record<Band, StatusMeaning> = {
-  critical: "critical",
-  attention: "warning",
-  minor: "info",
-  "no-failures": "pass",
-}
 
 const PURCHASE_FIELDS_RULE = "coverage.purchase-missing-fields"
 
@@ -102,9 +94,8 @@ export function ScoreDetails({ score }: { score: Scored }) {
       </p>
       <p>
         Checks that could not run are left out of the shares, never counted as passes, and shown as
-        Could not check ({count(uncertainty.checks, "check")} on {count(uncertainty.runs, "run")}{" "}
-        for {count(uncertainty.rules, "rule")}). Triage does not change the score. A rule that is
-        wrong about one run still costs points.
+        Could not check ({count(uncertainty.checks, "check")}). Triage does not change the score. A
+        rule that is wrong about one run still costs points.
       </p>
       <p>
         Score version {score.version}. Rules versions: {score.versions.join(", ")}.

@@ -1,12 +1,12 @@
 import { SeverityBadge } from "@/components/severity"
-import { BAND_GLYPH, ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
+import { ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
+import { ScoreFigure } from "@/components/score-figure"
+import { SectionHeading } from "@/components/section-heading"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
-import { BAND_LABEL } from "@/lib/health-score"
 import type { ReportModel } from "@/lib/report-model"
-import { cn } from "@/lib/utils"
 import type { ReactNode } from "react"
 
 /** The one-page summary: the score and how it adds up, what is uncertain, and the headlines. */
@@ -29,10 +29,7 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
       aria-label="Summary"
       className="space-y-4 px-8 py-8 text-sm print:break-after-page"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-xl font-semibold">Summary</h2>
-        {actions}
-      </div>
+      <SectionHeading title="Summary" actions={actions} />
       {runHealth.incomplete ? (
         <Alert
           className="border-sev-warning-border bg-sev-warning-bg"
@@ -47,37 +44,24 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
           </AlertDescription>
         </Alert>
       ) : null}
-      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
-        <p
-          className={cn(
-            "text-2xl font-semibold tabular-nums",
-            runHealth.incomplete && "text-muted-foreground",
-          )}
-          data-testid="score"
-        >
-          {score.score}
-          <span className="text-sm font-normal text-muted-foreground"> / 100</span>
+      <ScoreFigure
+        size="hero"
+        score={score.score}
+        band={score.band}
+        coverage={{
+          totalRuns: coverage.totalRuns,
+          evaluatedRuns: coverage.evaluatedRuns,
+          unfinishedRuns: runHealth.unfinishedRuns,
+          checks: summary.scoreCoverage.checks,
+          unresolvedChecks: summary.scoreCoverage.unresolvedChecks,
+          unauditedSites: 0,
+        }}
+      />
+      {score.mixedVersions ? (
+        <p className="text-xs text-muted-foreground">
+          Mixed rules versions: runs were judged by different versions of the rules.
         </p>
-        <p className="flex items-center gap-2 font-medium" data-testid="band">
-          {runHealth.incomplete ? (
-            <>
-              <StatusGlyph meaning="partial" />
-              Incomplete
-              <span className="font-normal text-muted-foreground">· {BAND_LABEL[score.band]}</span>
-            </>
-          ) : (
-            <>
-              <StatusGlyph meaning={BAND_GLYPH[score.band]} />
-              {BAND_LABEL[score.band]}
-            </>
-          )}
-          {score.mixedVersions ? (
-            <span className="text-xs font-normal text-muted-foreground">
-              · mixed rules versions
-            </span>
-          ) : null}
-        </p>
-      </div>
+      ) : null}
       <TriageNote model={model} />
       <div className="space-y-2 rounded-md border p-3">
         <ScoreArithmetic score={score} scope={scope} maxLines={5} />
@@ -86,13 +70,6 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
         </div>
       </div>
       <ul className="space-y-1.5">
-        {score.coverage === "partial" ? (
-          <li className="flex items-start gap-2" data-testid="partly-evaluated">
-            <StatusGlyph meaning="partial" className="mt-0.5" />
-            Partly evaluated: {coverage.evaluatedRuns} of {coverage.totalRuns} runs have check
-            results
-          </li>
-        ) : null}
         {score.uncertainty.checks > 0 ? (
           <li className="flex items-start gap-2" data-testid="unresolved-checks">
             <StatusGlyph meaning="could-not-check" className="mt-0.5" />
@@ -100,12 +77,6 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
               Unresolved checks: {count(score.uncertainty.rules, "rule")} could not be checked, on{" "}
               {count(score.uncertainty.runs, "run")}. They are never counted as passes.
             </span>
-          </li>
-        ) : null}
-        {score.coverage === "full" && score.resolution === "resolved" ? (
-          <li className="flex items-start gap-2" data-testid="fully-checked">
-            <StatusGlyph meaning="pass" className="mt-0.5" />
-            All {count(coverage.totalRuns, "run")} evaluated, every check resolved
           </li>
         ) : null}
         {coverage.bannerUncertainRuns > 0 ? (

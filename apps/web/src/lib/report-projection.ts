@@ -336,6 +336,8 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["summary.counts.couldNotCheck", count],
   ["summary.counts.acceptedRisk", count],
   ["summary.counts.fixed", count],
+  ["summary.scoreCoverage.checks", count],
+  ["summary.scoreCoverage.unresolvedChecks", count],
   ["summary.headlines[]", generated],
   ["summary.coverage.evaluatedRuns", count],
   ["summary.coverage.totalRuns", count],

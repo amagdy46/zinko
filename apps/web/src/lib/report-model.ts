@@ -154,6 +154,7 @@ export const ReportModel = Schema.Struct({
       acceptedRisk: Count,
       fixed: Count,
     }),
+    scoreCoverage: Schema.Struct({ checks: Count, unresolvedChecks: Count }),
     headlines: Some(Schema.String),
     coverage: Schema.Struct({
       evaluatedRuns: Count,

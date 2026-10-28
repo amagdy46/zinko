@@ -637,6 +637,12 @@ export const buildReport = (orgId: string, auditId: string) =>
           acceptedRisk: tally("accepted_risk"),
           fixed: tally("fixed"),
         },
+        scoreCoverage: {
+          checks: ruleStats.reduce((n, s) => n + s.n, 0),
+          unresolvedChecks: ruleStats
+            .filter((s) => s.status === "inconclusive")
+            .reduce((n, s) => n + s.n, 0),
+        },
         headlines: headlinesOf(failing, { ...coverage, unresolvedRuns: found.uncertainty.runs }),
         coverage,
         worst,
