@@ -14,8 +14,8 @@ The secondary user is the agency's **client**, who sees the white-label report.
 1. **Workspace:** sign up, create an agency workspace, and invite teammates.
 2. **Clients and sites:** add a client, then add one or more sites to it.
 3. **Run an audit:**
-   - Enter the start URL and up to 20 key page URLs. Funnel steps are entered manually as a list of URLs for now.
-   - Choose consent scenarios from no interaction, accept all, and reject all.
+   - Enter the start URL and up to 19 key page URLs (20 pages in all). Funnel steps are entered manually as a list of URLs for now.
+   - Choose consent scenarios from no interaction, accept all, reject all and Global Privacy Control.
    - Choose desktop or mobile.
    - Turn landing click IDs (`gclid`, `fbclid`, `ttclid`, `utm_*`) on or off.
 4. **Live progress:** see each page and scenario as it runs, with a screenshot thumbnail.
@@ -27,18 +27,18 @@ The secondary user is the agency's **client**, who sees the white-label report.
 6. **Tag matrix:** every vendor and destination ID, showing which events fired on which page in which consent scenario. This is the "what fires where" view consultants currently build in spreadsheets.
 7. **Hit explorer:** a per-run timeline of decoded hits and `dataLayer` pushes. Think of it as Omnibug in the browser, filterable.
 8. **Report:** a white-label report with the agency's logo, accent color and client name. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
-9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (verified by the re-run), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
+9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (confirmed only when the re-run passes every run that failed), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
 
-### Checks in v0.1 (about 20 deterministic rules)
+### Checks in v0.1 (25 deterministic rules)
 
 | Area | Rules |
 |---|---|
-| Consent | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after reject; Google hits without denied `gcs` before consent; `consent default` arriving after the Google tag |
-| Click IDs | `gclid`, `fbclid` and `ttclid` lost across navigation; `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent; IDs missing on the conversion page |
+| Consent | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after reject; Google hits without denied `gcs` before consent; `consent default` arriving after the Google tag; Consent Mode v2 signals missing; whether the site runs basic or advanced consent mode (informational); consent choice not kept on the next page or after a reload |
+| Click IDs | `gclid` and `fbclid` lost on redirects and across navigation (`ttclid` across navigation is not checked yet); `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent |
 | Coverage | `purchase` missing `transaction_id`, `value` or `currency`; currency format invalid; key page with no page_view |
-| Duplicates | Same event fired twice for one action; multiple GA4 IDs on one page; Meta Pixel initialized twice |
-| Dedup | Meta browser `eventID` missing, or not unique per action |
-| Hygiene | PII (email or phone) in URLs or params; tags failing with 4xx/5xx; hits sent from staging hosts |
+| Duplicates | Same event fired twice for one action; multiple GA4 IDs on one page; Meta Pixel initialized twice; the same GA4 event sent from the browser and from a first-party server collector |
+| Dedup | Meta browser `eventID` missing, or reused; TikTok events without an event ID |
+| Hygiene | PII (email or phone) in URLs or params; tags failing with 4xx/5xx; hits sent from staging hosts; the page's own location not matching the audited host; debug or preview parameters left in live hits |
 
 Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 
@@ -51,7 +51,7 @@ Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 | Scheduled audits, volume-drop alerts, Slack | v0.3, the first paid cloud feature |
 | Tracking plan (YAML), plan drift, GitHub Action | v0.4 |
 | Billing | When the cloud version launches |
-| CLI | The capture and rules packages are CLI-ready, so this is cheap to add at any point |
+| CLI `audit` | The CLI has `decode` and `capture` (with `--rules`, the same 25 checks as the app); a full audit stays in the web app |
 | Ad tracker, product analytics | Not planned |
 
 ## Success for v0.1

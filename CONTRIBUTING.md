@@ -31,7 +31,7 @@ docker compose up -d && pnpm db:migrate           # Postgres on :5432; migrates 
 pnpm build                                        # once: the Worker imports the built workspace packages
 ALLOW_PRIVATE_NETWORKS=true PORT=8080 pnpm --filter browser start   # engine on :8080
 pnpm --filter @repo/fixtures serve                # fixture sites on :4400
-pnpm dev                                          # app on http://localhost:1337
+pnpm dev                                          # app on http://localhost:1337 (the next free port if busy; see the URL it prints)
 ```
 
 - `pnpm db:migrate` and `db:generate` read `.env` at the repository root like the app does. A `DATABASE_URL` already set in your shell wins over the file; with neither, they use the docker-compose database.

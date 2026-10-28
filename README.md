@@ -41,7 +41,7 @@ pnpm --filter @repo/fixtures serve                                  # the fixtur
 pnpm dev                                                            # the app on http://localhost:1337
 ```
 
-`.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). Vite takes the next free port if 1337 is busy; the URL is printed on start. To pin another port: `pnpm dev -- --port 3000`.
+`.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). The app listens on port 1337 (Alchemy's default); if that is taken it moves to the next free port, so read the URL `pnpm dev` prints when it starts. Sign-in works on any port because `BETTER_AUTH_URL` stays empty locally.
 
 Then open the app and sign up. Create an organization, then a client (Clients > New client), then a site with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only), and choose New audit on the site. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
@@ -52,6 +52,7 @@ Then open the app and sign up. Create an organization, then a client (Clients > 
 - **Click IDs are added to the start URL only.** Checks about them on other pages follow the journey.
 - **The score is provisional.** Weights, the cap at 79 with a critical finding and the bands may change; a score delta is shown only between audits that checked the same runs under the same rules, and both scores are always computed with today's arithmetic.
 - **Not yet measured on Cloudflare:** the time of a 30-run audit (about 5 to 6 minutes locally against a 5-minute goal), cold start of the capture container, and the public report's rate limit.
+- **Capacity limits.** An organization can have 5 active (queued or running) audits at a time, and only one re-run of a given audit can be in progress at a time (a second press says so). Audits take turns on the capture engines.
 - Vendor-side errors (`hygiene.tag-errors`) are "could not check" when tracking requests are answered locally, which is how the fixtures are run.
 
 ## Try the decoder
@@ -70,9 +71,17 @@ node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/colle
     "vendor": "ga4",
     "destinationId": "G-ABC123",
     "event": "purchase",
-    "params": { "value": 49.9 },
+    "batchIndex": 0,
+    "params": {
+      "value": 49.9
+    },
     "ids": {},
-    "consent": { "adStorage": "denied", "analyticsStorage": "denied", "raw": "G100" },
+    "consent": {
+      "adStorage": "denied",
+      "analyticsStorage": "denied",
+      "raw": "G100"
+    },
+    "collector": "google",
     "host": "region1.google-analytics.com",
     "url": "https://region1.google-analytics.com/g/collect?v=2&tid=G-ABC123&en=purchase&gcs=G100&epn.value=49.9"
   }
@@ -111,19 +120,31 @@ node apps/cli/dist/index.js capture http://localhost:4400/meta-before-consent/ -
 ```text
 == http://localhost:4400/meta-before-consent/  [reject]
 engine: scrapling 0.5 (patchright 1.64.1)
-consent: rejected, cmp cookieconsent3, action at 6211ms, completed at 6217ms
+page: HTTP 200
+consent: rejected, cmp cookieconsent3, action at 5048ms, completed at 5052ms
 
-hits (3); "after" = sent after consent completed; 1 vendor request(s) not decoded
+documents
+  #0 /meta-before-consent/  start
+
+hits (3); "after" = sent at or after the consent action; 1 vendor request(s) not decoded
   time    document                  vendor  destination      event            consent                note
   ------  ------------------------  ------  ---------------  ---------------  ---------------------  -----
-  2421ms  #0 /meta-before-consent/  meta    100000000000001  PageView         ad:unknown an:unknown
-  3166ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     page_view        ad:denied an:denied
-  9415ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     user_engagement  ad:denied an:denied    after
+  1355ms  #0 /meta-before-consent/  meta    100000000000001  PageView         ad:unknown an:unknown
+  2020ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     page_view        ad:denied an:denied
+  8118ms  #0 /meta-before-consent/  ga4     G-ZINKO00001     user_engagement  ad:denied an:denied    after
+
+cookies
+  before-consent @ 5048ms  #0 /meta-before-consent/: (none)
+  after-consent @ 5053ms  #0 /meta-before-consent/: cc_cookie
+  end @ 8720ms  #0 /meta-before-consent/: cc_cookie
+
+errors: none
+complete: true  truncated: false
 ```
 
-The Meta hit lands at 2.4 s, before the reject action at 6.2 s. The output goes on to list cookies per snapshot and errors. `--block-vendors` answers recognised tracking collection requests (any host, a site's own server-side GTM collector included) and known vendor hosts locally, so no recognised hit reaches Google, Meta or TikTok; it is best effort, not a guarantee, and vendors Zinko does not know or unrecognised shapes can still leave (see `docs/vision.md`). The SDK files themselves (gtag.js, fbevents.js, the TikTok pixel) are still downloaded from the vendors. Against a real site, drop it and leave `ALLOW_PRIVATE_NETWORKS` unset; load only sites you are allowed to test.
+The Meta hit lands at 1.2 s, before the reject action at 4.9 s. The output also lists cookies per snapshot and errors; times vary from run to run. `--block-vendors` answers recognised tracking collection requests (any host, a site's own server-side GTM collector included) and known vendor hosts locally, so no recognised hit reaches Google, Meta or TikTok; it is best effort, not a guarantee, and vendors Zinko does not know or unrecognised shapes can still leave (see `docs/vision.md`). The SDK files themselves (gtag.js, fbevents.js, the TikTok pixel) are still downloaded from the vendors. Against a real site, drop it and leave `ALLOW_PRIVATE_NETWORKS` unset; load only sites you are allowed to test.
 
-`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--engine <url>` points at another engine. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit. `--rules` also runs the 25 checks on each capture and prints one line per rule (`pass`, `fail`, `inconclusive` or `not_applicable`, its message and how many pieces of evidence it cites); it is the same code the web app runs.
+`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>`, `--goto <url>` and `--reload` add journey steps in the order given, at most 8 in all. `--mobile` uses a phone viewport. `--engine <url>` points at another engine. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit. `--rules` also runs the 25 checks on each capture and prints one line per rule (`pass`, `fail`, `inconclusive` or `not_applicable`, its message and how many pieces of evidence it cites); it is the same code the web app runs. `--explain-digest` prints, for each failing check, what an AI explanation would be given (it runs the checks; pages are aliases such as "Page 1" unless you add `--page-paths`), and `--explain-prompt` prints the exact prompt the model would receive; neither calls a model.
 
 ## Why Zinko
 
@@ -140,14 +161,14 @@ Use something else if you need ongoing monitoring of production traffic today, o
 
 ## What Zinko checks
 
-| Area       | What it catches                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Consent    | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after "reject all"; Google hits before consent without a denied consent state (`gcs`); `consent default` arriving after the Google tag; Consent Mode v2 signals missing; whether the site runs basic or advanced consent mode (informational); Consent Mode v2 signals missing; whether the site runs basic or advanced consent mode (informational) |
-| Click IDs  | `gclid` and `fbclid` lost on redirects and across navigation (`ttclid` across navigation is not checked yet); `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent                                                                                                                                                                                                                                                                    |
-| Coverage   | `purchase` without `transaction_id`, `value` or `currency`; key pages with no `page_view`                                                                                                                                                                                                                                                                                                                                                   |
-| Duplicates | The same event fired twice for one action; several GA4 IDs on one page; Meta Pixel initialized twice; the same GA4 event sent from the browser and from a first-party server collector                                                                                                                                                                                                                                                      |
-| Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated; TikTok events without an event ID                                                                                                                                                                                                                                                                                                                |
-| Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts; the page's own location not matching the audited host; debug or preview parameters left in live hits                                                                                                                                                                                                                   |
+| Area       | What it catches                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Consent    | Ad or analytics cookies set before consent; non-Google pixels firing before consent or after "reject all"; Google hits before consent without a denied consent state (`gcs`); `consent default` arriving after the Google tag; Consent Mode v2 signals missing; whether the site runs basic or advanced consent mode (informational); the consent choice not kept on the next page or after a reload |
+| Click IDs  | `gclid` and `fbclid` lost on redirects and across navigation (`ttclid` across navigation is not checked yet); `_gcl_aw`, `_fbc` and `_ttp` cookies missing after consent                                                                                                                                                                                                                             |
+| Coverage   | `purchase` without `transaction_id`, `value` or `currency`; key pages with no `page_view`                                                                                                                                                                                                                                                                                                            |
+| Duplicates | The same event fired twice for one action; several GA4 IDs on one page; Meta Pixel initialized twice; the same GA4 event sent from the browser and from a first-party server collector                                                                                                                                                                                                               |
+| Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated; TikTok events without an event ID                                                                                                                                                                                                                                                                         |
+| Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts; the page's own location not matching the audited host; debug or preview parameters left in live hits                                                                                                                                                                            |
 
 These 25 checks are built and run on every audit. Each is a plain function over one run's capture, proven on a fixture site with a known bug. A run that did not load, or a consent check on a page whose banner was not found, is reported as `inconclusive` with the reason, never as clean. The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/ovriq/zinko/blob/main/docs/product.md).
 
