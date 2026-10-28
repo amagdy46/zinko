@@ -120,6 +120,8 @@ const ChangeItem = Schema.Struct({
   /** Pages the change is on and pages compared for the rule; counted, never named (aliases differ between audits). */
   pages: Count,
   pagesCompared: Count,
+  /** Pages the change is on that the other audit did not check: counted apart from the compared ones. */
+  pagesOutside: Count,
   confidence: Schema.Literals(["normal", "low"]),
   confirmation: Schema.Literals(["none", "repeated", "not_repeated", "incomplete"]),
   qualifier: Schema.NullOr(Schema.Literal("partly_unknown_before")),

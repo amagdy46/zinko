@@ -411,6 +411,7 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["changes.items[].title", stored],
   ["changes.items[].pages", count],
   ["changes.items[].pagesCompared", count],
+  ["changes.items[].pagesOutside", count],
   ["changes.items[].confidence", oneOf("confidence", ["normal", "low"])],
   [
     "changes.items[].confirmation",

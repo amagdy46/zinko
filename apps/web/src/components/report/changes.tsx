@@ -36,6 +36,13 @@ const qualification = (item: Item) => {
   return parts.length === 0 ? null : parts.join("; ")
 }
 
+/** Where it changed: on the pages both audits checked, and separately on pages only one of them had. */
+const pagesLine = (item: Item) => {
+  const compared = `On ${item.pages} of ${count(item.pagesCompared, "compared page")}`
+  if (item.pagesOutside === 0) return compared
+  return `${compared}, and on ${count(item.pagesOutside, "other page")} that the earlier audit did not check`
+}
+
 const tagLine = (tag: Tag) => {
   const name = `${tag.vendor}${tag.destination === null ? "" : ` ${tag.destination}`}`
   const where = `${tag.cellsAffected} of ${count(tag.cellsCompared, "run")}`
@@ -86,7 +93,7 @@ export function Changes({ model, extra }: { model: ReportModel; extra?: ReactNod
                       <span className="font-medium">{item.title}</span>
                     </p>
                     <p className="text-muted-foreground">
-                      On {count(item.pages, "page")} of {item.pagesCompared} compared
+                      {pagesLine(item)}
                       {note === null ? "." : `; ${note}.`}
                     </p>
                   </li>

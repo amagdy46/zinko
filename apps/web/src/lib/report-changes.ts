@@ -96,6 +96,7 @@ export function changesOf(input: {
                   title: f.title,
                   pages: f.pages.changed,
                   pagesCompared: f.pages.compared,
+                  pagesOutside: f.pages.outside,
                   confidence: f.confidence.level,
                   confirmation: confirmationOf(f.confirmation?.state),
                   qualifier: f.qualifier,

@@ -128,7 +128,7 @@ export interface FindingChange {
   resolution: Record<Resolution, number>
   cells: { common: number; failedBefore: number; failedNow: number; outside: number }
   /** Distinct pages the change is on, and the pages compared for this rule (aliases differ between audits, so only counts). */
-  pages: { changed: number; compared: number }
+  pages: { changed: number; compared: number; outside: number }
   /** `cell` indexes `Comparison.cells`. A finding that fails on the same cells as before lists only a few. */
   cellChanges: { cell: number; before: Verdict; now: Verdict | Resolution }[]
   cellChangesTotal: number
@@ -352,6 +352,23 @@ const wordingOf = (rows: RuleRows | undefined, side: Side, ruleId: string) => {
   const wording = side.wording.get(ruleId)
   if (rows === undefined || wording === undefined) return undefined
   return { version: Math.max(...[...rows.values()].map((r) => Number(r.rulesVersion))), wording }
+}
+
+/** Distinct pages the change is on where both audits ran, the pages compared, and the changed pages only one audit had. */
+const pagesOf = (
+  changed: ReadonlySet<string>,
+  common: ReadonlySet<string>,
+  runOf: (cell: string) => CellRun | undefined,
+) => {
+  const pageOf = (cell: string) => runOf(cell)?.cell.page ?? []
+  const comparedPages = new Set([...common].flatMap(pageOf))
+  const changedOnCompared = new Set([...changed].filter((c) => common.has(c)).flatMap(pageOf))
+  const changedOutside = new Set([...changed].filter((c) => !common.has(c)).flatMap(pageOf))
+  return {
+    changed: changedOnCompared.size,
+    compared: comparedPages.size,
+    outside: [...changedOutside].filter((page) => !comparedPages.has(page)).length,
+  }
 }
 
 /** Audits looked at for flips, counting the two being compared. */
@@ -660,15 +677,11 @@ export const compareAudits = (input: Input) => {
         failedNow: failsNow.size,
         outside: [...failsNow].filter((cell) => !commonCells.has(cell)).length,
       },
-      pages: {
-        changed: new Set(
-          [...changedCells].flatMap(
-            (c) => b.runByCell.get(c)?.cell.page ?? n.runByCell.get(c)?.cell.page ?? [],
-          ),
-        ).size,
-        compared: new Set([...commonCells].flatMap((c) => b.runByCell.get(c)?.cell.page ?? []))
-          .size,
-      },
+      pages: pagesOf(
+        changedCells,
+        commonCells,
+        (cell) => b.runByCell.get(cell) ?? n.runByCell.get(cell),
+      ),
       cellChanges,
       cellChangesTotal: listed.length,
       earlierFailure,
