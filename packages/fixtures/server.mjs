@@ -51,6 +51,15 @@ function handle(req, res) {
     return send(res, 302, { location: to }, "")
   }
 
+  if (path === "/server-error/") {
+    return send(
+      res,
+      500,
+      { "content-type": "text/html; charset=utf-8" },
+      "<!doctype html><title>Server error</title><h1>Something went wrong</h1>",
+    )
+  }
+
   if (path === "/g/collect") {
     return send(res, 500, { "content-type": "text/plain" }, "collection endpoint failed")
   }

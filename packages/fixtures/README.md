@@ -64,6 +64,8 @@ Other sites keep the query string on internal links (`keepQuery`), so only `lost
 
 `/g/collect` (any method) answers `500`; only `sgtm-errors` sends there.
 
+`/server-error/` answers `500` with a small HTML page, and any unknown path answers `404` (for example `/nope-404/`); they test how a key page that fails to load is reported. They are not sites and fire no tags.
+
 `/r?to=<url>` answers `302` to any URL; it exists to test the capture engine's SSRF policy.
 
 ## inspect

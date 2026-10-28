@@ -177,6 +177,8 @@ function renderText(
   out(
     `engine: ${engine.name} ${engine.version}${engine.fallbackReason ? ` (fallback: ${engine.fallbackReason})` : ""}`,
   )
+  const [start] = result.documents
+  if (start?.status !== undefined) out(`page: HTTP ${start.status}`)
   out(
     `consent: ${consent.outcome}, cmp ${consent.cmp ?? "none"}, action at ${ms(consent.actionAt)}, completed at ${ms(consent.completedAt)}`,
   )

@@ -1016,10 +1016,15 @@ class Capture:
             title = await self.page.title()
         except Exception as exc:
             log(f"title: {exc}")
-        if response is not None and (
-            response.headers.get("cf-mitigated") == "challenge" or title in CHALLENGE_TITLES
-        ):
+        if response is None:
+            return True
+        document = self.documents.get(self.current_document) if self.current_document is not None else None
+        if document is not None:
+            document["status"] = response.status
+        if response.headers.get("cf-mitigated") == "challenge" or title in CHALLENGE_TITLES:
             self.error("BotBlocked", f"{url}: the page answered with a bot challenge ({response.status})")
+        elif response.status >= 400:
+            self.error("HttpStatus", f"{url}: HTTP {response.status}")
         return True
 
     async def run_step(self, index: int, step: dict) -> bool:

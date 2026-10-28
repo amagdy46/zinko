@@ -65,6 +65,8 @@ export const CapturedDocument = Schema.Struct({
   redirects: Schema.Array(Schema.String),
   startedAt: Ms,
   title: Schema.NullOr(Schema.String),
+  /** The final response status of the navigation; absent in captures stored before it was recorded. */
+  status: Schema.optionalKey(Schema.Finite),
 })
 export type CapturedDocument = typeof CapturedDocument.Type
 
@@ -129,6 +131,7 @@ const CaptureError = Schema.Struct({
     "CmpNotFound",
     "ConsentNotApplied",
     "Navigation",
+    "HttpStatus",
     "JourneyStep",
     "EngineFailure",
   ]),

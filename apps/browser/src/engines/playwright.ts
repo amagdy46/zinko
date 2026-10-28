@@ -804,11 +804,12 @@ const navigate = async (url: string, code: "Navigation" | "JourneyStep") => {
   }
   committed = true
   const title = await page.title().catch(() => "")
-  if (
-    response !== null &&
-    (response.headers()["cf-mitigated"] === "challenge" || CHALLENGE_TITLES.has(title))
-  )
+  if (response === null) return true
+  const document = currentDocument === undefined ? undefined : documents.get(currentDocument)
+  if (document !== undefined) documents.set(document.id, { ...document, status: response.status() })
+  if (response.headers()["cf-mitigated"] === "challenge" || CHALLENGE_TITLES.has(title))
     error("BotBlocked", `${url}: the page answered with a bot challenge (${response.status()})`)
+  else if (response.status() >= 400) error("HttpStatus", `${url}: HTTP ${response.status()}`)
   return true
 }
 
