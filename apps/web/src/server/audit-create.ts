@@ -4,7 +4,9 @@ import { Database } from "@repo/core/Database"
 import { audit, checkResult, findingTriage, reportEdit, reportFindingEdit, run } from "@repo/db"
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Effect, Option } from "effect"
+import { type CellKey, cellId, cellKeyOf } from "@/lib/compare"
 import { hasCredentials, isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
+import { storedCells } from "./cell-key"
 import { atomically, Invalid, NotFound, siteInOrg } from "./server-fn"
 
 /** Queued or running audits one organization may have at once. Provisional. */
@@ -171,6 +173,14 @@ const copyCarryOver = (orgId: string, auditId: string, sourceId: string) =>
       where audit_id = ${sourceId} and org_id = ${orgId} and (detail <> 'standard' or not include_changes)`)
   })
 
+/** A new audit is compared with the site's latest evaluated full audit, a re-run with the audit it re-runs, a re-check with none. */
+const baselineFor = (orgId: string, siteId: string, input: CreateAudit) => {
+  if (input.narrow !== undefined)
+    return Effect.succeed(Option.none<{ id: string; createdAt: Date }>())
+  if (input.origin.kind === "rerun") return rerunBaseline(orgId, siteId, input.origin.auditId, true)
+  return latestBaseline(orgId, siteId, true)
+}
+
 export interface CreateAudit {
   readonly orgId: string
   readonly userId: string
@@ -178,6 +188,12 @@ export interface CreateAudit {
   readonly config: AuditConfig
   /** `new`: compared with the site's latest evaluated full audit. `rerun`: compared with that audit, and one re-run per baseline at a time. */
   readonly origin: { readonly kind: "new" } | { readonly kind: "rerun"; readonly auditId: string }
+  /** A re-check: a `narrow` audit of some cells for one rule. It has no baseline and carries nothing over. */
+  readonly narrow?: {
+    readonly ruleId: string
+    readonly targets: ReadonlyArray<CellKey>
+    readonly companions: ReadonlyArray<CellKey>
+  }
 }
 
 /**
@@ -198,9 +214,8 @@ export const createAudit = (input: CreateAudit) =>
       const target = yield* siteInOrg(orgId, input.siteId, true)
       if (target.archivedAt !== null)
         return yield* new Invalid({ message: "This site is archived." })
-      const baseline = yield* input.origin.kind === "rerun"
-        ? rerunBaseline(orgId, target.id, input.origin.auditId, true)
-        : latestBaseline(orgId, target.id, true)
+      const { narrow } = input
+      const baseline = yield* baselineFor(orgId, target.id, input)
       const baselineId = Option.match(baseline, { onNone: () => null, onSome: (b) => b.id })
       const [active] = yield* db
         .select({ total: count() })
@@ -210,7 +225,25 @@ export const createAudit = (input: CreateAudit) =>
         return yield* new Invalid({
           message: `Your organization already has ${MAX_ACTIVE_AUDITS} audits in progress. Wait for one to finish.`,
         })
-      if (input.origin.kind === "rerun") {
+      if (narrow !== undefined) {
+        const running = yield* db
+          .select({ cells: audit.narrowCells })
+          .from(audit)
+          .where(
+            and(
+              eq(audit.orgId, orgId),
+              eq(audit.siteId, target.id),
+              eq(audit.kind, "narrow"),
+              eq(audit.narrowRuleId, narrow.ruleId),
+              inArray(audit.status, [...ACTIVE_STATUSES]),
+            ),
+          )
+        const wanted = new Set(narrow.targets.map(cellId))
+        if (running.some((r) => storedCells(r.cells).some((cell) => wanted.has(cellId(cell)))))
+          return yield* new Invalid({
+            message: "A re-check of this check on these pages is already in progress.",
+          })
+      } else if (input.origin.kind === "rerun") {
         const [running] = yield* db
           .select({ id: audit.id })
           .from(audit)
@@ -242,10 +275,31 @@ export const createAudit = (input: CreateAudit) =>
           config,
           status: "queued",
           baselineAuditId: baselineId,
+          ...(narrow === undefined
+            ? {}
+            : {
+                kind: "narrow",
+                narrowRuleId: narrow.ruleId,
+                narrowCells: narrow.targets,
+                narrowCompanions: narrow.companions,
+              }),
         })
         .returning({ id: audit.id })
       if (created === undefined) return yield* new NotFound({ message: "Not found" })
       const { scenarios, viewports } = config
+      const targetIds = new Set((narrow?.targets ?? []).map((t) => cellId(t)))
+      const companionIds = new Set((narrow?.companions ?? []).map(cellId))
+      const roleOf = (r: {
+        pageUrl: string
+        scenario: string
+        viewport: string
+        journey: boolean
+      }) => {
+        if (narrow === undefined) return "target"
+        const key = cellId(cellKeyOf(r, config))
+        if (targetIds.has(key)) return "target"
+        return companionIds.has(key) ? "companion" : "extra"
+      }
       // a journey run captures at the start URL and walks the key pages from there
       const [startUrl] = urls
       const runPages = [
@@ -265,11 +319,13 @@ export const createAudit = (input: CreateAudit) =>
             scenario,
             viewport,
             status: "pending",
+            role: roleOf({ pageUrl, scenario, viewport, journey }),
           })),
         ),
       )
       yield* db.insert(run).values(runs)
-      if (baselineId !== null) yield* copyCarryOver(orgId, created.id, baselineId)
+      if (baselineId !== null && narrow === undefined)
+        yield* copyCarryOver(orgId, created.id, baselineId)
       return created.id
     }),
   )

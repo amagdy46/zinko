@@ -2,18 +2,20 @@ import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, hit, run } from "@repo/db"
-import { ruleChangedBetween } from "@repo/rules"
+import { ruleChangedBetween, VOLATILE_RULES } from "@repo/rules"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import {
   type AuditRef,
   type CellRun,
   type CheckRow,
+  type ConfirmationAudit,
   compareAudits,
   cellKeyOf,
   type Comparison,
   type HistoryAudit,
   type RuleWording,
+  recheckTargets,
   scoreDeltaOf,
   type Side,
   type TriageLine,
@@ -21,6 +23,7 @@ import {
 import { healthScore } from "@/lib/health-score"
 import { diffTags, type TagRun, type TagTriple } from "@/lib/tag-diff"
 import { evaluatedAudit } from "./audit-create"
+import { storedCells } from "./cell-key"
 import { auditInOrg } from "./audit-data"
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import { findingsOf } from "./findings-data"
@@ -29,6 +32,7 @@ import { Invalid, isUuid, NotFound } from "./server-fn"
 /** How many earlier audits are searched for the last time a new failure was already there. */
 const HISTORY_AUDITS = 10
 const PICKER_AUDITS = 50
+const CONFIRMATION_AUDITS = 20
 
 const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
 const decodeConfig = Schema.decodeUnknownEffect(AuditConfig)
@@ -82,6 +86,7 @@ const cellRunsOf = (orgId: string, auditId: string, config: AuditConfig, withBan
         journey: run.journey,
         consent: run.consent,
         decoder: run.decoderVersion,
+        status: run.status,
       })
       .from(run)
       .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(run.role, "target")))
@@ -100,6 +105,7 @@ const cellRunsOf = (orgId: string, auditId: string, config: AuditConfig, withBan
           banner: r.scenario === "none" ? (banners.get(r.id) ?? "unknown") : null,
         },
         decoder: r.decoder,
+        complete: r.status === "complete",
       }
     })
   })
@@ -337,14 +343,28 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       .where(earlierAudits(orgId, current.siteId, against))
       .orderBy(desc(audit.createdAt), desc(audit.id))
       .limit(HISTORY_AUDITS)
-    const history = yield* historyOf(orgId, older, newFailures)
 
-    const compared = compareAudits({
+    const shared = {
       before: before.side,
       now: now.side,
-      history,
       bannerDependent: new Set(BANNER_DEPENDENT_RULES),
+      volatile: new Set(Object.keys(VOLATILE_RULES)),
       ruleChanged: ruleChangedBetween,
+    }
+    // First pass decides which rules changed; only those need their history (regression, flips)
+    // and their re-checks read.
+    const first = compareAudits({
+      ...shared,
+      history: yield* historyOf(orgId, older, newFailures),
+      confirmations: [],
+    })
+    const changed = first.findings
+      .filter((f) => f.state !== "unchanged" && f.state !== "not_comparable")
+      .map((f) => f.ruleId)
+    const compared = compareAudits({
+      ...shared,
+      history: yield* historyOf(orgId, older, [...new Set([...newFailures, ...changed])]),
+      confirmations: yield* confirmationsOf(orgId, current.siteId, id, changed),
     })
     const comparison: Comparison = {
       now: { id, createdAt: current.createdAt.toISOString(), status: current.status },
@@ -437,4 +457,98 @@ export const tagDiffOf = (orgId: string, auditId: string, againstId: string) =>
       yield* decodeConfig(baseline.config).pipe(Effect.orDie),
     )
     return diffTags({ before, now })
+  })
+
+/** The finished re-checks of the given rules on this site, taken after `auditId`, newest first. */
+const confirmationsOf = (
+  orgId: string,
+  siteId: string,
+  auditId: string,
+  ruleIds: ReadonlyArray<string>,
+) =>
+  Effect.gen(function* () {
+    if (ruleIds.length === 0) return []
+    const { db } = yield* Database
+    const narrow = yield* db
+      .select({
+        id: audit.id,
+        ruleId: audit.narrowRuleId,
+        cells: audit.narrowCells,
+        config: audit.config,
+      })
+      .from(audit)
+      .where(
+        and(
+          eq(audit.orgId, orgId),
+          eq(audit.siteId, siteId),
+          eq(audit.kind, "narrow"),
+          inArray(audit.status, ["complete", "partial"]),
+          inArray(audit.narrowRuleId, [...ruleIds]),
+          sql`(${audit.createdAt}, ${audit.id}) > (select o.created_at, o.id from audit o where o.id = ${auditId})`,
+        ),
+      )
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(CONFIRMATION_AUDITS)
+    const found: ConfirmationAudit[] = []
+    for (const n of narrow) {
+      const targets = storedCells(n.cells)
+      if (n.ruleId === null || targets.length === 0) continue
+      const config = yield* decodeConfig(n.config).pipe(Effect.orDie)
+      found.push({
+        auditId: n.id,
+        ruleId: n.ruleId,
+        targets,
+        runs: yield* cellRunsOf(orgId, n.id, config, true),
+        checks: yield* checkRowsOf(orgId, [n.id], [n.ruleId]),
+      })
+    }
+    return found
+  })
+
+/**
+ * What a re-check of `ruleId` in `auditId` would target: the cells the rule fails on in the audit,
+ * and in `againstId` when given, and the audit's stored config to narrow. The same validation as a
+ * comparison: a foreign, newer or narrow `against`, or a narrow audit, is a 404.
+ */
+export const recheckPlanOf = (
+  orgId: string,
+  auditId: string,
+  againstId: string | undefined,
+  ruleId: string,
+) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const id = yield* auditInOrg(orgId, auditId)
+    const [current] = yield* db
+      .select()
+      .from(audit)
+      .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (current === undefined || current.kind !== "full")
+      return yield* new NotFound({ message: "Not found" })
+    if (current.status !== "complete" && current.status !== "partial")
+      return yield* new Invalid({ message: "Wait for this audit to finish." })
+    let baseline: Side | null = null
+    if (againstId !== undefined) {
+      if (!isUuid(againstId) || againstId === id)
+        return yield* new NotFound({ message: "Not found" })
+      const [valid] = yield* db
+        .select({ config: audit.config })
+        .from(audit)
+        .where(and(earlierAudits(orgId, current.siteId, id), eq(audit.id, againstId)))
+        .limit(1)
+      if (valid === undefined) return yield* new NotFound({ message: "Not found" })
+      baseline = (yield* sideOf(
+        orgId,
+        againstId,
+        yield* decodeConfig(valid.config).pipe(Effect.orDie),
+      )).side
+    }
+    const config = yield* decodeConfig(current.config).pipe(Effect.orDie)
+    const now = (yield* sideOf(orgId, id, config)).side
+    return {
+      siteId: current.siteId,
+      config,
+      targets: recheckTargets({ before: baseline, now }, ruleId),
+    }
   })

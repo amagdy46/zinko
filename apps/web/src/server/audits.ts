@@ -316,6 +316,7 @@ export const getAudit = createServerFn({ method: "GET" })
           .where(
             and(
               eq(run.auditId, found.audit.id),
+              eq(run.role, "target"),
               eq(run.orgId, orgId),
               eq(checkResult.orgId, orgId),
               eq(checkResult.status, "fail"),
@@ -344,6 +345,7 @@ export const getAudit = createServerFn({ method: "GET" })
               scenario: r.scenario,
               viewport: r.viewport,
               journey: r.journey,
+              role: r.role,
               status: r.status,
               failure: r.failure,
               errors: Option.getOrElse(decodeRunErrors(r.errors), () => []),
@@ -379,6 +381,7 @@ export const getAudit = createServerFn({ method: "GET" })
           .where(
             and(
               eq(run.auditId, found.audit.id),
+              eq(run.role, "target"),
               eq(run.orgId, orgId),
               eq(checkResult.orgId, orgId),
             ),
@@ -391,7 +394,9 @@ export const getAudit = createServerFn({ method: "GET" })
               (f.triage === null || f.triage === "open"),
           ).length
         const summary = {
-          hits: runs.reduce((total, row) => total + row.hitCount, 0),
+          hits: runs
+            .filter((row) => row.role === "target")
+            .reduce((total, row) => total + row.hitCount, 0),
           findings: {
             critical: findings.filter((f) => f.kind === "fail" && f.severity === "critical").length,
             warning: findings.filter((f) => f.kind === "fail" && f.severity === "warning").length,

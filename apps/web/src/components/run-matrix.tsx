@@ -24,6 +24,12 @@ export type AuditRun = Awaited<ReturnType<typeof getAudit>>["runs"][number]
 const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" } as const
 
 /** "Complete" reads as "passed"; a run only says the page was recorded. */
+/** Runs of a re-check that were executed but are not results: the banner check and the extras. */
+export function RunRoleBadge({ role }: { role: string }) {
+  if (role === "target") return null
+  return <Badge variant="outline">{role === "companion" ? "Banner check" : "Extra"}</Badge>
+}
+
 export function RunStatusBadge({ status }: { status: string }) {
   if (status !== "complete") return <StatusBadge status={toBadgeStatus(status)} />
   return (
@@ -66,6 +72,7 @@ export function RunMatrix({
             >
               <RunPath run={run} className="max-w-full text-xs" />
               <RunStatusBadge status={run.status} />
+              <RunRoleBadge role={run.role} />
               <span>
                 {scenarioLabel(run.scenario)} · {run.viewport}
               </span>
@@ -122,6 +129,7 @@ export function RunMatrix({
               <TableCell>{run.viewport}</TableCell>
               <TableCell>
                 <RunStatusBadge status={run.status} />
+                <RunRoleBadge role={run.role} />
               </TableCell>
               <TableCell>
                 {run.failing ? (
@@ -318,6 +326,7 @@ function MatrixCell({
       </HoverCardTrigger>
       <HoverCardContent>
         <RunStatusBadge status={run.status} />
+        <RunRoleBadge role={run.role} />
         <div className="my-2">
           <RunImage run={run} />
         </div>

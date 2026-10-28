@@ -72,7 +72,7 @@ export const candidateRunsOf = (
         captureKey: run.captureKey,
       })
       .from(run)
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+      .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
       .orderBy(asc(run.ordinal))
     const pages = [...new Set(runs.map((r) => r.pageUrl))]
     const checks = yield* db
@@ -82,6 +82,7 @@ export const candidateRunsOf = (
       .where(
         and(
           eq(run.auditId, auditId),
+          eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
           eq(checkResult.ruleId, f.ruleId),
@@ -96,6 +97,7 @@ export const candidateRunsOf = (
       .where(
         and(
           eq(run.auditId, auditId),
+          eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
           eq(checkResult.ruleId, f.ruleId),

@@ -4,6 +4,7 @@ import { ruleById } from "@repo/rules"
 import { and, asc, count, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { AREAS } from "@/lib/audit-labels"
+import { findingsFrom } from "@/lib/findings-from"
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import { NotFound } from "./server-fn"
 
@@ -65,6 +66,51 @@ export const triageJoin = and(
 )
 
 /**
+ * A re-check's findings, grouped from the check results of its target runs only. The stored
+ * `finding` rows of a narrow audit were aggregated over its companion and extra runs too, so they
+ * are not trusted.
+ */
+const narrowFindingRows = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const checks = yield* db
+      .select({
+        runId: checkResult.runId,
+        orgId: checkResult.orgId,
+        ruleId: checkResult.ruleId,
+        rulesVersion: checkResult.rulesVersion,
+        status: checkResult.status,
+        area: checkResult.area,
+        severity: checkResult.severity,
+        title: checkResult.title,
+        checkTitle: checkResult.checkTitle,
+        owner: checkResult.owner,
+        why: checkResult.why,
+        fix: checkResult.fix,
+      })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+        ),
+      )
+      .orderBy(asc(run.ordinal), asc(checkResult.ruleId))
+    const triage = yield* db
+      .select()
+      .from(findingTriage)
+      .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
+    return findingsFrom(auditId, checks).map((f) => ({
+      finding: f,
+      triage: triage.find((t) => t.ruleId === f.ruleId) ?? null,
+      originExists: true,
+    }))
+  })
+
+/**
  * The audit's findings, failing ones first by severity, then those that could not be checked.
  * `coverage.evaluatedRuns` counts the runs with check results: 0 means the audit was not
  * evaluated (an M2 audit, or no run reached `persist`), never that it is clean. `coverage.runs`
@@ -81,7 +127,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
     // Read first: `finish` writes the findings and settles the status in one transaction, so
     // a finished status here means the reads below see the findings (a later read could not).
     const [current] = yield* db
-      .select({ status: audit.status })
+      .select({ status: audit.status, kind: audit.kind })
       .from(audit)
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
@@ -89,7 +135,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
     const runs = yield* db
       .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario, status: run.status })
       .from(run)
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+      .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
     const evaluated = yield* db
       .select({
         rulesVersion: checkResult.rulesVersion,
@@ -97,13 +143,27 @@ export const findingsOf = (orgId: string, auditId: string) =>
       })
       .from(checkResult)
       .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+        ),
+      )
       .groupBy(checkResult.rulesVersion)
     const verdicts = yield* db
       .select({ runId: checkResult.runId, status: checkResult.status, n: count() })
       .from(checkResult)
       .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+        ),
+      )
       .groupBy(checkResult.runId, checkResult.status)
     const outcomes = yield* db
       .select({
@@ -115,7 +175,14 @@ export const findingsOf = (orgId: string, auditId: string) =>
       })
       .from(checkResult)
       .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+        ),
+      )
       .groupBy(checkResult.ruleId, checkResult.status, checkResult.area, checkResult.checkTitle)
     const failedDependent = yield* db
       .select({ ruleId: checkResult.ruleId, runId: checkResult.runId })
@@ -124,6 +191,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
       .where(
         and(
           eq(run.auditId, auditId),
+          eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
           eq(checkResult.status, "fail"),
@@ -145,17 +213,21 @@ export const findingsOf = (orgId: string, auditId: string) =>
       .where(
         and(
           eq(run.auditId, auditId),
+          eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
           eq(checkResult.status, "inconclusive"),
         ),
       )
       .orderBy(asc(run.ordinal))
-    const rows = yield* db
-      .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
-      .from(finding)
-      .leftJoin(findingTriage, triageJoin)
-      .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
+    const rows =
+      current.kind === "narrow"
+        ? yield* narrowFindingRows(orgId, auditId)
+        : yield* db
+            .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
+            .from(finding)
+            .leftJoin(findingTriage, triageJoin)
+            .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
     const runById = new Map(runs.map((r) => [r.id, r]))
     const knownRuns = new Map<string, number>()
     const unchecked = { checks: 0, rules: new Set<string>(), titles: new Set<string>() }

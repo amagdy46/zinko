@@ -40,6 +40,13 @@ function ReportScreen() {
   const navigate = Route.useNavigate()
   const [labelsOpen, setLabelsOpen] = useState(false)
   const moreRef = useRef<HTMLButtonElement>(null)
+  if (!draft.available && draft.reason === "narrow")
+    return (
+      <EmptyState
+        title="Re-checks are not reported"
+        description="A re-check covers a few pages for one check. Report on the audit it belongs to."
+      />
+    )
   if (!draft.available)
     return draft.reason === "running" ? (
       <p className="text-sm text-muted-foreground" data-testid="report-running">

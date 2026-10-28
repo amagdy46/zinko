@@ -1,4 +1,4 @@
-import { JOURNEY_STEPS, TEST_CLICK_IDS } from "@repo/core/audit"
+import { type AuditConfig, JOURNEY_STEPS, TEST_CLICK_IDS } from "@repo/core/audit"
 import type { HealthScore } from "./health-score"
 
 /*
@@ -80,7 +80,7 @@ export const cellKeyOf = (
   }
 }
 
-const cellId = (k: CellKey) =>
+export const cellId = (k: CellKey) =>
   JSON.stringify([k.page, k.scenario, k.viewport, k.itinerary, k.injected])
 
 export interface CellRun {
@@ -88,6 +88,8 @@ export interface CellRun {
   cell: CellKey
   compat: Compat
   decoder: string | null
+  /** The run captured completely. */
+  complete: boolean
 }
 
 export interface CheckRow {
@@ -129,6 +131,15 @@ export interface FindingChange {
   cellChanges: { cell: number; before: Verdict; now: Verdict | Resolution }[]
   cellChangesTotal: number
   earlierFailure: { auditId: string; date: string } | null
+  /** Low confidence never changes the state; it adds a label and the Re-check action. */
+  confidence: { level: "normal" | "low"; because: ("volatile_rule" | "flips" | "single_run")[] }
+  /** What a later re-check of these cells (a narrow audit) found; null when none covers them. */
+  confirmation: {
+    state: "repeated" | "not_repeated" | "incomplete"
+    auditId: string
+    cellsDone: number
+    cellsTotal: number
+  } | null
   triage: { before: TriageLine | null; now: TriageLine }
 }
 
@@ -235,10 +246,22 @@ const emptyResolution = (): Record<Resolution, number> => ({
   banner_differs: 0,
 })
 
+/** A finished re-check (a narrow audit) of one rule on some cells. */
+export interface ConfirmationAudit {
+  auditId: string
+  ruleId: string
+  targets: ReadonlyArray<CellKey>
+  runs: ReadonlyArray<CellRun>
+  checks: ReadonlyArray<CheckRow>
+}
+
 interface Input {
   before: Side
   now: Side
   history: ReadonlyArray<HistoryAudit>
+  /** Newest first. */
+  confirmations: ReadonlyArray<ConfirmationAudit>
+  volatile: ReadonlySet<string>
   bannerDependent: ReadonlySet<string>
   ruleChanged: (ruleId: string, judgedBy: readonly string[]) => boolean
 }
@@ -327,6 +350,85 @@ const wordingOf = (rows: RuleRows | undefined, side: Side, ruleId: string) => {
   const wording = side.wording.get(ruleId)
   if (rows === undefined || wording === undefined) return undefined
   return { version: Math.max(...[...rows.values()].map((r) => Number(r.rulesVersion))), wording }
+}
+
+/** Audits looked at for flips, counting the two being compared. */
+const FLIP_AUDITS = 5
+
+/** Whether the rule failed on any of the cells in that audit; null when the audit has no row on them. */
+const failedOnCells = (
+  cells: ReadonlySet<string>,
+  rows: ReadonlyArray<{ cell: string; status: CheckRow["status"] }>,
+) => {
+  const own = rows.filter((r) => cells.has(r.cell))
+  return own.length === 0 ? null : own.some((r) => r.status === "fail")
+}
+
+/** How many times the fail / not-fail answer on these cells changes over the last audits, oldest first. */
+const flipsOf = (
+  ruleId: string,
+  cells: ReadonlySet<string>,
+  sides: ReadonlyArray<ReadonlyArray<{ cell: string; status: CheckRow["status"] }>>,
+  history: ReadonlyArray<HistoryAudit>,
+) => {
+  const older = history.slice(0, FLIP_AUDITS - 2).map((audit) => {
+    const cellByRun = new Map(audit.runs.map((r) => [r.id, cellId(r.cell)]))
+    return audit.checks.flatMap((row) => {
+      const cell = cellByRun.get(row.runId)
+      return row.ruleId === ruleId && cell !== undefined ? [{ cell, status: row.status }] : []
+    })
+  })
+  const answers = [...sides, ...older]
+    .map((rows) => failedOnCells(cells, rows))
+    .filter((answer) => answer !== null)
+    .toReversed()
+  return answers.filter((answer, i) => i > 0 && answer !== answers[i - 1]).length
+}
+
+/**
+ * What the newest re-check that covers every cell of the change found there: it reproduces the
+ * change when its verdict on a cell equals the current audit's, and counts only cells whose run
+ * captured completely, agrees on consent and banner, and has a check result for the rule.
+ */
+const confirmationOf = (
+  ruleId: string,
+  changed: ReadonlySet<string>,
+  expectFail: ReadonlyMap<string, boolean>,
+  refRuns: ReadonlyMap<string, CellRun>,
+  input: Input,
+): FindingChange["confirmation"] => {
+  if (changed.size === 0) return null
+  const found = input.confirmations.find(
+    (c) =>
+      c.ruleId === ruleId &&
+      [...changed].every((cell) => c.targets.some((t) => cellId(t) === cell)),
+  )
+  if (found === undefined) return null
+  const runByCell = new Map(found.runs.map((r) => [cellId(r.cell), r]))
+  const rowByRun = new Map(found.checks.filter((c) => c.ruleId === ruleId).map((c) => [c.runId, c]))
+  let done = 0
+  let repeated = 0
+  let contradicted = 0
+  for (const cell of changed) {
+    const rerun = runByCell.get(cell)
+    const row = rerun === undefined ? undefined : rowByRun.get(rerun.id)
+    const reference = refRuns.get(cell)
+    if (rerun === undefined || row === undefined || !rerun.complete) continue
+    if (
+      reference !== undefined &&
+      compatDiffers(ruleId, reference, rerun, input.bannerDependent) !== null
+    )
+      continue
+    done += 1
+    const expected = expectFail.get(cell)
+    if (expected === undefined) continue
+    if ((row.status === "fail") === expected) repeated += 1
+    else contradicted += 1
+  }
+  let state: "repeated" | "not_repeated" | "incomplete" = "incomplete"
+  if (done === changed.size && repeated === done) state = "repeated"
+  else if (done === changed.size && contradicted === done) state = "not_repeated"
+  return { state, auditId: found.auditId, cellsDone: done, cellsTotal: changed.size }
 }
 
 /**
@@ -508,6 +610,32 @@ export const compareAudits = (input: Input) => {
       return [{ cell: at, before: was, now: is }]
     })
 
+    const changedCells = new Set<string>([...baselineFails, ...failsNow, ...shown])
+    const expectFail = new Map<string, boolean>()
+    for (const cell of changedCells) {
+      const status = rowsNow?.get(cell)?.status
+      if (status !== undefined) expectFail.set(cell, status === "fail")
+      else if (state === "fixed") expectFail.set(cell, false)
+    }
+    const refRuns = new Map<string, CellRun>()
+    for (const cell of changedCells) {
+      const reference = n.runByCell.get(cell) ?? b.runByCell.get(cell)
+      if (reference !== undefined) refRuns.set(cell, reference)
+    }
+    const because: FindingChange["confidence"]["because"] = []
+    const judged = state !== "unchanged" && state !== "not_comparable"
+    if (judged) {
+      if (input.volatile.has(ruleId)) because.push("volatile_rule")
+      const toRows = (rows: RuleRows | undefined) =>
+        [...(rows ?? [])].map(([cell, row]) => ({ cell, status: row.status }))
+      if (flipsOf(ruleId, changedCells, [toRows(rowsNow), toRows(rowsBefore)], input.history) >= 2)
+        because.push("flips")
+      if (changedCells.size === 1) because.push("single_run")
+    }
+    const confirmation = judged
+      ? confirmationOf(ruleId, changedCells, expectFail, refRuns, input)
+      : null
+
     findings.push({
       ruleId,
       ...wording,
@@ -528,6 +656,8 @@ export const compareAudits = (input: Input) => {
       cellChanges,
       cellChangesTotal: listed.length,
       earlierFailure,
+      confidence: { level: because.length > 0 ? "low" : "normal", because },
+      confirmation,
       triage: {
         before: before.triage.get(ruleId) ?? null,
         now: now.triage.get(ruleId) ?? OPEN,
@@ -600,4 +730,140 @@ export const scoreDeltaOf = (
     deltaWhyNot: reason,
     scoreVersion,
   }
+}
+
+/** The cells a rule fails on in the audit, and in the earlier one when there is a comparison. */
+export const recheckTargets = (
+  sides: { before: Side | null; now: Side },
+  ruleId: string,
+): CellKey[] => {
+  const found = new Map<string, CellKey>()
+  for (const side of [sides.now, ...(sides.before === null ? [] : [sides.before])]) {
+    const { runByCell, rows } = index(side)
+    for (const [cell, row] of rows.get(ruleId) ?? [])
+      if (row.status === "fail") {
+        const key = runByCell.get(cell)?.cell
+        if (key !== undefined) found.set(cell, key)
+      }
+  }
+  return [...found].toSorted(([x], [y]) => codeUnitOrder(x, y)).map(([, key]) => key)
+}
+
+type ConfigShape = Pick<AuditConfig, "pages" | "scenarios" | "viewports" | "clickIds"> & {
+  journey?: boolean | undefined
+}
+
+/** Every cell an audit with this config runs: its plain runs, then its journey runs. */
+export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
+  const [start] = config.pages
+  const plain = config.pages.flatMap((page, p) =>
+    config.scenarios.flatMap((scenario) =>
+      config.viewports.map((viewport) => ({
+        page: normalised(page),
+        scenario,
+        viewport,
+        itinerary: null,
+        injected: p === 0 && config.clickIds,
+      })),
+    ),
+  )
+  if (config.journey !== true || config.pages.length < 2 || start === undefined) return plain
+  const itinerary = [start, ...config.pages.slice(1, 1 + JOURNEY_STEPS)].map(normalised)
+  return [
+    ...plain,
+    ...config.scenarios.flatMap((scenario) =>
+      config.viewports.map((viewport) => ({
+        page: normalised(start),
+        scenario,
+        viewport,
+        itinerary,
+        injected: config.clickIds,
+      })),
+    ),
+  ]
+}
+
+const SCENARIO_ORDER = ["none", "accept", "reject", "gpc"] as const
+const VIEWPORT_ORDER = ["desktop", "mobile"] as const
+
+export interface NarrowPlan {
+  config: AuditConfig
+  /** The targets the narrowed config can reproduce. */
+  targets: CellKey[]
+  /** Runs executed only to detect the cookie banner for a `none` target. */
+  companions: CellKey[]
+  /** Targets the current configuration cannot reproduce as they were captured. */
+  dropped: CellKey[]
+}
+
+const narrowedOnce = (
+  config: AuditConfig,
+  targets: ReadonlyArray<CellKey>,
+  bannerDependent: boolean,
+): AuditConfig | null => {
+  const journey = targets.some((t) => t.itinerary !== null)
+  const wanted = new Set(targets.map((t) => t.page))
+  const pages = journey ? config.pages : config.pages.filter((p) => wanted.has(normalised(p)))
+  const [first] = pages
+  if (first === undefined) return null
+  const companions = bannerDependent && targets.some((t) => t.scenario === "none")
+  return {
+    pages,
+    scenarios: SCENARIO_ORDER.filter(
+      (scenario) =>
+        targets.some((t) => t.scenario === scenario) ||
+        (companions && (scenario === "accept" || scenario === "reject")),
+    ),
+    viewports: VIEWPORT_ORDER.filter((viewport) => targets.some((t) => t.viewport === viewport)),
+    clickIds:
+      normalised(first) === normalised(config.pages[0] ?? "") &&
+      targets.some((t) => t.injected && t.page === normalised(first)),
+    blockVendorRequests: config.blockVendorRequests,
+    ...(journey && pages.length > 1 ? { journey: true } : {}),
+  }
+}
+
+/**
+ * The config of a re-check of `targets`: their scenarios and viewports, their pages in the audit's
+ * order (the whole list for a journey), click IDs only when the start page is a target that had them,
+ * and accept and reject runs beside every `none` target of a banner-dependent rule. The result is
+ * checked against `cellsOfConfig`: a target it cannot reproduce is dropped, never silently moved.
+ */
+export const narrowedConfig = (
+  config: AuditConfig,
+  targets: ReadonlyArray<CellKey>,
+  bannerDependent: boolean,
+): NarrowPlan | null => {
+  let kept = [...targets]
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const narrowed = narrowedOnce(config, kept, bannerDependent)
+    if (narrowed === null) return null
+    const produced = new Set(cellsOfConfig(narrowed).map(cellId))
+    const reproducible = kept.filter((t) => produced.has(cellId(t)))
+    if (reproducible.length === kept.length || attempt === 1 || reproducible.length === 0) {
+      if (reproducible.length === 0) return null
+      const companions = bannerDependent
+        ? kept
+            .filter((t) => t.scenario === "none")
+            .flatMap((t) =>
+              ["accept", "reject"].map((scenario): CellKey => ({
+                page: t.page,
+                scenario,
+                viewport: t.viewport,
+                itinerary: t.itinerary,
+                injected: t.injected,
+              })),
+            )
+            .filter((c) => !kept.some((t) => cellId(t) === cellId(c)))
+        : []
+      return {
+        config: narrowed,
+        targets: reproducible,
+        companions: companions.filter((c) => produced.has(cellId(c))),
+        dropped: targets.filter((t) => !produced.has(cellId(t))),
+      }
+    }
+    kept = reproducible
+  }
+  return null
 }

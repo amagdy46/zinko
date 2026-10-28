@@ -1,7 +1,9 @@
 import { Link } from "@tanstack/react-router"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { ChangeBadge } from "@/components/change-badge"
-import { SeverityOrUnchecked } from "@/components/compare/findings-table"
+import { LowConfidence, SeverityOrUnchecked } from "@/components/compare/findings-table"
+import { RecheckDialog } from "@/components/recheck-dialog"
+import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
 import {
   Sheet,
@@ -23,6 +25,8 @@ import {
   cellPage,
   cellScenario,
   changeLine,
+  confidenceReasons,
+  confirmationLine,
   triageLine,
   verdictMeaning,
   VERDICT_WORDS,
@@ -85,6 +89,7 @@ export function ChangeSheet({
         {finding === undefined ? null : (
           <Detail
             auditId={auditId}
+            against={comparison.before.id}
             finding={finding}
             cells={cells}
             triage={triageLine(finding, (iso) => shortDate(iso, timeZone))}
@@ -97,23 +102,38 @@ export function ChangeSheet({
 
 function Detail({
   auditId,
+  against,
   finding,
   cells,
   triage,
 }: {
   auditId: string
+  against: string
   finding: FindingChange
   cells: ReadonlyArray<CellKey>
   triage: string | null
 }) {
   const timeZone = useTimeZone()
   const earlier = finding.earlierFailure
+  const confirmation = confirmationLine(finding)
+  const recheckButton = useRef<HTMLButtonElement>(null)
+  const [rechecking, setRechecking] = useState(false)
+  const rechecks =
+    finding.state !== "not_comparable" ||
+    finding.reason === "partly_rechecked" ||
+    finding.reason === "no_shared_scope"
   return (
     <div className="space-y-4 px-4 pb-6">
       <div className="flex flex-wrap items-center gap-2">
         <ChangeBadge state={finding.state} />
         <SeverityOrUnchecked finding={finding} />
+        <LowConfidence finding={finding} />
       </div>
+      {confidenceReasons(finding).map((reason) => (
+        <p key={reason} className="text-sm text-muted-foreground">
+          {reason}
+        </p>
+      ))}
       <p className="text-sm">{changeLine(finding)}</p>
       {earlier === null ? null : (
         <p className="text-sm text-muted-foreground">
@@ -121,6 +141,29 @@ function Detail({
         </p>
       )}
       {triage === null ? null : <p className="text-sm text-muted-foreground">{triage}</p>}
+      {confirmation === null ? null : <p className="text-sm">{confirmation}</p>}
+      {rechecks ? (
+        <>
+          <Button
+            ref={recheckButton}
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setRechecking(true)}
+          >
+            Re-check these pages
+          </Button>
+          <RecheckDialog
+            auditId={auditId}
+            ruleId={finding.ruleId}
+            against={against}
+            verify={false}
+            open={rechecking}
+            onOpenChange={setRechecking}
+            returnFocus={recheckButton}
+          />
+        </>
+      ) : null}
       {finding.now === "fail" || finding.now === "could_not_check" ? (
         <Link
           to="/app/audits/$auditId/findings"

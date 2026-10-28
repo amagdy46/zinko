@@ -17,6 +17,7 @@ import { CheckStatusBadge } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { RecheckDialog } from "@/components/recheck-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -216,9 +217,11 @@ export function FindingDetail({
   auditId,
   row,
   runs,
+  canVerify,
 }: {
   auditId: string
   row: FindingRow
+  canVerify: boolean
   runs: ReadonlyArray<{ id: string; screenshotUrl: string | null }>
 }) {
   const router = useRouter()
@@ -227,6 +230,8 @@ export function FindingDetail({
   const [pickedRun, setPickedRun] = useState<string | null>(null)
   const [pickedRef, setPickedRef] = useState<Ref | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const verifyButton = useRef<HTMLButtonElement>(null)
+  const [verifying, setVerifying] = useState(false)
 
   const load = useCallback(
     () =>
@@ -302,6 +307,28 @@ export function FindingDetail({
           <TriageMenu status={triage.status} pending={pending} onChange={changeTriage} />
         )}
       </div>
+      {couldNotCheck || !canVerify ? null : (
+        <>
+          <Button
+            ref={verifyButton}
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={() => setVerifying(true)}
+          >
+            Verify fix
+          </Button>
+          <RecheckDialog
+            auditId={auditId}
+            ruleId={row.ruleId}
+            verify
+            open={verifying}
+            onOpenChange={setVerifying}
+            returnFocus={verifyButton}
+          />
+        </>
+      )}
       {actionError === null ? null : (
         <p role="alert" className="text-sm text-destructive">
           {actionError}

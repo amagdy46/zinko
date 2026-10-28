@@ -1,11 +1,18 @@
 import { ChevronDown } from "lucide-react"
 import { useState } from "react"
 import { ChangeBadge, ChangeGlyph } from "@/components/change-badge"
+import { Badge } from "@/components/ui/badge"
 import { SeverityBadge } from "@/components/severity"
 import { CheckStatusBadge } from "@/components/status-badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import type { ChangeState, FindingChange } from "@/lib/compare"
-import { changeLine, CHANGE_ORDER, CHANGE_WORDS, triageLine } from "@/lib/compare-text"
+import {
+  changeLine,
+  CHANGE_ORDER,
+  CHANGE_WORDS,
+  confirmationLine,
+  triageLine,
+} from "@/lib/compare-text"
 import { shortDate, useTimeZone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -18,6 +25,15 @@ export function SeverityOrUnchecked({ finding }: { finding: FindingChange }) {
   )
 }
 
+/** The label a change carries when its rule is volatile, flips between audits or rests on one run. */
+export function LowConfidence({ finding }: { finding: FindingChange }) {
+  return finding.confidence.level === "low" ? (
+    <Badge variant="outline" className="border-dashed">
+      Low confidence
+    </Badge>
+  ) : null
+}
+
 function ChangeRow({
   finding,
   onOpen,
@@ -27,6 +43,7 @@ function ChangeRow({
 }) {
   const timeZone = useTimeZone()
   const triage = triageLine(finding, (iso) => shortDate(iso, timeZone))
+  const confirmation = confirmationLine(finding)
   return (
     <li>
       <button
@@ -38,10 +55,14 @@ function ChangeRow({
         <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <ChangeBadge state={finding.state} />
           <SeverityOrUnchecked finding={finding} />
+          <LowConfidence finding={finding} />
           <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{finding.title}</span>
         </span>
         <span className="text-sm text-muted-foreground">{changeLine(finding)}</span>
         {triage === null ? null : <span className="text-sm text-muted-foreground">{triage}</span>}
+        {confirmation === null ? null : (
+          <span className="text-sm text-muted-foreground">{confirmation}</span>
+        )}
       </button>
     </li>
   )

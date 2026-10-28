@@ -533,6 +533,7 @@ export const getSite = createServerFn({ method: "GET" })
             return {
               id: a.id,
               kind: a.kind,
+              narrowRuleId: a.narrowRuleId,
               status: a.status,
               error: a.error,
               createdAt: a.createdAt,
@@ -541,11 +542,14 @@ export const getSite = createServerFn({ method: "GET" })
                 finished: summary?.finished ?? 0,
                 incomplete: summary?.incomplete ?? 0,
               },
-              score: SETTLED.some((status) => status === a.status)
-                ? (scores.get(a.id) ?? null)
-                : null,
-              coverage: coverageOf(summaries, a.id),
+              // a re-check has no score: it ran a few pages for one check
+              score:
+                a.kind === "full" && SETTLED.some((status) => status === a.status)
+                  ? (scores.get(a.id) ?? null)
+                  : null,
+              coverage: a.kind === "full" ? coverageOf(summaries, a.id) : null,
               findings:
+                a.kind !== "full" ||
                 summary === undefined ||
                 summary.evaluated === 0 ||
                 !SETTLED.some((status) => status === a.status)

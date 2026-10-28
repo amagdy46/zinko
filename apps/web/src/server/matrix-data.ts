@@ -85,7 +85,7 @@ export const sliceOf = (orgId: string, auditId: string, view: MatrixView) =>
         consent: run.consent,
       })
       .from(run)
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+      .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
       .orderBy(asc(run.ordinal))
     const viewports = [...new Set(rows.map((r) => r.viewport))].toSorted(byOrder(VIEWPORT_ORDER))
     const viewport =
@@ -423,7 +423,14 @@ export const tagsSeenOf = (orgId: string, auditId: string) =>
       .select({ vendor: hit.vendor, destinationId: hit.destinationId, event: hit.event })
       .from(hit)
       .innerJoin(run, eq(run.id, hit.runId))
-      .where(and(eq(hit.orgId, orgId), eq(run.orgId, orgId), eq(run.auditId, auditId)))
+      .where(
+        and(
+          eq(hit.orgId, orgId),
+          eq(run.orgId, orgId),
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+        ),
+      )
       .groupBy(hit.vendor, hit.destinationId, hit.event)
     const vendors = new Map<string, { destinations: Set<string>; events: Set<string> }>()
     for (const t of triples) {

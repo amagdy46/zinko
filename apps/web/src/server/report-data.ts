@@ -71,7 +71,7 @@ export interface ReportStamp {
 }
 
 export type ReportBuild =
-  | { available: false; reason: "running" | "not-evaluated" }
+  | { available: false; reason: "running" | "not-evaluated" | "narrow" }
   | {
       available: true
       model: ReportModel
@@ -307,6 +307,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           .select({
             config: audit.config,
             status: audit.status,
+            kind: audit.kind,
             createdAt: audit.createdAt,
             finishedAt: audit.finishedAt,
             clientName: client.name,
@@ -334,7 +335,7 @@ export const buildReport = (orgId: string, auditId: string) =>
             consent: run.consent,
           })
           .from(run)
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+          .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
           .orderBy(asc(run.ordinal))
         const runs = yield* Effect.forEach(runRows, (r) =>
           Effect.map(decodeErrors(r.errors).pipe(Effect.orDie), (errors) => ({
@@ -349,6 +350,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           .where(
             and(
               eq(run.auditId, auditId),
+              eq(run.role, "target"),
               eq(run.orgId, orgId),
               eq(checkResult.orgId, orgId),
               eq(checkResult.status, "fail"),
@@ -371,7 +373,14 @@ export const buildReport = (orgId: string, auditId: string) =>
           })
           .from(hit)
           .innerJoin(run, eq(run.id, hit.runId))
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId)))
+          .where(
+            and(
+              eq(run.auditId, auditId),
+              eq(run.role, "target"),
+              eq(run.orgId, orgId),
+              eq(hit.orgId, orgId),
+            ),
+          )
           .groupBy(vendorSql, run.scenario)
         const ruleStats = yield* db
           .select({
@@ -385,7 +394,14 @@ export const buildReport = (orgId: string, auditId: string) =>
           })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+          .where(
+            and(
+              eq(run.auditId, auditId),
+              eq(run.role, "target"),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+            ),
+          )
           .groupBy(
             checkResult.ruleId,
             checkResult.rulesVersion,
@@ -466,6 +482,7 @@ export const buildReport = (orgId: string, auditId: string) =>
       branding,
     } = read
     const detail: DisclosureLevel = edit?.detail === "detailed" ? "detailed" : "standard"
+    if (head.kind === "narrow") return { available: false, reason: "narrow" } as const
     if (head.status === "queued" || head.status === "running")
       return { available: false, reason: "running" } as const
     if (found.coverage.evaluatedRuns === 0)

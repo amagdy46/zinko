@@ -79,6 +79,7 @@ export const getOverview = createServerFn({ method: "GET" })
             .where(
               and(
                 eq(run.auditId, auditId),
+                eq(run.role, "target"),
                 eq(run.orgId, orgId),
                 eq(checkResult.orgId, orgId),
                 eq(checkResult.ruleId, top.ruleId),
@@ -119,7 +120,14 @@ export const getOverview = createServerFn({ method: "GET" })
           })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+          .where(
+            and(
+              eq(run.auditId, auditId),
+              eq(run.role, "target"),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+            ),
+          )
           .groupBy(checkResult.area)
         const [stored] = yield* db
           .select({ config: audit.config })
@@ -138,7 +146,7 @@ export const getOverview = createServerFn({ method: "GET" })
             errors: run.errors,
           })
           .from(run)
-          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+          .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
           .orderBy(asc(run.ordinal))
         const runs = yield* Effect.forEach(runRows, (r) =>
           Effect.map(decodeErrors(r.errors).pipe(Effect.orDie), (errors) => ({

@@ -115,6 +115,7 @@ export const getFinding = createServerFn({ method: "GET" })
           .where(
             and(
               eq(run.auditId, auditId),
+              eq(run.role, "target"),
               eq(run.orgId, orgId),
               eq(checkResult.orgId, orgId),
               eq(checkResult.ruleId, f.ruleId),

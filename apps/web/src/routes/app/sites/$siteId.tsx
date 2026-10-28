@@ -263,7 +263,10 @@ function SitePage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={toBadgeStatus(a.status)} />
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge status={toBadgeStatus(a.status)} />
+                    {a.kind === "narrow" ? <Badge variant="outline">Verification</Badge> : null}
+                  </span>
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {a.runs.finished} of {a.runs.total}
@@ -347,12 +350,21 @@ function AuditFindings({
   audit,
 }: {
   audit: {
+    kind: string
+    narrowRuleId: string | null
     status: string
     findings: { critical: number; warning: number; info: number; couldNotCheck: number } | null
   }
 }) {
   if (audit.status === "running" || audit.status === "queued") {
     return <span className="text-xs text-muted-foreground">Checks are still to come</span>
+  }
+  if (audit.kind === "narrow") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Re-check of {audit.narrowRuleId ?? "one check"}
+      </span>
+    )
   }
   if (audit.findings === null) {
     return <span className="text-xs text-muted-foreground">Not evaluated</span>

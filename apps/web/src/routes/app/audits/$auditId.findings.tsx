@@ -321,7 +321,13 @@ function FindingsScreen() {
             {selected === undefined ? (
               <p className="p-4 text-muted-foreground">Select a finding to see its evidence.</p>
             ) : (
-              <FindingDetail key={selected.ruleId} auditId={audit.id} row={selected} runs={runs} />
+              <FindingDetail
+                key={selected.ruleId}
+                auditId={audit.id}
+                row={selected}
+                runs={runs}
+                canVerify={audit.kind === "full"}
+              />
             )}
           </aside>
         )}
@@ -373,6 +379,7 @@ function FindingsScreen() {
                   auditId={audit.id}
                   row={explicit}
                   runs={runs}
+                  canVerify={audit.kind === "full"}
                 />
               )}
             </div>

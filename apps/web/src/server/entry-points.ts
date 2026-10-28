@@ -24,6 +24,8 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "audits.getAudit": "read",
   "compare.getComparison": "read",
   "compare.getTagDiff": "read",
+  "recheck.previewRecheck": "read",
+  "recheck.recheck": "mutation",
   "explain.explainFinding": "mutation",
   "explain.getExplanation": "read",
   "report-edit.saveReportEdit": "mutation",

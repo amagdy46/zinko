@@ -64,6 +64,7 @@ export const registerOf = (orgId: string, auditId: string) =>
     const [head] = yield* db
       .select({
         config: audit.config,
+        kind: audit.kind,
         createdAt: audit.createdAt,
         finishedAt: audit.finishedAt,
         siteName: site.name,
@@ -74,13 +75,14 @@ export const registerOf = (orgId: string, auditId: string) =>
       .innerJoin(client, eq(client.id, site.clientId))
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
-    if (head === undefined) return yield* new NotFound({ message: "Not found" })
+    if (head === undefined || head.kind === "narrow")
+      return yield* new NotFound({ message: "Not found" })
     const config = yield* decodeConfig(head.config).pipe(Effect.orDie)
     const found = yield* findingsOf(orgId, auditId)
     const runs = yield* db
       .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario, journey: run.journey })
       .from(run)
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+      .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
       .orderBy(asc(run.ordinal))
     const wording = yield* db
       .select({ ruleId: findingTable.ruleId, why: findingTable.why, fix: findingTable.fix })

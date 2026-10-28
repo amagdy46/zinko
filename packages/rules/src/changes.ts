@@ -52,3 +52,17 @@ export const ruleChangedBetween = (ruleId: string, judgedBy: readonly string[]):
       Number(version) > lowest && Number(version) <= highest && ruleIds.includes(ruleId),
   )
 }
+
+/**
+ * Rules whose verdict was seen to change between runs of one unchanged page (a consent default that
+ * depends on a geo lookup or on which Google hit goes first: Allbirds, M3). A change in one of them
+ * is labelled Low confidence in a comparison. The value says why, for whoever edits the list.
+ */
+export const VOLATILE_RULES: Readonly<Record<string, string>> = {
+  "consent.default-after-tag":
+    "GTM's consent template can set the default without a dataLayer push, and the order of the first Google hits varies",
+  "consent.mode-classified":
+    "a region-based default (denied, then granted without a choice) flipped the verdict between runs of one page",
+  "consent.google-without-denied-state":
+    "depends on which Google hit goes first, which varies between loads",
+}

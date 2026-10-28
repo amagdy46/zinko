@@ -157,7 +157,11 @@ export const listTimeline = createServerFn({ method: "GET" })
         const after = yield* openCursor(data.cursor)
         const { db } = yield* Database
         const [o, a, k, r, i] = after ?? [0, 0, HIT, "", 0]
-        const inAudit: SQL[] = [eq(run.auditId, auditId), eq(run.orgId, orgId)]
+        const inAudit: SQL[] = [
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+        ]
         const inRun = [...inAudit]
         const runIds = many(data.runId)
         if (runIds.length > 0) {
@@ -370,7 +374,12 @@ export const listHitFilters = createServerFn({ method: "GET" })
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { db } = yield* Database
-        const inAudit = and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId))
+        const inAudit = and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(hit.orgId, orgId),
+        )
         const grouped = (column: typeof hit.vendor) =>
           db
             .select({ value: column, n: count() })
@@ -385,7 +394,7 @@ export const listHitFilters = createServerFn({ method: "GET" })
           db
             .select({ value: run.scenario, n: count() })
             .from(run)
-            .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+            .where(and(eq(run.auditId, auditId), eq(run.role, "target"), eq(run.orgId, orgId)))
             .groupBy(run.scenario),
         ])
         return {

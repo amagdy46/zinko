@@ -186,3 +186,27 @@ export const nothingChanged = (c: Comparison) =>
       f.spread !== "widened" &&
       f.spread !== "moved",
   )
+
+const CONFIDENCE_WORDS = {
+  volatile_rule: "This check is known to change between runs of one unchanged page.",
+  flips: "It changed several times over the last audits.",
+  single_run: "It rests on one run.",
+} as const
+
+/** Why a change carries the Low confidence label; empty at normal confidence. */
+export const confidenceReasons = (f: FindingChange) =>
+  f.confidence.because.map((reason) => CONFIDENCE_WORDS[reason])
+
+/** What a re-check of the changed runs found, in the words a reader can act on. */
+export const confirmationLine = (f: FindingChange) => {
+  const c = f.confirmation
+  if (c === null) return null
+  const of = `${c.cellsDone} of ${count(c.cellsTotal, "run")}`
+  if (f.state === "fixed") {
+    if (c.state === "repeated") return `Fix confirmed when re-checked: ${of}.`
+    if (c.state === "not_repeated") return `The fix did not hold when re-checked: ${of}.`
+  }
+  if (c.state === "repeated") return `Seen again when re-checked: ${of}.`
+  if (c.state === "not_repeated") return `Did not repeat when re-checked: ${of}.`
+  return `Re-check incomplete: ${of} could be compared.`
+}
