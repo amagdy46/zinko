@@ -52,11 +52,12 @@ export function RecheckResult({
   runs: number
 }) {
   const unknown = runs - determinateRuns
+  const coverage = `${determinateRuns} of ${count(runs, "run")} gave a complete result, ${unknown} could not be checked or did not finish`
   let result = `It no longer fails on the ${count(runs, "run")} re-checked.`
-  if (failingRuns > 0)
+  if (failingRuns > 0) {
     result = `It still fails on ${failingRuns} of the ${count(runs, "run")} re-checked.`
-  else if (unknown > 0)
-    result = `Re-check incomplete: ${determinateRuns} of ${count(runs, "run")} gave a result, ${unknown} could not be checked or did not finish.`
+    if (unknown > 0) result += ` Re-check incomplete: ${coverage}.`
+  } else if (unknown > 0) result = `Re-check incomplete: ${coverage}.`
   return (
     <section aria-labelledby="recheck-heading" className="space-y-1 rounded-lg border bg-card p-4">
       <h2 id="recheck-heading" className="text-base font-semibold">

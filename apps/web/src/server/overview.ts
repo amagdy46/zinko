@@ -170,7 +170,7 @@ export const getOverview = createServerFn({ method: "GET" })
                       Number,
                     ),
                   determinate:
-                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable') )`.mapWith(
+                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable') and ${run.status} = 'complete')`.mapWith(
                       Number,
                     ),
                 })
