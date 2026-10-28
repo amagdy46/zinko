@@ -11,6 +11,7 @@ export const invalidCurrency: Rule = {
   id,
   area: "coverage",
   severity: "warning",
+  owner: "developer",
   title: "Purchase currency is not an ISO 4217 code",
   checkTitle: "Purchase currency is an ISO 4217 code",
   why: "GA4, Google Ads, Meta and TikTok expect the currency as a three-letter uppercase ISO 4217 code (EUR, USD). Anything else, such as a lowercase code or a symbol, is rejected or reported without revenue, so the purchase's value is lost or converted wrongly.",

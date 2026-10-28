@@ -69,6 +69,7 @@ export const lostAcrossNavigation: Rule = {
   id,
   area: "clickids",
   severity: "warning",
+  owner: "developer",
   title: "Click ID lost between pages",
   checkTitle: "Click IDs kept between pages",
   why: "A visitor who lands from an ad brings a click ID on the landing URL. When a conversion on a later page carries neither that click ID nor the cookie that stores it, the ad platform cannot tie the sale to the click: the campaign looks like it converts less than it does, and bidding optimizes on the wrong signal.",

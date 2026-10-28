@@ -9,6 +9,7 @@ export const lostOnRedirect: Rule = {
   id,
   area: "clickids",
   severity: "warning",
+  owner: "developer",
   title: "Redirects dropping click IDs",
   checkTitle: "Click IDs survive redirects",
   why: "Ad platforms attribute a conversion to the click through the click ID on the landing URL (gclid, fbclid, ttclid). A redirect that drops the query string (a tracking link, an http to https or trailing-slash rule, a locale redirect) lands the visitor without it, so the tags never see the click and the conversion is reported as unattributed.",

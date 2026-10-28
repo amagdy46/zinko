@@ -8,6 +8,7 @@ export const multipleGa4Ids: Rule = {
   id,
   area: "duplicates",
   severity: "info",
+  owner: "tag-manager",
   title: "One page sends to more than one GA4 measurement ID",
   checkTitle: "One GA4 measurement ID per page",
   why: "Each GA4 measurement ID is a separate data stream. A second one is legitimate for a roll-up or agency property, but it is also what an old property left in place or a second Google tag added by a plugin looks like: every page view and purchase is then counted in both, and whichever one the reports read may be the wrong one.",

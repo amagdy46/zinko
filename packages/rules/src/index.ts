@@ -26,7 +26,16 @@ import { previewOrDebugLeak } from "./rules/hygiene/preview-or-debug-leak.js"
 import { tagErrors } from "./rules/hygiene/tag-errors.js"
 import type { CheckResult, Rule, RunInput } from "./types.js"
 
-export type { CheckResult, CheckStatus, DecodedHit, EvidenceRef, Rule, RunInput } from "./types.js"
+export type {
+  CheckResult,
+  CheckStatus,
+  DecodedHit,
+  EvidenceRef,
+  OwnerId,
+  Rule,
+  RunInput,
+} from "./types.js"
+export { OWNER_LABELS } from "./types.js"
 export { googleConsentFromCcm, isCcmRequest, isNonGoogle, withoutConsent } from "./consent-state.js"
 export { cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
 export { decodeHits } from "./decode.js"

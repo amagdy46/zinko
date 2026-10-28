@@ -9,6 +9,7 @@ export const metaEventIdReused: Rule = {
   id,
   area: "dedup",
   severity: "warning",
+  owner: "developer",
   title: "Meta event ID reused for the same event",
   checkTitle: "Meta event IDs unique per event",
   why: "Meta deduplicates by pixel, event name and event ID: a second event with the same name and ID is taken for a copy of the first and dropped. When a fixed or shared ID is sent with two real events of one kind (two add-to-carts, two leads), every one after the first silently disappears from reporting and optimization.",

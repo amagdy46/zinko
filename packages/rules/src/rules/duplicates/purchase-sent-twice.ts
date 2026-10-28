@@ -41,6 +41,7 @@ export const purchaseSentTwice: Rule = {
   id,
   area: "duplicates",
   severity: "critical",
+  owner: "developer",
   title: "Likely overcounting: purchase sent more than once",
   checkTitle: "Purchase sent once",
   why: "A purchase sent twice from one page is counted twice: revenue, conversions and ROAS are inflated, and Google Ads and Meta bid on conversions that never happened. GA4 and Ads drop repeats only when they carry the same transaction ID and arrive within their deduplication rules, and Meta and TikTok purchases carry no order id at all.",

@@ -9,6 +9,7 @@ export const pixelWithoutConsent: Rule = {
   id,
   area: "consent",
   severity: "critical",
+  owner: "tag-manager",
   title: "Ad pixel fired without consent",
   checkTitle: "Ad pixels wait for consent",
   why: "Meta and TikTok pixels carry no consent signal of their own: once one fires, the visit has been shared with the ad platform. A pixel that fires before the visitor chooses, when they never choose, or despite a Global Privacy Control signal, shares personal data without a legal basis.",

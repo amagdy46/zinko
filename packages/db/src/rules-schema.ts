@@ -33,6 +33,8 @@ export const checkResult = pgTable(
     title: text().notNull(),
     /** Null on rows written before the rule had a `checkTitle`. */
     checkTitle: text("check_title"),
+    /** Who usually fixes it (`OwnerId`); null on rows written before the rule had an owner. */
+    owner: text(),
     why: text().notNull(),
     fix: jsonb().notNull(),
     /** The run's `finished_at`, so a retry reproduces the row. */
@@ -62,6 +64,8 @@ export const finding = pgTable(
     title: text().notNull(),
     /** Null on rows written before the rule had a `checkTitle`. */
     checkTitle: text("check_title"),
+    /** From the newest rules version's check results; null on rows from before owners existed. */
+    owner: text(),
     why: text().notNull(),
     fix: jsonb().notNull(),
     failingRuns: integer("failing_runs").notNull(),

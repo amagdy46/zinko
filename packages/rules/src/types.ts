@@ -50,10 +50,20 @@ export interface CheckResult {
   evidence: readonly EvidenceRef[]
 }
 
+/** Who usually fixes a failing rule; a hint stored with the rule's wording, not a verdict. */
+export type OwnerId = "consent-platform" | "tag-manager" | "developer"
+
+export const OWNER_LABELS: Record<OwnerId, string> = {
+  "consent-platform": "Consent platform admin",
+  "tag-manager": "Tag manager or marketing",
+  developer: "Site developer",
+}
+
 export interface Rule {
   id: string
   area: "consent" | "clickids" | "coverage" | "duplicates" | "dedup" | "hygiene"
   severity: "critical" | "warning" | "info"
+  owner: OwnerId
   title: string
   /** A neutral noun phrase that reads true whether the check passes or fails; shown when it could not be run. */
   checkTitle: string

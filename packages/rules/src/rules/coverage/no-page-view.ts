@@ -8,6 +8,7 @@ export const noPageView: Rule = {
   id,
   area: "coverage",
   severity: "warning",
+  owner: "tag-manager",
   title: "GA4 events without a page_view",
   checkTitle: "GA4 events preceded by a page_view",
   why: "GA4 builds sessions, landing pages and traffic sources from page_view. When a page sends other GA4 events but no page_view, its visits are missing from page reports and its events are attributed to the wrong page or to no session source.",

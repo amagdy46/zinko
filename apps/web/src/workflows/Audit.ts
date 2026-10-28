@@ -464,6 +464,7 @@ const persist = (auditId: string, runId: string) =>
         severity: rule.severity,
         title: rule.title,
         checkTitle: rule.checkTitle,
+        owner: rule.owner,
         why: rule.why,
         fix: rule.fix,
         createdAt,
@@ -574,6 +575,7 @@ type StoredCheck = Pick<
   | "severity"
   | "title"
   | "checkTitle"
+  | "owner"
   | "why"
   | "fix"
 >
@@ -600,8 +602,11 @@ const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
     if (flagged.length === 0) continue
     const versions = [...new Set(group.map((c) => c.rulesVersion))].toSorted(byVersion)
     const newest = versions.at(-1)
-    const text = group.find((c) => c.rulesVersion === newest)
+    const inNewest = group.filter((c) => c.rulesVersion === newest)
+    const text = inNewest[0]
     if (text === undefined) continue
+    // The owner comes from the newest version's rows only: an older version's never fills a null.
+    const owner = inNewest.find((c) => c.owner !== null)?.owner ?? null
     const failingRuns = flagged.filter((c) => c.status === "fail").length
     findings.push({
       auditId,
@@ -613,6 +618,7 @@ const findingsFrom = (auditId: string, checks: ReadonlyArray<StoredCheck>) => {
       severity: text.severity,
       title: text.title,
       checkTitle: text.checkTitle,
+      owner,
       why: text.why,
       fix: text.fix,
       failingRuns,
@@ -648,6 +654,7 @@ const finish = (auditId: string) =>
             severity: checkResult.severity,
             title: checkResult.title,
             checkTitle: checkResult.checkTitle,
+            owner: checkResult.owner,
             why: checkResult.why,
             fix: checkResult.fix,
           })

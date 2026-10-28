@@ -29,6 +29,7 @@ export const metaEventIdMissing: Rule = {
   id,
   area: "dedup",
   severity: "warning",
+  owner: "developer",
   title: "Meta event sent without an event ID",
   checkTitle: "Meta events carry an event ID",
   why: "Meta matches a browser event with the same event from the Conversions API by its event ID. Without one, an event sent both ways is counted twice, and Meta cannot tell which copy to keep, so conversions and their value are overstated.",

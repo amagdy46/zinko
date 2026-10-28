@@ -9,6 +9,7 @@ export const pixelAfterReject: Rule = {
   id,
   area: "consent",
   severity: "critical",
+  owner: "tag-manager",
   title: "Ad pixel fired after the visitor rejected",
   checkTitle: "Ad pixels stay silent after the visitor rejects",
   why: "A visitor who rejects marketing cookies has refused to be shared with ad platforms. A Meta or TikTok hit after the rejection ignores that choice outright, which is the clearest consent breach a regulator or a visitor can find.",

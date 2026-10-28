@@ -9,6 +9,7 @@ import { auditInOrg, hitWithRequest, readCapture, runInAudit } from "./audit-dat
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import {
   checkTitleOf,
+  decodeOwner,
   decodeKind,
   decodeSeverity,
   findingsOf,
@@ -129,6 +130,7 @@ export const getFinding = createServerFn({ method: "GET" })
             severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
             title: f.title,
             checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
+            owner: yield* decodeOwner(f.owner).pipe(Effect.orDie),
             why: f.why,
             fix: yield* decodeFix(f.fix).pipe(Effect.orDie),
             rulesVersions: f.rulesVersions,
