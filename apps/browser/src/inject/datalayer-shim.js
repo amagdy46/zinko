@@ -217,19 +217,21 @@
       }
       return popupShown(instance, cmp)
     },
-    // In a document loaded after the choice: true while the banner of CMP `name` is shown, false
-    // when the CMP's own popup check finds none (also when the CMP leaves no markup at all once
-    // consent is stored, which `bannerShown` would call undetected), null while the page loads or
-    // when the check cannot run. The engines poll it, so a banner that appears late is still seen.
+    // In a document loaded after the choice: true while the banner of CMP `name` is shown; false
+    // only with positive evidence that the CMP is there and holds the choice (its own detection
+    // found it, or its own self-test passes: a stored choice for a rule CMP, a state check for a
+    // coded one) and its popup check finds no banner; null while the page loads, when the check
+    // cannot run or when nothing shows the CMP is present. The engines poll it, so a banner that
+    // appears late is still seen, and they refuse `hidden` when a script of the page failed.
     bannerWatch: async (name) => {
       const instance = window[AUTOCONSENT]
       if (!instance || document.readyState !== "complete") return null
       const cmp = instance.rules.find((rule) => rule.name === name)
       if (!cmp) return null
-      // Autoconsent's own visibility test: nothing is fading out in a document that just loaded,
-      // and a banner whose wrapper has no box of its own (vanilla-cookieconsent) still counts.
       try {
-        return Boolean(await cmp.detectPopup())
+        if (await cmp.detectPopup()) return true
+        if (await cmp.detectCmp()) return false
+        return cmp.hasSelfTest && (await cmp.test()) ? false : null
       } catch {
         return null
       }

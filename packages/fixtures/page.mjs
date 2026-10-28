@@ -26,7 +26,7 @@ export function renderPage({ name, page, flags, query, gpcHeader }) {
     ? `<link rel="stylesheet" href="/_vendor/cookieconsent/cookieconsent.css">`
     : ""
   const cmpBody = flags.cmp
-    ? `<script src="/_vendor/cookieconsent/cookieconsent.umd.js"></script>
+    ? `<script src="/_vendor/cookieconsent/cookieconsent.umd.js${flags.cmpBreaksAfterChoice ? `?site=${name}` : ""}"></script>
   <script src="/_shared/consent.js"></script>`
     : ""
 

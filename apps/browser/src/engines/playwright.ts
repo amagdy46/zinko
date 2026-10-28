@@ -695,6 +695,16 @@ const probeBanner = async (cmp: string): Promise<boolean | null> => {
   return values.some((value) => value === false) ? false : null
 }
 
+/** A script request of the document that was refused, failed or got an error status. */
+const failedScript = (documentId: string) =>
+  [...requests.values()].some(
+    (request) =>
+      request.documentId === documentId &&
+      request.resourceType === "script" &&
+      !request.blocked &&
+      (request.status === null || request.status >= 400),
+  )
+
 /**
  * Whether the banner of the detected CMP is shown in a document loaded after the consent action.
  * Polls from the document's commit until the observation window has ended, for at least
@@ -714,7 +724,9 @@ const observeBanner = async (documentId: string, cmp: string, windowEnded: () =>
     await sleep(BANNER_POLL_MS)
     return poll(hidden)
   }
-  const result = await poll(false)
+  const polled = await poll(false)
+  // A script of the page that failed may be the consent platform: an absent banner proves nothing.
+  const result = polled === "hidden" && failedScript(documentId) ? "unknown" : polled
   const document = documents.get(documentId)
   if (document !== undefined) documents.set(documentId, { ...document, banner: result })
   log(`banner window ${documentId}: ${result} after ${Date.now() - start} ms`)

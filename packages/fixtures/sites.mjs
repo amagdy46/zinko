@@ -31,6 +31,7 @@ export const defaults = {
   consentRestore: "update", // "update" | "never": whether a stored choice is reported to the tags again on later loads
   acceptGrants: "all", // "all" | "analytics": what "Accept all" grants
   conflictOnReload: false, // 2 s after a reloaded document loads, a request whose gcs and gcd contradict each other
+  cmpBreaksAfterChoice: false, // the banner library's script answers 404 once the visitor's choice is stored
   cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
@@ -67,6 +68,7 @@ export const sites = {
   "consent-reverts": { consentRestore: "never" },
   "consent-mixed-grant": { acceptGrants: "analytics" },
   "consent-conflict": { conflictOnReload: true },
+  "consent-cmp-404": { cmpBreaksAfterChoice: true },
   "consent-template-only": { consentDefault: "none", consentRestore: "never" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },

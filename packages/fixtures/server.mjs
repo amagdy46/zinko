@@ -137,6 +137,17 @@ async function handle(req, res) {
 
   if (path.endsWith("/g/collect")) return send(res, 204, {}, "")
 
+  // consent-cmp-404: the banner library cannot be fetched once its cookie says a choice was made
+  const broken = url.searchParams.get("site")
+  if (
+    path === "/_vendor/cookieconsent/cookieconsent.umd.js" &&
+    broken !== null &&
+    Object.hasOwn(sites, broken) &&
+    sites[broken].cmpBreaksAfterChoice === true &&
+    (req.headers.cookie ?? "").includes("cc_cookie=")
+  )
+    return send(res, 404, { "content-type": "text/plain" }, "not found")
+
   const file = staticFiles[path]
   if (file) {
     return readFile(join(root, file[0]), "utf8").then((body) =>

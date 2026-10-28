@@ -832,6 +832,16 @@ class Capture:
             return True
         return False if False in values else None
 
+    def failed_script(self, document_id: str) -> bool:
+        """A script request of the document that was refused, failed or got an error status."""
+        return any(
+            r["documentId"] == document_id
+            and r["resourceType"] == "script"
+            and not r["blocked"]
+            and (r["status"] is None or r["status"] >= 400)
+            for r in self.requests.values()
+        )
+
     async def observe_banner(self, document_id: str, cmp: str, window_ended) -> None:
         """Whether the banner of the detected CMP is shown in a document loaded after the consent action.
 
@@ -852,6 +862,9 @@ class Capture:
             if elapsed >= WINDOW_CAP_S or (elapsed >= BANNER_MIN_S and window_ended()):
                 break
             await asyncio.sleep(BANNER_POLL_S)
+        # A script of the page that failed may be the consent platform: an absent banner proves nothing.
+        if result == "hidden" and self.failed_script(document_id):
+            result = "unknown"
         document = self.documents.get(document_id)
         if document is not None:
             document["banner"] = result
