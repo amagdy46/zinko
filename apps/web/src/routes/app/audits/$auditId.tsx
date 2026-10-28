@@ -152,6 +152,17 @@ function AuditPage() {
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
     { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
+  const shareLink =
+    !active && summary.evaluatedRuns > 0 ? (
+      <Link
+        to="/app/audits/$auditId/report"
+        params={{ auditId: audit.id }}
+        search={{ share: 1 }}
+        className="inline-flex h-8 items-center rounded-md border px-3 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        Share report
+      </Link>
+    ) : null
   const findingsLink = (
     <Link
       to="/app/audits/$auditId/findings"
@@ -206,6 +217,7 @@ function AuditPage() {
               ) : null}
             </>
           }
+          actions={shareLink}
         />
       ) : (
         <header className="flex flex-col gap-x-3 gap-y-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-1">
@@ -255,6 +267,7 @@ function AuditPage() {
                 <span className="max-sm:hidden">· See why</span>
               </Link>
             ) : null}
+            {shareLink}
           </div>
         </header>
       )}

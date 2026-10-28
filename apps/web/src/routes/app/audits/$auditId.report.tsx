@@ -14,6 +14,8 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { getReportDraft } from "@/server/report"
 
 export const Route = createFileRoute("/app/audits/$auditId/report")({
+  validateSearch: (search: Record<string, unknown>): { share?: 1 } =>
+    search.share === 1 || search.share === "1" ? { share: 1 } : {},
   loader: ({ params }) => getReportDraft({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   component: ReportScreen,
@@ -40,6 +42,7 @@ function ReportScreen() {
         auditId={auditId}
         versions={draft.versions}
         changes={draft.consultant.changesSincePublished}
+        detail={draft.model.detail}
       />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm print:hidden">
         <ToggleGroup

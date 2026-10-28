@@ -121,3 +121,29 @@ export const reportFileCleanup = pgTable(
   },
   (t) => [primaryKey({ columns: [t.orgId, t.key] })],
 )
+
+/** A link to one snapshot. Only the SHA-256 of the 256-bit token is stored, and the token is shown once. */
+export const reportShare = pgTable(
+  "report_share",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    snapshotId: uuid("snapshot_id")
+      .notNull()
+      .references(() => reportSnapshot.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    label: text(),
+    /** Null for a link that never expires. */
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: text("revoked_by"),
+    /** Opened, not read: link-preview bots count. Updated at most once a minute. */
+    viewCount: integer("view_count").notNull().default(0),
+    lastViewedAt: timestamp("last_viewed_at", { withTimezone: true }),
+  },
+  (t) => [index().on(t.orgId, t.snapshotId)],
+)
