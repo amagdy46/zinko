@@ -287,12 +287,18 @@ export function DisclosureDialog({
   auditId,
   detail,
   disclosure,
+  open,
+  onOpenChange: setOpen,
+  menuOpener,
 }: {
   auditId: string
   detail: DisclosureLevel
   disclosure: ConsultantPayload["disclosure"]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** The "More" button that opens this from a menu below `sm`, where the trigger is hidden. */
+  menuOpener: React.RefObject<HTMLElement | null>
 }) {
-  const [open, setOpen] = useState(false)
   const [value, setValue] = useState<DisclosureLevel>(detail)
   const save = useSave(() => setOpen(false))
   return (
@@ -307,11 +313,18 @@ export function DisclosureDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" data-testid="disclosure">
+        <Button variant="outline" size="sm" data-testid="disclosure" className="max-sm:hidden">
           Page labels: {detail === "standard" ? "Page 1, Page 2" : "paths and ad-platform IDs"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent
+        className="max-h-[85vh] overflow-y-auto"
+        onCloseAutoFocus={(event) => {
+          if (window.matchMedia("(min-width: 40rem)").matches) return
+          event.preventDefault()
+          menuOpener.current?.focus()
+        }}
+      >
         <DialogHeader>
           <DialogTitle>How pages are named in this report</DialogTitle>
           <DialogDescription>

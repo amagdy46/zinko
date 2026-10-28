@@ -52,6 +52,19 @@ function AuditPage() {
   const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
   const refetch = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const tabBar = useRef<HTMLElement>(null)
+  const href = useLocation({ select: (location) => location.href })
+  const scrolledFor = useRef<string | null>(null)
+  useEffect(() => {
+    if (scrolledFor.current === href) return
+    scrolledFor.current = href
+    const bar = tabBar.current
+    const current = bar?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (bar === null || bar === undefined || current === null || current === undefined) return
+    const edge = current.offsetLeft + current.offsetWidth - bar.clientWidth
+    if (edge > bar.scrollLeft) bar.scrollLeft = edge + 8
+    else if (current.offsetLeft < bar.scrollLeft) bar.scrollLeft = current.offsetLeft - 8
+  }, [href])
   const previous = useRef({ id: audit.id, active })
   const [now, setNow] = useState<number | null>(null)
   const { connected } = useAuditRoom(
@@ -341,6 +354,7 @@ function AuditPage() {
         </div>
       ) : null}
       <nav
+        ref={tabBar}
         aria-label="Audit"
         className="scroll-edges -mx-1.5 flex gap-2.5 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
       >

@@ -142,7 +142,13 @@ function ClientPage() {
                   <form onSubmit={addSite} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="site-name">Name</Label>
-                      <Input id="site-name" name="name" required maxLength={100} />
+                      <Input
+                        id="site-name"
+                        name="name"
+                        required
+                        maxLength={100}
+                        placeholder="Main store"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="site-url">Address</Label>

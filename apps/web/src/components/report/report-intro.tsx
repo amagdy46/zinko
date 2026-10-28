@@ -26,9 +26,11 @@ const STEPS = [
 export function ReportIntro({
   unbranded,
   canManageBranding,
+  shared,
 }: {
   unbranded: boolean
   canManageBranding: boolean
+  shared: boolean
 }) {
   const dismissed = useSyncExternalStore(
     subscribe,
@@ -37,7 +39,7 @@ export function ReportIntro({
   )
   return (
     <div className="space-y-3 print:hidden">
-      {dismissed ? null : (
+      {dismissed || shared ? null : (
         <section className="space-y-3 rounded-lg border p-4" aria-label="About the report">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-medium">Send this to your client in three steps</h2>

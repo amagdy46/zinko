@@ -1,6 +1,7 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
 import { useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import type { DisclosureLevel } from "@/lib/report-model"
 import { ShareDialog } from "./share-dialog"
 
@@ -21,17 +22,24 @@ export const statusOf = (versions: ReadonlyArray<ReportVersion>, changes: boolea
     : `Version ${latest.version} published`
 }
 
+const dotClass = (shared: boolean, changes: boolean) => {
+  if (!shared) return "border border-muted-foreground"
+  return changes ? "bg-sev-warning" : "bg-primary"
+}
+
 /** The report's status chip and the Share button; the dialog opens from `?share=1` too. */
 export function Versions({
   auditId,
   versions,
   changes,
   detail,
+  incomplete,
 }: {
   auditId: string
   versions: ReadonlyArray<ReportVersion>
   changes: boolean
   detail: DisclosureLevel
+  incomplete: boolean
 }) {
   const navigate = useNavigate()
   const open = useSearch({ from: "/app/audits/$auditId/report", select: (s) => s.share === 1 })
@@ -46,9 +54,13 @@ export function Versions({
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm print:hidden">
       <span
-        className="inline-flex h-8 items-center rounded-md border px-3"
+        className="inline-flex h-8 items-center gap-2 rounded-full bg-muted px-3 text-xs"
         data-testid="report-status"
       >
+        <span
+          aria-hidden="true"
+          className={cn("size-2 shrink-0 rounded-full", dotClass(versions.length > 0, changes))}
+        />
         {statusOf(versions, changes)}
       </span>
       <Button
@@ -67,6 +79,7 @@ export function Versions({
         detail={detail}
         latestVersion={versions[0]?.version ?? null}
         changes={changes}
+        incomplete={incomplete}
         returnFocus={opener}
       />
     </div>
