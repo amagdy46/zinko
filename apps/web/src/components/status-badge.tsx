@@ -1,9 +1,12 @@
-import { StatusGlyph } from "@/components/status-glyph"
+import type { AuditStatus, RunStatus } from "@repo/core"
+import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
+const neutral = "border-status-neutral-border bg-status-neutral-bg text-status-neutral"
+
 const statuses = {
-  complete: { label: "Finished", meaning: "finished", tone: "bg-muted text-muted-foreground" },
+  complete: { label: "Finished", meaning: "finished", tone: neutral },
   partial: {
     label: "Partial",
     meaning: "partial",
@@ -14,20 +17,30 @@ const statuses = {
     meaning: "failed",
     tone: "border-sev-critical-border bg-sev-critical-bg text-sev-critical",
   },
-  running: { label: "Running", meaning: "running", tone: "bg-primary/10 text-primary" },
-  queued: { label: "Queued", meaning: "queued", tone: "bg-muted text-muted-foreground" },
-  pending: { label: "Queued", meaning: "queued", tone: "bg-muted text-muted-foreground" },
-  none: { label: "Not audited", meaning: "none", tone: "bg-muted text-muted-foreground" },
-} as const
+  running: {
+    label: "Running",
+    meaning: "running",
+    tone: "border-status-active-border bg-status-active-bg text-status-active",
+  },
+  queued: { label: "Queued", meaning: "queued", tone: neutral },
+  pending: { label: "Queued", meaning: "queued", tone: neutral },
+  none: { label: "Not audited", meaning: "none", tone: neutral },
+  unknown: { label: "Unknown", meaning: "none", tone: neutral },
+} satisfies Record<
+  AuditStatus | RunStatus | "none" | "unknown",
+  { label: string; meaning: StatusMeaning; tone: string }
+>
 
-function isStatus(status: string): status is keyof typeof statuses {
-  return Object.hasOwn(statuses, status)
-}
+export type BadgeStatus = keyof typeof statuses
 
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const display = isStatus(status)
-    ? statuses[status]
-    : { label: status, meaning: "none" as const, tone: "bg-muted text-muted-foreground" }
+/** Narrows a stored status string at the boundary; a value the app does not know becomes "unknown". */
+const isBadgeStatus = (status: string): status is BadgeStatus => Object.hasOwn(statuses, status)
+
+export const toBadgeStatus = (status: string): BadgeStatus =>
+  isBadgeStatus(status) ? status : "unknown"
+
+export function StatusBadge({ status, className }: { status: BadgeStatus; className?: string }) {
+  const display = statuses[status]
   return (
     <Badge variant="secondary" className={cn("gap-1.5", display.tone, className)}>
       <StatusGlyph meaning={display.meaning} />
@@ -45,7 +58,7 @@ const checks = {
   inconclusive: {
     label: "Could not check",
     meaning: "could-not-check",
-    tone: "border-dashed border-input bg-muted text-muted-foreground",
+    tone: "border-dashed border-status-neutral-border bg-status-neutral-bg text-status-neutral",
   },
   pass: {
     label: "Pass",
@@ -55,7 +68,7 @@ const checks = {
   not_applicable: {
     label: "Not applicable",
     meaning: "not-applicable",
-    tone: "bg-muted text-muted-foreground",
+    tone: neutral,
   },
 } as const
 

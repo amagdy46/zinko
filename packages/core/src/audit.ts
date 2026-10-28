@@ -50,6 +50,10 @@ export const TEST_CLICK_IDS = {
   utm_campaign: "zinko-audit",
 } as const
 
+/** The values `audit.status` and `run.status` hold; the UI maps each one exhaustively. */
+export type AuditStatus = "queued" | "running" | "complete" | "partial" | "failed"
+export type RunStatus = "pending" | "running" | "complete" | "partial" | "failed"
+
 const RunError = Schema.Struct({ code: Schema.String, message: Schema.String })
 
 /** What the audit room pushes to open tabs. The page refetches the audit; the event only says when. */

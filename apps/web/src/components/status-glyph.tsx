@@ -22,7 +22,10 @@ const meanings = {
   "could-not-check": { icon: CircleDashed, tone: "text-muted-foreground" },
   "not-applicable": { icon: CircleMinus, tone: "text-muted-foreground" },
   queued: { icon: Circle, tone: "text-muted-foreground" },
-  running: { icon: LoaderCircle, tone: "animate-spin text-primary motion-reduce:animate-none" },
+  running: {
+    icon: LoaderCircle,
+    tone: "animate-spin text-status-active motion-reduce:animate-none",
+  },
   partial: { icon: CircleAlert, tone: "text-sev-warning" },
   captured: { icon: CircleDot, tone: "text-muted-foreground" },
   failed: { icon: CircleX, tone: "text-sev-critical" },

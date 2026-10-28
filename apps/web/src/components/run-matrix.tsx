@@ -1,7 +1,7 @@
 import { useState } from "react"
 import type { getAudit } from "@/server/audits"
 import { RunPath } from "@/components/evidence"
-import { StatusBadge } from "@/components/status-badge"
+import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { HoverCard, HoverCardTrigger, HoverCardContent } from "@/components/ui/hover-card"
@@ -24,7 +24,7 @@ const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" }
 
 /** "Complete" reads as "passed"; a run only says the page was recorded. */
 export function RunStatusBadge({ status }: { status: string }) {
-  if (status !== "complete") return <StatusBadge status={status} />
+  if (status !== "complete") return <StatusBadge status={toBadgeStatus(status)} />
   return (
     <Badge variant="secondary" className="gap-1.5 bg-muted text-muted-foreground">
       <StatusGlyph meaning="captured" />

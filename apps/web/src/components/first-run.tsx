@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react"
 import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
-import { StatusBadge } from "@/components/status-badge"
+import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { count, relativeTime, useTimeZone } from "@/lib/format"
 
 type Result = {
@@ -29,7 +29,7 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
       ) : null}
       {latest ? (
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={latest.status} />
+          <StatusBadge status={toBadgeStatus(latest.status)} />
           <time title={relativeTime(latest.createdAt, timeZone).title}>
             {relativeTime(latest.createdAt).text}
           </time>
@@ -186,7 +186,7 @@ export function FirstRun({
       </ol>
       {first !== undefined && !complete[1] ? (
         <Link
-          className="text-sm text-primary underline-offset-4 hover:underline"
+          className="text-sm text-status-active underline-offset-4 hover:underline"
           to="/app/clients/$clientId"
           params={{ clientId: first.id }}
         >

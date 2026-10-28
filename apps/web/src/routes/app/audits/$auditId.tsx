@@ -12,7 +12,7 @@ import { ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
-import { StatusBadge } from "@/components/status-badge"
+import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -165,7 +165,7 @@ function AuditPage() {
           ]}
           meta={
             <>
-              <StatusBadge status={audit.status} />
+              <StatusBadge status={toBadgeStatus(audit.status)} />
               {active ? (
                 <TooltipProvider>
                   <Tooltip>
@@ -203,7 +203,7 @@ function AuditPage() {
             {site.name}
           </Link>
           <h1 className="text-base font-semibold tracking-tight">Audit of {site.name}</h1>
-          <StatusBadge status={audit.status} />
+          <StatusBadge status={toBadgeStatus(audit.status)} />
           <span className="tabular-nums text-muted-foreground">{count(runs.length, "run")}</span>
           {findingsLink}
           <span className="tabular-nums text-muted-foreground">{duration(elapsed)}</span>
