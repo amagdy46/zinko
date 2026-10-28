@@ -30,6 +30,7 @@ export const notPersistedAcrossNavigation: Rule = {
   id,
   area: "consent",
   severity: "warning",
+  owner: "consent-platform",
   title: "Consent choice not kept on the next page",
   checkTitle: "Consent choice kept across pages and reloads",
   why: "A visitor who accepted or rejected the banner expects the site to remember it. When the banner comes back on the next page or after a reload, or the tags go back to their denied default, the choice was not kept: visitors are asked again, tags measure with the wrong consent state, and what you collect after an accept can be lost.",
