@@ -346,26 +346,27 @@ export function FindingDetail({
                 from the newest.
               </p>
             ) : null}
-            <Section title="Why it matters">
-              <p>{finding.why}</p>
-            </Section>
-            <section className="space-y-1">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  How to fix it
-                </h3>
-                <CopyButton
-                  value={finding.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
-                  label="Copy fix steps"
-                />
-              </div>
-              <ol className="list-decimal space-y-1 pl-5">
-                {finding.fix.map((step) => (
-                  <li key={step}>{step}</li>
-                ))}
-              </ol>
-            </section>
-            <ExplainSection auditId={auditId} ruleId={row.ruleId} />
+            <div className="space-y-5 xl:grid xl:grid-cols-2 xl:gap-6 xl:space-y-0">
+              <Section title="Why it matters">
+                <p>{finding.why}</p>
+              </Section>
+              <section className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    How to fix it
+                  </h3>
+                  <CopyButton
+                    value={finding.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+                    label="Copy fix steps"
+                  />
+                </div>
+                <ol className="list-decimal space-y-1 pl-5">
+                  {finding.fix.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </section>
+            </div>
           </>
         )}
         <Section title="Where it was seen">
@@ -380,7 +381,11 @@ export function FindingDetail({
               {BANNER_NOTE[detection]} The finding keeps its severity.
             </p>
           ))}
-          <ul className="divide-y rounded-md border text-xs" aria-label="Where it was seen">
+          <ul
+            className="max-h-36 divide-y overflow-y-auto rounded-md border text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            aria-label="Where it was seen"
+            tabIndex={0}
+          >
             {checks.map((c) => (
               <li key={c.runId} data-testid="check">
                 <button
@@ -391,8 +396,8 @@ export function FindingDetail({
                     setPickedRef(null)
                   }}
                   className={cn(
-                    "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
-                    c.runId === check?.runId && "bg-muted",
+                    "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:ring-inset",
+                    c.runId === check?.runId && "bg-accent shadow-[inset_2px_0_0_var(--primary)]",
                   )}
                 >
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
@@ -431,6 +436,7 @@ export function FindingDetail({
             screenshotUrl={runs.find((r) => r.id === check.runId)?.screenshotUrl ?? null}
           />
         )}
+        {couldNotCheck ? null : <ExplainSection auditId={auditId} ruleId={row.ruleId} />}
       </div>
     </div>
   )

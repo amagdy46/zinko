@@ -16,6 +16,7 @@ import {
 import { runPage, runReason, runMeaning, runDuration, scenarioLabel } from "@/lib/audit-labels"
 import { runPageLabel } from "@/lib/page-label"
 import { duration, count } from "@/lib/format"
+import { selectableRow } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 
 export type AuditRun = Awaited<ReturnType<typeof getAudit>>["runs"][number]
@@ -41,12 +42,12 @@ const failingText = (run: AuditRun) =>
 export function RunMatrix({
   runs,
   view,
-  sheetOpen,
+  selectedId,
   onSelect,
 }: {
   runs: AuditRun[]
   view: "matrix" | "list" | "thumbnails"
-  sheetOpen: boolean
+  selectedId: string | undefined
   onSelect: (id: string) => void
 }) {
   if (view === "thumbnails")
@@ -57,7 +58,11 @@ export function RunMatrix({
             <button
               type="button"
               onClick={() => onSelect(run.id)}
-              className="flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+              aria-current={run.id === selectedId ? "true" : undefined}
+              className={cn(
+                "flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+                run.id === selectedId && "border-primary bg-accent hover:bg-accent",
+              )}
             >
               <RunPath run={run} className="max-w-full text-xs" />
               <RunStatusBadge status={run.status} />
@@ -99,7 +104,12 @@ export function RunMatrix({
         </TableHeader>
         <TableBody>
           {runs.map((run) => (
-            <TableRow key={run.id} onClick={() => onSelect(run.id)} className="cursor-pointer">
+            <TableRow
+              key={run.id}
+              data-selected={run.id === selectedId}
+              onClick={() => onSelect(run.id)}
+              className={selectableRow}
+            >
               <TableCell>
                 <button
                   type="button"
@@ -204,7 +214,8 @@ export function RunMatrix({
                             page={page}
                             scenario={scenario}
                             viewport={viewport}
-                            sheetOpen={sheetOpen}
+                            selected={run.id === selectedId}
+                            sheetOpen={selectedId !== undefined}
                             onSelect={onSelect}
                           />
                         ) : (
@@ -251,6 +262,7 @@ function MatrixCell({
   page,
   scenario,
   viewport,
+  selected,
   sheetOpen,
   onSelect,
 }: {
@@ -258,6 +270,7 @@ function MatrixCell({
   page: string
   scenario: string
   viewport: string
+  selected: boolean
   sheetOpen: boolean
   onSelect: (id: string) => void
 }) {
@@ -275,7 +288,11 @@ function MatrixCell({
             onSelect(run.id)
           }}
           aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${statusWord}, ${hits}${run.failing ? `, ${failingText(run)}` : ""}`}
-          className="inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+          aria-current={selected ? "true" : undefined}
+          className={cn(
+            "inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none",
+            selected && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+          )}
         >
           {run.failing && run.status === "complete" ? null : (
             <StatusGlyph meaning={runMeaning(run.status)} />

@@ -29,6 +29,7 @@ import { scenarioLabel } from "@/lib/audit-labels"
 import { searchText, searchValues } from "@/lib/hits-filter"
 import { hasClickIds, runPageLabel } from "@/lib/page-label"
 import { consentWords, vendorName } from "@/lib/tag-matrix"
+import { selectableRow } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 import { getAudit } from "@/server/audits"
 import { getHitDetail, listHitFilters, listTimeline } from "@/server/hits"
@@ -753,7 +754,7 @@ function Timeline({
           Time: ms since the capture started. Status: the HTTP status, or Answered locally. Consent:
           Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in full.
         </p>
-        <div className="max-h-[70svh] overflow-auto rounded-lg border">
+        <div className="scroll-edges max-h-[70svh] overflow-auto rounded-lg border">
           <table
             className="group/timeline w-full text-left font-mono text-xs"
             data-testid="timeline"
@@ -761,12 +762,12 @@ function Timeline({
           >
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
-                {singleRun ? null : <th className="hidden px-2 font-medium md:table-cell">Run</th>}
-                <th className="px-2 font-medium">Time</th>
+                {singleRun ? null : <th className="px-2 font-medium">Run</th>}
+                <th className="hidden px-2 font-medium md:table-cell">Time</th>
                 <th className="px-2 font-medium">Vendor</th>
                 <th className="px-2 font-medium">Event</th>
-                <th className="px-2 font-medium">Status</th>
-                <th className="px-2 font-medium">Consent</th>
+                <th className={cn("hidden px-2 font-medium md:table-cell", paneHidden)}>Status</th>
+                <th className={cn("hidden px-2 font-medium md:table-cell", paneHidden)}>Consent</th>
                 <th className={cn("hidden px-2 font-medium md:table-cell", paneHidden)}>
                   Destination
                 </th>
@@ -926,7 +927,7 @@ function Timeline({
 
 const cellBase = "px-2 py-0 whitespace-nowrap"
 
-/** The destination and key params columns make room for the detail pane; the pane repeats them. */
+/** Status, consent, destination and key params make room for the detail pane; the pane repeats them. */
 const paneHidden = "group-data-[pane=open]/timeline:hidden!"
 
 function RunCell({
@@ -941,7 +942,7 @@ function RunCell({
   if (singleRun) return null
   return (
     <td
-      className={cn(cellBase, "hidden max-w-56 truncate text-muted-foreground md:table-cell")}
+      className={cn(cellBase, "max-w-36 truncate text-muted-foreground md:max-w-56")}
       title={run === undefined ? undefined : runTitle(run)}
     >
       #{ordinal + 1}
@@ -973,13 +974,10 @@ function HitRow({
       data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
-      className={cn(
-        "h-7 max-md:h-9 cursor-pointer border-t hover:bg-muted/50",
-        isSelected && "bg-accent",
-      )}
+      className={cn("h-7 border-t max-md:h-9", selectableRow)}
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
-      <td className={cn(cellBase, "tabular-nums")}>{thousands(item.at)} ms</td>
+      <td className={cn(cellBase, "hidden tabular-nums md:table-cell")}>{thousands(item.at)} ms</td>
       <td className={cellBase}>{vendorName(item.vendor)}</td>
       <td className={cellBase}>
         <button
@@ -991,14 +989,14 @@ function HitRow({
           {item.event}
         </button>
       </td>
-      <td className={cellBase}>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
         {item.blocked ? (
           <span title="Answered locally, not sent to the vendor">Answered locally</span>
         ) : (
           <span className="tabular-nums">{item.status ?? "No status"}</span>
         )}
       </td>
-      <td className={cellBase}>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
         <ConsentText consent={item.consent} />
       </td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>{item.destinationId}</td>
@@ -1045,12 +1043,13 @@ function PushRow({
       data-selected={isSelected}
       onClick={onSelect}
       className={cn(
-        "h-7 max-md:h-9 cursor-pointer border-t text-muted-foreground hover:bg-muted/50",
-        isSelected && "bg-accent text-foreground",
+        "h-7 border-t text-muted-foreground max-md:h-9",
+        selectableRow,
+        isSelected && "text-foreground",
       )}
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
-      <td className={cn(cellBase, "tabular-nums")}>
+      <td className={cn(cellBase, "hidden tabular-nums md:table-cell")}>
         {group ? `${thousands(item.at)}–${thousands(group.to)} ms` : `${thousands(item.at)} ms`}
       </td>
       <td className={cellBase}>dataLayer</td>
@@ -1074,8 +1073,8 @@ function PushRow({
           {group ? <Badge variant="secondary">{group.count} pushes</Badge> : null}
         </button>
       </td>
-      <td className={cellBase}>-</td>
-      <td className={cellBase}>-</td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
       <td className={cn("hidden max-w-0 truncate px-2 py-0 2xl:table-cell", paneHidden)}>
         {preview(item)}

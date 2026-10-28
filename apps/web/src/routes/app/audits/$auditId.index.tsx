@@ -59,7 +59,7 @@ function RunsPage() {
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
-      <RunMatrix runs={runs} view={view} sheetOpen={run !== undefined} onSelect={select} />
+      <RunMatrix runs={runs} view={view} selectedId={run} onSelect={select} />
       <RunSheet
         auditId={audit.id}
         runs={runs}

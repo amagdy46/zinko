@@ -579,9 +579,9 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
       data-selected={selected}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
         failing ? SeverityMark[row.severity] : "border-l-2 border-l-transparent",
-        selected && "bg-accent",
+        selected && "bg-accent ring-1 ring-primary/40 ring-inset hover:bg-accent",
       )}
     >
       {failing ? null : <StatusGlyph meaning="could-not-check" className="mt-0.5" />}
@@ -598,6 +598,22 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
           </span>
         ) : null}
       </span>
+      {failing && row.knownRuns > 0 ? (
+        <span className="flex shrink-0 flex-col items-end gap-1 pt-0.5 text-xs text-muted-foreground">
+          <span className="tabular-nums">
+            {row.failingRuns} of {count(row.knownRuns, "run")}
+          </span>
+          <svg aria-hidden="true" viewBox="0 0 100 4" className="h-1 w-16">
+            <rect width="100" height="4" rx="2" className="fill-muted" />
+            <rect
+              width={Math.min(100, (row.failingRuns / row.knownRuns) * 100)}
+              height="4"
+              rx="2"
+              className="fill-foreground/50"
+            />
+          </svg>
+        </span>
+      ) : null}
     </Link>
   )
 }
