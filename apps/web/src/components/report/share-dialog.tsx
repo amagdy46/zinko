@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { relativeTime, shortDateTime, useTimeZone } from "@/lib/format"
+import { relativeTime, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
 import type { DisclosureLevel } from "@/lib/report-model"
 import { deleteSnapshot } from "@/server/report-publish"
 import { createShareLink, listShares, revokeShare } from "@/server/report-share"
@@ -59,14 +59,17 @@ function ShareBody({
   detail,
   latestVersion,
   changes,
+  incomplete,
 }: {
   auditId: string
   detail: DisclosureLevel
   latestVersion: number | null
   changes: boolean
+  incomplete: boolean
 }) {
   const router = useRouter()
   const timeZone = useTimeZone()
+  const [opened] = useState(() => Date.now())
   const [label, setLabel] = useState("")
   const [expiry, setExpiry] = useState<(typeof EXPIRIES)[number]["value"]>("30")
   const [pending, setPending] = useState(false)
@@ -74,7 +77,8 @@ function ShareBody({
   const [created, setCreated] = useState<{ url: string; version: number } | null>(null)
   const [versions, setVersions] = useState<Versions>([])
   const [target, setTarget] = useState<Versions[number] | null>(null)
-  const deleteOpener = useRef<HTMLButtonElement>(null)
+  const deleteOpener = useRef<HTMLButtonElement | null>(null)
+  const linkField = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     const result = await listShares({ data: { auditId } })
@@ -91,7 +95,16 @@ function ShareBody({
     }
   }, [auditId])
 
+  useEffect(() => {
+    if (created !== null) linkField.current?.focus()
+  }, [created])
+
+  const days = DAYS[expiry]
   const nextVersion = changes || latestVersion === null ? (latestVersion ?? 0) + 1 : latestVersion
+  const publishNote =
+    changes || latestVersion === null
+      ? `This publishes version ${nextVersion}.`
+      : `The report is unchanged since version ${nextVersion}, so the link opens that version.`
 
   async function create() {
     setPending(true)
@@ -157,14 +170,20 @@ function ShareBody({
               </div>
             ))}
           </RadioGroup>
+          <p className="text-muted-foreground">
+            {days === null
+              ? "Works until you turn it off."
+              : `Stops working on ${shortDate(opened + days * 86_400_000, timeZone)}.`}
+          </p>
         </fieldset>
+        {incomplete ? (
+          <p className="text-muted-foreground">This audit is incomplete. The report says so.</p>
+        ) : null}
         <p className="text-muted-foreground" data-testid="share-preflight">
           {detail === "detailed"
             ? "Pages print as their paths, and ad-platform IDs are included."
-            : "Pages print as Page 1, Page 2; no page paths or ad-platform IDs."}{" "}
-          {changes || latestVersion === null
-            ? `This publishes version ${nextVersion}.`
-            : `Nothing changed, so this link opens version ${nextVersion}.`}
+            : "Pages print as Page 1, Page 2; no page paths or ad-platform IDs."}
+          {created === null ? ` ${publishNote}` : ""}
         </p>
         {error === null ? null : (
           <p role="alert" className="text-destructive">
@@ -176,9 +195,17 @@ function ShareBody({
         </Button>
         {created === null ? null : (
           <div className="space-y-1.5 rounded-md border p-3" data-testid="created-link">
-            <p className="font-medium">Version {created.version}</p>
+            <p role="status" className="font-medium">
+              Link created for version {created.version}. It is shown once.
+            </p>
             <div className="flex items-center gap-2">
-              <Input readOnly value={created.url} aria-label="Report link" className="min-w-0" />
+              <Input
+                ref={linkField}
+                readOnly
+                value={created.url}
+                aria-label="Report link"
+                className="min-w-0"
+              />
               <Button
                 type="button"
                 variant="outline"
@@ -189,9 +216,7 @@ function ShareBody({
                 <Copy />
               </Button>
             </div>
-            <p className="text-muted-foreground">
-              This link is shown once. Create another to send it again.
-            </p>
+            <p className="text-muted-foreground">Create another link to send it again.</p>
           </div>
         )}
         {versions.length === 0 ? null : (
@@ -210,14 +235,17 @@ function ShareBody({
                   </p>
                   {v.canDelete ? (
                     <Button
-                      ref={deleteOpener}
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setTarget(v)}
+                      className="text-destructive hover:text-destructive"
+                      onClick={(event) => {
+                        deleteOpener.current = event.currentTarget
+                        setTarget(v)
+                      }}
                       data-testid={`delete-version-${v.version}`}
                     >
-                      Delete this version
+                      Delete version {v.version}
                     </Button>
                   ) : null}
                 </div>
@@ -249,6 +277,7 @@ function ShareBody({
                             type="button"
                             variant="outline"
                             size="sm"
+                            aria-label={`Turn off ${l.label ?? "link"}, version ${v.version}`}
                             onClick={() => revoke(l.id)}
                           >
                             Turn off
@@ -268,7 +297,7 @@ function ShareBody({
         onOpenChange={(next) => {
           if (!next) setTarget(null)
         }}
-        label="Delete this version"
+        label={`Delete version ${target?.version ?? ""}`}
         variant="destructive"
         title={`Delete version ${target?.version ?? ""}?`}
         description="Every link to this version stops working and the stored copy of the report and its logo is removed. This cannot be undone."
@@ -298,6 +327,7 @@ export function ShareDialog({
   detail: DisclosureLevel
   latestVersion: number | null
   changes: boolean
+  incomplete: boolean
   returnFocus: React.RefObject<HTMLElement | null>
 }) {
   return (
