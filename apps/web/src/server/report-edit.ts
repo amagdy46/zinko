@@ -1,11 +1,11 @@
 import { Database } from "@repo/core/Database"
-import { audit as auditTable, finding, reportEdit, reportFindingEdit } from "@repo/db"
+import { reportEdit, reportFindingEdit } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { hasPersonalData } from "./branding-data"
 import { auditInOrg } from "./audit-data"
-import { earlierAudits } from "./compare-data"
+import { comparisonOf } from "./compare-data"
+import { findingRowOf } from "./findings-data"
 import { requireSession } from "./require-session"
 import { Invalid, isUuid, membership, NotFound, mutation } from "./server-fn"
 
@@ -87,45 +87,20 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
         if (note !== undefined && note.length > NOTE_MAX)
           return yield* new Invalid({ message: `A note can be at most ${NOTE_MAX} characters.` })
         const { db } = yield* Database
-        const findingOf = (id: string) =>
-          db
-            .select({ ruleId: finding.ruleId })
-            .from(finding)
-            .where(
-              and(
-                eq(finding.auditId, id),
-                eq(finding.orgId, orgId),
-                eq(finding.ruleId, data.ruleId),
-              ),
-            )
-            .limit(1)
-        const [current] = yield* findingOf(auditId)
-        let found = current
-        if (data.against !== undefined) {
-          // Only a finding of the earlier audit that this one no longer has (a Fixed change) may be
-          // named through it; one that still fails is edited as the audit's own finding.
-          if (!isUuid(data.against) || data.against === auditId || current !== undefined)
+        let ruleId: string
+        if (data.against === undefined) {
+          ruleId = (yield* findingRowOf(orgId, auditId, data.ruleId)).finding.ruleId
+        } else {
+          // A change the comparison itself calls Fixed (so a rule that is removed, unchecked or still
+          // failing is a 404) may be left out; the comparison checks both audits against the
+          // organization and the site.
+          if (!isUuid(data.against) || data.against === auditId)
             return yield* new NotFound({ message: "Not found" })
-          const [audit] = yield* db
-            .select({ siteId: auditTable.siteId })
-            .from(auditTable)
-            .where(and(eq(auditTable.id, auditId), eq(auditTable.orgId, orgId)))
-          const [valid] =
-            audit === undefined
-              ? []
-              : yield* db
-                  .select({ id: auditTable.id })
-                  .from(auditTable)
-                  .where(
-                    and(
-                      earlierAudits(orgId, audit.siteId, auditId),
-                      eq(auditTable.id, data.against),
-                    ),
-                  )
-          if (valid === undefined) return yield* new NotFound({ message: "Not found" })
-          ;[found] = yield* findingOf(valid.id)
+          const { comparison } = yield* comparisonOf(orgId, auditId, data.against)
+          const change = comparison?.findings.find((f) => f.ruleId === data.ruleId)
+          if (change?.state !== "fixed") return yield* new NotFound({ message: "Not found" })
+          ruleId = change.ruleId
         }
-        if (found === undefined) return yield* new NotFound({ message: "Not found" })
         const sent = {
           ...(note === undefined ? {} : { note: note || null }),
           ...(data.hidden === undefined ? {} : { hidden: data.hidden }),
@@ -140,7 +115,7 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
         }
         yield* db
           .insert(reportFindingEdit)
-          .values({ auditId, orgId, ruleId: found.ruleId, ...sent, ...stamp })
+          .values({ auditId, orgId, ruleId, ...sent, ...stamp })
           .onConflictDoUpdate({
             target: [reportFindingEdit.auditId, reportFindingEdit.ruleId],
             set: { ...sent, ...stamp },
