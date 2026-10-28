@@ -14,7 +14,7 @@ import {
   site,
 } from "@repo/db"
 import { buildDigest, canonicalJson } from "@repo/llm"
-import { and, asc, count, eq, max, sql } from "drizzle-orm"
+import { and, asc, count, eq, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { AREAS, SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
 import { pageIndexOf } from "@/lib/page-match"
@@ -63,14 +63,11 @@ const VIEWPORT_LABEL = { desktop: "Desktop", mobile: "Mobile" } as const
  */
 export interface ReportStamp {
   auditFinishedAt: string | null
-  brandingUpdatedAt: string | null
-  logoSha256: string | null
-  triageUpdatedAt: string | null
-  triageCount: number
-  editUpdatedAt: string | null
-  editDetail: DisclosureLevel
-  findingEditUpdatedAt: string | null
-  findingEditCount: number
+  /** Fingerprints of the rows' values, not of their timestamps: an update stamped earlier can commit later. */
+  branding: string
+  edit: string
+  findingEdits: string
+  triage: string
 }
 
 export type ReportBuild =
@@ -241,6 +238,10 @@ const publicationHashOf = (model: ReportModel) =>
     return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
   })
 
+/** A fingerprint of the values of a table's rows (the table name and column are ours, never input). */
+const rowsOf = (table: string, order: string) =>
+  sql<string>`md5(coalesce(string_agg(${sql.raw(table)}::text, '|' order by ${sql.raw(order)}), ''))`
+
 /**
  * The inputs a consultant can change, read in a few small queries. `buildReport` takes it inside
  * its snapshot; publication takes it again under the lock and starts over when the two differ.
@@ -254,33 +255,27 @@ export const readStamp = (orgId: string, auditId: string) =>
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     const [branding] = yield* db
-      .select({ updatedAt: orgBranding.updatedAt, logoSha256: orgBranding.logoSha256 })
+      .select({ fingerprint: rowsOf("org_branding", "org_id") })
       .from(orgBranding)
       .where(eq(orgBranding.orgId, orgId))
-      .limit(1)
     const [edit] = yield* db
-      .select({ updatedAt: reportEdit.updatedAt, detail: reportEdit.detail })
+      .select({ fingerprint: rowsOf("report_edit", "audit_id") })
       .from(reportEdit)
       .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
-      .limit(1)
     const [findingEdits] = yield* db
-      .select({ updatedAt: max(reportFindingEdit.updatedAt), rows: count() })
+      .select({ fingerprint: rowsOf("report_finding_edit", "rule_id") })
       .from(reportFindingEdit)
       .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
     const [triage] = yield* db
-      .select({ updatedAt: max(findingTriage.updatedAt), rows: count() })
+      .select({ fingerprint: rowsOf("finding_triage", "rule_id") })
       .from(findingTriage)
       .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
     return {
       auditFinishedAt: head?.finishedAt?.toISOString() ?? null,
-      brandingUpdatedAt: branding?.updatedAt.toISOString() ?? null,
-      logoSha256: branding?.logoSha256 ?? null,
-      triageUpdatedAt: triage?.updatedAt?.toISOString() ?? null,
-      triageCount: triage?.rows ?? 0,
-      editUpdatedAt: edit?.updatedAt.toISOString() ?? null,
-      editDetail: edit?.detail === "detailed" ? "detailed" : "standard",
-      findingEditUpdatedAt: findingEdits?.updatedAt?.toISOString() ?? null,
-      findingEditCount: findingEdits?.rows ?? 0,
+      branding: branding?.fingerprint ?? "",
+      edit: edit?.fingerprint ?? "",
+      findingEdits: findingEdits?.fingerprint ?? "",
+      triage: triage?.fingerprint ?? "",
     } satisfies ReportStamp
   })
 
