@@ -213,7 +213,7 @@ Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/pla
 
 ### Compare and polish (M6, v0.1 release)
 
-Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/plan.md) (proposed 2026-10-28, revised after review round 1, 18 tasks). A comparison is a pure function of two audits' derived rows, computed on read, cell by cell (page × scenario × viewport × journey); only the baseline link and the carried-over triage and report edits are stored. The workflow does not change. No tests, no new dependency.
+Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/plan.md) (proposed 2026-10-28, revised after review rounds 1 and 2, 19 tasks). A comparison is a pure function of two audits' derived rows, computed on read, cell by cell (page × scenario × viewport × journey); only the baseline link and the carried-over triage and report edits are stored. The workflow does not change. No tests, no new dependency.
 
 | Feature | How we build it | Status |
 |---|---|---|
