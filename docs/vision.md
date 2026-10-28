@@ -182,12 +182,17 @@ Run on the local stack (`pnpm dev` with `BROWSER_URL`, the engine on :8080, fixt
 
 ### Report (M5)
 
+Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/plan.md) (proposed 2026-10-28, 15 tasks). The report is a read model over the M3 and M4 rows, built on read into one validated JSON document (`ReportModel`); sharing freezes it. No tests, no new dependency, and no personal data: evidence comes from the same minimiser as the AI explanation (`buildDigest`), never from `getEvidence`.
+
 | Feature | How we build it | Status |
 |---|---|---|
-| White-label report | Branding table (logo, accent, footer), report route | planned |
-| Share link | Secret token, revocable, no login needed (DataTrue's hosted report) | planned |
-| PDF | The container prints the report route with `page.pdf()` | planned |
-| **Audit register export** | A CSV or sheet of every finding next to the report, for consultants who track fixes in spreadsheets (Tracking Auditor's Sheet export) | proposed |
+| White-label branding | `org_branding` (agency name, logo in `Storage`, one of eight contrast-checked accent presets selected by `data-accent`, footer, "Powered by Zinko" toggle); Settings > Branding, owner/admin only, enforced on the server. Logos are PNG, JPEG or WebP up to 512 KB, checked by magic bytes, served through the signed `/files/` route | planned |
+| Report page | A Report tab on the audit: cover, one-page summary (score with its arithmetic, deterministic headlines, no model), scope and method, a vendor by scenario consent table, findings with stored wording and one safe evidence item, a prioritised action plan grouped by owner, an appendix (Could not check, Not evaluated, left-out findings, rules list, legend). Consultant view and Client view of the same component | planned |
+| Owner hint | `Rule.owner` (`consent-platform`, `tag-manager`, `developer`) stored on `check_result` and `finding` like the other wording; per-finding override in `report_finding_edit`; older audits read "Owner not assigned" | planned |
+| Consultant edits | `report_edit` (summary override) and `report_finding_edit` (note, leave out of the detail, owner), stored apart from derived rows and never touched by the workflow. "Leave out" removes the detail and the plan entry; the score, its arithmetic and the counts keep the finding and the appendix names it | planned |
+| Share link | `report_snapshot` (frozen JSON, versioned per audit, content hash) and `report_share` (SHA-256 of a 256-bit token, label, expiry of 7, 30 or 90 days or never, revoke). Public page `/r/<token>`: no session, no chrome, `noindex`, `no-store`, `Referrer-Policy: no-referrer`, a strict CSP; unknown token 404, revoked or expired 410 with the agency name only; an older version shows "A newer version was published". Frozen rather than live so the client reads a dated record that later edits cannot change, and the public path is one indexed row | planned |
+| PDF | The browser's print of the same page through a print stylesheet (A4, light, no chrome, page breaks, running footer). A `page.pdf()` endpoint on the capture engine is deferred: the engine refuses the app's origin by design (SSRF policy), shares three engines FIFO with audits, and the container image has never run. Prerequisites recorded in the plan | planned |
+| **Audit register export** | A CSV, one row per finding (severity, area, status, owner, pages, triage, reason, note, whether it is in the report, stored why and fix), served by a session-checked Worker route with spreadsheet formula escaping | planned |
 
 ### Compare and polish (M6, v0.1 release)
 
