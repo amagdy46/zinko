@@ -1,7 +1,7 @@
 import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, run } from "@repo/db"
+import { audit, checkResult, hit, run } from "@repo/db"
 import { ruleChangedBetween } from "@repo/rules"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -19,6 +19,7 @@ import {
   type TriageLine,
 } from "@/lib/compare"
 import { healthScore } from "@/lib/health-score"
+import { diffTags, type TagRun, type TagTriple } from "@/lib/tag-diff"
 import { evaluatedAudit } from "./audit-create"
 import { auditInOrg } from "./audit-data"
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
@@ -346,4 +347,83 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       empty: null,
       comparison,
     } satisfies ComparisonView
+  })
+
+/** One side of a tag diff: its runs as cells, and the distinct tags each complete run sent. */
+const tagSideOf = (orgId: string, auditId: string, config: AuditConfig) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const rows = yield* db
+      .select({
+        id: run.id,
+        pageUrl: run.pageUrl,
+        scenario: run.scenario,
+        viewport: run.viewport,
+        journey: run.journey,
+        status: run.status,
+      })
+      .from(run)
+      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(run.role, "target")))
+    const runs = rows.map((r): TagRun => {
+      const cell = cellKeyOf(r, config)
+      return { id: r.id, cell, cellId: JSON.stringify(cell), complete: r.status === "complete" }
+    })
+    // grouping in the database keeps this to distinct (run, vendor, destination, event) rows
+    const tags: TagTriple[] = yield* db
+      .select({
+        runId: hit.runId,
+        vendor: hit.vendor,
+        destinationId: hit.destinationId,
+        event: hit.event,
+      })
+      .from(hit)
+      .innerJoin(run, eq(run.id, hit.runId))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.orgId, orgId),
+          eq(hit.orgId, orgId),
+          eq(run.role, "target"),
+          eq(run.status, "complete"),
+        ),
+      )
+      .groupBy(hit.runId, hit.vendor, hit.destinationId, hit.event)
+    return { runs, tags }
+  })
+
+/**
+ * The tag-level changes of `auditId` against an earlier audit of the same site: disappeared, new,
+ * destination changed and events changed, on the cells both audits captured completely. Both ids go
+ * through the organization; the earlier one must be an earlier evaluated full audit of the site.
+ */
+export const tagDiffOf = (orgId: string, auditId: string, againstId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const id = yield* auditInOrg(orgId, auditId)
+    if (!isUuid(againstId) || againstId === id) return yield* new NotFound({ message: "Not found" })
+    const [current] = yield* db
+      .select({
+        siteId: audit.siteId,
+        kind: audit.kind,
+        status: audit.status,
+        config: audit.config,
+      })
+      .from(audit)
+      .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (current === undefined || current.kind !== "full")
+      return yield* new NotFound({ message: "Not found" })
+    const [baseline] = yield* db
+      .select({ config: audit.config })
+      .from(audit)
+      .where(and(earlierAudits(orgId, current.siteId, id), eq(audit.id, againstId)))
+      .limit(1)
+    if (baseline === undefined) return yield* new NotFound({ message: "Not found" })
+    const now = yield* tagSideOf(orgId, id, yield* decodeConfig(current.config).pipe(Effect.orDie))
+    const before = yield* tagSideOf(
+      orgId,
+      againstId,
+      yield* decodeConfig(baseline.config).pipe(Effect.orDie),
+    )
+    return diffTags({ before, now })
   })

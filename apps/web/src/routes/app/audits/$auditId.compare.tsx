@@ -6,6 +6,7 @@ import { ChangeSheet } from "@/components/compare/change-sheet"
 import { FindingsTable } from "@/components/compare/findings-table"
 import { CompareNotices } from "@/components/compare/notices"
 import { CompareSummary } from "@/components/compare/summary"
+import { TagsSection } from "@/components/compare/tags"
 import { EmptyState } from "@/components/empty-state"
 import { Button } from "@/components/ui/button"
 import {
@@ -203,7 +204,8 @@ function CompareScreen() {
       <CompareNotices comparison={comparison} />
       {nothingChanged(comparison) ? (
         <p role="status" className="text-sm">
-          No finding changed in the {comparison.comparability.commonCells} shared runs.
+          No finding changed in the {comparison.comparability.commonCells} shared runs. Open Tags
+          below to see whether any tag did.
         </p>
       ) : null}
       {shownCount === 0 ? (
@@ -218,6 +220,7 @@ function CompareScreen() {
           }}
         />
       )}
+      <TagsSection key={comparison.before.id} auditId={auditId} against={comparison.before.id} />
       <ChangeSheet
         auditId={auditId}
         comparison={comparison}
