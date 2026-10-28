@@ -1,6 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { useState } from "react"
 import { EmptyState } from "@/components/empty-state"
+import {
+  DisclosureDialog,
+  EditSummary,
+  FindingActions,
+} from "@/components/report/consultant-controls"
 import { ReportView } from "@/components/report/report-view"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { getReportDraft } from "@/server/report"
 
 export const Route = createFileRoute("/app/audits/$auditId/report")({
@@ -11,6 +18,8 @@ export const Route = createFileRoute("/app/audits/$auditId/report")({
 
 function ReportScreen() {
   const draft = Route.useLoaderData()
+  const { auditId } = Route.useParams()
+  const [view, setView] = useState<"consultant" | "client">("consultant")
   if (!draft.available)
     return draft.reason === "running" ? (
       <p className="text-sm text-muted-foreground" data-testid="report-running">
@@ -31,6 +40,24 @@ function ReportScreen() {
         >
           Draft, not shared
         </span>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          size="sm"
+          value={view}
+          onValueChange={(next) => {
+            if (next === "consultant" || next === "client") setView(next)
+          }}
+          aria-label="View"
+        >
+          <ToggleGroupItem value="consultant">Consultant view</ToggleGroupItem>
+          <ToggleGroupItem value="client">Client view</ToggleGroupItem>
+        </ToggleGroup>
+        <DisclosureDialog
+          auditId={auditId}
+          detail={draft.model.detail}
+          disclosure={draft.consultant.disclosure}
+        />
         {draft.canManageBranding ? (
           <Link
             to="/app/settings/branding"
@@ -44,7 +71,20 @@ function ReportScreen() {
           </span>
         )}
       </div>
-      <ReportView model={draft.model} logoSrc={draft.logoUrl} mode="consultant" />
+      <ReportView
+        model={draft.model}
+        logoSrc={draft.logoUrl}
+        mode={view}
+        controls={
+          view === "client"
+            ? undefined
+            : {
+                summary: <EditSummary summary={draft.consultant.edits.summary} />,
+                Finding: FindingActions,
+                hiddenFindings: draft.consultant.hiddenFindings,
+              }
+        }
+      />
     </div>
   )
 }

@@ -1,5 +1,6 @@
-import { boolean, pgTable, text, timestamp } from "drizzle-orm/pg-core"
+import { boolean, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core"
 import { organization } from "./auth-schema.ts"
+import { audit } from "./audit-schema.ts"
 
 /*
  * What the consultant sends to clients. `org_branding` is people's work: the audit workflow never
@@ -26,3 +27,44 @@ export const orgBranding = pgTable("org_branding", {
   updatedBy: text("updated_by").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 })
+
+/** The consultant's text and disclosure level for one audit; written only by `saveReportEdit`. */
+export const reportEdit = pgTable("report_edit", {
+  auditId: uuid("audit_id")
+    .primaryKey()
+    .references(() => audit.id, { onDelete: "cascade" }),
+  orgId: text("org_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  /** Replaces the generated summary when set. */
+  summary: text(),
+  /** `standard` (page aliases) or `detailed` (entered paths and ad-platform IDs). */
+  detail: text().notNull().default("standard"),
+  updatedBy: text("updated_by").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+})
+
+/**
+ * The consultant's work on one finding of one audit. No foreign key to `finding`, like
+ * `finding_triage`: the workflow recomputes findings and must never touch this.
+ */
+export const reportFindingEdit = pgTable(
+  "report_finding_edit",
+  {
+    auditId: uuid("audit_id")
+      .notNull()
+      .references(() => audit.id, { onDelete: "cascade" }),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ruleId: text("rule_id").notNull(),
+    note: text(),
+    /** Left out of the report's detail and plan; the score and counts still include it. */
+    hidden: boolean().notNull().default(false),
+    /** Replaces the rule's stored owner hint (an `OwnerId`). */
+    owner: text(),
+    updatedBy: text("updated_by").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.auditId, t.ruleId] })],
+)

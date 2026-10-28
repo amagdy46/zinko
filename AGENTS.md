@@ -156,7 +156,9 @@ Zero errors and zero warnings are the bar.
 - The report is a read model: `buildReport` (`server/report-data.ts`) reads the database in one `REPEATABLE READ` read-only transaction (`atomically`, the isolation statement first), commits, then builds the model without touching the database, then `assertProjected` validates it. Draft reads go through `getReportDraft` (`server/report.ts`).
 - Every string a report prints comes from `lib/report-projection.ts` (`pageLabel`, `runReasonLabel`, and the vendor, event and evidence helpers as later tasks add them). Never print `check_result.message`, a capture error message or `runReason` output. A new field in `ReportModel` needs a validator in `LEAF_VALIDATORS` for each leaf path (an object that can be `null` needs its own path too); without one the report does not render.
 - The Overview and the report share `scoreSummaryOf` (`server/score-summary.ts`) and `ScoreArithmetic` (`components/score-arithmetic.tsx`); change a figure there, not in one of the two.
-- `ReportView` (`components/report/`) is pure: no hooks, router links or fetching.
+- `ReportView` (`components/report/`) is pure: no hooks, router links or fetching. The consultant's controls (`consultant-controls.tsx`) are passed in through its `controls` prop and never render in the client view.
+- The consultant's work is `report_edit` (summary, disclosure level) and `report_finding_edit` (note, leave out, owner override), written only by `saveReportEdit` and `saveFindingEdit` (`server/report-edit.ts`, any member, `auditInOrg` first, a rule that is not a finding of the audit is a 404). The workflow never touches them (`rg "report_|org_branding" apps/web/src/workflows` stays empty). A finding left out is removed from `model.findings`, `model.actionPlan` and the evidence, is listed by title in the appendix and still counts in the score; its detail lives only in the consultant payload (`hiddenFindings`), never in the model or a snapshot.
+- Evidence for a finding comes from `server/digest-data.ts` (shared with Explain) and `readCaptureTolerant`; the report never selects `hit.params`, `hit.ids` or `hit.url`.
 
 ## Realtime
 

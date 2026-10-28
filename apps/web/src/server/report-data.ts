@@ -8,6 +8,8 @@ import {
   findingTriage,
   hit,
   orgBranding,
+  reportEdit,
+  reportFindingEdit,
   run,
   site,
 } from "@repo/db"
@@ -39,7 +41,7 @@ import { brandingOf } from "./branding-data"
 import { auditInOrg, type CaptureRead, readCaptureTolerant } from "./audit-data"
 import { type CandidateRun, candidateRunsOf, digestRunOf } from "./digest-data"
 import { decodeFix } from "./findings"
-import { decodeSeverity, findingsOf, SEVERITY_ORDER } from "./findings-data"
+import { decodeOwner, decodeSeverity, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { coverageOf, decodeConsent } from "./matrix-data"
 import { scoreSummaryOf } from "./score-summary"
 import { atomically, NotFound } from "./server-fn"
@@ -62,6 +64,10 @@ export interface ReportStamp {
   logoSha256: string | null
   triageUpdatedAt: string | null
   triageCount: number
+  editUpdatedAt: string | null
+  editDetail: DisclosureLevel
+  findingEditUpdatedAt: string | null
+  findingEditCount: number
 }
 
 export type ReportBuild =
@@ -231,7 +237,7 @@ const publicationHashOf = (model: ReportModel) =>
  * error there is fatal. Phase 2 touches no database. Every string in the model comes through
  * `report-projection.ts`, and `assertProjected` checks the finished model before it is returned.
  */
-export const buildReport = (orgId: string, auditId: string, detail: DisclosureLevel = "standard") =>
+export const buildReport = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
     const read = yield* atomically(
       Effect.gen(function* () {
@@ -347,6 +353,25 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
               (yield* candidateRunsOf(orgId, auditId, f, { candidates: EVIDENCE_CANDIDATES }))
                 .candidates,
             )
+        const [edit] = yield* db
+          .select({
+            summary: reportEdit.summary,
+            detail: reportEdit.detail,
+            updatedAt: reportEdit.updatedAt,
+          })
+          .from(reportEdit)
+          .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
+          .limit(1)
+        const findingEdits = yield* db
+          .select({
+            ruleId: reportFindingEdit.ruleId,
+            note: reportFindingEdit.note,
+            hidden: reportFindingEdit.hidden,
+            owner: reportFindingEdit.owner,
+            updatedAt: reportFindingEdit.updatedAt,
+          })
+          .from(reportFindingEdit)
+          .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
         const branding = yield* brandingOf(orgId)
         const [brandingRow] = yield* db
           .select({ updatedAt: orgBranding.updatedAt })
@@ -367,6 +392,8 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           ruleStats,
           wording,
           candidates,
+          edit,
+          findingEdits,
           branding,
           brandingRow,
           triage,
@@ -383,8 +410,11 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
       ruleStats,
       wording,
       candidates,
+      edit,
+      findingEdits,
       branding,
     } = read
+    const detail: DisclosureLevel = edit?.detail === "detailed" ? "detailed" : "standard"
     if (head.status === "queued" || head.status === "running")
       return { available: false, reason: "running" } as const
     if (found.coverage.evaluatedRuns === 0)
@@ -456,6 +486,9 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         return fetched
       })
     const findings: ReportFinding[] = []
+    const hiddenFindings: ReportFinding[] = []
+    const editOf = new Map(findingEdits.map((e) => [e.ruleId, e]))
+    const destinations = new Set<string>()
     for (const f of failing.toSorted(byFindingOrder)) {
       const stored = wordingOf.get(f.ruleId)
       if (stored === undefined) continue
@@ -497,8 +530,13 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           [digestRun],
           { includePagePaths: false },
         )
-        const rows = evidenceRows(digest.cases[0]?.evidence ?? [], detail)
+        const facts = digest.cases[0]?.evidence ?? []
+        const rows = evidenceRows(facts, detail)
         if (rows.length === 0) continue
+        const shown = new Set(rows.map((row) => row.destination))
+        for (const row of evidenceRows(facts, "detailed"))
+          if (row.destination !== null && !shown.has(row.destination))
+            destinations.add(row.destination)
         const { run: r } = candidate
         evidence = {
           caption: `Seen on ${label(r.pageUrl, r.journey)}, ${scenarioLabel(r.scenario)}, ${
@@ -508,15 +546,22 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         }
         break
       }
-      findings.push({
+      const edited = editOf.get(f.ruleId)
+      const owner =
+        edited?.owner === undefined || edited.owner === null
+          ? f.owner
+          : yield* decodeOwner(edited.owner).pipe(Effect.orDie)
+      let ownerSource: ReportFinding["ownerSource"] = f.owner === null ? "none" : "rule"
+      if (edited?.owner) ownerSource = "author"
+      const entry: ReportFinding = {
         ruleId: f.ruleId,
         severity: f.severity,
         area: f.area,
         title: f.title,
         why: stored.why,
         fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
-        owner: f.owner,
-        ownerSource: f.owner === null ? "none" : "rule",
+        owner,
+        ownerSource,
         failingRuns: f.failingRuns,
         knownRuns: f.knownRuns,
         pages,
@@ -526,9 +571,11 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           status: f.triage.status,
           reason: f.triage.status === "accepted_risk" ? f.triage.reason : null,
         },
-        note: null,
+        note: edited?.note ?? null,
         evidence,
-      })
+      }
+      if (edited?.hidden === true) hiddenFindings.push(entry)
+      else findings.push(entry)
     }
     const generatedAt = new Date()
     const model: ReportModel = {
@@ -560,8 +607,8 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         },
       },
       summary: {
-        source: "generated",
-        text: null,
+        source: edit?.summary ? "author" : "generated",
+        text: edit?.summary ?? null,
         score: scored,
         withoutAccepted: summary.withoutAccepted,
         runHealth: {
@@ -596,7 +643,9 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
       },
       consent: consentSummaryOf(config.scenarios, runs, hitCells),
       findings,
-      leftOut: [],
+      leftOut: hiddenFindings
+        .map((f) => ({ ruleId: f.ruleId, title: f.title }))
+        .toSorted((a, b) => byText(a.ruleId, b.ruleId)),
       actionPlan: actionPlanOf(findings),
       appendix: {
         couldNotCheck: found.findings
@@ -620,8 +669,17 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
       model,
       publicationHash: yield* publicationHashOf(model),
       consultant: {
-        edits: { summary: null, detail },
-        hiddenFindings: [],
+        edits: { summary: edit?.summary ?? null, detail },
+        hiddenFindings,
+        disclosure: {
+          pages: [
+            ...config.pages.map((url) => pageLabel(config.pages, url, false, "detailed")),
+            ...(config.journey === true && startUrl !== undefined
+              ? [pageLabel(config.pages, startUrl, true, "detailed")]
+              : []),
+          ],
+          destinations: [...destinations].toSorted(byText),
+        },
         changesSincePublished: false,
       },
       stamp: {
@@ -630,6 +688,14 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         logoSha256: branding.logoSha256,
         triageUpdatedAt: read.triage?.updatedAt?.toISOString() ?? null,
         triageCount: read.triage?.rows ?? 0,
+        editUpdatedAt: edit?.updatedAt.toISOString() ?? null,
+        editDetail: detail,
+        findingEditUpdatedAt:
+          findingEdits
+            .map((e) => e.updatedAt.toISOString())
+            .toSorted()
+            .at(-1) ?? null,
+        findingEditCount: findingEdits.length,
       },
     } as const
   })

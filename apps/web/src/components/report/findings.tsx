@@ -1,8 +1,12 @@
+import type { ReportControls } from "./report-view"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
 import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { cn } from "@/lib/utils"
+import type { ReactNode } from "react"
 import {
+  byFindingOrder,
   type EvidenceRow,
   OWNER_LABELS,
   type ReportFinding,
@@ -119,17 +123,33 @@ function Triage({ finding }: { finding: ReportFinding }) {
   )
 }
 
-function FindingCard({ finding }: { finding: ReportFinding }) {
+function FindingCard({
+  finding,
+  hidden,
+  actions,
+}: {
+  finding: ReportFinding
+  hidden: boolean
+  actions: ReactNode
+}) {
   const scenarios = finding.scenarios.join(", ")
   return (
     <article
       id={`finding-${finding.ruleId}`}
-      className="space-y-3 rounded-md border p-4 text-sm"
+      className={cn(
+        "space-y-3 rounded-md border p-4 text-sm",
+        hidden && "border-dashed bg-muted/40",
+      )}
       aria-labelledby={`finding-title-${finding.ruleId}`}
     >
       <div className="space-y-1">
         <div className="flex flex-wrap items-center gap-2">
           <SeverityBadge severity={finding.severity} />
+          {hidden ? (
+            <span className="rounded-md border px-2 py-0.5 text-xs" data-testid="left-out">
+              Left out
+            </span>
+          ) : null}
           <span className="text-xs text-muted-foreground">
             {AREAS[finding.area] ?? finding.area}
           </span>
@@ -180,22 +200,42 @@ function FindingCard({ finding }: { finding: ReportFinding }) {
           {finding.note}
         </p>
       )}
+      {hidden ? (
+        <p className="text-muted-foreground">
+          Left out of the detail: the client does not see this card or its plan entry. The score and
+          counts still include it.
+        </p>
+      ) : null}
+      {actions}
     </article>
   )
 }
 
 /** The failing findings by severity, in the stored wording. */
-export function Findings({ model }: { model: ReportModel }) {
+export function Findings({ model, controls }: { model: ReportModel; controls?: ReportControls }) {
+  const Actions = controls?.Finding
+  const hiddenIds = new Set(controls?.hiddenFindings.map((f) => f.ruleId))
+  const shown = [...model.findings, ...(controls?.hiddenFindings ?? [])].toSorted(byFindingOrder)
   return (
     <section id="findings" aria-label="Findings" className="space-y-4 px-8 py-8 text-sm">
       <h2 className="text-xl font-semibold">Findings</h2>
-      {model.findings.length === 0 ? (
+      {shown.length === 0 ? (
         <p className="flex items-start gap-2" data-testid="no-findings">
           <StatusGlyph meaning="pass" className="mt-0.5" />
           No failing checks in the pages and scenarios this audit ran.
         </p>
       ) : (
-        model.findings.map((finding) => <FindingCard key={finding.ruleId} finding={finding} />)
+        shown.map((finding) => {
+          const hidden = hiddenIds.has(finding.ruleId)
+          return (
+            <FindingCard
+              key={finding.ruleId}
+              finding={finding}
+              hidden={hidden}
+              actions={Actions === undefined ? null : <Actions finding={finding} hidden={hidden} />}
+            />
+          )
+        })
       )}
     </section>
   )

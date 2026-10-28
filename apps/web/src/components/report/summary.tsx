@@ -7,9 +7,10 @@ import { count } from "@/lib/format"
 import { BAND_LABEL } from "@/lib/health-score"
 import type { ReportModel } from "@/lib/report-model"
 import { cn } from "@/lib/utils"
+import type { ReactNode } from "react"
 
 /** The one-page summary: the score and how it adds up, what is uncertain, and the headlines. */
-export function Summary({ model }: { model: ReportModel }) {
+export function Summary({ model, actions }: { model: ReportModel; actions?: ReactNode }) {
   const { summary, cover, branding } = model
   const { score, runHealth, counts, coverage, worst } = summary
   const scope = [
@@ -28,7 +29,10 @@ export function Summary({ model }: { model: ReportModel }) {
       aria-label="Summary"
       className="space-y-4 px-8 py-8 text-sm print:break-after-page"
     >
-      <h2 className="text-xl font-semibold">Summary</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-xl font-semibold">Summary</h2>
+        {actions}
+      </div>
       {runHealth.incomplete ? (
         <Alert
           className="border-sev-warning-border bg-sev-warning-bg"
