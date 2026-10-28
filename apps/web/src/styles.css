@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *):not(.report-paper *));
 
 :root,
 .report-paper {
@@ -250,4 +250,78 @@
       left center / 0.75rem 100% no-repeat scroll,
     linear-gradient(to left, color-mix(in oklab, var(--foreground) 22%, transparent), transparent)
       right center / 0.75rem 100% no-repeat scroll;
+}
+
+/* The report on paper: always light, near-black text, no tinted backgrounds, chips as outline plus glyph. */
+@page {
+  size: A4;
+  margin: 16mm 14mm 24mm;
+  @bottom-right {
+    content: counter(page);
+    font:
+      8pt ui-sans-serif,
+      system-ui,
+      sans-serif;
+    color: oklch(0.3 0.01 285);
+  }
+}
+
+.report-paper {
+  overflow-wrap: anywhere;
+}
+
+@media print {
+  html,
+  body {
+    background: oklch(1 0 0);
+    color-scheme: light;
+  }
+
+  .toaster,
+  [data-sonner-toaster] {
+    display: none;
+  }
+
+  .report-paper {
+    --foreground: oklch(0.16 0.01 285);
+    --card-foreground: oklch(0.16 0.01 285);
+    --muted-foreground: oklch(0.36 0.014 285);
+    --border: oklch(0.62 0.01 285);
+    font-size: 10.5pt;
+    color: var(--foreground);
+  }
+
+  .report-paper * {
+    background-color: transparent !important;
+    box-shadow: none !important;
+    orphans: 3;
+    widows: 3;
+  }
+
+  .report-paper [data-slot="badge"] {
+    border-color: currentcolor;
+  }
+
+  .report-paper :is(h1, h2, h3, h4, caption) {
+    break-after: avoid;
+  }
+
+  .report-paper :is(tr, li, dt, [data-slot="badge"], .keep-together) {
+    break-inside: avoid;
+  }
+
+  .report-paper thead {
+    display: table-header-group;
+  }
+
+  .report-paper table {
+    table-layout: fixed;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .report-paper :is(svg, .print-exact) {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }

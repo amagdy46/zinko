@@ -17,7 +17,7 @@ export function Appendix({ model }: { model: ReportModel }) {
     <section
       id="appendix"
       aria-label="Appendix"
-      className="space-y-6 px-8 py-8 text-sm print:break-before-page"
+      className="space-y-6 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
     >
       <h2 className="text-xl font-semibold">Appendix</h2>
       <div className="space-y-2">
@@ -96,7 +96,7 @@ export function Appendix({ model }: { model: ReportModel }) {
       <div className="space-y-2">
         <h3 className="font-medium">E. Rules in this audit</h3>
         <div className="overflow-x-auto print:overflow-visible">
-          <table className="w-full min-w-[34rem] border-collapse text-left text-xs">
+          <table className="w-full min-w-[34rem] print:min-w-0 border-collapse text-left text-xs">
             <thead>
               <tr className="border-b">
                 {[

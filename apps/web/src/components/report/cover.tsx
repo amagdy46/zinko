@@ -17,36 +17,34 @@ export function Cover({
     <section
       id="cover"
       aria-label="Cover"
-      className="space-y-8 border-t-8 border-report-accent px-8 py-10 print:break-after-page"
+      className="space-y-8 border-t-8 border-report-accent px-8 py-10 print:p-0 print:pt-8"
     >
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           {logoSrc === null ? null : (
             <img src={logoSrc} alt="" className="max-h-14 max-w-40 object-contain" />
           )}
-          <p className="text-lg font-semibold text-report-accent [overflow-wrap:anywhere]">
-            {branding.agencyName}
-          </p>
+          <p className="text-lg font-semibold">{branding.agencyName}</p>
         </div>
         {draft ? (
-          <span className="shrink-0 rounded-md border px-2 py-1 text-xs text-muted-foreground">
+          <span className="shrink-0 rounded-md border px-2 py-1 text-xs text-muted-foreground print:hidden">
             Draft
           </span>
         ) : null}
       </div>
       <div className="space-y-2">
         <p className="text-sm text-muted-foreground">Tracking audit</p>
-        <h1 className="text-2xl font-semibold [overflow-wrap:anywhere]">{cover.clientName}</h1>
+        <h1 className="text-3xl font-semibold">{cover.clientName}</h1>
         <p className="text-base [overflow-wrap:anywhere]">
           {cover.siteName} <span className="text-muted-foreground">· {cover.host}</span>
         </p>
         <p className="text-sm text-muted-foreground">Audited on {reportDate(cover.auditedAt)}</p>
       </div>
-      <dl className="grid gap-4 rounded-md bg-report-tint p-4 text-sm sm:grid-cols-2">
+      <dl className="grid gap-4 rounded-md border p-4 text-sm sm:grid-cols-2">
         <div className="sm:col-span-2">
           <dt className="font-medium">Pages ({scope.pages.length})</dt>
           <dd>
-            <ul className="mt-1 space-y-0.5 [overflow-wrap:anywhere]">
+            <ul className="mt-1 space-y-0.5 sm:columns-2">
               {scope.pages.map((page) => (
                 <li key={page}>{page}</li>
               ))}

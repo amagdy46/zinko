@@ -109,21 +109,21 @@ function AppShell() {
     [router],
   )
   return (
-    <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
+    <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)] print:block print:min-h-0">
       <a
         href="#main"
-        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:flex focus-visible:h-8 focus-visible:items-center focus-visible:rounded-md focus-visible:border focus-visible:bg-background focus-visible:px-3 focus-visible:text-sm focus-visible:font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:flex focus-visible:h-8 focus-visible:items-center print:hidden focus-visible:rounded-md focus-visible:border focus-visible:bg-background focus-visible:px-3 focus-visible:text-sm focus-visible:font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
         Skip to content
       </a>
       <aside
         aria-label="Sidebar"
-        className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex"
+        className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex print:hidden"
       >
         <SidebarContent onFind={() => setFindOpen(true)} />
       </aside>
-      <div className="flex min-w-0 flex-col">
-        <header className="flex items-center gap-2 border-b bg-sidebar px-4 py-2 md:hidden">
+      <div className="flex min-w-0 flex-col print:block">
+        <header className="flex items-center gap-2 border-b bg-sidebar px-4 py-2 md:hidden print:hidden">
           <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon" aria-label="Open menu" data-find-return>
@@ -155,7 +155,7 @@ function AppShell() {
         <main
           id="main"
           tabIndex={-1}
-          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-2 [&_h1:focus-visible]:ring-ring [&_h1:focus-visible]:ring-offset-2 [&_h1:focus-visible]:ring-offset-background [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6"
+          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-2 [&_h1:focus-visible]:ring-ring [&_h1:focus-visible]:ring-offset-2 [&_h1:focus-visible]:ring-offset-background [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6 print:p-0"
         >
           <Outlet />
         </main>

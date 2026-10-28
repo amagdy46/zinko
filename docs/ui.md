@@ -124,3 +124,7 @@ Counts have one definition each. "Could not check" is a rule whose finding has k
 Layout: `PageContainer` (`max-w-5xl`, left-aligned) wraps Clients, client, site, New audit and Settings so they share the audit workspace's left edge; the audit workspace is full width. The Clients "Last audit" cell is two lines (status and time; inline score), and the mobile audit header hides the severity split, duration and "See why" to stay within two lines.
 
 Overview top: one card with the large score and three tiles (Critical and Warning open, linking to Findings, and Could not check rules); then one "n caveats" disclosure (runs that did not finish with "See which runs", checks that could not run, undetected banner, mixed rules versions), open only when the audit is incomplete. The worst-finding prose is `max-w-prose` with its first sentence in foreground. Counts by area is one row per area with a segmented SVG bar (token fills, scaled to the busiest area) and the counts as linked text with glyphs.
+
+## Report on paper
+
+The Report tab's **Save as PDF** opens the browser's print dialog; the help line says to turn off headers and footers so the page address is not printed. In print only the report prints: the sidebar, header, tab bar, toolbar, edit controls, the Draft label and findings left out of the detail are hidden. The paper is always light, text is near-black, severity chips are an outline with their glyph (colour is never the only cue), and the cover, summary, scope, consent scenarios, findings, action plan and appendix each start a page.

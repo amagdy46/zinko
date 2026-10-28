@@ -163,7 +163,12 @@ function AuditPage() {
     </Link>
   )
   return (
-    <div className={cn("min-w-0", full ? "space-y-6" : "space-y-2")}>
+    <div
+      className={cn(
+        "min-w-0 print:[&>:not([data-report])]:hidden",
+        full ? "space-y-6" : "space-y-2",
+      )}
+    >
       {full ? (
         <PageHeader
           title={`Audit of ${site.name}`}

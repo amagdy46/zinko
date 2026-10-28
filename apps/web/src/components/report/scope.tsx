@@ -10,7 +10,11 @@ export function Scope({ model }: { model: ReportModel }) {
   const { scope } = cover
   const runs = method.runs.complete + method.runs.partial + method.runs.failed
   return (
-    <section id="scope" aria-label="Scope and method" className="space-y-4 px-8 py-8 text-sm">
+    <section
+      id="scope"
+      aria-label="Scope and method"
+      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
+    >
       <h2 className="text-xl font-semibold">Scope and method</h2>
       <p>
         {count(runs, "run")} on {count(scope.pages.length, "page")}, audited on{" "}
@@ -20,7 +24,7 @@ export function Scope({ model }: { model: ReportModel }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-1">
           <h3 className="font-medium">Pages</h3>
-          <ul className="space-y-0.5 [overflow-wrap:anywhere]">
+          <ul className="space-y-0.5 sm:columns-2">
             {scope.pages.map((page) => (
               <li key={page}>{page}</li>
             ))}

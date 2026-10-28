@@ -96,7 +96,7 @@ export function EditSummary({ summary }: { summary: string | null }) {
       }}
     >
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm" data-testid="edit-summary">
+        <Button variant="outline" size="sm" className="print:hidden" data-testid="edit-summary">
           Edit summary
         </Button>
       </SheetTrigger>

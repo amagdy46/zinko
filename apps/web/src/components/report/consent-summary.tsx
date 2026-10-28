@@ -57,7 +57,7 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
     <section
       id="consent"
       aria-label="Consent scenarios"
-      className="space-y-4 px-8 py-8 text-sm print:break-before-page"
+      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
     >
       <h2 className="text-xl font-semibold">Consent scenarios</h2>
       {consent.rows.length === 0 ? (
@@ -67,7 +67,7 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
         </p>
       ) : (
         <div className="overflow-x-auto print:overflow-visible">
-          <table className="w-full min-w-[32rem] table-fixed border-collapse text-left align-top">
+          <table className="w-full min-w-[32rem] print:min-w-0 table-fixed border-collapse text-left align-top">
             <caption className="sr-only">Vendor by consent scenario</caption>
             <thead>
               <tr className="border-b">

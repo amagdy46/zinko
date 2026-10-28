@@ -27,7 +27,7 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
     <section
       id="summary"
       aria-label="Summary"
-      className="space-y-4 px-8 py-8 text-sm print:break-after-page"
+      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:space-y-1.5 print:p-0 print:leading-snug"
     >
       <SectionHeading title="Summary" actions={actions} />
       {runHealth.incomplete ? (
@@ -63,7 +63,7 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
         </p>
       ) : null}
       <TriageNote model={model} />
-      <div className="space-y-2 rounded-md border p-3">
+      <div className="space-y-2 rounded-md border p-3 print:space-y-1 print:p-2">
         <ScoreArithmetic score={score} scope={scope} maxLines={5} />
         <div className="space-y-2 text-xs text-muted-foreground">
           <ScoreDetails score={score} />

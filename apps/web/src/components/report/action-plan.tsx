@@ -5,7 +5,11 @@ import { OWNER_LABELS, type ReportModel } from "@/lib/report-model"
 export function ActionPlan({ model }: { model: ReportModel }) {
   const set = model.findings.filter((f) => f.triage.status !== "open")
   return (
-    <section id="plan" aria-label="Action plan" className="space-y-4 px-8 py-8 text-sm">
+    <section
+      id="plan"
+      aria-label="Action plan"
+      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
+    >
       <h2 className="text-xl font-semibold">Action plan</h2>
       {model.actionPlan.length === 0 ? (
         <p className="flex items-start gap-2" data-testid="plan-empty">
@@ -25,7 +29,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                   <span className="[overflow-wrap:anywhere]">
                     <a
                       href={`#finding-${item.ruleId}`}
-                      className="font-medium underline underline-offset-4"
+                      className="font-medium text-report-accent underline underline-offset-4"
                     >
                       {item.title}
                     </a>
@@ -48,7 +52,10 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                   className="mt-0.5"
                 />
                 <span className="[overflow-wrap:anywhere]">
-                  <a href={`#finding-${f.ruleId}`} className="underline underline-offset-4">
+                  <a
+                    href={`#finding-${f.ruleId}`}
+                    className="text-report-accent underline underline-offset-4"
+                  >
                     {f.title}
                   </a>
                   <span className="text-muted-foreground">

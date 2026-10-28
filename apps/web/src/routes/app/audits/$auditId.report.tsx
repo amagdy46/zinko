@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
+import { Printer } from "lucide-react"
 import { useState } from "react"
 import { EmptyState } from "@/components/empty-state"
 import {
@@ -7,6 +8,7 @@ import {
   FindingActions,
 } from "@/components/report/consultant-controls"
 import { ReportView } from "@/components/report/report-view"
+import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { getReportDraft } from "@/server/report"
 
@@ -32,8 +34,8 @@ function ReportScreen() {
       />
     )
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+    <div className="space-y-4" data-report>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm print:hidden">
         <span
           className="inline-flex h-8 items-center rounded-md border px-3"
           data-testid="report-status"
@@ -58,6 +60,10 @@ function ReportScreen() {
           detail={draft.model.detail}
           disclosure={draft.consultant.disclosure}
         />
+        <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
+          <Printer />
+          Save as PDF
+        </Button>
         {draft.canManageBranding ? (
           <Link
             to="/app/settings/branding"
@@ -71,6 +77,10 @@ function ReportScreen() {
           </span>
         )}
       </div>
+      <p className="text-xs text-muted-foreground print:hidden">
+        Save as PDF opens the print dialog. Turn off headers and footers there so the page address
+        is not printed.
+      </p>
       <ReportView
         model={draft.model}
         logoSrc={draft.logoUrl}

@@ -70,7 +70,7 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{evidence.caption}</p>
       <div className="overflow-x-auto print:overflow-visible">
-        <table className="w-full min-w-[30rem] border-collapse text-left text-xs">
+        <table className="w-full min-w-[30rem] print:min-w-0 border-collapse text-left text-xs">
           <thead>
             <tr className="border-b">
               {["Source", "Event", "Destination", "Timing", "Consent state"].map((head) => (
@@ -138,7 +138,7 @@ function FindingCard({
       id={`finding-${finding.ruleId}`}
       className={cn(
         "space-y-3 rounded-md border p-4 text-sm",
-        hidden && "border-dashed bg-muted/40",
+        hidden && "border-dashed bg-muted/40 print:hidden",
       )}
       aria-labelledby={`finding-title-${finding.ruleId}`}
     >
@@ -217,7 +217,11 @@ export function Findings({ model, controls }: { model: ReportModel; controls?: R
   const hiddenIds = new Set(controls?.hiddenFindings.map((f) => f.ruleId))
   const shown = [...model.findings, ...(controls?.hiddenFindings ?? [])].toSorted(byFindingOrder)
   return (
-    <section id="findings" aria-label="Findings" className="space-y-4 px-8 py-8 text-sm">
+    <section
+      id="findings"
+      aria-label="Findings"
+      className="space-y-4 px-8 py-8 text-sm leading-7 print:break-before-page print:p-0 print:leading-normal"
+    >
       <h2 className="text-xl font-semibold">Findings</h2>
       {shown.length === 0 ? (
         <p className="flex items-start gap-2" data-testid="no-findings">

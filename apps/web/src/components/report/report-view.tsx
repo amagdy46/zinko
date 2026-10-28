@@ -5,6 +5,7 @@ import { Appendix } from "./appendix"
 import { ConsentSummary } from "./consent-summary"
 import { Cover } from "./cover"
 import { Findings } from "./findings"
+import { Footer } from "./footer"
 import { Scope } from "./scope"
 import { Summary } from "./summary"
 
@@ -37,7 +38,7 @@ export function ReportView({
   return (
     <article
       data-accent={model.branding.accent}
-      className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border bg-card text-card-foreground"
+      className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border bg-card text-card-foreground print:max-w-none print:overflow-visible print:rounded-none print:border-0"
     >
       <Cover model={model} logoSrc={logoSrc} draft={mode === "consultant"} />
       <Summary model={model} actions={controls?.summary} />
@@ -46,6 +47,7 @@ export function ReportView({
       <Findings model={model} controls={controls} />
       <ActionPlan model={model} />
       <Appendix model={model} />
+      <Footer model={model} />
     </article>
   )
 }
