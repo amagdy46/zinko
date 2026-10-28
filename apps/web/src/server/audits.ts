@@ -8,6 +8,7 @@ import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost, isOnSite, originHost } from "@/lib/site-url"
 import {
+  carryOverOf,
   createAudit,
   evaluatedAudit,
   launchAudit,
@@ -164,11 +165,12 @@ export const previewRerun = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const { target, config, unavailable } = yield* rerunnable(orgId, data.auditId)
-        const baseline = yield* rerunBaseline(orgId, target.id, data.auditId)
+        const baseline = Option.getOrNull(yield* rerunBaseline(orgId, target.id, data.auditId))
         return {
           config,
           unavailable,
-          baseline: Option.getOrNull(baseline),
+          baseline,
+          carryOver: baseline === null ? null : yield* carryOverOf(orgId, baseline.id),
         }
       }),
     ),

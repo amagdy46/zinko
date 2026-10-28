@@ -93,6 +93,13 @@ export const findingTriage = pgTable(
     reason: text(),
     updatedBy: text("updated_by").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+    /**
+     * Set when `createAudit` copied this row from an earlier audit: the first audit it came from and
+     * that audit's creation date. No foreign key on purpose, so deleting the origin keeps both, and
+     * independent of `audit.baseline_audit_id`. Cleared by `setTriage`.
+     */
+    inheritedFromAuditId: uuid("inherited_from_audit_id"),
+    inheritedFromAt: timestamp("inherited_from_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.auditId, t.ruleId] })],
 )

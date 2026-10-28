@@ -24,13 +24,14 @@ export const SEVERITY_ORDER: Record<typeof Severity.Type, number> = {
 }
 
 /** A finding with no triage row is `open`. */
-export const triageOf = (row: typeof findingTriage.$inferSelect | null) =>
+export const triageOf = (row: typeof findingTriage.$inferSelect | null, originKept: boolean) =>
   row === null
     ? Effect.succeed({
         status: "open" as const,
         reason: null,
         updatedBy: null,
         updatedAt: null,
+        inheritedFrom: null,
       })
     : decodeTriageStatus(row.status).pipe(
         Effect.orDie,
@@ -39,12 +40,23 @@ export const triageOf = (row: typeof findingTriage.$inferSelect | null) =>
           reason: row.reason,
           updatedBy: row.updatedBy,
           updatedAt: row.updatedAt,
+          inheritedFrom:
+            row.inheritedFromAt === null
+              ? null
+              : {
+                  auditId: originKept ? row.inheritedFromAuditId : null,
+                  at: row.inheritedFromAt,
+                },
         })),
       )
 
 /** What the check is called when it could not be run: the stored title, then the rule's, then the area. */
 export const checkTitleOf = (stored: string | null, ruleId: string, area: string) =>
   stored ?? ruleById(ruleId)?.checkTitle ?? `Check: ${AREAS[area] ?? area}`
+
+/** Whether the audit a triage row was carried over from still exists in the organization. */
+export const originExists = (orgId: string) =>
+  sql<boolean>`exists (select 1 from ${audit} where ${audit.id} = ${findingTriage.inheritedFromAuditId} and ${audit.orgId} = ${orgId})`
 
 export const triageJoin = and(
   eq(findingTriage.auditId, finding.auditId),
@@ -140,7 +152,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
       )
       .orderBy(asc(run.ordinal))
     const rows = yield* db
-      .select({ finding, triage: findingTriage })
+      .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
       .from(finding)
       .leftJoin(findingTriage, triageJoin)
       .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
@@ -174,32 +186,34 @@ export const findingsOf = (orgId: string, auditId: string) =>
         if (!passingRuns.has(r.id)) nothingApplied += 1
       } else buckets.notEvaluated += 1
     }
-    const findings = yield* Effect.forEach(rows, ({ finding: f, triage }) =>
-      Effect.gen(function* () {
-        const affected = f.runIds.flatMap((id) => {
-          const found = runById.get(id)
-          return found === undefined ? [] : [found]
-        })
-        return {
-          ruleId: f.ruleId,
-          kind: yield* decodeKind(f.kind).pipe(Effect.orDie),
-          area: f.area,
-          severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
-          title: f.title,
-          checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
-          owner: yield* decodeOwner(f.owner).pipe(Effect.orDie),
-          reason: f.kind === "inconclusive" ? (reasonOf.get(f.ruleId) ?? null) : null,
-          rulesVersions: f.rulesVersions,
-          failingRuns: f.failingRuns,
-          knownRuns: knownRuns.get(f.ruleId) ?? 0,
-          bannerUncertainRuns: bannerUncertain.get(f.ruleId) ?? 0,
-          inconclusiveRuns: f.inconclusiveRuns,
-          runIds: f.runIds,
-          pages: new Set(affected.map((r) => r.pageUrl)).size,
-          scenarios: new Set(affected.map((r) => r.scenario)).size,
-          triage: yield* triageOf(triage),
-        }
-      }),
+    const findings = yield* Effect.forEach(
+      rows,
+      ({ finding: f, triage, originExists: originKept }) =>
+        Effect.gen(function* () {
+          const affected = f.runIds.flatMap((id) => {
+            const found = runById.get(id)
+            return found === undefined ? [] : [found]
+          })
+          return {
+            ruleId: f.ruleId,
+            kind: yield* decodeKind(f.kind).pipe(Effect.orDie),
+            area: f.area,
+            severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
+            title: f.title,
+            checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
+            owner: yield* decodeOwner(f.owner).pipe(Effect.orDie),
+            reason: f.kind === "inconclusive" ? (reasonOf.get(f.ruleId) ?? null) : null,
+            rulesVersions: f.rulesVersions,
+            failingRuns: f.failingRuns,
+            knownRuns: knownRuns.get(f.ruleId) ?? 0,
+            bannerUncertainRuns: bannerUncertain.get(f.ruleId) ?? 0,
+            inconclusiveRuns: f.inconclusiveRuns,
+            runIds: f.runIds,
+            pages: new Set(affected.map((r) => r.pageUrl)).size,
+            scenarios: new Set(affected.map((r) => r.scenario)).size,
+            triage: yield* triageOf(triage, originKept),
+          }
+        }),
     )
     return {
       status: current.status,

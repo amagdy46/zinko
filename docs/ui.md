@@ -97,7 +97,7 @@ Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar 
 
 ### Re-run (M6)
 
-The audit header has **Re-run** (secondary, before Share report; disabled while the audit runs or the site is archived) and each settled row of the site history has a ghost **Re-run**. Both open one confirm dialog (`RerunDialog`): "12 runs, about 2 minutes, with the same settings. It will be compared with this audit." A refusal (cap of five active audits, a re-run already in progress) shows inside the dialog. Focus returns to the control that opened it. The New audit form says "Compared with the audit of <date>" when the site has an evaluated full audit.
+The audit header has **Re-run** (secondary, before Share report; disabled while the audit runs or the site is archived) and each settled row of the site history has a ghost **Re-run**. Both open one confirm dialog (`RerunDialog`): "12 runs, about 2 minutes, with the same settings. It will be compared with this audit." A refusal (cap of five active audits, a re-run already in progress) shows inside the dialog. Focus returns to the control that opened it. The New audit form says "Compared with the audit of <date>" when the site has an evaluated full audit. Both show the carry-over preflight ("From the audit of 14 Oct: 1 accepted risk, 1 note, 1 owner override, 1 finding left out of the report."). A carried triage row reads "Carried over from the audit of 3 Oct" under its line in the finding detail, and the share dialog says "1 note carried over from earlier audits; check it still applies."
 
 ## Not built yet
 

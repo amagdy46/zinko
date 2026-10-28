@@ -51,6 +51,8 @@ export const reportEdit = pgTable("report_edit", {
   summary: text(),
   /** `standard` (page aliases) or `detailed` (entered paths and ad-platform IDs). */
   detail: text().notNull().default("standard"),
+  /** Whether the report carries the "what changed" section (a comparison with the baseline). */
+  includeChanges: boolean("include_changes").notNull().default(true),
   updatedBy: text("updated_by").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 })
@@ -76,6 +78,9 @@ export const reportFindingEdit = pgTable(
     owner: text(),
     updatedBy: text("updated_by").notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+    /** As on `finding_triage`: the audit this row was copied from, kept after that audit is deleted. */
+    inheritedFromAuditId: uuid("inherited_from_audit_id"),
+    inheritedFromAt: timestamp("inherited_from_at", { withTimezone: true }),
   },
   (t) => [primaryKey({ columns: [t.auditId, t.ruleId] })],
 )

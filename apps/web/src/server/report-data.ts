@@ -428,6 +428,7 @@ export const buildReport = (orgId: string, auditId: string) =>
             hidden: reportFindingEdit.hidden,
             owner: reportFindingEdit.owner,
             updatedAt: reportFindingEdit.updatedAt,
+            carried: sql<boolean>`${reportFindingEdit.inheritedFromAt} is not null`,
           })
           .from(reportFindingEdit)
           .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
@@ -789,6 +790,9 @@ export const buildReport = (orgId: string, auditId: string) =>
       consultant: {
         edits: { summary: edit?.summary ?? null, detail },
         hiddenFindings,
+        carriedNotes: findings.filter(
+          (f) => f.note !== null && editOf.get(f.ruleId)?.carried === true,
+        ).length,
         disclosure: {
           pages: [
             ...config.pages.map((url) => pageLabel(config.pages, url, false, "detailed")),

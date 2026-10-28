@@ -62,6 +62,7 @@ function ReportScreen() {
         auditId={auditId}
         versions={draft.versions}
         changes={draft.consultant.changesSincePublished}
+        carriedNotes={draft.consultant.carriedNotes}
         detail={draft.model.detail}
         incomplete={draft.model.summary.runHealth.incomplete}
       />

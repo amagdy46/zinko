@@ -302,6 +302,8 @@ export type DisclosureLevel = ReportModel["detail"]
 export interface ConsultantPayload {
   edits: { summary: string | null; detail: DisclosureLevel }
   hiddenFindings: ReportFinding[]
+  /** Notes printed in the report that were carried over from an earlier audit and not edited since. */
+  carriedNotes: number
   /** What switching to Detailed would print beyond Standard: the entered page paths and ad-platform IDs. */
   disclosure: { pages: ReadonlyArray<string>; destinations: ReadonlyArray<string> }
   changesSincePublished: boolean

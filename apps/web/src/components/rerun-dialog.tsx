@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { runBreakdown } from "@/lib/audit-labels"
+import { carryOverText } from "@/lib/carry-over"
 import { count, shortDate, useTimeZone } from "@/lib/format"
 import { previewRerun, rerunAudit } from "@/server/audits"
 
@@ -106,7 +107,12 @@ function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void 
         baseline.id === auditId
           ? "It will be compared with this audit."
           : `It will be compared with the audit of ${shortDate(baseline.createdAt, timeZone)}.`
-    description = `${count(breakdown.runs, "run")}, ${breakdown.duration}, with the same settings. ${comparison}`
+    const carried =
+      baseline === null || preview.carryOver === null
+        ? ""
+        : carryOverText(preview.carryOver, shortDate(baseline.createdAt, timeZone))
+    description =
+      `${count(breakdown.runs, "run")}, ${breakdown.duration}, with the same settings. ${comparison} ${carried}`.trim()
   }
 
   return (

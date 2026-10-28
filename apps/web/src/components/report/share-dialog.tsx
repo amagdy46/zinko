@@ -14,7 +14,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { relativeTime, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
+import { count, relativeTime, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
 import type { DisclosureLevel } from "@/lib/report-model"
 import { deleteSnapshot } from "@/server/report-publish"
 import { createShareLink, listShares, revokeShare } from "@/server/report-share"
@@ -59,12 +59,14 @@ function ShareBody({
   detail,
   latestVersion,
   changes,
+  carriedNotes,
   incomplete,
 }: {
   auditId: string
   detail: DisclosureLevel
   latestVersion: number | null
   changes: boolean
+  carriedNotes: number
   incomplete: boolean
 }) {
   const router = useRouter()
@@ -177,6 +179,12 @@ function ShareBody({
         </fieldset>
         {incomplete ? (
           <p className="text-muted-foreground">This audit is incomplete. The report says so.</p>
+        ) : null}
+        {carriedNotes > 0 ? (
+          <p className="text-muted-foreground" data-testid="share-carried">
+            {count(carriedNotes, "note")} carried over from earlier audits; check{" "}
+            {carriedNotes === 1 ? "it still applies" : "they still apply"}.
+          </p>
         ) : null}
         <p className="text-muted-foreground" data-testid="share-preflight">
           {detail === "detailed"
@@ -326,6 +334,7 @@ export function ShareDialog({
   detail: DisclosureLevel
   latestVersion: number | null
   changes: boolean
+  carriedNotes: number
   incomplete: boolean
   returnFocus: React.RefObject<HTMLElement | null>
 }) {

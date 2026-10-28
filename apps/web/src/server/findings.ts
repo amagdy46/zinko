@@ -14,6 +14,7 @@ import {
   decodeSeverity,
   findingsOf,
   triageJoin,
+  originExists,
   triageOf,
   TriageStatus,
 } from "./findings-data"
@@ -72,7 +73,7 @@ export const getFinding = createServerFn({ method: "GET" })
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { db } = yield* Database
         const [found] = yield* db
-          .select({ finding, triage: findingTriage })
+          .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
           .from(finding)
           .leftJoin(findingTriage, triageJoin)
           .where(
@@ -137,7 +138,10 @@ export const getFinding = createServerFn({ method: "GET" })
             failingRuns: f.failingRuns,
             inconclusiveRuns: f.inconclusiveRuns,
           },
-          triage: { ...(yield* triageOf(found.triage)), updatedByName: actor?.name ?? null },
+          triage: {
+            ...(yield* triageOf(found.triage, found.originExists)),
+            updatedByName: actor?.name ?? null,
+          },
           checks: yield* Effect.forEach(checks, (check) =>
             decodeEvidence(check.evidence).pipe(
               Effect.orDie,
@@ -197,12 +201,14 @@ export const setTriage = createServerFn({ method: "POST" })
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
         const values = { status: data.status, reason, updatedBy: userId, updatedAt: new Date() }
+        // an edit is this audit's own call, so a carried-over marker goes
+        const written = { ...values, inheritedFromAuditId: null, inheritedFromAt: null }
         yield* db
           .insert(findingTriage)
-          .values({ auditId, orgId, ruleId: found.ruleId, ...values })
+          .values({ auditId, orgId, ruleId: found.ruleId, ...written })
           .onConflictDoUpdate({
             target: [findingTriage.auditId, findingTriage.ruleId],
-            set: values,
+            set: written,
           })
         return values
       }),

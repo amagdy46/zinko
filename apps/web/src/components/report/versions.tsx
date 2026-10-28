@@ -32,12 +32,14 @@ export function Versions({
   auditId,
   versions,
   changes,
+  carriedNotes,
   detail,
   incomplete,
 }: {
   auditId: string
   versions: ReadonlyArray<ReportVersion>
   changes: boolean
+  carriedNotes: number
   detail: DisclosureLevel
   incomplete: boolean
 }) {
@@ -79,6 +81,7 @@ export function Versions({
         detail={detail}
         latestVersion={versions[0]?.version ?? null}
         changes={changes}
+        carriedNotes={carriedNotes}
         incomplete={incomplete}
         returnFocus={opener}
       />

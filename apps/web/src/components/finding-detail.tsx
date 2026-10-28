@@ -82,11 +82,19 @@ function TriageLine({ triage }: { triage: FindingDetailData["triage"] }) {
   if (triage.status === "open" || triage.updatedAt === null) return null
   const who = triage.updatedByName ?? "a former member"
   const when = shortDate(triage.updatedAt)
+  const origin = triage.inheritedFrom
   return (
     <p className="text-sm text-muted-foreground" data-testid="triage-line">
       {triage.status === "accepted_risk"
         ? `Accepted by ${who}, ${when}: ${triage.reason ?? ""}`
         : `Marked fixed by ${who}, ${when}`}
+      {origin === null ? null : (
+        <span className="block" data-testid="carried-over">
+          {origin.auditId === null
+            ? `Carried over from an earlier audit (${shortDate(origin.at)})`
+            : `Carried over from the audit of ${shortDate(origin.at)}`}
+        </span>
+      )}
     </p>
   )
 }

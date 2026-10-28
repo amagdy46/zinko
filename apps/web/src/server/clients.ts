@@ -5,7 +5,7 @@ import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
-import { latestBaseline } from "./audit-create"
+import { carryOverOf, latestBaseline } from "./audit-create"
 import {
   auditDetails,
   clientSummary,
@@ -516,7 +516,8 @@ export const getSite = createServerFn({ method: "GET" })
           .where(and(eq(audit.siteId, found.id), eq(audit.orgId, orgId), eq(audit.kind, "full")))
           .orderBy(desc(audit.createdAt))
           .limit(1)
-        const baseline = yield* latestBaseline(orgId, found.id)
+        const baseline = Option.getOrNull(yield* latestBaseline(orgId, found.id))
+        const carryOver = baseline === null ? null : yield* carryOverOf(orgId, baseline.id)
         return {
           site: {
             id: found.id,
@@ -560,7 +561,8 @@ export const getSite = createServerFn({ method: "GET" })
           page,
           hasMore: rows.length > AUDITS_PER_PAGE,
           lastConfig: latest?.config ?? null,
-          baseline: Option.getOrNull(baseline),
+          baseline,
+          carryOver,
         }
       }),
     ),

@@ -96,7 +96,13 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
           ...(data.hidden === undefined ? {} : { hidden: data.hidden }),
           ...(data.owner === undefined ? {} : { owner: data.owner }),
         }
-        const stamp = { updatedBy: userId, updatedAt: new Date() }
+        // an edit is this audit's own call, so a carried-over marker goes
+        const stamp = {
+          updatedBy: userId,
+          updatedAt: new Date(),
+          inheritedFromAuditId: null,
+          inheritedFromAt: null,
+        }
         yield* db
           .insert(reportFindingEdit)
           .values({ auditId, orgId, ruleId: found.ruleId, ...sent, ...stamp })

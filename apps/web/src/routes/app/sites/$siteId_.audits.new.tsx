@@ -18,6 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea"
 import { pageTitle } from "@/lib/page-title"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
+import { carryOverText } from "@/lib/carry-over"
 import { count, shortDate, useTimeZone } from "@/lib/format"
 import { isOnSite, onSiteScheme, originHost, withoutCredentials } from "@/lib/site-url"
 import { startAudit } from "@/server/audits"
@@ -66,7 +67,7 @@ function NewAudit() {
 }
 
 function NewAuditForm() {
-  const { site, lastConfig, baseline } = Route.useLoaderData()
+  const { site, lastConfig, baseline, carryOver } = Route.useLoaderData()
   const timeZone = useTimeZone()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
@@ -208,7 +209,10 @@ function NewAuditForm() {
       />
       {baseline !== null && (
         <p className="text-sm text-muted-foreground">
-          Compared with the audit of {shortDate(baseline.createdAt, timeZone)}.
+          Compared with the audit of {shortDate(baseline.createdAt, timeZone)}.{" "}
+          {carryOver === null
+            ? ""
+            : carryOverText(carryOver, shortDate(baseline.createdAt, timeZone))}
         </p>
       )}
       {copied && (
