@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SettingsSection } from "@/components/settings-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
@@ -93,15 +93,11 @@ function Explanations({
   }
 
   return (
-    <Card className="max-w-xl shadow-none">
-      <CardHeader>
-        <CardTitle>Explanations</CardTitle>
-        <CardDescription>
-          Optional text beside a finding that explains it in plain words. It never changes a
-          verdict, and nothing is sent unless you allow it here.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
+    <SettingsSection
+      title="Explanations"
+      description="Optional text beside a finding that explains it in plain words. It never changes a verdict, and nothing is sent unless you allow it here."
+    >
+      <div className="max-w-xl">
         <form onSubmit={save} className="space-y-4">
           <div className="flex items-start gap-3">
             <Checkbox
@@ -177,8 +173,8 @@ function Explanations({
             </p>
           )}
         </form>
-      </CardContent>
-    </Card>
+      </div>
+    </SettingsSection>
   )
 }
 
@@ -248,15 +244,11 @@ function AiSettings() {
 
   return (
     <div className="space-y-6">
-      <Card className="max-w-xl shadow-none">
-        <CardHeader>
-          <CardTitle>AI provider</CardTitle>
-          <CardDescription>
-            Bring your own key. It is encrypted before it is stored and never sent back to the
-            browser.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <SettingsSection
+        title="AI provider"
+        description="Bring your own key. It is encrypted before it is stored and never sent back to the browser."
+      >
+        <div className="max-w-xl space-y-4">
           {configured ? (
             <p className="text-sm" data-testid="ai-status">
               <span className="font-medium">{settings.provider}</span> ·{" "}
@@ -384,8 +376,8 @@ function AiSettings() {
               Ask an owner or admin of this organization to change these settings.
             </p>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SettingsSection>
       {policy === null ? null : <Explanations policy={policy} />}
     </div>
   )

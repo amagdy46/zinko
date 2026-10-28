@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { type FormEvent, type MouseEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { SettingsSection } from "@/components/settings-section"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -146,15 +147,11 @@ function Members() {
   }
 
   return (
-    <section className="space-y-4" aria-labelledby="members-title">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 space-y-1">
-          <h2 id="members-title" className="text-lg font-semibold wrap-break-word">
-            Members of {org.name}
-          </h2>
-          <p className="text-sm text-muted-foreground">People with access to this organization.</p>
-        </div>
-        {canManage ? (
+    <SettingsSection
+      title={`Members of ${org.name}`}
+      description="People with access to this organization."
+      action={
+        canManage ? (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button onClick={() => setLink(null)}>Invite member</Button>
@@ -224,8 +221,9 @@ function Members() {
               )}
             </DialogContent>
           </Dialog>
-        ) : null}
-      </div>
+        ) : null
+      }
+    >
       <Table className="table-fixed">
         <TableHeader>
           <TableRow>
@@ -380,7 +378,7 @@ function Members() {
           else await remove(confirming.id)
         }}
       />
-    </section>
+    </SettingsSection>
   )
 }
 

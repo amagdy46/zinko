@@ -2,7 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { SettingsSection } from "@/components/settings-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { authClient } from "@/lib/auth-client"
@@ -30,35 +30,30 @@ function Profile() {
   }
 
   return (
-    <Card className="max-w-xl shadow-none">
-      <CardHeader>
-        <CardTitle>Profile</CardTitle>
-        <CardDescription>
-          Your name is visible to the other members of your organization.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={save} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              name="name"
-              autoComplete="name"
-              defaultValue={session.name}
-              required
-              pattern=".*\S.*"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="profile-email">Email</Label>
-            <Input id="profile-email" value={session.email} readOnly />
-          </div>
-          <Button type="submit" disabled={pending}>
-            {pending ? "Saving…" : "Save profile"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+    <SettingsSection
+      title="Profile"
+      description="Your name is visible to the other members of your organization."
+    >
+      <form onSubmit={save} className="max-w-xl space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input
+            id="name"
+            name="name"
+            autoComplete="name"
+            defaultValue={session.name}
+            required
+            pattern=".*\S.*"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="profile-email">Email</Label>
+          <Input id="profile-email" value={session.email} readOnly />
+        </div>
+        <Button type="submit" disabled={pending}>
+          {pending ? "Saving…" : "Save profile"}
+        </Button>
+      </form>
+    </SettingsSection>
   )
 }
