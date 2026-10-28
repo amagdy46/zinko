@@ -841,6 +841,8 @@ class Capture:
             r["documentId"] == document_id
             and r["resourceType"] == "script"
             and not r["blocked"]
+            # vendor hosts are refused or answered locally by blockVendorRequests, not by the page
+            and not (self.block_vendors and self.is_vendor_host(r["url"]))
             and (r["status"] is None or r["status"] >= 400)
             for r in self.requests.values()
         )

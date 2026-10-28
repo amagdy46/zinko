@@ -696,6 +696,8 @@ const probeBanner = async (cmp: string): Promise<boolean | null> => {
   return values.some((value) => value === false) ? false : null
 }
 
+const isVendorUrl = (url: string) => URL.canParse(url) && isVendorHost(new URL(url).hostname)
+
 /** A script request of the document that was refused, failed or got an error status. */
 const failedScript = (documentId: string) =>
   [...requests.values()].some(
@@ -703,6 +705,8 @@ const failedScript = (documentId: string) =>
       request.documentId === documentId &&
       request.resourceType === "script" &&
       !request.blocked &&
+      // vendor hosts are refused or answered locally by blockVendorRequests, not by the page
+      !(captureRequest.blockVendorRequests === true && isVendorUrl(request.url)) &&
       (request.status === null || request.status >= 400),
   )
 
