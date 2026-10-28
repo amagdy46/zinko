@@ -1,6 +1,6 @@
 import { Llm, type LlmIdentity, type LlmModel } from "@repo/core/llm"
 import { Database } from "@repo/core/Database"
-import { finding, member, user } from "@repo/db"
+import { type finding, member, user } from "@repo/db"
 import {
   buildDigest,
   buildExplainPrompt,
