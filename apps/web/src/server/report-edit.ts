@@ -47,22 +47,17 @@ export const saveReportEdit = createServerFn({ method: "POST" })
             message: `The summary can be at most ${SUMMARY_MAX} characters.`,
           })
         const { db } = yield* Database
-        const [current] = yield* db
-          .select({ summary: reportEdit.summary, detail: reportEdit.detail })
-          .from(reportEdit)
-          .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
-          .limit(1)
-        const values = {
-          summary: summary === undefined ? (current?.summary ?? null) : summary || null,
-          detail: data.detail ?? current?.detail ?? "standard",
-          updatedBy: userId,
-          updatedAt: new Date(),
+        // Only what the caller sent is updated, so two saves of different fields cannot undo each other.
+        const sent = {
+          ...(summary === undefined ? {} : { summary: summary || null }),
+          ...(data.detail === undefined ? {} : { detail: data.detail }),
         }
+        const stamp = { updatedBy: userId, updatedAt: new Date() }
         yield* db
           .insert(reportEdit)
-          .values({ auditId, orgId, ...values })
-          .onConflictDoUpdate({ target: reportEdit.auditId, set: values })
-        return { personalData: hasPersonalData(values.summary) }
+          .values({ auditId, orgId, ...sent, ...stamp })
+          .onConflictDoUpdate({ target: reportEdit.auditId, set: { ...sent, ...stamp } })
+        return { personalData: hasPersonalData(sent.summary ?? null) }
       }),
     ),
   )
@@ -96,36 +91,20 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
           )
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
-        const [current] = yield* db
-          .select({
-            note: reportFindingEdit.note,
-            hidden: reportFindingEdit.hidden,
-            owner: reportFindingEdit.owner,
-          })
-          .from(reportFindingEdit)
-          .where(
-            and(
-              eq(reportFindingEdit.auditId, auditId),
-              eq(reportFindingEdit.orgId, orgId),
-              eq(reportFindingEdit.ruleId, found.ruleId),
-            ),
-          )
-          .limit(1)
-        const values = {
-          note: note === undefined ? (current?.note ?? null) : note || null,
-          hidden: data.hidden ?? current?.hidden ?? false,
-          owner: data.owner === undefined ? (current?.owner ?? null) : data.owner,
-          updatedBy: userId,
-          updatedAt: new Date(),
+        const sent = {
+          ...(note === undefined ? {} : { note: note || null }),
+          ...(data.hidden === undefined ? {} : { hidden: data.hidden }),
+          ...(data.owner === undefined ? {} : { owner: data.owner }),
         }
+        const stamp = { updatedBy: userId, updatedAt: new Date() }
         yield* db
           .insert(reportFindingEdit)
-          .values({ auditId, orgId, ruleId: found.ruleId, ...values })
+          .values({ auditId, orgId, ruleId: found.ruleId, ...sent, ...stamp })
           .onConflictDoUpdate({
             target: [reportFindingEdit.auditId, reportFindingEdit.ruleId],
-            set: values,
+            set: { ...sent, ...stamp },
           })
-        return { personalData: hasPersonalData(values.note) }
+        return { personalData: hasPersonalData(sent.note ?? null) }
       }),
     ),
   )

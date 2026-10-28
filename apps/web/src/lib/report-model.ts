@@ -4,6 +4,9 @@ import { ACCENTS } from "./report-accent"
 
 export const REPORT_MODEL_VERSION = 1
 
+/** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
+const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
+
 const Count = Schema.Int
 const Amount = Schema.Finite
 const Severity = Schema.Literals(["critical", "warning", "info"])
@@ -49,7 +52,7 @@ const Score = Schema.Struct({
     ruleTitles: Schema.Array(Schema.String),
     bannerUncertainRuns: Count,
   }),
-  versions: Schema.Array(Schema.String),
+  versions: Some(Schema.String),
   mixedVersions: Schema.Boolean,
 })
 
@@ -121,9 +124,9 @@ export const ReportModel = Schema.Struct({
     host: Schema.String,
     auditedAt: Schema.String,
     scope: Schema.Struct({
-      pages: Schema.Array(Schema.String),
-      scenarios: Schema.Array(Schema.String),
-      viewports: Schema.Array(Schema.String),
+      pages: Some(Schema.String),
+      scenarios: Some(Schema.String),
+      viewports: Some(Schema.String),
       journey: Schema.Boolean,
       clickIds: Schema.Boolean,
     }),
@@ -151,7 +154,7 @@ export const ReportModel = Schema.Struct({
       acceptedRisk: Count,
       fixed: Count,
     }),
-    headlines: Schema.Array(Schema.String),
+    headlines: Some(Schema.String),
     coverage: Schema.Struct({
       evaluatedRuns: Count,
       totalRuns: Count,
@@ -168,7 +171,7 @@ export const ReportModel = Schema.Struct({
     ),
   }),
   method: Schema.Struct({
-    rulesVersions: Schema.Array(Schema.String),
+    rulesVersions: Some(Schema.String),
     scoreVersion: Count,
     runs: Schema.Struct({ complete: Count, partial: Count, failed: Count }),
     mixedVersions: Schema.Boolean,
@@ -219,6 +222,8 @@ export const ReportModel = Schema.Struct({
     ),
   }),
 })
+
+export const decodeReportModel = Schema.decodeUnknownEffect(ReportModel)
 
 export type EvidenceRow = typeof EvidenceRow.Type
 export type ReportModel = typeof ReportModel.Type

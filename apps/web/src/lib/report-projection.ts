@@ -8,6 +8,7 @@ import {
 } from "@repo/llm"
 import { Data, Effect } from "effect"
 import { AREAS, ERROR_TEXT, FAILURE_TEXT, SCENARIOS } from "./audit-labels"
+import { pageIndexOf } from "./page-match"
 import { ACCENTS } from "./report-accent"
 import type { DisclosureLevel, EvidenceRow, ReportModel } from "./report-model"
 
@@ -30,7 +31,7 @@ const withoutQueryAndFragment = (url: string) => {
  * The label of a page of the audit. Standard: its position in the audit's configured list
  * ("Page 2", the first is "Page 1 (start page)"; a journey run is "Journey from Page 1"). Detailed:
  * the entered path without query or fragment, capped. `pages` are the configured pages; a page URL
- * is matched by its address without query, because the start URL may carry added click IDs.
+ * is matched exactly, or minus the test click IDs the audit adds to its start URL.
  */
 export function pageLabel(
   pages: ReadonlyArray<string>,
@@ -38,8 +39,7 @@ export function pageLabel(
   journey: boolean,
   detail: DisclosureLevel,
 ): string {
-  const target = pageUrl.split(/[?#]/)[0]
-  const index = pages.findIndex((page) => page === pageUrl || page.split(/[?#]/)[0] === target)
+  const index = pageIndexOf(pages, pageUrl)
   const found = pages[index]
   if (found === undefined)
     throw new ProjectionViolation({ path: "pageLabel", rule: "unknown page" })
@@ -392,30 +392,66 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["appendix.rules[].notApplicable", count],
 ])
 
-const leavesOf = (value: unknown, path: string, out: Array<[string, unknown]>) => {
+/** Every object and array path the model may have: the prefixes of the registered leaf paths. */
+const containerPathsOf = (path: string): string[] => {
+  const parts = path.split(".")
+  return parts.flatMap((part, i) => {
+    const prefix = parts.slice(0, i + 1).join(".")
+    const isArray = part.endsWith("[]")
+    if (i === parts.length - 1) return isArray ? [prefix.slice(0, -2)] : []
+    return isArray ? [prefix.slice(0, -2), prefix] : [prefix]
+  })
+}
+
+const CONTAINER_PATHS: ReadonlySet<string> = new Set(
+  [...LEAF_VALIDATORS.keys()].flatMap(containerPathsOf),
+)
+
+/** Leaves not under an array that must be present: not under a nullable object like `summary.worst`. */
+const REQUIRED_PATHS = [...LEAF_VALIDATORS.keys()].filter((path) => {
+  if (path.includes("[]")) return false
+  const parts = path.split(".")
+  return !parts.slice(0, -1).some((_, i) => LEAF_VALIDATORS.has(parts.slice(0, i + 1).join(".")))
+})
+
+const walk = (
+  value: unknown,
+  path: string,
+  leaves: Array<[string, unknown]>,
+  containers: string[],
+) => {
   if (Array.isArray(value)) {
-    for (const item of value) leavesOf(item, `${path}[]`, out)
-    return out
-  }
-  if (value !== null && typeof value === "object") {
+    containers.push(path)
+    for (const item of value) walk(item, `${path}[]`, leaves, containers)
+  } else if (value !== null && typeof value === "object") {
+    containers.push(path)
     for (const [key, item] of Object.entries(value))
-      leavesOf(item, path === "" ? key : `${path}.${key}`, out)
-    return out
-  }
-  out.push([path, value])
-  return out
+      walk(item, path === "" ? key : `${path}.${key}`, leaves, containers)
+  } else leaves.push([path, value])
 }
 
 /**
  * Fails (a defect, never a silent drop) when any leaf of the model has no registered validator or
- * fails its own. The message names the path and the rule, never the value: it may be personal data.
+ * fails its own, when an object or array stands where none is registered (an empty one included),
+ * or when a required non-array field is missing. The message names the path and the rule, never
+ * the value: it may be personal data.
  */
 export const assertProjected = (model: ReportModel, detail: DisclosureLevel) =>
   Effect.suspend(() => {
-    for (const [path, value] of leavesOf(model, "", [])) {
+    const leaves: Array<[string, unknown]> = []
+    const containers: string[] = []
+    walk(model, "", leaves, containers)
+    for (const path of containers.slice(1))
+      if (!CONTAINER_PATHS.has(path))
+        return Effect.die(new ProjectionViolation({ path, rule: "unregistered container" }))
+    for (const [path, value] of leaves) {
       const validator = LEAF_VALIDATORS.get(path)
       const failure = validator === undefined ? "unregistered path" : validator(value, detail)
       if (failure !== null) return Effect.die(new ProjectionViolation({ path, rule: failure }))
     }
+    const present = new Set([...leaves.map(([path]) => path), ...containers])
+    for (const path of REQUIRED_PATHS)
+      if (!present.has(path))
+        return Effect.die(new ProjectionViolation({ path, rule: "missing field" }))
     return Effect.void
   })

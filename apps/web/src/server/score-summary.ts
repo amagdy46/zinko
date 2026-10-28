@@ -1,7 +1,7 @@
+import { pageIndexOf } from "@/lib/page-match"
 import { healthScore, type ScoreFinding, type Uncertainty } from "@/lib/health-score"
 
 const LOAD_FAILURES = new Set(["Navigation", "HttpStatus", "Timeout"])
-const withoutQuery = (url: string) => url.split("?")[0]
 
 interface SummaryRun {
   pageUrl: string
@@ -33,7 +33,7 @@ export function scoreSummaryOf<Run extends SummaryRun>(input: {
       versions: coverage.rulesVersions,
     })
   const startRuns = runs.filter(
-    (r) => startUrl !== undefined && withoutQuery(r.pageUrl) === withoutQuery(startUrl),
+    (r) => startUrl !== undefined && pageIndexOf([startUrl], r.pageUrl) === 0,
   )
   const loadFailed = (r: Run) =>
     r.status === "failed" ||
@@ -42,7 +42,7 @@ export function scoreSummaryOf<Run extends SummaryRun>(input: {
   const pages = new Map<string, Run[]>()
   for (const r of runs) {
     if (startRuns.includes(r)) continue
-    const page = withoutQuery(r.pageUrl) ?? r.pageUrl
+    const page = r.pageUrl
     pages.set(page, [...(pages.get(page) ?? []), r])
   }
   const brokenPages = [...pages].flatMap(([page, [first, ...rest]]) =>

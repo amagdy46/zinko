@@ -17,11 +17,13 @@ import { buildDigest, canonicalJson } from "@repo/llm"
 import { and, asc, count, eq, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { AREAS, SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
+import { pageIndexOf } from "@/lib/page-match"
 import { count as plural } from "@/lib/format"
 import {
   byText,
   actionPlanOf,
   byFindingOrder,
+  decodeReportModel,
   type ConsultantPayload,
   type DisclosureLevel,
   headlinesOf,
@@ -76,6 +78,13 @@ export type ReportBuild =
       available: true
       model: ReportModel
       publicationHash: string
+      /**
+       * Server only, never in the model: a capture read that failed for a reason that may pass
+       * (storage or body), so the evidence may be missing for now. Publication refuses while any.
+       */
+      transientEvidenceFailures: ReadonlyArray<"storage" | "body">
+      /** The logo this build read, as the model's digest saw it; a preview URL is signed from this. */
+      logo: { key: string; type: string | null; sha256: string | null } | null
       consultant: ConsultantPayload
       stamp: ReportStamp
     }
@@ -487,6 +496,7 @@ export const buildReport = (orgId: string, auditId: string) =>
       })
     const findings: ReportFinding[] = []
     const hiddenFindings: ReportFinding[] = []
+    const transientEvidenceFailures = new Set<"storage" | "body">()
     const editOf = new Map(findingEdits.map((e) => [e.ruleId, e]))
     const destinations = new Set<string>()
     for (const f of failing.toSorted(byFindingOrder)) {
@@ -497,11 +507,7 @@ export const buildReport = (orgId: string, auditId: string) =>
         return r === undefined ? [] : [r]
       })
       const pageOrder = (r: (typeof affected)[number]) => {
-        const target = r.pageUrl.split(/[?#]/)[0]
-        return (
-          Number(r.journey) * config.pages.length +
-          config.pages.findIndex((p) => p === r.pageUrl || p.split(/[?#]/)[0] === target)
-        )
+        return Number(r.journey) * config.pages.length + pageIndexOf(config.pages, r.pageUrl)
       }
       const pages = [
         ...new Map(
@@ -513,7 +519,11 @@ export const buildReport = (orgId: string, auditId: string) =>
       let evidence: ReportFinding["evidence"] = null
       for (const candidate of candidates.get(f.ruleId) ?? []) {
         const fetched = yield* captureOf(candidate)
-        if (!fetched.found) continue
+        if (!fetched.found) {
+          if (fetched.reason === "storage" || fetched.reason === "body")
+            transientEvidenceFailures.add(fetched.reason)
+          continue
+        }
         const digestRun = yield* digestRunOf(candidate, fetched.capture)
         const digest = buildDigest(
           {
@@ -663,11 +673,17 @@ export const buildReport = (orgId: string, auditId: string) =>
         rules: yield* rulesListOf(ruleStats),
       },
     }
+    yield* decodeReportModel(model, { onExcessProperty: "error" }).pipe(Effect.orDie)
     yield* assertProjected(model, detail)
     return {
       available: true,
       model,
       publicationHash: yield* publicationHashOf(model),
+      transientEvidenceFailures: [...transientEvidenceFailures],
+      logo:
+        branding.logoKey === null
+          ? null
+          : { key: branding.logoKey, type: branding.logoType, sha256: branding.logoSha256 },
       consultant: {
         edits: { summary: edit?.summary ?? null, detail },
         hiddenFindings,
