@@ -140,6 +140,8 @@ let context: BrowserContext | undefined
 let page: Page | undefined
 const documents = new Map<string, Document>()
 const documentOfRequest = new Map<Request, string>()
+// The method of each document's final navigation request: a reload sends it again.
+const documentMethod = new Map<string, string>()
 let currentDocument: string | undefined
 let committed = false
 const requests = new Map<string, CapturedRequest>()
@@ -200,6 +202,7 @@ const onRequest = (req: Request) => {
         redirects: [...document.redirects, previous.url()],
       })
       documentOfRequest.set(req, document.id)
+      documentMethod.set(document.id, req.method())
     } else {
       const id = `d${documents.size + 1}`
       documents.set(id, {
@@ -212,6 +215,7 @@ const onRequest = (req: Request) => {
       })
       currentDocument = id
       documentOfRequest.set(req, id)
+      documentMethod.set(id, req.method())
     }
   }
   if (currentDocument === undefined) return
@@ -895,6 +899,14 @@ const runStep = async (
   await observeConsent()
   await checkpoint()
   await unhide()
+  const method = before === undefined ? undefined : documentMethod.get(before)
+  if (step.action === "reload" && method !== undefined && method !== "GET") {
+    error(
+      "JourneyStep",
+      `step ${index + 1} reload of ${current.url()}: the page was loaded with ${method}, and a reload would send it again`,
+    )
+    return false
+  }
   if (step.action === "goto" || step.action === "reload") {
     emit({ type: "cookies", snapshot: held })
     pendingNavigation = step.action

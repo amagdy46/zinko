@@ -227,6 +227,8 @@ class Capture:
         self.page = None
         self.documents: dict[str, dict] = {}
         self.document_of_request: dict = {}
+        # The method of each document's final navigation request: a reload sends it again.
+        self.document_method: dict[str, str] = {}
         self.current_document: str | None = None
         self.committed = False
         self.requests: dict[str, dict] = {}
@@ -413,6 +415,7 @@ class Capture:
                 doc_id = self.document_of_request[previous]
                 self.documents[doc_id]["redirects"].append(previous.url)
                 self.documents[doc_id]["url"] = req.url
+                self.document_method[doc_id] = req.method
             else:
                 doc_id = f"d{len(self.documents) + 1}"
                 self.documents[doc_id] = {
@@ -425,6 +428,7 @@ class Capture:
                 }
                 self.current_document = doc_id
             self.document_of_request[req] = doc_id
+            self.document_method.setdefault(doc_id, req.method)
         if self.current_document is None:
             return
         body = None
@@ -1095,6 +1099,13 @@ class Capture:
         await self.observe_consent()
         await self.checkpoint()
         await self.unhide()
+        method = self.document_method.get(before) if before is not None else None
+        if step["action"] == "reload" and method not in (None, "GET"):
+            self.error(
+                "JourneyStep",
+                f"step {index + 1} reload of {self.page.url}: the page was loaded with {method}, and a reload would send it again",
+            )
+            return False
         if step["action"] in ("goto", "reload"):
             emit({"type": "cookies", "snapshot": held})
             self.pending_navigation = step["action"]

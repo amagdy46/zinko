@@ -8,6 +8,13 @@ import type { EvidenceRef, Rule } from "../../types.js"
 
 const id = "consent.not-persisted-across-navigation"
 
+const CUT_SHORT: ReadonlySet<string> = new Set([
+  "JourneyStep",
+  "Timeout",
+  "Navigation",
+  "EngineFailure",
+])
+
 function pathOf(url: string): string {
   if (!URL.canParse(url)) return url
   return new URL(url).pathname
@@ -96,6 +103,11 @@ export const notPersistedAcrossNavigation: Rule = {
         `${distinct(failures).join("; ")} after the visitor ${outcome === "accepted" ? "accepted" : "rejected"}`,
         cited,
       )
+    // A step that failed or a deadline that cut the journey short leaves pages unvisited (a
+    // reload refused because the page came from a POST, or dropped by the deadline).
+    const cut = input.capture.errors.find((error) => CUT_SHORT.has(error.code))
+    if (cut !== undefined)
+      unresolved.push(`the pages the run did not reach (${cut.code}: ${cut.message})`)
     if (unresolved.length > 0)
       return inconclusive(
         id,
