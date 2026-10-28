@@ -36,6 +36,10 @@ export const RULE_CHANGES: Readonly<Record<string, readonly string[]>> = {
   "5": ["duplicates.purchase-sent-twice"],
   // ab7e9c7: a flip from denied to granted without a choice is inconclusive
   "6": ["consent.mode-classified"],
+  // versions 7 and 8 only added rules (`consent.not-persisted-across-navigation`,
+  // `duplicates.purchase-on-reload`), which need no entry; 9: a purchase after the reload that
+  // matches nothing earlier is inconclusive, where version 8 passed it
+  "9": ["duplicates.purchase-on-reload"],
 }
 
 /**
