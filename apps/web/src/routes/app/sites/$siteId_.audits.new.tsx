@@ -90,6 +90,7 @@ function NewAuditForm() {
   )
   const [clickIds, setClickIds] = useState(last?.clickIds ?? false)
   const [journey, setJourney] = useState(last?.journey ?? false)
+  const [reload, setReload] = useState(last?.reload ?? false)
   const [blockVendorRequests, setBlockVendorRequests] = useState(last?.blockVendorRequests ?? true)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
@@ -103,6 +104,7 @@ function NewAuditForm() {
     setViewports(["desktop"])
     setClickIds(false)
     setJourney(false)
+    setReload(false)
     setBlockVendorRequests(true)
     setErrors({})
   }
@@ -130,8 +132,11 @@ function NewAuditForm() {
     scenarios: scenarios.length,
     viewports: viewports.length,
     journeySteps:
-      journey && startError === undefined ? Math.min(keyPages.length, JOURNEY_STEPS) : 0,
+      journey && startError === undefined
+        ? Math.min(keyPages.length, JOURNEY_STEPS) + (reload ? 1 : 0)
+        : 0,
   })
+  const reloadTarget = keyPages[Math.min(keyPages.length, JOURNEY_STEPS) - 1]
   const scenarioReason = scenarios.length === 0 ? "Choose at least one scenario." : undefined
   const disabledReason =
     scenarioReason ?? (viewports.length === 0 ? "Choose at least one viewport." : undefined)
@@ -168,6 +173,7 @@ function NewAuditForm() {
           clickIds,
           blockVendorRequests,
           journey,
+          reload: journey && reload,
         },
       },
     })
@@ -363,6 +369,14 @@ function NewAuditForm() {
                 onChange={setJourney}
               />
               {journey && (
+                <Toggle
+                  label="Reload the last page after the journey"
+                  help={`Reloads ${reloadTarget === undefined ? "the last page the journey visits" : `${withoutCredentials(reloadTarget)}, the last page the journey visits`}, to see whether the visitor's consent choice survives a reload.${keyPages.length > JOURNEY_STEPS ? ` The journey stops after ${JOURNEY_STEPS} key pages; the rest are not visited.` : ""} Adds one page load to each journey run.`}
+                  checked={reload}
+                  onChange={setReload}
+                />
+              )}
+              {journey && (
                 <div className="space-y-2 rounded-md border p-3">
                   <p className="text-sm font-medium">Journey path</p>
                   {keyPages.length === 0 && (
@@ -432,8 +446,8 @@ function NewAuditForm() {
           </ul>
           {journey && keyPages.length > 0 && (
             <p className="hidden text-xs text-muted-foreground lg:block">
-              A journey run takes as long as {1 + Math.min(keyPages.length, JOURNEY_STEPS)} page
-              runs.
+              A journey run takes as long as{" "}
+              {1 + Math.min(keyPages.length, JOURNEY_STEPS) + (reload ? 1 : 0)} page runs.
             </p>
           )}
           {breakdown.runs > 100 && (

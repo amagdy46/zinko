@@ -31,10 +31,15 @@ export const AuditConfig = Schema.Struct({
    * browser context. Optional, so configs stored before M3 still decode.
    */
   journey: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Ends each journey run with a reload of the last page it visited, to see whether the visitor's
+   * consent choice survives it. Only meaningful with `journey`; optional, so older configs decode.
+   */
+  reload: Schema.optionalKey(Schema.Boolean),
 })
 export type AuditConfig = typeof AuditConfig.Type
 
-/** How many key pages a journey run walks through: the engine takes at most 5 steps. */
+/** How many key pages a journey run walks through, before the optional reload: the engine takes at most 8 steps. */
 export const JOURNEY_STEPS = 5
 
 /**

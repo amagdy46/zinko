@@ -36,7 +36,9 @@ export const LIMITS = {
   requests: 2_000,
   bodyBytes: 64 * 1024,
   dataLayer: 1_000,
+  /** What the egress proxy relays to the browser, plus `responseBytesPerStep` for each journey step. */
   responseBytes: 10 * 1024 * 1024,
+  responseBytesPerStep: 4 * 1024 * 1024,
   /** The whole result, counted over the checkpoints it is built from. */
   resultBytes: 10 * 1024 * 1024,
   /** One checkpoint line; a longer one is dropped unread. */
@@ -332,7 +334,8 @@ const capture = async (
   const proxy = await startEgressProxy({
     allowPrivate: options.allowPrivate,
     blockVendors: request.blockVendorRequests === true,
-    maxResponseBytes: LIMITS.responseBytes,
+    maxResponseBytes:
+      LIMITS.responseBytes + LIMITS.responseBytesPerStep * (request.journey?.length ?? 0),
     now: at,
   })
   const workDir = await mkdtemp(join(tmpdir(), "zinko-capture-"))

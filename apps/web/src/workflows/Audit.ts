@@ -87,7 +87,8 @@ const STEP = {
 // An attempt of `capture-<n>` always gives its engine back when it ends, so a retried attempt
 // finds its grant gone and the run joins the line again (`Lost`); retrying here only covers a
 // crash after the capture was stored. The engine stops a capture at 60 s plus 15 s per journey
-// step, 135 s at JOURNEY_STEPS, well inside the timeout.
+// step, 150 s at JOURNEY_STEPS and a reload (200 s at most, whatever the steps), well inside the
+// timeout.
 const CAPTURE_STEP = {
   retries: { limit: 3, delay: "5 seconds", backoff: "constant" },
   timeout: "4 minutes",
@@ -290,7 +291,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
     if (yield* exists(keys.capture))
       return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
 
-    const { blockVendorRequests, pages } = yield* decodeConfig(config)
+    const { blockVendorRequests, pages, reload } = yield* decodeConfig(config)
     const { scenario, viewport } = yield* decodeRunShape(current)
     yield* db
       .update(run)
@@ -314,9 +315,12 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
           viewport,
           ...(current.journey
             ? {
-                journey: pages
-                  .slice(1, 1 + JOURNEY_STEPS)
-                  .map((url) => ({ action: "goto" as const, url })),
+                journey: [
+                  ...pages
+                    .slice(1, 1 + JOURNEY_STEPS)
+                    .map((url) => ({ action: "goto" as const, url })),
+                  ...(reload === true ? [{ action: "reload" as const }] : []),
+                ],
               }
             : {}),
           blockVendorRequests,

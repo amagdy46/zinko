@@ -33,6 +33,7 @@ capture options:
   --mobile                                     Use a 390x844 mobile viewport
   --click <selector>                           Click an element after the page loads (repeatable)
   --goto <url>                                 Navigate to another URL (repeatable)
+  --reload                                     Reload the current page (repeatable; normally last)
   --engine <url>                               Capture engine (default: http://localhost:8080)
   --block-vendors                              Answer vendor collection requests locally
   --rules                                      Run the checks on each scenario and list their results
@@ -42,12 +43,12 @@ capture options:
   --page-paths                                 With --explain-digest or --explain-prompt: send each page's path as entered, not an alias
   --json                                       Print JSON instead of tables (with --rules, adds checks)
 
---click and --goto run in the order given, at most 5 steps in total.
+--click, --goto and --reload run in the order given, at most 8 steps in total.
 `
 
 const DEFAULT_ENGINE = "http://localhost:8080"
 const SCENARIOS: readonly Scenario[] = ["none", "accept", "reject", "gpc"]
-const MAX_STEPS = 5
+const MAX_STEPS = 8
 const REQUEST_TIMEOUT_MS = 180_000
 
 const decodeResult = Schema.decodeUnknownSync(CaptureResult)
@@ -184,6 +185,13 @@ function renderText(
   )
   out("")
 
+  out("documents")
+  for (const [index, doc] of result.documents.entries())
+    out(
+      `  #${index} ${pathOf(doc.url)}  ${doc.navigation ?? "(not recorded)"}${doc.banner === undefined ? "" : `, banner ${doc.banner}`}`,
+    )
+  out("")
+
   const docLabel = (id: string) => {
     const index = result.documents.findIndex((d) => d.id === id)
     const doc = result.documents[index]
@@ -272,7 +280,7 @@ function digestsOf(
               page: { index: 0, url: opts.url, start: true },
               scenario,
               viewport: opts.base.viewport,
-              journey: opts.base.journey.some((step) => step.action === "goto"),
+              journey: isJourney(opts.base.journey),
               capture: result,
               hits,
               evidence: check.evidence,
@@ -294,6 +302,10 @@ function renderDigests(scenario: Scenario, digests: readonly Digest[], prompt: b
   out("")
 }
 
+/** As in an audit's journey runs, a journey navigates to other pages or reloads one; a click alone does not count. */
+const isJourney = (steps: readonly JourneyStep[]) =>
+  steps.some((step) => step.action === "goto" || step.action === "reload")
+
 function isHttpUrl(value: string): boolean {
   if (!URL.canParse(value)) return false
   const { protocol, hostname } = new URL(value)
@@ -310,6 +322,7 @@ function parseCapture(argv: string[]) {
       mobile: { type: "boolean", default: false },
       click: { type: "string", multiple: true },
       goto: { type: "string", multiple: true },
+      reload: { type: "boolean", multiple: true },
       engine: { type: "string", default: DEFAULT_ENGINE },
       "block-vendors": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
@@ -328,13 +341,15 @@ function parseCapture(argv: string[]) {
   // Tokens keep the order flags were typed in, which parseArgs' grouped values lose.
   const journey: JourneyStep[] = []
   for (const token of tokens) {
-    if (token.kind !== "option" || token.value === undefined) continue
+    if (token.kind !== "option") continue
+    if (token.name === "reload") journey.push({ action: "reload" })
+    if (token.value === undefined) continue
     if (token.name === "click") journey.push({ action: "click", selector: token.value })
     if (token.name === "goto") journey.push({ action: "goto", url: token.value })
   }
   if (journey.length > MAX_STEPS) {
     throw new CliError(
-      `At most ${MAX_STEPS} --click/--goto steps are allowed; got ${journey.length}.`,
+      `At most ${MAX_STEPS} --click/--goto/--reload steps are allowed; got ${journey.length}.`,
     )
   }
   const badUrl = [
@@ -397,8 +412,7 @@ async function runFrom(
           viewport: opts.base.viewport,
           pageUrl: opts.url,
           siteHost: new URL(opts.url).hostname,
-          // as in an audit's journey runs, a journey navigates to other pages; clicks alone do not
-          journey: opts.base.journey.some((step) => step.action === "goto"),
+          journey: isJourney(opts.base.journey),
           capture: result,
           hits,
         })
