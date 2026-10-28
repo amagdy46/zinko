@@ -1212,6 +1212,8 @@ class Capture:
             self.error("JourneyStep", f"{label}: the click stayed on the same page")
             return False
         arrival = (urlsplit(self.page.url).hostname or "").rstrip(".")
+        # `URL` keeps the brackets around an IPv6 literal, as the contract's canonical host does; urlsplit drops them.
+        arrival = f"[{arrival}]" if ":" in arrival else arrival
         if arrival != host and not arrival.endswith("." + host):
             self.error("JourneyStep", f"{label}: arrived at {arrival}")
             return False

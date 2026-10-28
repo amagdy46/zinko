@@ -325,7 +325,8 @@ const withoutLinkerValue = (url: string) => url.replace(/([?&])_gl=[^&#]*/, "$1_
 /** A bare host name as `URL` writes it, for `--follow` and `--allow-host`. */
 function hostOf(value: string): string {
   const host = URL.canParse(`http://${value}`) ? new URL(`http://${value}`).hostname : ""
-  if (host === "" || value.includes("/") || value.includes(":"))
+  const bracketed = value.startsWith("[") && value.endsWith("]")
+  if (host === "" || value.includes("/") || (value.includes(":") && !bracketed))
     throw new CliError(`"${value}" is not a host name (no scheme, port or path).`)
   return host.replace(/\.$/, "")
 }
