@@ -3,11 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 const statuses = {
-  complete: {
-    label: "Complete",
-    meaning: "pass",
-    tone: "border-status-pass-border bg-status-pass-bg text-status-pass",
-  },
+  complete: { label: "Finished", meaning: "finished", tone: "bg-muted text-muted-foreground" },
   partial: {
     label: "Partial",
     meaning: "partial",

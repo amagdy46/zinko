@@ -17,6 +17,7 @@ const meanings = {
   warning: { icon: Triangle, tone: "fill-sev-warning-solid text-sev-warning-solid" },
   info: { icon: Circle, tone: "fill-sev-info-solid text-sev-info-solid" },
   pass: { icon: CircleCheck, tone: "text-status-pass" },
+  finished: { icon: CircleCheck, tone: "text-muted-foreground" },
   fail: { icon: CircleX, tone: "text-sev-critical" },
   "could-not-check": { icon: CircleDashed, tone: "text-muted-foreground" },
   "not-applicable": { icon: CircleMinus, tone: "text-muted-foreground" },
