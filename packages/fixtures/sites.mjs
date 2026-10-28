@@ -30,6 +30,7 @@ export const defaults = {
   consentPersist: true, // false: the banner library's cookie is removed on every load, so the choice is never kept
   consentRestore: "update", // "update" | "never": whether a stored choice is reported to the tags again on later loads
   acceptGrants: "all", // "all" | "analytics": what "Accept all" grants
+  conflictOnReload: false, // 2 s after a reloaded document loads, a request whose gcs and gcd contradict each other
   cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
@@ -65,6 +66,7 @@ export const sites = {
   "consent-not-persisted": { consentPersist: false },
   "consent-reverts": { consentRestore: "never" },
   "consent-mixed-grant": { acceptGrants: "analytics" },
+  "consent-conflict": { conflictOnReload: true },
   "consent-template-only": { consentDefault: "none", consentRestore: "never" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },

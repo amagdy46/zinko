@@ -209,6 +209,30 @@
     }, 1200)
   }
 
+  // One request that contradicts itself (gcs grants, gcd denies), only after a reload, sent just
+  // after the page is hidden so it is the last thing the tags say about consent
+  if (cfg.conflictOnReload && performance.getEntriesByType("navigation")[0]?.type === "reload") {
+    document.addEventListener(
+      "visibilitychange",
+      () => {
+        if (!document.hidden) return
+        setTimeout(() => {
+          const params = new URLSearchParams({
+            v: "2",
+            tid: ID.ga4,
+            cid: "1111111111.1700000000",
+            gcs: "G111",
+            gcd: "13q3q3q3q5l1",
+            dl: location.origin + location.pathname,
+            en: "page_view",
+          })
+          void fetch("/metrics/g/collect?" + params, { method: "POST", keepalive: true })
+        }, 100)
+      },
+      { once: true },
+    )
+  }
+
   window.zinkoConsent = (analytics, marketing) => {
     const marketingState = marketing ? "granted" : "denied"
     gtag("consent", "update", {

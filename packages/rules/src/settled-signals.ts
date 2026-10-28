@@ -13,10 +13,14 @@ export const SIGNALS = [
 ] as const
 export type Signal = (typeof SIGNALS)[number]
 
-/** What a signal was said to be at one moment: a consent command or a Google request. Never `unknown`. */
+/**
+ * What a signal was said to be at one moment: a consent command or a Google request. A request
+ * whose own `gcs` and `gcd` disagree is an explicit `unknown`, which replaces whatever was settled
+ * before it; a request with nothing to say about the signal is no event at all.
+ */
 export interface SignalEvent {
   at: number
-  state: "granted" | "denied"
+  state: "granted" | "denied" | "unknown"
   /** Set for a `default` or `update` command; absent for a request. */
   command?: "default" | "update"
   ref: EvidenceRef
@@ -28,9 +32,9 @@ function definite(state: ConsentState | "unset"): "granted" | "denied" | undefin
 
 /**
  * The state one request carries for one signal. `gcs` names ad and analytics storage, `gcd` all
- * four; when both say something and disagree, the request says nothing about the signal.
+ * four; when both say something and disagree, the request is an explicit `unknown`.
  */
-function hitState(hit: DecodedHit, signal: Signal): "granted" | "denied" | undefined {
+function hitState(hit: DecodedHit, signal: Signal): "granted" | "denied" | "unknown" | undefined {
   const gcs: Partial<Record<Signal, ConsentState>> = {
     ad_storage: hit.consent.adStorage,
     analytics_storage: hit.consent.analyticsStorage,
@@ -47,7 +51,7 @@ function hitState(hit: DecodedHit, signal: Signal): "granted" | "denied" | undef
           ad_personalization: gcd.adPersonalization,
         }[signal]
   const fromGcd = gcdSignal === undefined ? undefined : definite(gcdFinalState(gcdSignal))
-  if (fromGcs !== undefined && fromGcd !== undefined && fromGcs !== fromGcd) return undefined
+  if (fromGcs !== undefined && fromGcd !== undefined && fromGcs !== fromGcd) return "unknown"
   return fromGcs ?? fromGcd
 }
 
