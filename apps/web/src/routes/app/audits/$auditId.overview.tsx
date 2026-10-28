@@ -111,6 +111,16 @@ function OverviewScreen() {
       <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       <AreaStrip auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
+      <p className="text-sm text-muted-foreground">
+        Ready to send?{" "}
+        <Link
+          to="/app/audits/$auditId/report"
+          params={{ auditId: audit.id }}
+          className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        >
+          Open the report
+        </Link>
+      </p>
     </div>
   )
 }

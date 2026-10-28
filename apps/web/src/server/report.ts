@@ -1,5 +1,8 @@
 import { Storage } from "@repo/core"
+import { Database } from "@repo/core/Database"
+import { organization } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
+import { eq } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { buildReport } from "./report-data"
 import { versionsOf } from "./report-publish-data"
@@ -37,6 +40,12 @@ export const getReportDraft = createServerFn({ method: "GET" })
         const first = yield* attempt
         const { built, logoUrl } = first.current ? first : yield* attempt
         if (!built.available) return { available: false as const, reason: built.reason }
+        const { db } = yield* Database
+        const [org] = yield* db
+          .select({ name: organization.name })
+          .from(organization)
+          .where(eq(organization.id, organizationId))
+          .limit(1)
         const versions = yield* versionsOf(organizationId, data.auditId)
         const latest = versions[0]
         return {
@@ -49,6 +58,10 @@ export const getReportDraft = createServerFn({ method: "GET" })
           },
           logoUrl,
           canManageBranding: isManager(role),
+          // no logo and the agency still goes by the organization's name: the report looks unbranded
+          unbranded:
+            built.model.branding.logoDigest === null &&
+            built.model.branding.agencyName === org?.name,
           versions: versions.map((v) => ({
             id: v.id,
             version: v.version,

@@ -69,7 +69,7 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{evidence.caption}</p>
-      <div className="overflow-x-auto print:overflow-visible">
+      <div className="overflow-x-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 print:overflow-visible">
         <table className="w-full min-w-[30rem] print:min-w-0 border-collapse text-left text-xs">
           <thead>
             <tr className="border-b">

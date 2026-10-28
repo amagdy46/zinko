@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { Download, Printer } from "lucide-react"
-import { useState } from "react"
 import { EmptyState } from "@/components/empty-state"
 import {
   DisclosureDialog,
   EditSummary,
   FindingActions,
 } from "@/components/report/consultant-controls"
+import { ReportIntro } from "@/components/report/report-intro"
 import { Versions } from "@/components/report/versions"
 import { ReportView } from "@/components/report/report-view"
 import { Button } from "@/components/ui/button"
@@ -15,8 +15,10 @@ import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { getReportDraft } from "@/server/report"
 
 export const Route = createFileRoute("/app/audits/$auditId/report")({
-  validateSearch: (search: Record<string, unknown>): { share?: 1 } =>
-    search.share === 1 || search.share === "1" ? { share: 1 } : {},
+  validateSearch: (search: Record<string, unknown>): { share?: 1; view?: "client" } => ({
+    ...(search.share === 1 || search.share === "1" ? { share: 1 as const } : {}),
+    ...(search.view === "client" ? { view: "client" as const } : {}),
+  }),
   head: ({ matches }: TitleContext) => auditTabTitle("Report", matches),
   loader: ({ params }) => getReportDraft({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
@@ -26,7 +28,8 @@ export const Route = createFileRoute("/app/audits/$auditId/report")({
 function ReportScreen() {
   const draft = Route.useLoaderData()
   const { auditId } = Route.useParams()
-  const [view, setView] = useState<"consultant" | "client">("consultant")
+  const { view = "consultant" } = Route.useSearch()
+  const navigate = Route.useNavigate()
   if (!draft.available)
     return draft.reason === "running" ? (
       <p className="text-sm text-muted-foreground" data-testid="report-running">
@@ -40,6 +43,7 @@ function ReportScreen() {
     )
   return (
     <div className="space-y-4" data-report>
+      <ReportIntro unbranded={draft.unbranded} canManageBranding={draft.canManageBranding} />
       <Versions
         auditId={auditId}
         versions={draft.versions}
@@ -53,7 +57,11 @@ function ReportScreen() {
           size="sm"
           value={view}
           onValueChange={(next) => {
-            if (next === "consultant" || next === "client") setView(next)
+            if (next === "consultant" || next === "client")
+              void navigate({
+                search: (prev) => ({ ...prev, view: next === "client" ? "client" : undefined }),
+                replace: true,
+              })
           }}
           aria-label="View"
         >

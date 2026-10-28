@@ -95,7 +95,7 @@ export function Appendix({ model }: { model: ReportModel }) {
       </div>
       <div className="space-y-2">
         <h3 className="font-medium">E. Rules in this audit</h3>
-        <div className="overflow-x-auto print:overflow-visible">
+        <div className="overflow-x-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 print:overflow-visible">
           <table className="w-full min-w-[34rem] print:min-w-0 border-collapse text-left text-xs">
             <thead>
               <tr className="border-b">

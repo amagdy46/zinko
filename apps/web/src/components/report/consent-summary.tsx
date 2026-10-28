@@ -66,7 +66,7 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
           No GA4, Google Ads, Meta or TikTok request was seen in any run.
         </p>
       ) : (
-        <div className="overflow-x-auto print:overflow-visible">
+        <div className="overflow-x-auto outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 print:overflow-visible">
           <table className="w-full min-w-[32rem] print:min-w-0 table-fixed border-collapse text-left align-top">
             <caption className="sr-only">Vendor by consent scenario</caption>
             <thead>
