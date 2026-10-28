@@ -13,7 +13,7 @@
   <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a client and a site, audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 24 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has not been deployed to Cloudflare yet: the container image build and a real deploy are the open item, so the [self-hosting guide](https://github.com/ovriq/zinko/blob/main/docs/self-hosting.md) is written but **not yet run end to end**. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a client and a site, audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 25 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has not been deployed to Cloudflare yet: the container image build and a real deploy are the open item, so the [self-hosting guide](https://github.com/ovriq/zinko/blob/main/docs/self-hosting.md) is written but **not yet run end to end**. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
@@ -119,7 +119,7 @@ hits (3); "after" = sent after consent completed; 1 vendor request(s) not decode
 
 The Meta hit lands at 2.4 s, before the reject action at 6.2 s. The output goes on to list cookies per snapshot and errors. `--block-vendors` answers recognised tracking collection requests (any host, a site's own server-side GTM collector included) and known vendor hosts locally, so no recognised hit reaches Google, Meta or TikTok; it is best effort, not a guarantee, and vendors Zinko does not know or unrecognised shapes can still leave (see `docs/vision.md`). The SDK files themselves (gtag.js, fbevents.js, the TikTok pixel) are still downloaded from the vendors. Against a real site, drop it and leave `ALLOW_PRIVATE_NETWORKS` unset; load only sites you are allowed to test.
 
-`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--engine <url>` points at another engine. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit. `--rules` also runs the 24 checks on each capture and prints one line per rule (`pass`, `fail`, `inconclusive` or `not_applicable`, its message and how many pieces of evidence it cites); it is the same code the web app runs.
+`--scenario` is `none`, `accept`, `reject`, `gpc` or `all` (the four in turn). `--click <selector>` and `--goto <url>` add journey steps in the order given, up to 5. `--mobile` uses a phone viewport. `--engine <url>` points at another engine. `--json` prints one object per scenario, including `undecoded`: vendor requests no decoder turned into a hit. `--rules` also runs the 25 checks on each capture and prints one line per rule (`pass`, `fail`, `inconclusive` or `not_applicable`, its message and how many pieces of evidence it cites); it is the same code the web app runs.
 
 ## Why Zinko
 
@@ -145,7 +145,7 @@ Use something else if you need ongoing monitoring of production traffic today, o
 | Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated; TikTok events without an event ID                                                                                                                                                                                                                                                                                                                |
 | Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts; the page's own location not matching the audited host; debug or preview parameters left in live hits                                                                                                                                                                                                                   |
 
-These 24 checks are built and run on every audit. Each is a plain function over one run's capture, proven on a fixture site with a known bug. A run that did not load, or a consent check on a page whose banner was not found, is reported as `inconclusive` with the reason, never as clean. The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/ovriq/zinko/blob/main/docs/product.md).
+These 25 checks are built and run on every audit. Each is a plain function over one run's capture, proven on a fixture site with a known bug. A run that did not load, or a consent check on a page whose banner was not found, is reported as `inconclusive` with the reason, never as clean. The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/ovriq/zinko/blob/main/docs/product.md).
 
 ## Repository layout
 
@@ -154,7 +154,7 @@ apps/cli            zinko CLI (decode and capture, with --rules; audit is planne
 apps/web            TanStack Start web app on Cloudflare Workers: clients, sites, audits, live progress, Hits explorer, Findings, Compare, reports
 apps/browser        capture engine: Node server, egress proxy, Scrapling (Python) in a container image
 packages/decoders   GA4, Google Ads, Meta Pixel and TikTok decoders -> a normalized Hit
-packages/rules      the 24 checks: one run's capture and hits -> pass, fail, inconclusive or not applicable, with evidence
+packages/rules      the 25 checks: one run's capture and hits -> pass, fail, inconclusive or not applicable, with evidence
 packages/capture-contract  Effect Schemas for the engine's POST /capture
 packages/fixtures   fake shops, each with one known tracking bug
 packages/core       Effect service interfaces
