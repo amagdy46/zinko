@@ -258,6 +258,8 @@ class Capture:
         self.after_consent_taken = False
         # Once the choice is settled autoconsent only watches: it detects but hides and clicks nothing.
         self.watch_mode = False
+        # Node asked this process to wrap up: nothing may wait for a banner window any more.
+        self.finalizing = False
         # One banner window per main document, started when it commits and bound to its id.
         self.banner_results: dict[str, str] = {}
         self.banner_windows: dict[str, asyncio.Future] = {}
@@ -893,6 +895,16 @@ class Capture:
         self.banner_results[document_id] = result
         log(f"banner window {document_id}: {result} after {round((time.monotonic() - start) * 1000)} ms")
 
+    async def close_banner_windows(self) -> None:
+        """Waits for the windows still open, or at the deadline gives up on them: an unfinished one is `unknown`."""
+        open_windows = {doc: task for doc, task in self.banner_windows.items() if not task.done()}
+        if open_windows and not self.finalizing:
+            await asyncio.wait(open_windows.values(), timeout=WINDOW_CAP_S + 1)
+        for doc, task in open_windows.items():
+            if not task.done():
+                task.cancel()
+            self.banner_results.setdefault(doc, "unknown")
+
     def watch_banner(self, document_id: str) -> None:
         """At a main document's commit: watch its banner, if it loaded after the consent action."""
         document = self.documents.get(document_id)
@@ -1152,7 +1164,8 @@ class Capture:
         before = self.current_document
         # Leaving a page ends its banner window, so let it finish first.
         if before in self.banner_windows:
-            await self.banner_windows[before]
+            # shielded: a deadline cancels this step, not the window task that other code still owns
+            await asyncio.shield(self.banner_windows[before])
         await self.flush_beacons()
         held = await self.snapshot("document-end")
         await self.observe_consent()
@@ -1207,7 +1220,7 @@ class Capture:
             if self.current_document not in (None, before)
             else None
         )
-        await asyncio.gather(self.observe_window(), *([banner] if banner is not None else []))
+        await asyncio.gather(self.observe_window(), *([asyncio.shield(banner)] if banner is not None else []))
         if step["action"] == "click" and self.current_document != before:
             emit({"type": "cookies", "snapshot": held})
         # A click can start an off-site navigation after `load` has already resolved.
@@ -1220,7 +1233,7 @@ class Capture:
         if self.verification is not None:
             self.verify_task.cancel()
             self.settle_consent()
-        await asyncio.gather(*self.banner_windows.values())
+        await self.close_banner_windows()
         # After a refused navigation the page shows Chromium's error page: nothing to photograph.
         if self.committed and self.left_site is None:
             try:
@@ -1236,6 +1249,18 @@ class Capture:
         await self.checkpoint()
 
 
+async def finalize_safely(capture: Capture) -> None:
+    """The final flush, bounded; if it does not finish, whatever was gathered is still checkpointed."""
+    try:
+        await asyncio.wait_for(capture.finish(), 4)
+    except (Exception, asyncio.CancelledError) as exc:
+        log(f"finalize: {type(exc).__name__}: {exc}")
+        try:
+            await asyncio.wait_for(capture.checkpoint(), 2)
+        except (Exception, asyncio.CancelledError) as checkpoint_exc:
+            log(f"final checkpoint: {type(checkpoint_exc).__name__}: {checkpoint_exc}")
+
+
 async def main() -> None:
     job = json.loads(sys.stdin.readline())
     capture = Capture(job)
@@ -1244,6 +1269,7 @@ async def main() -> None:
     def finalize() -> None:
         if not finalizing.is_set():
             finalizing.set()
+            capture.finalizing = True
             work.cancel()
 
     loop = asyncio.get_running_loop()
@@ -1255,19 +1281,13 @@ async def main() -> None:
         if not finalizing.is_set():
             raise
         capture.error("Timeout", "the capture ran past its time limit; this is what was captured until then")
-        try:
-            await asyncio.wait_for(capture.finish(), 4)
-        except Exception as exc:
-            log(f"finalize: {exc}")
+        await finalize_safely(capture)
     except Exception as exc:
         if capture.context is None:
             emit({"type": "launch-failed", "message": f"{type(exc).__name__}: {exc}".split("\n")[0]})
         else:
             capture.error("EngineFailure", f"{type(exc).__name__}: {exc}".split("\n")[0])
-            try:
-                await asyncio.wait_for(capture.finish(), 4)
-            except Exception as finish_exc:
-                log(f"finish after failure: {finish_exc}")
+            await finalize_safely(capture)
     log(f"actionsSent={capture.actions_sent}")
     emit({"type": "done"})
     # Node kills this process and the browser once it reads `done`.

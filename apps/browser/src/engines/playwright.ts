@@ -167,6 +167,8 @@ let endTaken = false
 const autoconsentActive = scenario === "accept" || scenario === "reject"
 let afterConsentTaken = false
 let watchMode = false
+// Node asked this process to wrap up: nothing may wait for a banner window any more.
+let finalizing = false
 let actionsSent = 0
 // How the next top-level document is reached; a navigation no step asked for is a click.
 let pendingNavigation: Document["navigation"]
@@ -751,6 +753,14 @@ const observeBanner = async (documentId: string, cmp: string) => {
   log(`banner window ${documentId}: ${result} after ${Date.now() - start} ms`)
 }
 
+/** Waits for the windows still open, or at the deadline gives up on them: an unfinished one is `unknown`. */
+const closeBannerWindows = async () => {
+  const open = [...bannerWindows].filter(([documentId]) => !bannerResults.has(documentId))
+  if (!finalizing) await Promise.all(open.map(([, window]) => window))
+  for (const [documentId] of open)
+    if (!bannerResults.has(documentId)) bannerResults.set(documentId, "unknown")
+}
+
 /** At a main document's commit: watch its banner, if it loaded after the consent action. */
 const watchBanner = (documentId: string) => {
   const document = documents.get(documentId)
@@ -938,6 +948,17 @@ const navigate = async (
   return true
 }
 
+const reloadRefusal = (
+  before: string | undefined,
+  method: string | undefined,
+  navigating: boolean,
+): string | undefined => {
+  if (currentDocument !== before) return "the page navigated by itself"
+  if (navigating) return "the page is navigating"
+  if (method === "GET") return undefined
+  return `the page was loaded with ${method ?? "an unknown method"}, and a reload would send it again`
+}
+
 const runStep = async (
   index: number,
   step: NonNullable<EngineJob["request"]["journey"]>[number],
@@ -959,14 +980,7 @@ const runStep = async (
     const navigating = [...inflight].some(
       (request) => request.isNavigationRequest() && request.frame() === current.mainFrame(),
     )
-    const refusal =
-      currentDocument !== before
-        ? "the page navigated by itself"
-        : navigating
-          ? "the page is navigating"
-          : method === "GET"
-            ? undefined
-            : `the page was loaded with ${method ?? "an unknown method"}, and a reload would send it again`
+    const refusal = reloadRefusal(before, method, navigating)
     if (refusal !== undefined) {
       error("JourneyStep", `step ${index + 1} reload of ${current.url()}: ${refusal}`)
       return false
@@ -1015,7 +1029,7 @@ const runStep = async (
 const finish = async () => {
   if (page === undefined) return
   settleConsent()
-  await Promise.all(bannerWindows.values())
+  await closeBannerWindows()
   // After a refused navigation the page shows Chromium's error page: nothing to photograph.
   if (committed && leftSite === undefined) {
     try {
@@ -1190,7 +1204,10 @@ const run = async () => {
 
 const settle = async (work: Promise<void>) => {
   const finalize = new Promise<"finalize">((resolve) =>
-    process.once("SIGTERM", () => resolve("finalize")),
+    process.once("SIGTERM", () => {
+      finalizing = true
+      resolve("finalize")
+    }),
   )
   const outcome = await Promise.race([work.then(() => "done" as const), finalize]).catch(
     (cause: unknown) => cause,
