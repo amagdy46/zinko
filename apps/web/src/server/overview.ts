@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
-import { checkResult, finding, run } from "@repo/db"
-import { and, asc, eq } from "drizzle-orm"
+import { audit, checkResult, finding, run } from "@repo/db"
+import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
+import { runReason } from "@/lib/audit-labels"
 import { healthScore } from "@/lib/health-score"
 import { auditInOrg } from "./audit-data"
 import { findingsOf, SEVERITY_ORDER } from "./findings-data"
@@ -11,13 +12,24 @@ import { requireSession } from "./require-session"
 import { membership, read } from "./server-fn"
 
 const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
+const decodeStartPage = Schema.decodeUnknownEffect(
+  Schema.Struct({ pages: Schema.NonEmptyArray(Schema.String) }),
+)
+const decodeErrors = Schema.decodeUnknownEffect(
+  Schema.NullOr(Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))),
+)
+
+const LOAD_FAILURES = new Set(["Navigation", "Timeout"])
+const withoutQuery = (url: string) => url.split("?")[0]
 
 /**
  * What the Overview shows, computed from the stored findings and check results on every read:
  * the score, the counts by area (failing findings by severity, and rules that could not be
  * checked), the triage tally, the worst open failing finding in full (the stored text of the
  * finding and the message of its first failing run) and the tags seen. Triage does not change
- * the score or the counts, only which finding is the worst.
+ * the score or the counts, only which finding is the worst; `withoutAccepted` is the same score
+ * with accepted risks left out, for the one place that shows both. `runHealth` says whether the
+ * start page could not be loaded or most runs did not finish, which makes the score incomplete.
  */
 export const getOverview = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -94,7 +106,71 @@ export const getOverview = createServerFn({ method: "GET" })
             }
         }
         const tags = yield* tagsSeenOf(orgId, auditId)
+        const checked = yield* db
+          .select({
+            area: checkResult.area,
+            passedRules:
+              sql<number>`count(distinct ${checkResult.ruleId}) filter (where ${checkResult.status} = 'pass')`.mapWith(
+                Number,
+              ),
+          })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+          .groupBy(checkResult.area)
+        const [stored] = yield* db
+          .select({ config: audit.config })
+          .from(audit)
+          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+          .limit(1)
+        const [startUrl] =
+          stored === undefined
+            ? []
+            : (yield* decodeStartPage(stored.config).pipe(Effect.orDie)).pages
+        const runRows = yield* db
+          .select({
+            pageUrl: run.pageUrl,
+            status: run.status,
+            failure: run.failure,
+            errors: run.errors,
+          })
+          .from(run)
+          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
+          .orderBy(asc(run.ordinal))
+        const runs = yield* Effect.forEach(runRows, (r) =>
+          Effect.map(decodeErrors(r.errors).pipe(Effect.orDie), (errors) => ({
+            ...r,
+            errors: errors ?? [],
+          })),
+        )
+        const startRuns = runs.filter(
+          (r) => startUrl !== undefined && withoutQuery(r.pageUrl) === withoutQuery(startUrl),
+        )
+        const startFailed =
+          startRuns.length > 0 &&
+          startRuns.every(
+            (r) =>
+              r.status === "failed" ||
+              (r.status === "partial" && r.errors.some((e) => LOAD_FAILURES.has(e.code))),
+          )
+        const unfinished = runs.filter((r) => r.status === "failed" || r.status === "partial")
+        const withoutAcceptedScore = healthScore({
+          findings: failing.filter((f) => f.triage.status !== "accepted_risk"),
+          uncertainty,
+          evaluatedRuns: coverage.evaluatedRuns,
+          totalRuns: coverage.totalRuns,
+          versions: coverage.rulesVersions,
+        })
         return {
+          runHealth: {
+            startFailed,
+            startPage: startUrl ?? null,
+            startReason: startFailed && startRuns[0] ? runReason(startRuns[0]) : null,
+            unfinishedRuns: unfinished.length,
+            incomplete: startFailed || (runs.length > 0 && unfinished.length * 2 >= runs.length),
+          },
+          checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
+          withoutAccepted: withoutAcceptedScore.evaluated ? withoutAcceptedScore.score : null,
           worst,
           tags,
           status,

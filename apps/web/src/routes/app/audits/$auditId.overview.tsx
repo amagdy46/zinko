@@ -1,11 +1,12 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
-import { CircleDashed, Info } from "lucide-react"
+import { ChevronDown, CircleDashed, Info } from "lucide-react"
 import { CopyButton } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Table,
@@ -17,6 +18,7 @@ import {
 } from "@/components/ui/table"
 import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { BAND_LABEL, CRITICAL_CAP, type Band, type HealthScore, WEIGHT } from "@/lib/health-score"
 import { vendorName } from "@/lib/tag-matrix"
 import { getOverview } from "@/server/overview"
@@ -42,12 +44,25 @@ const BAND_GLYPH: Record<Band, StatusMeaning> = {
 const SEVERITIES = ["critical", "warning", "info"] as const
 const SEVERITY_LABEL = { critical: "Critical", warning: "Warning", info: "Info" } as const
 
+const PURCHASE_FIELDS_RULE = "coverage.purchase-missing-fields"
+
 const rests = (n: number) => (n === 1 ? "rests" : "rest")
 
 function OverviewScreen() {
   const { audit } = auditRoute.useLoaderData()
-  const { status, score, coverage, areas, triage, bannerUncertain, worst, tags } =
-    Route.useLoaderData()
+  const {
+    status,
+    score,
+    coverage,
+    areas,
+    checkedAreas,
+    triage,
+    bannerUncertain,
+    worst,
+    tags,
+    withoutAccepted,
+    runHealth,
+  } = Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
       <p className="text-sm text-muted-foreground" data-testid="overview-running">
@@ -68,12 +83,33 @@ function OverviewScreen() {
   ].join(" × ")
   return (
     <div className="min-w-0 space-y-6">
+      {runHealth.incomplete ? (
+        <Alert
+          role="status"
+          className="border-sev-warning-border bg-sev-warning-bg"
+          data-testid="incomplete-audit"
+        >
+          <StatusGlyph meaning="partial" />
+          <AlertTitle className="line-clamp-none">This audit is incomplete</AlertTitle>
+          <AlertDescription className="text-foreground">
+            {runHealth.startFailed
+              ? `The start page${runHealth.startPage === null ? "" : ` (${runHealth.startPage})`} could not be loaded${runHealth.startReason === null ? "" : `: ${runHealth.startReason}`}. `
+              : `${runHealth.unfinishedRuns} of ${coverage.totalRuns} runs did not finish. `}
+            The score below describes only what could be captured, so do not read it as the state of
+            the site.
+          </AlertDescription>
+        </Alert>
+      ) : null}
       <ScoreBlock
         score={score}
+        withoutAccepted={withoutAccepted}
+        incomplete={runHealth.incomplete}
         evaluated={coverage.evaluatedRuns}
         totalRuns={coverage.totalRuns}
         scope={scope}
         triage={triage}
+        auditId={audit.id}
+        worst={worst}
       />
       {score.mixedVersions ? (
         <Alert
@@ -97,16 +133,15 @@ function OverviewScreen() {
             {rests(score.uncertainty.bannerUncertainRuns)} on an undetected banner
           </AlertTitle>
           <AlertDescription>
-            <p>{BANNER_NOTE.summary}</p>
             <p>
-              The findings keep their severity and their weight in the score.{" "}
-              {bannerUncertain.map((f) => `${f.title} (${count(f.runs, "run")})`).join(", ")}.
+              {BANNER_NOTE.summary} The findings keep their severity and their weight in the score.
             </p>
+            <p>{bannerUncertain.map((f) => `${f.title} (${count(f.runs, "run")})`).join(", ")}</p>
           </AlertDescription>
         </Alert>
       ) : null}
       <WorstFinding auditId={audit.id} worst={worst} />
-      <AreaCounts auditId={audit.id} areas={areas} />
+      <AreaCounts auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
     </div>
   )
@@ -221,28 +256,52 @@ function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }
 
 function ScoreBlock({
   score,
+  withoutAccepted,
+  incomplete,
   evaluated,
   totalRuns,
   scope,
   triage,
+  auditId,
+  worst,
 }: {
   score: Scored
+  withoutAccepted: number | null
+  incomplete: boolean
   evaluated: number
   totalRuns: number
   scope: string
   triage: Overview["triage"]
+  auditId: string
+  worst: Overview["worst"]
 }) {
   const { uncertainty } = score
   return (
     <section aria-label="Score" className="space-y-3 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-        <p className="text-2xl font-semibold tabular-nums" data-testid="score">
+        <p
+          className={cn(
+            "text-2xl font-semibold tabular-nums",
+            incomplete && "text-muted-foreground",
+          )}
+          data-testid="score"
+        >
           {score.score}
           <span className="text-sm font-normal text-muted-foreground"> / 100</span>
         </p>
         <p className="flex items-center gap-2 text-sm font-medium" data-testid="band">
-          <StatusGlyph meaning={BAND_GLYPH[score.band]} />
-          {BAND_LABEL[score.band]}
+          {incomplete ? (
+            <>
+              <StatusGlyph meaning="partial" />
+              Incomplete
+              <span className="font-normal text-muted-foreground">· {BAND_LABEL[score.band]}</span>
+            </>
+          ) : (
+            <>
+              <StatusGlyph meaning={BAND_GLYPH[score.band]} />
+              {BAND_LABEL[score.band]}
+            </>
+          )}
           {score.mixedVersions ? (
             <span className="text-xs font-normal text-muted-foreground">
               · mixed rules versions
@@ -264,29 +323,60 @@ function ScoreBlock({
           </PopoverContent>
         </Popover>
       </div>
+      <TriageNote triage={triage} score={score.score} withoutAccepted={withoutAccepted} />
+      {worst === null ? null : (
+        <div
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm"
+          data-testid="start-with"
+        >
+          <span className="text-muted-foreground">Start with</span>
+          <SeverityBadge severity={worst.severity} />
+          <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{worst.title}</span>
+          <Button asChild size="sm" variant="outline">
+            <Link
+              to="/app/audits/$auditId/findings"
+              params={{ auditId }}
+              search={{ finding: worst.ruleId }}
+            >
+              Open finding
+            </Link>
+          </Button>
+        </div>
+      )}
       <ul className="space-y-1.5 text-sm">
         {score.coverage === "partial" ? (
           <li className="flex items-start gap-2" data-testid="partly-evaluated">
             <StatusGlyph meaning="partial" className="mt-0.5" />
-            Partly evaluated: {evaluated} of {totalRuns} runs
+            Partly evaluated: {evaluated} of {totalRuns} runs have check results
           </li>
         ) : null}
-        {score.resolution === "unresolved" ? (
-          <li className="flex items-start gap-2" data-testid="unresolved-checks">
-            <StatusGlyph meaning="could-not-check" className="mt-0.5" />
-            <span>
-              Unresolved checks:{" "}
-              {[
-                uncertainty.checks > 0
-                  ? `${count(uncertainty.rules, "rule")} could not be checked, on ${count(uncertainty.runs, "run")}: ${uncertainty.ruleTitles.join(", ")}`
-                  : null,
-                uncertainty.bannerUncertainRuns > 0
-                  ? `${count(uncertainty.bannerUncertainRuns, "failing consent check")} ${rests(uncertainty.bannerUncertainRuns)} on an undetected banner`
-                  : null,
-              ]
-                .filter((part) => part !== null)
-                .join(". ")}
-            </span>
+        {uncertainty.checks > 0 ? (
+          <li data-testid="unresolved-checks">
+            <Collapsible>
+              <CollapsibleTrigger
+                className={cn(
+                  "group flex min-h-8 items-start gap-2 rounded-md text-left",
+                  focusRing,
+                )}
+              >
+                <StatusGlyph meaning="could-not-check" className="mt-0.5" />
+                <span>
+                  Could not check: {count(uncertainty.rules, "rule")}, on{" "}
+                  {count(uncertainty.runs, "run")}
+                </span>
+                <ChevronDown
+                  aria-hidden="true"
+                  className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-180"
+                />
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <ul className="mt-1 list-disc space-y-0.5 pl-9 text-muted-foreground">
+                  {uncertainty.ruleTitles.map((title) => (
+                    <li key={title}>{title}</li>
+                  ))}
+                </ul>
+              </CollapsibleContent>
+            </Collapsible>
           </li>
         ) : null}
         {score.coverage === "full" && score.resolution === "resolved" ? (
@@ -295,36 +385,53 @@ function ScoreBlock({
             All {count(totalRuns, "run")} evaluated, every check resolved
           </li>
         ) : null}
-        {triage.acceptedRisk + triage.fixed > 0 ? (
-          <li className="text-muted-foreground" data-testid="triage-tally">
-            {triage.acceptedRisk} accepted risk, {triage.fixed} fixed. They still count in the
-            score.
-          </li>
-        ) : null}
       </ul>
-      {score.coverage === "partial" ? (
-        <Alert role="status" className="border-sev-warning-border bg-sev-warning-bg">
-          <AlertDescription className="text-foreground">
-            {count(totalRuns - evaluated, "run")} of this audit{" "}
-            {totalRuns - evaluated === 1 ? "has" : "have"} no check results, so what follows may be
-            incomplete.
-          </AlertDescription>
-        </Alert>
-      ) : null}
     </section>
   )
 }
 
+function TriageNote({
+  triage,
+  score,
+  withoutAccepted,
+}: {
+  triage: Overview["triage"]
+  score: number
+  withoutAccepted: number | null
+}) {
+  if (triage.acceptedRisk > 0 && withoutAccepted !== null)
+    return (
+      <p className="text-sm" data-testid="score-without-accepted">
+        <span className="font-medium tabular-nums">{withoutAccepted}</span> excluding{" "}
+        {count(triage.acceptedRisk, "accepted risk")}
+        <span className="text-muted-foreground">
+          {" "}
+          · {score} counting all findings
+          {triage.fixed > 0 ? `; ${triage.fixed} fixed still count` : ""}
+        </span>
+      </p>
+    )
+  if (triage.fixed > 0)
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="triage-tally">
+        {triage.fixed} fixed. Fixed findings still count in the score: it describes this audit.
+      </p>
+    )
+  return null
+}
+
 function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
   const { uncertainty } = score
+  const purchaseFailed = score.lines.some((l) => l.ruleId === PURCHASE_FIELDS_RULE)
   return (
     <>
-      <p className="font-medium">How this is scored (score version {score.version})</p>
+      <p className="font-medium">How this is scored</p>
+      <p>
+        Starts at 100. Each failing check costs points, more for Critical, more when it fails on
+        more pages.
+      </p>
       <p className="text-muted-foreground">
-        The score describes what this audit ran ({scope}), not the whole site. It starts at 100.
-        Each failing rule costs its weight ({WEIGHT.critical} Critical, {WEIGHT.warning} Warning,{" "}
-        {WEIGHT.info} Info) times 0.5 plus half the share of runs it failed on, counting only runs
-        where it could be checked.
+        It describes what this audit ran ({scope}), not the whole site.
       </p>
       {score.lines.length === 0 ? (
         <p>No rule failed, so nothing is taken off.</p>
@@ -352,25 +459,62 @@ function Arithmetic({ score, scope }: { score: Scored; scope: string }) {
         {Math.max(0, Math.round(100 - score.total))}
         {score.capped ? `, capped to ${CRITICAL_CAP} because a Critical rule failed` : ""}
       </p>
-      {score.lines.some((l) => l.severity === "critical") && !score.capped ? (
+      {purchaseFailed ? (
         <p className="text-muted-foreground">
-          A Critical failure caps the score at {CRITICAL_CAP}; here the points already put it lower.
+          The purchase-fields rule is known to over-trigger, and the score does not dampen a false
+          Critical.
         </p>
       ) : null}
-      <p className="text-muted-foreground">
-        Not scored: checks that could not run are left out of the shares, never counted as passes,
-        and shown as unresolved ({count(uncertainty.checks, "check")} on{" "}
-        {count(uncertainty.runs, "run")} for {count(uncertainty.rules, "rule")}). Triage does not
-        change the score. A rule that is wrong about one run still costs points, and the cap does
-        not dampen a false Critical (the purchase-fields rule is known to over-trigger). The number
-        matters less than the findings and the coverage line.
-      </p>
-      <p className="text-xs text-muted-foreground">Rules versions: {score.versions.join(", ")}</p>
+      <Collapsible>
+        <CollapsibleTrigger
+          className={cn(
+            "group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium",
+            focusRing,
+          )}
+        >
+          Details
+          <ChevronDown
+            aria-hidden="true"
+            className="size-4 transition-transform group-data-[state=open]:rotate-180"
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent className="space-y-2 text-xs text-muted-foreground">
+          <p>
+            Each failing rule costs its weight ({WEIGHT.critical} Critical, {WEIGHT.warning}{" "}
+            Warning, {WEIGHT.info} Info) times 0.5 plus half the share of runs it failed on,
+            counting only runs where it could be checked.
+          </p>
+          <p>
+            A Critical failure caps the score at {CRITICAL_CAP}
+            {score.lines.some((l) => l.severity === "critical") && !score.capped
+              ? "; here the points already put it lower"
+              : ""}
+            .
+          </p>
+          <p>
+            Checks that could not run are left out of the shares, never counted as passes, and shown
+            as Could not check ({count(uncertainty.checks, "check")} on{" "}
+            {count(uncertainty.runs, "run")} for {count(uncertainty.rules, "rule")}). Triage does
+            not change the score. A rule that is wrong about one run still costs points.
+          </p>
+          <p>
+            Score version {score.version}. Rules versions: {score.versions.join(", ")}.
+          </p>
+        </CollapsibleContent>
+      </Collapsible>
     </>
   )
 }
 
-function AreaCounts({ auditId, areas }: { auditId: string; areas: Overview["areas"] }) {
+function AreaCounts({
+  auditId,
+  areas,
+  checkedAreas,
+}: {
+  auditId: string
+  areas: Overview["areas"]
+  checkedAreas: Overview["checkedAreas"]
+}) {
   const cell = (n: number, area: string, severity?: (typeof SEVERITIES)[number]) =>
     n === 0 ? (
       <span className="tabular-nums text-muted-foreground">0</span>
@@ -384,48 +528,73 @@ function AreaCounts({ auditId, areas }: { auditId: string; areas: Overview["area
         {n}
       </Link>
     )
+  const all = Object.entries(AREAS)
+  const shown = all.filter(([area]) => areas[area] !== undefined)
+  const quiet = all.filter(([area]) => areas[area] === undefined)
+  const passed = quiet.filter(([area]) => (checkedAreas[area] ?? 0) > 0).map(([, label]) => label)
+  const unchecked = quiet
+    .filter(([area]) => (checkedAreas[area] ?? 0) === 0)
+    .map(([, label]) => label)
   return (
     <section aria-label="Counts by area" className="space-y-2">
       <h2 className="text-sm font-medium">Counts by area</h2>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Area</TableHead>
-            {SEVERITIES.map((s) => (
-              <TableHead key={s} className="text-right">
+      {shown.length > 0 ? (
+        <Table className="text-xs sm:text-sm">
+          <TableHeader>
+            <TableRow>
+              <TableHead className="px-2 sm:px-3">Area</TableHead>
+              {SEVERITIES.map((s) => (
+                <TableHead key={s} className="px-2 text-right sm:px-3">
+                  <span className="inline-flex items-center gap-1.5">
+                    <StatusGlyph meaning={s} className="hidden sm:block" />
+                    {SEVERITY_LABEL[s]}
+                  </span>
+                </TableHead>
+              ))}
+              <TableHead className="px-2 text-right sm:px-3">
                 <span className="inline-flex items-center gap-1.5">
-                  <StatusGlyph meaning={s} />
-                  {SEVERITY_LABEL[s]}
+                  <StatusGlyph meaning="could-not-check" className="hidden sm:block" />
+                  <span className="whitespace-normal">Could not check</span>
                 </span>
               </TableHead>
-            ))}
-            <TableHead className="text-right">
-              <span className="inline-flex items-center gap-1.5">
-                <StatusGlyph meaning="could-not-check" />
-                Could not check
-              </span>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {Object.entries(AREAS).map(([area, label]) => {
-            const found = areas[area]
-            return (
-              <TableRow key={area}>
-                <TableCell className="font-medium">{label}</TableCell>
-                {SEVERITIES.map((s) => (
-                  <TableCell key={s} className="text-right">
-                    {cell(found?.[s] ?? 0, area, s)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {shown.map(([area, label]) => {
+              const found = areas[area]
+              return (
+                <TableRow key={area}>
+                  <TableCell className="px-2 font-medium sm:px-3">{label}</TableCell>
+                  {SEVERITIES.map((s) => (
+                    <TableCell key={s} className="px-2 text-right sm:px-3">
+                      {cell(found?.[s] ?? 0, area, s)}
+                    </TableCell>
+                  ))}
+                  <TableCell className="px-2 text-right sm:px-3">
+                    {cell(found?.couldNotCheck ?? 0, area)}
                   </TableCell>
-                ))}
-                <TableCell className="text-right">
-                  {cell(found?.couldNotCheck ?? 0, area)}
-                </TableCell>
-              </TableRow>
-            )
-          })}
-        </TableBody>
-      </Table>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      ) : null}
+      <ul className="space-y-1 text-sm text-muted-foreground" data-testid="quiet-areas">
+        {passed.length > 0 ? (
+          <li className="flex items-start gap-2">
+            <StatusGlyph meaning="pass" className="mt-0.5" />
+            <span>No failures in {passed.join(", ")}: checks ran and passed.</span>
+          </li>
+        ) : null}
+        {unchecked.length > 0 ? (
+          <li className="flex items-start gap-2">
+            <StatusGlyph meaning="not-applicable" className="mt-0.5" />
+            <span>
+              Nothing was checked in {unchecked.join(", ")} (not evaluated or not applicable).
+            </span>
+          </li>
+        ) : null}
+      </ul>
       <p className="text-xs text-muted-foreground">
         Failing rules per area, accepted and fixed ones included. Could not check counts rules.
       </p>
