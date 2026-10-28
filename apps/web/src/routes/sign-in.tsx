@@ -42,7 +42,7 @@ function SignIn() {
   return (
     <AuthCard
       title="Sign in"
-      description="Welcome back."
+      description="Zinko checks what a website's tags and consent banner really do. Sign in to continue."
       footer={
         <>
           No account yet?{" "}
@@ -70,6 +70,7 @@ function SignIn() {
             autoComplete="current-password"
             required
           />
+          <p className="text-xs text-muted-foreground">Password reset is not available yet.</p>
         </div>
         {error === null ? null : (
           <p role="alert" className="text-sm text-destructive">

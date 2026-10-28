@@ -6,6 +6,7 @@ import {
   useLocation,
   useRouter,
 } from "@tanstack/react-router"
+import { NotFound } from "@/components/not-found"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
@@ -15,14 +16,14 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { remainingTime, runReason, scenarioLabel } from "@/lib/audit-labels"
-import { count, duration } from "@/lib/format"
+import { count, duration, shortDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
 import { getAudit } from "@/server/audits"
 
 export const Route = createFileRoute("/app/audits/$auditId")({
   loader: ({ params }) => getAudit({ data: { id: params.auditId } }),
-  notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
+  notFoundComponent: () => <NotFound what="Audit" />,
   component: AuditPage,
 })
 
@@ -153,7 +154,7 @@ function AuditPage() {
             { label: "Clients", to: "/app/clients" },
             { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
             { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-            { label: `Audit · ${audit.createdAt.toLocaleDateString()}` },
+            { label: `Audit · ${shortDate(audit.createdAt)}` },
           ]}
           meta={
             <>

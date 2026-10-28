@@ -252,8 +252,8 @@ function Members() {
                       {member.user.name}
                       {member.userId === session.userId ? " (you)" : ""}
                     </div>
-                    <div className="break-all text-xs text-muted-foreground">
-                      {member.user.email}
+                    <div className="wrap-anywhere text-xs text-muted-foreground">
+                      <Email address={member.user.email} />
                     </div>
                   </div>
                 </div>
@@ -311,7 +311,9 @@ function Members() {
             ? pending.map((invitation) => (
                 <TableRow key={invitation.id}>
                   <TableCell className="whitespace-normal">
-                    <div className="break-all text-sm">{invitation.email}</div>
+                    <div className="wrap-anywhere text-sm">
+                      <Email address={invitation.email} />
+                    </div>
                     <Badge variant="outline" className="mt-1 sm:hidden">
                       Pending
                     </Badge>
@@ -379,5 +381,18 @@ function Members() {
         }}
       />
     </section>
+  )
+}
+
+/** An address that wraps after the @ before it would break inside a word. */
+function Email({ address }: { address: string }) {
+  const at = address.indexOf("@")
+  if (at === -1) return address
+  return (
+    <>
+      {address.slice(0, at + 1)}
+      <wbr />
+      {address.slice(at + 1)}
+    </>
   )
 }

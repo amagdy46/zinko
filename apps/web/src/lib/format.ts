@@ -5,6 +5,18 @@ const fullDate = new Intl.DateTimeFormat("en", {
   timeZone: "UTC",
 })
 
+const shortDay = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+})
+
+/** "28 Oct 2026": unambiguous in every locale, unlike 10/28/2026. */
+export function shortDate(date: Date | string | number): string {
+  return shortDay.format(new Date(date))
+}
+
 /** Use text as the label and title as its full date tooltip. */
 export function relativeTime(date: Date | string | number): { text: string; title: string } {
   const value = new Date(date)

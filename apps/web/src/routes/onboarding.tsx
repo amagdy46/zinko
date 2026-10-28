@@ -49,7 +49,7 @@ function Onboarding() {
   return (
     <AuthCard
       title="Create your organization"
-      description="Keep your clients, audits and team together. Next, add your first client."
+      description="Your organization is your consultancy or team. You add your clients next."
       account={
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="break-all">Signed in as {session.email}</span>
@@ -77,7 +77,13 @@ function Onboarding() {
       <form method="post" onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Organization name</Label>
-          <Input id="name" name="name" placeholder="Acme Inc." required />
+          <Input
+            id="name"
+            name="name"
+            placeholder="Acme Consulting"
+            autoComplete="organization"
+            required
+          />
         </div>
         {error === null ? null : (
           <p role="alert" className="text-sm text-destructive">

@@ -43,7 +43,7 @@ function SignUp() {
   return (
     <AuthCard
       title="Create an account"
-      description="Start with an email and a password."
+      description="Zinko checks what a website's tags and consent banner really do, so you can show clients what to fix."
       footer={
         <>
           Already have an account?{" "}
@@ -75,7 +75,11 @@ function SignUp() {
             autoComplete="new-password"
             minLength={8}
             required
+            aria-describedby="password-hint"
           />
+          <p id="password-hint" className="text-xs text-muted-foreground">
+            8 or more characters.
+          </p>
         </div>
         {error === null ? null : (
           <p role="alert" className="text-sm text-destructive">

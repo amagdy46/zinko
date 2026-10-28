@@ -169,7 +169,7 @@ function Explanations({
           </div>
           {policy.canManage ? (
             <Button type="submit" disabled={!dirty || saving}>
-              {saving ? "Saving…" : "Save"}
+              {saving ? "Saving…" : "Save explanation options"}
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -221,7 +221,7 @@ function AiSettings() {
       return
     }
     form.reset()
-    toast.success("AI settings saved")
+    toast.success("AI provider saved")
     await router.invalidate()
   }
 
@@ -276,7 +276,10 @@ function AiSettings() {
               data-testid="ai-status"
             >
               <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-              <p>No key is set for this organization. Without a key, fix templates are used.</p>
+              <p>
+                No key is set for this organization. Without a key, findings show the built-in fix
+                steps.
+              </p>
             </div>
           )}
           <p className="text-sm text-muted-foreground">
@@ -352,7 +355,7 @@ function AiSettings() {
               ) : null}
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={pending !== null}>
-                  {pending === "save" ? "Saving…" : "Save settings"}
+                  {pending === "save" ? "Saving…" : "Save provider"}
                 </Button>
                 {configured ? (
                   <>
