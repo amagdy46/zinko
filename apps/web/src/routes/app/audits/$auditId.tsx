@@ -163,6 +163,7 @@ function AuditPage() {
       label: `Findings ${findingsTab}`,
       link: { to: "/app/audits/$auditId/findings", params },
     },
+    { label: "Compare", link: { to: "/app/audits/$auditId/compare", params } },
     { label: "Tag matrix", link: { to: "/app/audits/$auditId/matrix", params } },
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
     { label: "Report", link: { to: "/app/audits/$auditId/report", params } },

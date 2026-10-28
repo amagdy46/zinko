@@ -195,6 +195,16 @@ const STATE_ORDER: ChangeState[] = [
   "unchanged",
   "not_comparable",
 ]
+/** Cells that still fail or were not re-checked come before the ones that passed. */
+const RESOLUTION_RANK: Record<Resolution, number> = {
+  still_fails: 0,
+  consent_differs: 1,
+  banner_differs: 1,
+  missing: 2,
+  could_not_check: 3,
+  pass: 4,
+  not_applicable: 4,
+}
 const SEVERITY_RANK: Record<Severity, number> = { critical: 0, warning: 1, info: 2 }
 const codeUnitOrder = (a: string, b: string) => {
   if (a < b) return -1
@@ -458,11 +468,10 @@ export const compareAudits = (input: Input) => {
     const listed: { cell: string; before: Verdict; now: Verdict | Resolution }[] = []
     for (const cell of fresh.toSorted(codeUnitOrder))
       listed.push({ cell, before: verdictOf(rowsBefore?.get(cell)?.status), now: "fail" })
-    const resolved = [...resolutionOf].toSorted(([x], [y]) => codeUnitOrder(x, y))
-    for (const stillFails of [true, false])
-      for (const [cell, found] of resolved)
-        if ((found === "still_fails") === stillFails)
-          listed.push({ cell, before: "fail", now: found })
+    const resolved = [...resolutionOf].toSorted(
+      ([x, ra], [y, rb]) => RESOLUTION_RANK[ra] - RESOLUTION_RANK[rb] || codeUnitOrder(x, y),
+    )
+    for (const [cell, found] of resolved) listed.push({ cell, before: "fail", now: found })
     const cap =
       state === "unchanged" && spread === "same" ? MAX_CELL_CHANGES_UNCHANGED : MAX_CELL_CHANGES
     const cellChanges = listed.slice(0, cap).flatMap(({ cell, before: was, now: is }) => {
