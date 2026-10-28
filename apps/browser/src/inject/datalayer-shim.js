@@ -149,6 +149,23 @@
       box.left < window.innerWidth
     )
   }
+  // For a banner in a document that just loaded: the computed-style checks of `onScreen`, but an
+  // element with no box of its own (a wrapper such as vanilla-cookieconsent's `.cm-wrapper`) is
+  // shown when one of its descendants is.
+  const displayed = (element) => {
+    if (!element.checkVisibility(shownOnly)) return false
+    const box = element.getBoundingClientRect()
+    if (box.width > 0 && box.height > 0) return onScreen(element)
+    return Array.from(element.querySelectorAll("*")).some(
+      (child) => child.checkVisibility(shownOnly) && onScreen(child),
+    )
+  }
+  function watchedVisible(selector, check = "all") {
+    const results = Array.from(this.elementSelector(selector), displayed)
+    if (check === "none") return results.every((result) => !result)
+    if (results.length === 0) return false
+    return check === "any" ? results.some(Boolean) : results.every(Boolean)
+  }
   function strictlyVisible(selector, check = "all") {
     const results = Array.from(this.elementSelector(selector), onScreen)
     if (check === "none") return results.every((result) => !result)
@@ -217,7 +234,8 @@
       }
       return popupShown(instance, cmp)
     },
-    // In a document loaded after the choice: true while the banner of CMP `name` is shown; false
+    // In a document loaded after the choice: true while the banner of CMP `name` is shown (opaque,
+    // visible and on screen, or with a visible descendant when its wrapper has no box); false
     // only with positive evidence that the CMP is there and holds the choice (its own detection
     // found it, or its own self-test passes: a stored choice for a rule CMP, a state check for a
     // coded one) and its popup check finds no banner; null while the page loads, when the check
@@ -228,12 +246,17 @@
       if (!instance || document.readyState !== "complete") return null
       const cmp = instance.rules.find((rule) => rule.name === name)
       if (!cmp) return null
+      const dom = instance.domActions
+      const loose = dom.elementVisible
+      dom.elementVisible = watchedVisible
       try {
         if (await cmp.detectPopup()) return true
         if (await cmp.detectCmp()) return false
         return cmp.hasSelfTest && (await cmp.test()) ? false : null
       } catch {
         return null
+      } finally {
+        dom.elementVisible = loose
       }
     },
   }

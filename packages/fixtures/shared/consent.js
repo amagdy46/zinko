@@ -5,6 +5,7 @@ setTimeout(() => runBanner(), window.zinkoConfig.cmpDelay)
 function runBanner() {
   // consent-not-persisted: the previous document's choice is forgotten before the library reads it
   if (!window.zinkoConfig.consentPersist) document.cookie = "cc_cookie=; Max-Age=0; path=/"
+  if (window.zinkoConfig.ghostBanner && document.cookie.includes("cc_cookie=")) addGhostBanner()
   window.CookieConsent.run({
     // headless captures set navigator.webdriver; the banner must still show
     hideFromBots: false,
@@ -57,4 +58,13 @@ function reportConsent() {
     window.CookieConsent.acceptedCategory("analytics"),
     window.zinkoConfig.acceptGrants === "all" && window.CookieConsent.acceptedCategory("marketing"),
   )
+}
+
+// consent-ghost-banner: the markup of a banner the visitor cannot see
+function addGhostBanner() {
+  const ghost = document.createElement("div")
+  ghost.id = "cc-main"
+  ghost.innerHTML =
+    '<div class="cm-wrapper"><div class="cm" style="visibility:hidden;position:fixed;right:16px;bottom:16px;width:300px;height:200px">We use cookies</div></div>'
+  document.body.append(ghost)
 }
