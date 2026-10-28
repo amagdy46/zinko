@@ -31,7 +31,7 @@ import {
 import { decodeFix } from "./findings"
 import { decodeSeverity } from "./findings-data"
 import { requireSession } from "./require-session"
-import { Forbidden, Invalid, isManager, membership, NotFound, read, respond } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, NotFound, read, mutation } from "./server-fn"
 
 const FindingInput = Schema.Struct({ auditId: Schema.String, ruleId: Schema.String })
 const ExplainInput = Schema.Struct({
@@ -262,7 +262,7 @@ export const explainFinding = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(ExplainInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const org = yield* authorize(context.session, data)
         if (data.regenerate && !isManager(org.role))

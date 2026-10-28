@@ -153,6 +153,8 @@ const ended = (state: "revoked" | "expired", agency: string) =>
     agency,
   )
 
+export const reportRouteMeta = { path: "/r/*", methods: ["GET"], access: "read" } as const
+
 /**
  * The public report, under `/r/`: `GET /r/<token>` is the document, `GET /r/<token>/logo` its logo.
  * A malformed token never reaches the database, and an unknown token, a deleted version and a

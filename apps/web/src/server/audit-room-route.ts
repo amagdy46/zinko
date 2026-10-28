@@ -27,6 +27,12 @@ const isAllowedOrigin = (request: Request, baseURL: unknown) => {
 
 const notFound = () => new Response("Not found", { status: 404 })
 
+export const auditRoomRouteMeta = {
+  path: "/ws/audits/*",
+  methods: ["GET"],
+  access: "read",
+} as const
+
 /**
  * WebSocket upgrades on `/ws/audits/<auditId>`. The id is validated, the origin checked (403), the
  * session resolved (401) and the audit looked up in an organization the user is a member of (404,
@@ -36,6 +42,8 @@ const notFound = () => new Response("Not found", { status: 404 })
 export const auditRoomRoute: WorkerRoute = async (request) => {
   const match = pattern.exec(new URL(request.url).pathname)
   if (match?.[1] === undefined) return undefined
+  if (request.method !== "GET")
+    return new Response("Method not allowed", { status: 405, headers: { Allow: "GET" } })
   const auditId = match[1]
   if (!isAuditId(auditId)) return notFound()
   return runtime

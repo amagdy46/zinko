@@ -23,7 +23,7 @@ import {
   membership,
   NotFound,
   read,
-  respond,
+  mutation,
   siteInOrg,
 } from "./server-fn"
 
@@ -135,7 +135,7 @@ export const startAudit = createServerFn({ method: "POST" })
     Schema.toStandardSchemaV1(Schema.Struct({ siteId: Schema.String, config: AuditConfig })),
   )
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const { db } = yield* Database

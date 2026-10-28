@@ -18,7 +18,7 @@ import {
   TriageStatus,
 } from "./findings-data"
 import { requireSession } from "./require-session"
-import { Invalid, membership, NotFound, read, respond } from "./server-fn"
+import { Invalid, membership, NotFound, read, mutation } from "./server-fn"
 
 /** Long enough for one look at the evidence; the screen asks again for the next one. */
 const SCREENSHOT_URL_SECONDS = 5 * 60
@@ -173,7 +173,7 @@ export const setTriage = createServerFn({ method: "POST" })
     ),
   )
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)

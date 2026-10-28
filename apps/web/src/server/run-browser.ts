@@ -3,7 +3,7 @@ import { Browser } from "@repo/core"
 import { createServerFn } from "@tanstack/react-start"
 import { Effect, Schema } from "effect"
 import { requireSession } from "./require-session"
-import { runtime } from "./runtime"
+import { mutation } from "./server-fn"
 
 /**
  * Captures one page under one consent scenario in the browser container and returns the
@@ -15,7 +15,7 @@ export const runBrowser = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(CaptureRequest))
   .handler(({ data }) =>
-    runtime.runPromise(
+    mutation(
       Effect.gen(function* () {
         const browser = yield* Browser
         return yield* browser.capture(data)

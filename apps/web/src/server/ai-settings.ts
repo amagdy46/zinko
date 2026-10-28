@@ -4,8 +4,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { Effect, Option, Schema } from "effect"
 import { LlmCredentials } from "./llm"
 import { requireSession } from "./require-session"
-import { runtime } from "./runtime"
-import { Forbidden, isManager, membership } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, mutation, read } from "./server-fn"
 
 /** The active organization and whether the caller may change its AI settings, read from one membership lookup. */
 const manager = (session: Session) =>
@@ -20,10 +19,7 @@ const manager = (session: Session) =>
 
 /** User-facing failure: the message, never the cause (which may carry request details). */
 const report = <A, R>(effect: Effect.Effect<A, { readonly message: string }, R>) =>
-  effect.pipe(
-    Effect.map((value) => ({ ok: true as const, value })),
-    Effect.catch((error) => Effect.succeed({ ok: false as const, message: error.message })),
-  )
+  effect.pipe(Effect.mapError((error) => new Invalid({ message: error.message })))
 
 const baseUrlField = Schema.String.check(Schema.isMaxLength(2048))
 
@@ -54,7 +50,7 @@ const parseBaseUrl = (provider: string, value: string | undefined) =>
 export const getLlmSettings = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .handler(({ context }) =>
-    runtime.runPromise(
+    read(
       Effect.gen(function* () {
         const { organizationId, role } = yield* membership(context.session)
         const canManage = isManager(role)
@@ -76,7 +72,7 @@ export const saveLlmSettings = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveInput))
   .handler(({ context, data }) =>
-    runtime.runPromise(
+    mutation(
       report(
         Effect.gen(function* () {
           const orgId = yield* manager(context.session)
@@ -96,7 +92,7 @@ export const saveLlmSettings = createServerFn({ method: "POST" })
 export const clearLlmSettings = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .handler(({ context }) =>
-    runtime.runPromise(
+    mutation(
       report(
         Effect.gen(function* () {
           const orgId = yield* manager(context.session)
@@ -110,7 +106,7 @@ export const clearLlmSettings = createServerFn({ method: "POST" })
 export const testLlmSettings = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .handler(({ context }) =>
-    runtime.runPromise(
+    mutation(
       report(
         Effect.gen(function* () {
           const orgId = yield* manager(context.session)

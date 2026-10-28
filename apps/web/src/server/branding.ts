@@ -6,7 +6,7 @@ import { Effect, Schema } from "effect"
 import { ACCENTS } from "@/lib/report-accent"
 import { brandingOf, hasPersonalData } from "./branding-data"
 import { requireSession } from "./require-session"
-import { Forbidden, Invalid, isManager, membership, read, respond } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, read, mutation } from "./server-fn"
 
 const NAME_MAX = 80
 const FOOTER_MAX = 300
@@ -59,7 +59,7 @@ export const saveBranding = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, role, userId } = yield* membership(context.session)
         if (!isManager(role))

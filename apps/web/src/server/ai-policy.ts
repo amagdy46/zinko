@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { Effect, Schema } from "effect"
 import { aiPolicyOf } from "./ai-policy-data"
 import { requireSession } from "./require-session"
-import { Forbidden, isManager, membership, read, respond } from "./server-fn"
+import { Forbidden, isManager, membership, read, mutation } from "./server-fn"
 
 const SaveInput = Schema.Struct({
   explanationsEnabled: Schema.Boolean,
@@ -27,7 +27,7 @@ export const saveAiPolicy = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, role, userId } = yield* membership(context.session)
         if (!isManager(role))

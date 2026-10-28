@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm"
 import { Effect } from "effect"
 import { brandingOf, sha256Hex } from "./branding-data"
 import { requireSession } from "./require-session"
-import { Forbidden, Invalid, isManager, membership, respond } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, mutation } from "./server-fn"
 
 const LOGO_MAX_BYTES = 512 * 1024
 
@@ -42,7 +42,7 @@ export const uploadLogo = createServerFn({ method: "POST" })
     return data
   })
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, userId } = yield* manager(context.session)
         const file = data.get("file")
@@ -77,7 +77,7 @@ export const uploadLogo = createServerFn({ method: "POST" })
 export const removeLogo = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .handler(({ context }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, userId } = yield* manager(context.session)
         const current = yield* brandingOf(organizationId)

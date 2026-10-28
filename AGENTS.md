@@ -52,7 +52,7 @@ Rules for AI agents (and humans) working in this repo. Read this before changing
 | Command                    | Use                                                               |
 | -------------------------- | ----------------------------------------------------------------- |
 | `pnpm dev`                 | Dev server                                                        |
-| `pnpm check`               | Format check, lint (incl. Effect diagnostics), types              |
+| `pnpm check`               | Entry-point registry check, format, lint (incl. Effect), types    |
 | `pnpm format`              | Apply formatting (oxfmt via Vite+)                                |
 | `pnpm lint`                | Lint only                                                         |
 | `pnpm typecheck`           | Regenerate the route tree, then type-check every workspace        |
@@ -159,6 +159,16 @@ Zero errors and zero warnings are the bar.
 - `ReportView` (`components/report/`) is pure: no hooks, router links or fetching. The consultant's controls (`consultant-controls.tsx`) are passed in through its `controls` prop and never render in the client view.
 - The consultant's work is `report_edit` (summary, disclosure level) and `report_finding_edit` (note, leave out, owner override), written only by `saveReportEdit` and `saveFindingEdit` (`server/report-edit.ts`, any member, `auditInOrg` first, a rule that is not a finding of the audit is a 404). The workflow never touches them (`rg "report_|org_branding" apps/web/src/workflows` stays empty). A finding left out is removed from `model.findings`, `model.actionPlan` and the evidence, is listed by title in the appendix and still counts in the score; its detail lives only in the consultant payload (`hiddenFindings`), never in the model or a snapshot.
 - Evidence for a finding comes from `server/digest-data.ts` (shared with Explain) and `readCaptureTolerant`; the report never selects `hit.params`, `hit.ids` or `hit.url`.
+
+## Entry points (registry and mutation gate)
+
+`scripts/check-entry-points.mjs` runs first in `pnpm check`. It parses `apps/web/src` (syntax only, no application module is imported) and fails closed: syntax it cannot classify is an error. Decision and inventory: `docs/decisions/0005-demo-data.md`.
+
+- **A new server function.** Put it in `apps/web/src/server/<file>.ts` as `export const name = createServerFn({ method: "GET" | "POST" })...handler(...)` (method a string literal; no stored, re-exported or computed `createServerFn`). Add `"<file>.<name>": "read" | "mutation"` to `ENTRY_POINTS` in `server/entry-points.ts`. A `"read"` is a GET whose handler wraps its Effect in `read(...)`. A `"mutation"` is anything that changes state or spends money (database writes, storage, tokens, the capture engine): a POST that wraps its Effect in `mutation(...)` from `./server-fn`, and nothing else (not `respond`, not `read`). Removing a function means removing its entry.
+- **Never run an Effect yourself.** `runtime.runPromise`, `Effect.run*` and `ManagedRuntime` (also through an alias, a destructured name or a call split across lines) are allowed only in the files in `RUNTIME_ALLOWED` (`server/entry-points.ts`): the runtime and gates, the Worker routes, auth wiring and the session readers. Do not add a file there to get a check passing; go through `mutation`/`read`.
+- **A new Worker route.** Export it from its own file under `server/` and add its identifier (a plain imported name, no spread or call) to `workerRoutes` in `server/routes.ts`. Next to it, declare `export const <name>Meta = { path: "/x/*", methods: ["GET"], access: "read" } as const` (strings only). `"read"` means methods within `GET`/`HEAD` and a method guard in the route (compare `request.method` with a string literal, return `undefined` or a 405; the literals must be listed in `methods`). `"mutation"` means the route calls `mutation(...)`, except Better Auth (`/api/auth/*`). A route file with a runtime call goes in `RUNTIME_ALLOWED`.
+- `mutation(effect)` is `respond` plus the single place a demo mode refuses writes (M6 Task 17); outside demo mode it only runs the Effect.
+- No dynamic `import()` of a server module outside the files in `RUNTIME_ALLOWED` (`auth-live.ts` needs one to break an import cycle); a computed specifier is always an error.
 
 ## Realtime
 

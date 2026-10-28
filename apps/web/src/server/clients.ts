@@ -25,7 +25,7 @@ import {
   membership,
   NotFound,
   read,
-  respond,
+  mutation,
   siteInOrg,
 } from "./server-fn"
 
@@ -250,7 +250,7 @@ export const createClient = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ name: Schema.String })))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const name = yield* parseName(data.name)
@@ -265,7 +265,7 @@ export const archiveClient = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, role } = yield* membership(context.session)
         yield* clientInOrg(orgId, data.id)
@@ -295,7 +295,7 @@ export const deleteClient = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, role } = yield* membership(context.session)
         yield* clientInOrg(orgId, data.id)
@@ -372,7 +372,7 @@ export const createSite = createServerFn({ method: "POST" })
     ),
   )
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         yield* clientInOrg(orgId, data.clientId)
@@ -403,7 +403,7 @@ export const updateSiteAddress = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.String, url: Schema.String })))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         yield* siteInOrg(orgId, data.id)
@@ -435,7 +435,7 @@ export const archiveSite = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, role } = yield* membership(context.session)
         const found = yield* siteInOrg(orgId, data.id)
@@ -454,7 +454,7 @@ export const deleteSite = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, role } = yield* membership(context.session)
         yield* siteInOrg(orgId, data.id)

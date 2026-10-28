@@ -6,7 +6,7 @@ import { Effect, Schema } from "effect"
 import { hasPersonalData } from "./branding-data"
 import { auditInOrg } from "./audit-data"
 import { requireSession } from "./require-session"
-import { Invalid, membership, NotFound, respond } from "./server-fn"
+import { Invalid, membership, NotFound, mutation } from "./server-fn"
 
 const SUMMARY_MAX = 2000
 const NOTE_MAX = 1000
@@ -37,7 +37,7 @@ export const saveReportEdit = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveReportInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
@@ -71,7 +71,7 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SaveFindingInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId: orgId, userId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)

@@ -3,6 +3,12 @@ import { BetterAuth } from "./auth-live"
 import type { WorkerRoute } from "./routes"
 import { runtime } from "./runtime"
 
+export const authRouteMeta = {
+  path: "/api/auth/*",
+  methods: ["GET", "POST"],
+  access: "mutation",
+} as const
+
 /** Serves Better Auth's HTTP API under `/api/auth/*` (sign-in, sign-up, sessions, organizations). */
 export const authRoute: WorkerRoute = async (request) => {
   if (!new URL(request.url).pathname.startsWith("/api/auth/")) return undefined

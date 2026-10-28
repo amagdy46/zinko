@@ -13,6 +13,12 @@ const notFound = () => new Response("Not found", { status: 404 })
 /** A file name part from the host: lower-case letters, digits, dots and hyphens only. */
 const safeHost = (host: string) => host.toLowerCase().replaceAll(/[^a-z0-9.-]/g, "-")
 
+export const registerRouteMeta = {
+  path: "/api/audits/*/register.csv",
+  methods: ["GET"],
+  access: "read",
+} as const
+
 /**
  * `GET /api/audits/<auditId>/register.csv`: the audit register as a download, for a member of the
  * audit's organization. The session is resolved, then the membership, then the audit in that

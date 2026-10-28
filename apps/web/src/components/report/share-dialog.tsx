@@ -34,7 +34,7 @@ const DAYS: Record<(typeof EXPIRIES)[number]["value"], (typeof EXPIRIES)[number]
   never: null,
 }
 
-type Versions = Extract<Awaited<ReturnType<typeof listShares>>, { ok: true }>["value"]
+type Versions = Awaited<ReturnType<typeof listShares>>
 
 const expiryText = (expiresAt: Date | string | null, timeZone: string | undefined) =>
   expiresAt === null ? ", never expires" : `, expires ${shortDateTime(expiresAt, timeZone)}`
@@ -81,14 +81,13 @@ function ShareBody({
   const linkField = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    const result = await listShares({ data: { auditId } })
-    if (result.ok) setVersions(result.value)
+    setVersions(await listShares({ data: { auditId } }))
   }, [auditId])
 
   useEffect(() => {
     let current = true
-    void listShares({ data: { auditId } }).then((result) => {
-      if (current && result.ok) setVersions(result.value)
+    void listShares({ data: { auditId } }).then((latest) => {
+      if (current) setVersions(latest)
     })
     return () => {
       current = false

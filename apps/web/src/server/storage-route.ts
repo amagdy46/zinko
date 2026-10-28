@@ -14,6 +14,8 @@ const decodeKey = (encoded: string) => {
   }
 }
 
+export const storageRouteMeta = { path: "/files/*", methods: ["GET"], access: "read" } as const
+
 /**
  * Serves `/files/<key>?expires=..&signature=..` (see `Storage.signedUrl`) straight from the bucket.
  * Keys are opaque: whoever holds a signed URL can read that key, so never build keys from user input.

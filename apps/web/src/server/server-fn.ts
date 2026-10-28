@@ -54,6 +54,14 @@ export const read = <A, E, R extends Env>(effect: Effect.Effect<A, E, R>) =>
     return result.value
   })
 
+/**
+ * `respond` for every state-changing server function (a POST registered "mutation" in
+ * `entry-points.ts`). It is the one place that can refuse writes, so a function never reaches the
+ * runtime by another route: `pnpm check` fails a write that bypasses it. Today it only runs the
+ * Effect; the demo mode (M6 Task 17) puts its refusal here, before any side effect.
+ */
+export const mutation = <A, E, R extends Env>(effect: Effect.Effect<A, E, R>) => respond(effect)
+
 /** The session's organization and role; a user who is not (or no longer) a member gets a 404. */
 export const membership = (session: Session) =>
   activeMembership(session).pipe(Effect.mapError(() => new NotFound({ message: "Not found" })))

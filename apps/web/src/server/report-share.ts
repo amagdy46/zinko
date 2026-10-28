@@ -9,7 +9,7 @@ import { auditInOrg } from "./audit-data"
 import { publishReportData } from "./report-publish-data"
 import { shareInOrg, sharesOf } from "./report-share-data"
 import { requireSession } from "./require-session"
-import { Invalid, membership, respond } from "./server-fn"
+import { Invalid, membership, mutation, read } from "./server-fn"
 
 const LABEL_MAX = 80
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -28,7 +28,7 @@ export const createShareLink = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(CreateInput))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, userId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(organizationId, data.auditId)
@@ -62,7 +62,7 @@ export const listShares = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String })))
   .handler(({ context, data }) =>
-    respond(
+    read(
       Effect.gen(function* () {
         const { organizationId, userId, role } = yield* membership(context.session)
         return yield* sharesOf(organizationId, userId, role, data.auditId)
@@ -75,7 +75,7 @@ export const revokeShare = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ shareId: Schema.String })))
   .handler(({ context, data }) =>
-    respond(
+    mutation(
       Effect.gen(function* () {
         const { organizationId, userId } = yield* membership(context.session)
         const id = yield* shareInOrg(organizationId, data.shareId)
