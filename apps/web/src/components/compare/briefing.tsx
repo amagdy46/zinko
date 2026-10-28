@@ -37,28 +37,32 @@ export function Briefing({
   )
 }
 
-/** The result of a re-check, in place of a briefing. */
+/** The result of a re-check, in place of a briefing: a run that gave no verdict is never counted as a pass. */
 export function RecheckResult({
   ruleId,
   title,
   failingRuns,
+  determinateRuns,
   runs,
 }: {
   ruleId: string
   title: string | null
   failingRuns: number
+  determinateRuns: number
   runs: number
 }) {
+  const unknown = runs - determinateRuns
+  let result = `It no longer fails on the ${count(runs, "run")} re-checked.`
+  if (failingRuns > 0)
+    result = `It still fails on ${failingRuns} of the ${count(runs, "run")} re-checked.`
+  else if (unknown > 0)
+    result = `Re-check incomplete: ${determinateRuns} of ${count(runs, "run")} gave a result, ${unknown} could not be checked or did not finish.`
   return (
     <section aria-labelledby="recheck-heading" className="space-y-1 rounded-lg border bg-card p-4">
       <h2 id="recheck-heading" className="text-base font-semibold">
         Re-check of {title ?? ruleId}
       </h2>
-      <p className="text-sm">
-        {failingRuns === 0
-          ? `It no longer fails on the ${count(runs, "run")} re-checked.`
-          : `It still fails on ${failingRuns} of the ${count(runs, "run")} re-checked.`}
-      </p>
+      <p className="text-sm">{result}</p>
     </section>
   )
 }

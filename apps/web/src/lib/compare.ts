@@ -397,6 +397,7 @@ const confirmationOf = (
   changed: ReadonlySet<string>,
   expectFail: ReadonlyMap<string, boolean>,
   refRuns: ReadonlyMap<string, CellRun>,
+  currentVersions: readonly string[],
   input: Input,
 ): FindingChange["confirmation"] => {
   if (changed.size === 0) return null
@@ -415,7 +416,11 @@ const confirmationOf = (
     const rerun = runByCell.get(cell)
     const row = rerun === undefined ? undefined : rowByRun.get(rerun.id)
     const reference = refRuns.get(cell)
+    // only a determinate verdict (not Could not check) of a run that captured completely, judged
+    // by a comparable rules version, says anything about the change
     if (rerun === undefined || row === undefined || !rerun.complete) continue
+    if (row.status === "inconclusive") continue
+    if (input.ruleChanged(ruleId, [row.rulesVersion, ...currentVersions])) continue
     if (
       reference !== undefined &&
       compatDiffers(ruleId, reference, rerun, input.bannerDependent) !== null
@@ -616,7 +621,7 @@ export const compareAudits = (input: Input) => {
     const expectFail = new Map<string, boolean>()
     for (const cell of changedCells) {
       const status = rowsNow?.get(cell)?.status
-      if (status !== undefined) expectFail.set(cell, status === "fail")
+      if (status !== undefined && status !== "inconclusive") expectFail.set(cell, status === "fail")
       else if (state === "fixed") expectFail.set(cell, false)
     }
     const refRuns = new Map<string, CellRun>()
@@ -635,7 +640,7 @@ export const compareAudits = (input: Input) => {
       if (changedCells.size === 1) because.push("single_run")
     }
     const confirmation = judged
-      ? confirmationOf(ruleId, changedCells, expectFail, refRuns, input)
+      ? confirmationOf(ruleId, changedCells, expectFail, refRuns, versions, input)
       : null
 
     findings.push({

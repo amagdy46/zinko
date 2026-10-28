@@ -170,14 +170,40 @@ export const getOverview = createServerFn({ method: "GET" })
           .select({ kind: audit.kind, ruleId: audit.narrowRuleId })
           .from(audit)
           .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+        // a re-check's result: how many of the runs re-checked gave a verdict, and how many still fail
+        const [verdicts] =
+          self?.kind === "narrow" && self.ruleId !== null
+            ? yield* db
+                .select({
+                  failing:
+                    sql<number>`count(*) filter (where ${checkResult.status} = 'fail')`.mapWith(
+                      Number,
+                    ),
+                  determinate:
+                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable'))`.mapWith(
+                      Number,
+                    ),
+                })
+                .from(checkResult)
+                .innerJoin(run, eq(run.id, checkResult.runId))
+                .where(
+                  and(
+                    eq(run.auditId, auditId),
+                    eq(run.role, "target"),
+                    eq(run.orgId, orgId),
+                    eq(checkResult.orgId, orgId),
+                    eq(checkResult.ruleId, self.ruleId),
+                  ),
+                )
+            : []
         const rechecked = findings.find((f) => f.ruleId === self?.ruleId)
-        // a re-check's result: how many of the runs it re-checked still fail the check
         const recheck =
           self?.kind === "narrow" && self.ruleId !== null
             ? {
                 ruleId: self.ruleId,
                 title: rechecked?.title ?? null,
-                failingRuns: rechecked?.failingRuns ?? 0,
+                failingRuns: verdicts?.failing ?? 0,
+                determinateRuns: verdicts?.determinate ?? 0,
                 runs: coverage.totalRuns,
               }
             : null
