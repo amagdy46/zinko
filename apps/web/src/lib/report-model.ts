@@ -373,7 +373,7 @@ export interface ConsultantPayload {
   } | null
   /** Notes printed in the report that were carried over from an earlier audit and not edited since. */
   carriedNotes: number
-  /** What switching to Detailed would print beyond Standard: the entered page paths and ad-platform IDs. */
+  /** What switching to Detailed would print beyond Standard: the entered page paths and Meta and TikTok IDs. */
   disclosure: { pages: ReadonlyArray<string>; destinations: ReadonlyArray<string> }
   changesSincePublished: boolean
 }

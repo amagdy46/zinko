@@ -188,8 +188,8 @@ function ShareBody({
         ) : null}
         <p className="text-muted-foreground" data-testid="share-preflight">
           {detail === "detailed"
-            ? "Pages print as their paths, and ad-platform IDs are included."
-            : "Pages print as Page 1, Page 2; no page paths or ad-platform IDs."}
+            ? "Pages print as their paths (no query strings), and Meta and TikTok IDs are included. Google Analytics and Google Ads IDs print either way."
+            : "Pages print as Page 1, Page 2: no page addresses, query strings or personal data, and no Meta or TikTok IDs. Google Analytics and Google Ads IDs are shown."}
           {created === null ? ` ${publishNote}` : ""}
         </p>
         {error === null ? null : (

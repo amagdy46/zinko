@@ -349,7 +349,9 @@ export function DisclosureDialog({
           <DialogTitle>Show page addresses</DialogTitle>
           <DialogDescription>
             A page path can hold a name or a token, and no check can tell. Read the list below
-            before you switch it on. Google Analytics and Google Ads IDs print either way.
+            before you switch it on. Off prints page aliases only: no page addresses, query
+            strings or personal data, and no Meta or TikTok IDs. Google Analytics and Google Ads
+            IDs are shown either way.
           </DialogDescription>
         </DialogHeader>
         <RadioGroup
@@ -381,7 +383,7 @@ export function DisclosureDialog({
             ))}
           </ul>
           <p className="text-muted-foreground">
-            Paths are printed as entered, without query or fragment. Ad-platform IDs are the Meta
+            Paths are printed as entered, without query or fragment. The IDs listed are the Meta
             and TikTok pixel IDs found in the evidence.
           </p>
         </div>
