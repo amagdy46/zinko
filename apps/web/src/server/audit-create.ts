@@ -309,7 +309,7 @@ export const createAudit = (input: CreateAudit) =>
           ? [{ pageUrl: startUrl, journey: true }]
           : []),
       ]
-      const runs = runPages.flatMap(({ pageUrl, journey }, p) =>
+      const planned = runPages.flatMap(({ pageUrl, journey }, p) =>
         scenarios.flatMap((scenario, s) =>
           viewports.map((viewport, v) => ({
             orgId,
@@ -324,7 +324,27 @@ export const createAudit = (input: CreateAudit) =>
           })),
         ),
       )
-      yield* db.insert(run).values(runs)
+      // after the others: one accept run per declared host that follows a link from the start URL
+      const [firstViewport] = viewports
+      const crossHostRuns =
+        narrow === undefined &&
+        config.crossHost === true &&
+        startUrl !== undefined &&
+        firstViewport !== undefined
+          ? target.measuredHosts.map((followHost, i) => ({
+              orgId,
+              auditId: created.id,
+              ordinal: planned.length + i,
+              pageUrl: startUrl,
+              journey: true,
+              scenario: "accept",
+              viewport: firstViewport,
+              status: "pending",
+              role: "target",
+              followHost,
+            }))
+          : []
+      yield* db.insert(run).values([...planned, ...crossHostRuns])
       if (baselineId !== null && narrow === undefined)
         yield* copyCarryOver(orgId, created.id, baselineId)
       return created.id

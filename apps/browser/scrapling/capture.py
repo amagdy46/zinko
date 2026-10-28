@@ -70,6 +70,15 @@ BANNER_POLL_S = 0.5
 BANNER_FRAME_S = 1.5
 NAVIGATION_TIMEOUT_MS = 30_000
 CLICK_TIMEOUT_MS = 5_000
+# The index, among `a[href]` in document order, of the first visible http(s) link whose host is
+# exactly `host`, or -1. Mirrors FIND_LINK in `src/engines/playwright.ts`.
+FIND_LINK = r"""(host) =>
+  [...document.querySelectorAll("a[href]")].findIndex((a) => {
+    if (a.protocol !== "http:" && a.protocol !== "https:") return false
+    if (a.hostname.replace(/\.$/, "") !== host) return false
+    const box = a.getBoundingClientRect()
+    return box.width > 0 && box.height > 0 && a.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+  })"""
 CHALLENGE_TITLES = ("Just a moment...", "Attention Required! | Cloudflare")
 MAX_URL = 8192
 CHUNK_BYTES = 1024 * 1024
@@ -1158,6 +1167,56 @@ class Capture:
             self.error("HttpStatus", f"{label}: HTTP {response.status}")
         return True
 
+    async def follow_link(self, index: int, host: str, before: str | None) -> bool:
+        """Clicks the first visible link to exactly `host` and waits for the document it opens.
+
+        Mirrors `followLink` in `src/engines/playwright.ts`: it succeeds only when a new main-frame
+        document committed on `host` or a subdomain of it; anything else is a `JourneyStep` error,
+        and a host the allow-list refuses ends the capture with its own `Navigation` error.
+        """
+        label = f"step {index + 1} follow {host}"
+        position = await self.page.evaluate(f"({FIND_LINK})({json.dumps(host)})")
+        if not isinstance(position, int) or position < 0:
+            self.error("JourneyStep", f"{label}: no visible link to {host} on {self.page.url}")
+            return False
+        timeout = min(NAVIGATION_TIMEOUT_MS, self.remaining_ms())
+        navigated = asyncio.ensure_future(
+            self.page.wait_for_event(
+                "framenavigated", predicate=lambda frame: frame == self.page.main_frame, timeout=timeout
+            )
+        )
+        try:
+            await self.page.locator("a[href]").nth(position).click(timeout=CLICK_TIMEOUT_MS)
+        except Exception as exc:
+            navigated.cancel()
+            self.error("JourneyStep", f"{label}: {exc}".split("\n")[0])
+            return False
+        deadline = time.monotonic() + timeout / 1000
+        while not navigated.done() and self.left_site is None and time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
+        if self.left_site is not None:
+            navigated.cancel()
+            await self.checkpoint()
+            return False
+        if not navigated.done() or navigated.exception() is not None:
+            navigated.cancel()
+            self.error("JourneyStep", f"{label}: the click did not open a page")
+            return False
+        try:
+            await self.page.wait_for_load_state("load", timeout=min(NAVIGATION_TIMEOUT_MS, self.remaining_ms()))
+        except Exception as exc:
+            self.error("JourneyStep", f"{label}: {exc}".split("\n")[0])
+            return False
+        self.committed = True
+        if self.current_document == before:
+            self.error("JourneyStep", f"{label}: the click stayed on the same page")
+            return False
+        arrival = (urlsplit(self.page.url).hostname or "").rstrip(".")
+        if arrival != host and not arrival.endswith("." + host):
+            self.error("JourneyStep", f"{label}: arrived at {arrival}")
+            return False
+        return True
+
     async def run_step(self, index: int, step: dict) -> bool:
         if self.left_site is not None:
             return False
@@ -1205,6 +1264,11 @@ class Capture:
             if not opened:
                 self.pending_navigation = None
                 return False
+        elif step["action"] == "follow":
+            self.pending_navigation = "follow"
+            if not await self.follow_link(index, step["host"], before):
+                self.pending_navigation = None
+                return False
         else:
             self.pending_navigation = "click"
             try:
@@ -1221,7 +1285,7 @@ class Capture:
             else None
         )
         await asyncio.gather(self.observe_window(), *([asyncio.shield(banner)] if banner is not None else []))
-        if step["action"] == "click" and self.current_document != before:
+        if step["action"] not in ("goto", "reload") and self.current_document != before:
             emit({"type": "cookies", "snapshot": held})
         # A click can start an off-site navigation after `load` has already resolved.
         return self.left_site is None

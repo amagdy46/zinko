@@ -125,8 +125,10 @@ function AuditPage() {
     audit.startedAt === null && active
       ? 0
       : Math.max(0, (audit.finishedAt?.getTime() ?? now ?? start.getTime()) - start.getTime())
-  const units = (run: (typeof runs)[number]) =>
-    run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1
+  const units = (run: (typeof runs)[number]) => {
+    if (run.followHost !== null) return 2
+    return run.journey ? 1 + Math.min(5, audit.config.pages.length - 1) : 1
+  }
   const workUnits = runs.reduce((total, run) => total + units(run), 0)
   const remainingUnits = runs
     .filter((run) => run.status === "pending" || run.status === "running")

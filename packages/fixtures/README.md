@@ -85,6 +85,8 @@ Any page accepts `?delay=<ms>` (at most 300000): the response is held that long,
 
 `/post-form/timed?after=<ms>` and `/post-form/pagehide` answer a GET page that submits a POST form to `/post-form/received` by itself (after the delay, or when the page is hidden or left); they test that a `reload` step refuses a page that became a POST. They are not sites.
 
+Pages requested on a `www.<name>` host (`www.shop.localhost:4400`) also link to `checkout.<name>` (the same path under `/product`), and pages on `localhost` link to `127.0.0.1` on the same port: the link a `follow` step clicks (`--follow checkout.shop.localhost`, `--follow 127.0.0.1`). The server answers on any `Host`; `*.localhost` names reach it through the engine's loopback mapping, which needs `ALLOW_PRIVATE_NETWORKS=true`. `/follow-test/` is a page of links for the follow step's failure cases, on the subdomains of the host it is requested on: `stay.<parent>` (a handler cancels the navigation), `spa.<parent>` (a same-document `pushState`), `elsewhere.<parent>` (a handler navigates to `other.<parent>/clean/`), `hidden.<parent>` (not displayed). Expected `--follow <name>.<parent> --allow-host <parent>`: `stay` "the click did not open a page", `spa` "the click stayed on the same page", `elsewhere` "arrived at other.<parent>", `hidden` and any host with no link "no visible link to <host>"; all `JourneyStep` errors, on both engines.
+
 `/r?to=<url>` answers `302` to any URL; it exists to test the capture engine's SSRF policy.
 
 ## inspect

@@ -35,6 +35,10 @@ const policyProblem = async (request: CaptureRequest): Promise<string | undefine
   const resolved = await resolveHost(start.url.hostname, allowPrivate)
   if (!resolved.ok) return `${request.url}: ${resolved.reason}`
   for (const step of request.journey ?? []) {
+    if (step.action === "follow") {
+      const checked = checkUrl(`http://${step.host}/`, allowPrivate)
+      if (!checked.ok) return `${step.host}: ${checked.reason}`
+    }
     if (step.action !== "goto") continue
     const checked = checkUrl(step.url, allowPrivate)
     if (!checked.ok) return `${step.url}: ${checked.reason}`

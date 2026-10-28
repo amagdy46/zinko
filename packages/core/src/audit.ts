@@ -37,6 +37,11 @@ export const AuditConfig = Schema.Struct({
    */
   reload: Schema.optionalKey(Schema.Boolean),
   /**
+   * Adds one accept-only journey run per declared measured host (at most 3): the visitor follows a
+   * link to that host, to see whether consent and identity travel with them. Needs `measuredHosts`.
+   */
+  crossHost: Schema.optionalKey(Schema.Boolean),
+  /**
    * The site's declared measured hosts, copied when the audit is created so that editing the site
    * later changes nothing in a running or retried audit. Optional, so older configs decode.
    */

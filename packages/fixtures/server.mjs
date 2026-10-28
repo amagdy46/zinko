@@ -137,6 +137,25 @@ async function handle(req, res) {
       `<!doctype html><title>received</title><h1>received by ${req.method}</h1>`,
     )
 
+  // Links for the follow step's failure cases, all on subdomains of the request host's parent:
+  // `stay` (a click handler that cancels the navigation), `spa` (a same-document pushState),
+  // `elsewhere` (a handler that navigates to another host), `hidden` (a link nobody can click).
+  if (path === "/follow-test/") {
+    const port = (req.headers.host ?? "").split(":")[1]
+    const parent = (req.headers.host ?? "").split(":")[0].split(".").slice(1).join(".")
+    const at = (name, to = "/follow-test/") => `//${name}.${parent}${port ? `:${port}` : ""}${to}`
+    return send(
+      res,
+      200,
+      { "content-type": "text/html; charset=utf-8" },
+      `<!doctype html><title>follow-test</title>
+<a href="${at("stay")}" onclick="event.preventDefault()">stay</a>
+<a href="${at("spa")}" onclick="event.preventDefault(); history.pushState(null, '', '/follow-test/next')">spa</a>
+<a href="${at("elsewhere")}" onclick="event.preventDefault(); location.href = '${at("other", "/clean/")}'">elsewhere</a>
+<a href="${at("hidden")}" style="display:none">hidden</a>`,
+    )
+  }
+
   if (path === "/r") {
     const to = url.searchParams.get("to")
     if (!to || !/^[\x21-\x7e]+$/.test(to)) {
@@ -206,7 +225,14 @@ async function handle(req, res) {
   if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
 
   const gpcHeader = req.headers["sec-gpc"]
-  const body = renderPage({ name, page: pages[rest], flags, query: url.search, gpcHeader })
+  const body = renderPage({
+    name,
+    page: pages[rest],
+    flags,
+    query: url.search,
+    gpcHeader,
+    host: req.headers.host,
+  })
   const headers = { "content-type": "text/html; charset=utf-8" }
   if (flags.gpcEcho) headers["x-sec-gpc-received"] = gpcHeader ?? "(not sent)"
   return send(res, 200, headers, body)

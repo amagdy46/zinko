@@ -60,7 +60,11 @@ export const verdictMeaning = (verdict: Verdict | Resolution) => {
 export const cellPage = (cell: CellKey) => {
   const url = URL.canParse(cell.page) ? new URL(cell.page) : null
   const path = url === null ? cell.page : `${url.pathname}${url.search}`
-  const label = cell.itinerary === null ? path : `Journey from ${path}`
+  const followed = cell.itinerary?.find((step) => step.startsWith("follow "))
+  const label =
+    cell.itinerary === null
+      ? path
+      : `Journey from ${path}${followed === undefined ? "" : `, then ${followed.slice("follow ".length)}`}`
   return cell.injected ? `${label} (test click IDs)` : label
 }
 

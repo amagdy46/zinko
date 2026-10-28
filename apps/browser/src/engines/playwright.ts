@@ -959,6 +959,96 @@ const reloadRefusal = (
   return `the page was loaded with ${method ?? "an unknown method"}, and a reload would send it again`
 }
 
+// The index, among `a[href]` in document order, of the first visible http(s) link whose host is
+// exactly `host` (a www or apex alias is another host), or -1. Mirrored in `scrapling/capture.py`.
+const FIND_LINK = `(host) =>
+  [...document.querySelectorAll("a[href]")].findIndex((a) => {
+    if (a.protocol !== "http:" && a.protocol !== "https:") return false
+    if (a.hostname.replace(/\\.$/, "") !== host) return false
+    const box = a.getBoundingClientRect()
+    return box.width > 0 && box.height > 0 && a.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })
+  })`
+
+const until = (condition: () => boolean, ms: number) =>
+  new Promise<boolean>((resolve) => {
+    const deadline = Date.now() + ms
+    const timer = setInterval(() => {
+      const met = condition()
+      if (met || Date.now() >= deadline) {
+        clearInterval(timer)
+        resolve(met)
+      }
+    }, 50)
+  })
+
+/**
+ * Clicks the first visible link to exactly `host` with a real mouse click (the Google tag decorates
+ * links when they are clicked) and waits for the document it opens. It succeeds only when a new
+ * main-frame document committed on `host` or a subdomain of it (a redirect from the declared host
+ * to a subdomain may load; the rules decide what that is worth); anything else is a `JourneyStep`
+ * error. A host the allow-list refuses ends the capture with its own `Navigation` error.
+ */
+const followLink = async (
+  current: Page,
+  index: number,
+  host: string,
+  before: string | undefined,
+) => {
+  const label = `step ${index + 1} follow ${host}`
+  const position = await current.evaluate(`(${FIND_LINK})(${JSON.stringify(host)})`)
+  if (typeof position !== "number" || position < 0) {
+    error("JourneyStep", `${label}: no visible link to ${host} on ${current.url()}`)
+    return false
+  }
+  const timeout = Math.min(NAVIGATION_TIMEOUT_MS, remainingMs())
+  const navigated = current
+    .waitForEvent("framenavigated", {
+      predicate: (frame) => frame === current.mainFrame(),
+      timeout,
+    })
+    .then(
+      () => "navigated" as const,
+      () => "timeout" as const,
+    )
+  try {
+    await current.locator("a[href]").nth(position).click({ timeout: CLICK_TIMEOUT_MS })
+  } catch (cause) {
+    error("JourneyStep", `${label}: ${firstLine(cause)}`)
+    return false
+  }
+  const refused = until(() => leftSite !== undefined, timeout).then((hit) =>
+    hit ? ("refused" as const) : ("timeout" as const),
+  )
+  const outcome = await Promise.race([navigated, refused])
+  if (leftSite !== undefined) {
+    await checkpoint()
+    return false
+  }
+  if (outcome === "timeout") {
+    error("JourneyStep", `${label}: the click did not open a page`)
+    return false
+  }
+  try {
+    await current.waitForLoadState("load", {
+      timeout: Math.min(NAVIGATION_TIMEOUT_MS, remainingMs()),
+    })
+  } catch (cause) {
+    error("JourneyStep", `${label}: ${firstLine(cause)}`)
+    return false
+  }
+  committed = true
+  if (currentDocument === before) {
+    error("JourneyStep", `${label}: the click stayed on the same page`)
+    return false
+  }
+  const arrival = new URL(current.url()).hostname.replace(/\.$/, "")
+  if (arrival !== host && !arrival.endsWith(`.${host}`)) {
+    error("JourneyStep", `${label}: arrived at ${arrival}`)
+    return false
+  }
+  return true
+}
+
 const runStep = async (
   index: number,
   step: NonNullable<EngineJob["request"]["journey"]>[number],
@@ -1001,6 +1091,13 @@ const runStep = async (
       pendingNavigation = undefined
       return false
     }
+  } else if (step.action === "follow") {
+    pendingNavigation = "follow"
+    const arrived = await followLink(current, index, step.host, before)
+    if (!arrived) {
+      pendingNavigation = undefined
+      return false
+    }
   } else {
     pendingNavigation = "click"
     try {
@@ -1020,7 +1117,7 @@ const runStep = async (
       ? bannerWindows.get(currentDocument)
       : undefined
   await Promise.all([observeWindow(), banner])
-  if (step.action === "click" && currentDocument !== before)
+  if (step.action !== "goto" && step.action !== "reload" && currentDocument !== before)
     emit({ type: "cookies", snapshot: held })
   // A click can start an off-site navigation after `load` has already resolved.
   return leftSite === undefined

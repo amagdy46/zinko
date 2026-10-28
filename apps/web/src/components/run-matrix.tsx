@@ -151,12 +151,15 @@ export function RunMatrix({
         </TableBody>
       </Table>
     )
-  const pageKey = (run: AuditRun) => `${run.pageUrl}\0${run.journey}`
+  const pageKey = (run: AuditRun) => `${run.pageUrl}\0${run.journey}\0${run.followHost ?? ""}`
   const pages = [...new Map(runs.map((run) => [pageKey(run), run])).values()]
   const countOf = (label: (run: AuditRun) => string, run: AuditRun) =>
     pages.filter((other) => label(other) === label(run)).length
   const withHost = (run: AuditRun) => `${new URL(run.pageUrl).host}${runPage(run)}`
-  const withUrl = (run: AuditRun) => (run.journey ? `Journey from ${run.pageUrl}` : run.pageUrl)
+  const withUrl = (run: AuditRun) => {
+    if (run.followHost !== null) return `Journey from ${run.pageUrl}, then ${run.followHost}`
+    return run.journey ? `Journey from ${run.pageUrl}` : run.pageUrl
+  }
   const pageLabel = (run: AuditRun) => {
     if (countOf(runPageLabel, run) === 1) return runPageLabel(run)
     if (countOf(runPage, run) === 1) return runPage(run)

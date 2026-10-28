@@ -29,6 +29,13 @@ export const pathLabels = (pageUrls: ReadonlyArray<string>) => {
   )
 }
 
-/** A run's page for display: the path, and "Journey from" for the journey run. */
-export const runPageLabel = (run: { pageUrl: string; journey: boolean }) =>
-  run.journey ? `Journey from ${withoutQuery(run.pageUrl)}` : withoutQuery(run.pageUrl)
+/** A run's page for display: the path, "Journey from" for the journey run, and the host a cross-host run follows a link to. */
+export const runPageLabel = (run: {
+  pageUrl: string
+  journey: boolean
+  followHost?: string | null
+}) => {
+  if (run.followHost !== undefined && run.followHost !== null)
+    return `Journey from ${withoutQuery(run.pageUrl)}, then ${run.followHost}`
+  return run.journey ? `Journey from ${withoutQuery(run.pageUrl)}` : withoutQuery(run.pageUrl)
+}

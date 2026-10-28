@@ -86,6 +86,7 @@ const cellRunsOf = (orgId: string, auditId: string, config: AuditConfig, withBan
         scenario: run.scenario,
         viewport: run.viewport,
         journey: run.journey,
+        followHost: run.followHost,
         consent: run.consent,
         decoder: run.decoderVersion,
         status: run.status,
@@ -393,6 +394,7 @@ const tagSideOf = (orgId: string, auditId: string, config: AuditConfig) =>
         scenario: run.scenario,
         viewport: run.viewport,
         journey: run.journey,
+        followHost: run.followHost,
         status: run.status,
       })
       .from(run)

@@ -7,14 +7,27 @@ const escapeHtml = (text) =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
 
-export function renderPage({ name, page, flags, query, gpcHeader }) {
+// The other host a page links to, computed from the host it was requested on: `www.<site>` links to
+// `checkout.<site>` (a subdomain), `localhost` to `127.0.0.1` (an unrelated host, the cross-domain case).
+function otherHost(host) {
+  if (host === undefined) return undefined
+  const [name = "", port] = host.split(":")
+  const suffix = port === undefined ? "" : `:${port}`
+  if (name.startsWith("www.")) return `checkout.${name.slice(4)}${suffix}`
+  return name === "localhost" ? `127.0.0.1${suffix}` : undefined
+}
+
+export function renderPage({ name, page, flags, query, gpcHeader, host }) {
   const base = `/${name}`
   const suffix = flags.keepQuery ? query : ""
   const nav = [
     `<a href="${base}/${suffix}">Home</a>`,
     `<a href="${base}/product${suffix}">Product</a>`,
     `<a href="${base}/thank-you${suffix}">Thank you</a>`,
-  ].join(" | ")
+  ]
+  const other = otherHost(host)
+  if (other !== undefined) nav.push(`<a href="//${other}${base}/product${suffix}">Checkout</a>`)
+  const navHtml = nav.join(" | ")
   const config = JSON.stringify({ page, ...flags }).replaceAll("<", "\\u003c")
   const gpc =
     flags.gpcEcho && page === "home"
@@ -41,7 +54,7 @@ export function renderPage({ name, page, flags, query, gpcHeader }) {
   <script src="/_shared/tags.js"></script>
 </head>
 <body>
-  <nav>${nav}</nav>
+  <nav>${navHtml}</nav>
   <h1>${titles[page]}</h1>
   <p>Fixture site <strong>${name}</strong>.</p>
   ${gpc}

@@ -102,9 +102,15 @@ export type HostCheck =
   | { readonly ok: true; readonly addresses: ReadonlyArray<string> }
   | { readonly ok: false; readonly reason: string }
 
-/** Resolves `host` and refuses it if any address is private, unless `allowPrivate` is set. */
+/**
+ * Resolves `host` and refuses it if any address is private, unless `allowPrivate` is set. With
+ * `allowPrivate`, `*.localhost` names are loopback (RFC 6761) whatever the system resolver says,
+ * so the fixtures' virtual hosts work on machines that only resolve `localhost` itself.
+ */
 export const resolveHost = async (host: string, allowPrivate: boolean): Promise<HostCheck> => {
   const name = host.replace(/^\[|\]$/g, "")
+  if (allowPrivate && name.replace(/\.$/, "").endsWith(".localhost"))
+    return { ok: true, addresses: ["127.0.0.1"] }
   const answers: ReadonlyArray<LookupAddress> = await lookup(name, {
     all: true,
     verbatim: true,

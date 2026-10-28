@@ -94,6 +94,9 @@ function NewAuditForm() {
   const [clickIds, setClickIds] = useState(last?.clickIds ?? false)
   const [journey, setJourney] = useState(last?.journey ?? false)
   const [reload, setReload] = useState(last?.reload ?? false)
+  const [crossHost, setCrossHost] = useState(
+    site.measuredHosts.length > 0 && (last?.crossHost ?? false),
+  )
   const [blockVendorRequests, setBlockVendorRequests] = useState(last?.blockVendorRequests ?? true)
   const [errors, setErrors] = useState<Errors>({})
   const [pending, setPending] = useState(false)
@@ -109,6 +112,7 @@ function NewAuditForm() {
     setClickIds(false)
     setJourney(false)
     setReload(false)
+    setCrossHost(false)
     setBlockVendorRequests(true)
     setErrors({})
   }
@@ -139,6 +143,7 @@ function NewAuditForm() {
       journey && startError === undefined
         ? Math.min(keyPages.length, JOURNEY_STEPS) + (reload ? 1 : 0)
         : 0,
+    crossHostRuns: crossHost && startError === undefined ? site.measuredHosts.length : 0,
   })
   const reloadTarget = keyPages[Math.min(keyPages.length, JOURNEY_STEPS) - 1]
   const scenarioReason = scenarios.length === 0 ? "Choose at least one scenario." : undefined
@@ -178,6 +183,7 @@ function NewAuditForm() {
           blockVendorRequests,
           journey,
           reload: journey && reload,
+          crossHost,
         },
       },
     })
@@ -415,6 +421,14 @@ function NewAuditForm() {
                     ))}
                   </ol>
                 </div>
+              )}
+              {site.measuredHosts.length > 0 && (
+                <Toggle
+                  label="Also follow links to the site's other hosts"
+                  help={`Opens the start URL, accepts the banner, then clicks a link to ${site.measuredHosts.join(", ")} to see whether consent and the visitor's analytics identity carry over. Adds one accept run per host (${site.measuredHosts.length}), using the first selected viewport.`}
+                  checked={crossHost}
+                  onChange={setCrossHost}
+                />
               )}
               <Collapsible>
                 <CollapsibleTrigger className="-my-1.5 py-1.5 text-sm font-medium underline-offset-4 hover:underline">

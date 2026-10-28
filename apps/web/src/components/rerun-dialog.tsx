@@ -100,6 +100,7 @@ function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void 
         config.journey === true && config.pages.length > 1
           ? Math.min(config.pages.length - 1, JOURNEY_STEPS)
           : 0,
+      crossHostRuns: config.crossHost === true ? (config.measuredHosts?.length ?? 0) : 0,
     })
     let comparison = "There is no earlier evaluated audit to compare it with."
     if (baseline !== null)

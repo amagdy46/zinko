@@ -34,6 +34,9 @@ capture options:
   --click <selector>                           Click an element after the page loads (repeatable)
   --goto <url>                                 Navigate to another URL (repeatable)
   --reload                                     Reload the current page (repeatable; normally last)
+  --follow <host>                              Click the first visible link to exactly <host> (repeatable)
+  --allow-host <host>                          Keep navigations on this host and its subdomains (repeatable);
+                                               without it any host may be opened
   --engine <url>                               Capture engine (default: http://localhost:8080)
   --block-vendors                              Answer vendor collection requests locally
   --rules                                      Run the checks on each scenario and list their results
@@ -43,7 +46,7 @@ capture options:
   --page-paths                                 With --explain-digest or --explain-prompt: send each page's path as entered, not an alias
   --json                                       Print JSON instead of tables (with --rules, adds checks)
 
---click, --goto and --reload run in the order given, at most 8 steps in total.
+--click, --goto, --reload and --follow run in the order given, at most 8 steps in total.
 `
 
 const DEFAULT_ENGINE = "http://localhost:8080"
@@ -304,14 +307,24 @@ function renderDigests(scenario: Scenario, digests: readonly Digest[], prompt: b
   out("")
 }
 
-/** As in an audit's journey runs, a journey navigates to other pages or reloads one; a click alone does not count. */
+/** As in an audit's journey runs, a journey navigates to other pages, reloads one or follows a link; a click alone does not count. */
 const isJourney = (steps: readonly JourneyStep[]) =>
-  steps.some((step) => step.action === "goto" || step.action === "reload")
+  steps.some(
+    (step) => step.action === "goto" || step.action === "reload" || step.action === "follow",
+  )
 
 function isHttpUrl(value: string): boolean {
   if (!URL.canParse(value)) return false
   const { protocol, hostname } = new URL(value)
   return (protocol === "http:" || protocol === "https:") && hostname !== ""
+}
+
+/** A bare host name as `URL` writes it, for `--follow` and `--allow-host`. */
+function hostOf(value: string): string {
+  const host = URL.canParse(`http://${value}`) ? new URL(`http://${value}`).hostname : ""
+  if (host === "" || value.includes("/") || value.includes(":"))
+    throw new CliError(`"${value}" is not a host name (no scheme, port or path).`)
+  return host.replace(/\.$/, "")
 }
 
 function parseCapture(argv: string[]) {
@@ -325,6 +338,8 @@ function parseCapture(argv: string[]) {
       click: { type: "string", multiple: true },
       goto: { type: "string", multiple: true },
       reload: { type: "boolean", multiple: true },
+      follow: { type: "string", multiple: true },
+      "allow-host": { type: "string", multiple: true },
       engine: { type: "string", default: DEFAULT_ENGINE },
       "block-vendors": { type: "boolean", default: false },
       json: { type: "boolean", default: false },
@@ -348,10 +363,11 @@ function parseCapture(argv: string[]) {
     if (token.value === undefined) continue
     if (token.name === "click") journey.push({ action: "click", selector: token.value })
     if (token.name === "goto") journey.push({ action: "goto", url: token.value })
+    if (token.name === "follow") journey.push({ action: "follow", host: hostOf(token.value) })
   }
   if (journey.length > MAX_STEPS) {
     throw new CliError(
-      `At most ${MAX_STEPS} --click/--goto/--reload steps are allowed; got ${journey.length}.`,
+      `At most ${MAX_STEPS} --click/--goto/--reload/--follow steps are allowed; got ${journey.length}.`,
     )
   }
   const badUrl = [
@@ -367,6 +383,9 @@ function parseCapture(argv: string[]) {
     viewport: values.mobile ? ("mobile" as const) : ("desktop" as const),
     journey,
     blockVendorRequests: values["block-vendors"],
+    ...(values["allow-host"] === undefined
+      ? {}
+      : { allowedHosts: values["allow-host"].map(hostOf) }),
   }
   // Everything but the scenario is the same for each run, so a bad URL or step fails once, here.
   try {

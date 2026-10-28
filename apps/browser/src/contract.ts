@@ -8,12 +8,6 @@ const TargetUrl = Schema.String.check(Schema.isPattern(/^https?:\/\//i), Schema.
 
 export const Scenario = Schema.Literals(["none", "accept", "reject", "gpc"])
 
-const JourneyStep = Schema.Union([
-  Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
-  Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
-  Schema.Struct({ action: Schema.Literal("reload") }),
-])
-
 const CanonicalHost = Schema.String.check(
   Schema.isMaxLength(253),
   Schema.makeFilter(
@@ -24,6 +18,13 @@ const CanonicalHost = Schema.String.check(
     { expected: "a canonical hostname, as URL gives it, with no trailing dot" },
   ),
 )
+
+const JourneyStep = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
+  Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
+  Schema.Struct({ action: Schema.Literal("reload") }),
+  Schema.Struct({ action: Schema.Literal("follow"), host: CanonicalHost }),
+])
 
 export const CaptureRequest = Schema.Struct({
   url: TargetUrl,

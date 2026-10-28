@@ -63,8 +63,25 @@ export const injectionOf = (url: string) => {
   return Object.entries(TEST_CLICK_IDS).every(([name, value]) => searchParams.get(name) === value)
 }
 
+/** A journey run walks the key pages; a cross-host run only follows a link from the start URL to its host. */
+const itineraryOf = (
+  run: { journey: boolean; followHost?: string | null },
+  start: string,
+  pages: ReadonlyArray<string>,
+) => {
+  if (run.followHost !== undefined && run.followHost !== null)
+    return [normalised(start), `follow ${run.followHost}`]
+  return run.journey ? [start, ...pages.slice(1, 1 + JOURNEY_STEPS)].map(normalised) : null
+}
+
 export const cellKeyOf = (
-  run: { pageUrl: string; scenario: string; viewport: string; journey: boolean },
+  run: {
+    pageUrl: string
+    scenario: string
+    viewport: string
+    journey: boolean
+    followHost?: string | null
+  },
   config: { pages: ReadonlyArray<string> },
 ): CellKey => {
   const injected = injectionOf(run.pageUrl)
@@ -73,9 +90,7 @@ export const cellKeyOf = (
     page: normalised(injected ? start : run.pageUrl),
     scenario: run.scenario,
     viewport: run.viewport,
-    itinerary: run.journey
-      ? [start, ...config.pages.slice(1, 1 + JOURNEY_STEPS)].map(normalised)
-      : null,
+    itinerary: itineraryOf(run, start, config.pages),
     injected,
   }
 }
@@ -783,9 +798,11 @@ export const recheckTargets = (
 
 type ConfigShape = Pick<AuditConfig, "pages" | "scenarios" | "viewports" | "clickIds"> & {
   journey?: boolean | undefined
+  crossHost?: boolean | undefined
+  measuredHosts?: ReadonlyArray<string> | undefined
 }
 
-/** Every cell an audit with this config runs: its plain runs, then its journey runs. */
+/** Every cell an audit with this config runs: its plain runs, its journey runs, then its cross-host runs. */
 export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
   const [start] = config.pages
   const plain = config.pages.flatMap((page, p) =>
@@ -799,7 +816,19 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
       })),
     ),
   )
-  if (config.journey !== true || config.pages.length < 2 || start === undefined) return plain
+  const [firstViewport] = config.viewports
+  const crossHost =
+    config.crossHost === true && start !== undefined && firstViewport !== undefined
+      ? (config.measuredHosts ?? []).map((host) => ({
+          page: normalised(start),
+          scenario: "accept",
+          viewport: firstViewport,
+          itinerary: [normalised(start), `follow ${host}`],
+          injected: config.clickIds,
+        }))
+      : []
+  if (config.journey !== true || config.pages.length < 2 || start === undefined)
+    return [...plain, ...crossHost]
   const itinerary = [start, ...config.pages.slice(1, 1 + JOURNEY_STEPS)].map(normalised)
   return [
     ...plain,
@@ -812,6 +841,7 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
         injected: config.clickIds,
       })),
     ),
+    ...crossHost,
   ]
 }
 

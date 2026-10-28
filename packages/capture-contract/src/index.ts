@@ -19,14 +19,6 @@ const TargetUrl = Schema.String.check(
 export const Scenario = Schema.Literals(["none", "accept", "reject", "gpc"])
 export type Scenario = typeof Scenario.Type
 
-/** Runs in the same browser context, after the start URL has loaded and the consent action. */
-export const JourneyStep = Schema.Union([
-  Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
-  Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
-  Schema.Struct({ action: Schema.Literal("reload") }),
-])
-export type JourneyStep = typeof JourneyStep.Type
-
 /**
  * A hostname exactly as `URL` gives it (lowercase, punycode ASCII, IP literals normalized), without
  * a trailing dot. Mirrored in `apps/browser/src/contract.ts`.
@@ -41,6 +33,18 @@ const CanonicalHost = Schema.String.check(
     { expected: "a canonical hostname, as URL gives it, with no trailing dot" },
   ),
 )
+
+/**
+ * Runs in the same browser context, after the start URL has loaded and the consent action.
+ * `follow` clicks the first visible link whose host is exactly `host`.
+ */
+export const JourneyStep = Schema.Union([
+  Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
+  Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
+  Schema.Struct({ action: Schema.Literal("reload") }),
+  Schema.Struct({ action: Schema.Literal("follow"), host: CanonicalHost }),
+])
+export type JourneyStep = typeof JourneyStep.Type
 
 export const CaptureRequest = Schema.Struct({
   url: TargetUrl,

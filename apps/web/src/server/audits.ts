@@ -348,6 +348,7 @@ export const getAudit = createServerFn({ method: "GET" })
               scenario: r.scenario,
               viewport: r.viewport,
               journey: r.journey,
+              followHost: r.followHost,
               role: r.role,
               status: r.status,
               failure: r.failure,

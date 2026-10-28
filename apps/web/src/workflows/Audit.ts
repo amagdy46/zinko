@@ -259,6 +259,23 @@ const grantFor = (auditId: string, turn: string) =>
     }
   })
 
+/** A cross-host run only follows its link; a journey run walks the key pages, then reloads when asked. */
+const journeyOf = (
+  current: { journey: boolean; followHost: string | null },
+  pages: ReadonlyArray<string>,
+  reload: boolean,
+) => {
+  if (current.followHost !== null)
+    return { journey: [{ action: "follow" as const, host: current.followHost }] }
+  if (!current.journey) return {}
+  return {
+    journey: [
+      ...pages.slice(1, 1 + JOURNEY_STEPS).map((url) => ({ action: "goto" as const, url })),
+      ...(reload ? [{ action: "reload" as const }] : []),
+    ],
+  }
+}
+
 /**
  * Captures one run on the engine `grant` holds and stores it in R2, at most once: a run that
  * already has its keys, or whose capture is already in R2 (written before a database failure), is
@@ -314,16 +331,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
           url: current.pageUrl,
           scenario,
           viewport,
-          ...(current.journey
-            ? {
-                journey: [
-                  ...pages
-                    .slice(1, 1 + JOURNEY_STEPS)
-                    .map((url) => ({ action: "goto" as const, url })),
-                  ...(reload === true ? [{ action: "reload" as const }] : []),
-                ],
-              }
-            : {}),
+          ...journeyOf(current, pages, reload === true),
           blockVendorRequests,
           allowedHosts: [host, ...(measuredHosts ?? [])],
         },

@@ -60,6 +60,7 @@ export const latestRecheckOf = (orgId: string, auditId: string, ruleId: string) 
         scenario: run.scenario,
         viewport: run.viewport,
         journey: run.journey,
+        followHost: run.followHost,
       })
       .from(checkResult)
       .innerJoin(run, eq(run.id, checkResult.runId))

@@ -416,3 +416,11 @@ Engines for this branch: Playwright on :8093, Scrapling on :8094, fixtures on :4
 - `RunInput.measuredHosts` is added with its first reader (Task 7), not here.
 - The workflow already sends `allowedHosts: [site.host, ...config.measuredHosts]` from the config snapshot in this task, because the verification of the snapshot needs a step that reads it.
 - Private-host refusal cannot be exercised on the dev stage (`ALLOW_PRIVATE_SITES` is on there); it is the same `isPrivateHost` check as `parseSiteUrl`, and `checkout.shop.localhost` is private by that function.
+
+### Task 6
+
+- **Fixtures `consentScope` and `linker` move to Tasks 7 and 8**, where a rule first reads them; Task 6 adds only the host-dependent `Checkout` link and `/follow-test/`.
+- **Identity of cross-host runs (plan silent).** A cross-host run is a journey run, so the matrix row, the run list and the compare cell would have been the same as the ordinary journey's accept run. `run.follow_host` is now part of the run list key and label (`Journey from /clean/, then <host>`), of `cellKeyOf` (itinerary `[start, "follow <host>"]`) and of `cellsOfConfig`. The tag matrix and the matrix slice still treat every journey run as the "journey" page, so the cross-host runs share that column.
+- **`consent.not-persisted-across-navigation` fires on a follow document.** On the first cross-host audit the rule failed on the `follow` document (host-only consent cookie), so one cause would be two findings. Task 7 removes `follow` documents from that rule's required documents.
+- **DNS checks (d)** used a throwaway resolver preloaded into the engine (`NODE_OPTIONS=--require`, a stub of `dns.promises.lookup`: `mixed.test` answers 93.184.216.34 and 127.0.0.1, `rebind.test` answers 203.0.113.9 once, then 127.0.0.1). No hosts-file entry was available.
+- The wait for the arrival is `framenavigated` on the main frame plus `load`; a click that opens nothing costs the 30 s navigation timeout before it is reported.

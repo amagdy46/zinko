@@ -37,18 +37,21 @@ export const runBreakdown = ({
   scenarios,
   viewports,
   journeySteps,
+  crossHostRuns = 0,
 }: {
   pages: number
   scenarios: number
   viewports: number
   journeySteps: number
+  /** Accept runs that follow a link to a declared host: two page loads each. */
+  crossHostRuns?: number
 }) => {
   const pageRuns = pages * scenarios * viewports
   const journeyRuns = journeySteps > 0 ? scenarios * viewports : 0
   const journeyWork = journeyRuns * (1 + journeySteps)
-  const workUnits = pageRuns + journeyWork
+  const workUnits = pageRuns + journeyWork + crossHostRuns * 2
   return {
-    runs: pageRuns + journeyRuns,
+    runs: pageRuns + journeyRuns + crossHostRuns,
     workUnits,
     duration: estimateDuration(workUnits),
     lines: [
@@ -63,6 +66,15 @@ export const runBreakdown = ({
               label: `Journey × ${count(scenarios, "scenario")} × ${count(viewports, "viewport")}`,
               runs: journeyRuns,
               workUnits: journeyWork,
+            },
+          ]
+        : []),
+      ...(crossHostRuns > 0
+        ? [
+            {
+              label: `Other hosts × ${count(crossHostRuns, "host")}`,
+              runs: crossHostRuns,
+              workUnits: crossHostRuns * 2,
             },
           ]
         : []),
