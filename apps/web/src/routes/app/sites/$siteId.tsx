@@ -1,6 +1,6 @@
 import { NotFound } from "@/components/not-found"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import { useRef, useState } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
@@ -10,6 +10,15 @@ import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/empty-state"
 import { FindingCounts } from "@/components/first-run"
 import { Badge } from "@/components/ui/badge"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,9 +33,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { count, relativeTime } from "@/lib/format"
+import { count, relativeTime, shortDateTime, useTimeZone } from "@/lib/format"
+import { formField } from "@/lib/form"
+import { withScheme } from "@/lib/site-url"
 import { Button } from "@/components/ui/button"
-import { archiveSite, deleteSite, getSite } from "@/server/clients"
+import { archiveSite, deleteSite, getSite, updateSiteAddress } from "@/server/clients"
 
 const Page = Schema.Int.check(Schema.isGreaterThan(0))
 
@@ -44,6 +55,29 @@ function SitePage() {
   const router = useRouter()
   const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [urlError, setUrlError] = useState<string>()
+  const timeZone = useTimeZone()
+
+  async function saveAddress(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPending(true)
+    try {
+      const result = await updateSiteAddress({
+        data: { id: site.id, url: withScheme(formField(new FormData(event.currentTarget), "url")) },
+      })
+      if (!result.ok) {
+        setUrlError(result.message)
+        return
+      }
+      setEditing(false)
+      toast.success("Address saved")
+      await router.invalidate()
+    } finally {
+      setPending(false)
+    }
+  }
 
   async function leave(action: typeof archiveSite) {
     const result = await action({ data: { id: site.id } })
@@ -78,7 +112,7 @@ function SitePage() {
                 </Link>
               </Button>
             ) : null}
-            {canManage && !site.archived ? (
+            {!site.archived ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button ref={menuButton} variant="ghost" size="icon" aria-label="Site actions">
@@ -86,22 +120,76 @@ function SitePage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onSelect={() => setConfirming("archive")}>
-                    Archive
+                  <DropdownMenuItem onSelect={() => setEditing(true)}>
+                    Edit address
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    className="text-destructive"
-                    onSelect={() => setConfirming("delete")}
-                  >
-                    Delete
-                  </DropdownMenuItem>
+                  {canManage ? (
+                    <>
+                      <DropdownMenuItem onSelect={() => setConfirming("archive")}>
+                        Archive
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        variant="destructive"
+                        className="text-destructive"
+                        onSelect={() => setConfirming("delete")}
+                      >
+                        Delete
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : null}
           </>
         }
       />
+      <Dialog
+        open={editing}
+        onOpenChange={(isOpen) => {
+          setEditing(isOpen)
+          if (!isOpen) setUrlError(undefined)
+        }}
+      >
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            menuButton.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Edit address</DialogTitle>
+            <DialogDescription>
+              Audits only visit pages on this address. A site with audits can switch between http://
+              and https:// but keeps its host; earlier audits keep the URLs they captured.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveAddress} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="site-address">Address</Label>
+              <Input
+                id="site-address"
+                name="url"
+                inputMode="url"
+                autoComplete="off"
+                required
+                defaultValue={site.origin}
+                className="font-mono text-sm"
+                aria-invalid={urlError !== undefined}
+                aria-describedby={urlError === undefined ? undefined : "site-address-error"}
+                onChange={() => setUrlError(undefined)}
+              />
+              {urlError === undefined ? null : (
+                <p id="site-address-error" role="alert" className="text-sm text-destructive">
+                  {urlError}
+                </p>
+              )}
+            </div>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save address"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <ConfirmDialog
         open={confirming === "archive"}
         onOpenChange={(isOpen) => setConfirming(isOpen ? "archive" : null)}
@@ -157,8 +245,8 @@ function SitePage() {
                     params={{ auditId: a.id }}
                     className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
                   >
-                    <time title={relativeTime(a.createdAt).title}>
-                      {relativeTime(a.createdAt).text}
+                    <time title={relativeTime(a.createdAt).text}>
+                      {shortDateTime(a.createdAt, timeZone)}
                     </time>
                   </Link>
                 </TableCell>
@@ -177,7 +265,12 @@ function SitePage() {
                   {a.score === null ? (
                     <span className="text-muted-foreground">–</span>
                   ) : (
-                    `${a.score}/100`
+                    <>
+                      {a.score}/100
+                      <span className="block text-xs text-muted-foreground">
+                        from {count(a.runs.total, "run")}
+                      </span>
+                    </>
                   )}
                 </TableCell>
                 <TableCell>

@@ -17,7 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
-import { isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
+import { isOnSite, onSiteScheme, originHost, withoutCredentials } from "@/lib/site-url"
 import { startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
 
@@ -51,22 +51,32 @@ const errorFor = (message: string, start: string, keyPages: ReadonlyArray<string
   return { form: message }
 }
 
+const withoutError = (errors: Errors, key: keyof Errors): Errors =>
+  Object.fromEntries(Object.entries(errors).filter(([name]) => name !== key))
+
 type Errors = { startUrl?: string; pages?: string; scenarios?: string; form?: string }
 
+/** Keyed by the address: a cached copy of this page is shown first, and the form must start over once the saved address arrives. */
 function NewAudit() {
+  const { site } = Route.useLoaderData()
+  return <NewAuditForm key={site.origin} />
+}
+
+function NewAuditForm() {
   const { site, lastConfig } = Route.useLoaderData()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
   const [copied, setCopied] = useState(last !== null)
   const [startUrl, setStartUrl] = useState(
     last !== null && isOnSite(last.pages[0] ?? "", site)
-      ? (last.pages[0] ?? site.origin)
+      ? onSiteScheme(last.pages[0] ?? site.origin, site)
       : site.origin,
   )
   const [pages, setPages] = useState(
     last?.pages
       .slice(1)
       .filter((page) => isOnSite(page, site))
+      .map((page) => onSiteScheme(page, site))
       .join("\n") ?? "",
   )
   const [scenarios, setScenarios] = useState<ReadonlyArray<Scenario>>(
@@ -212,7 +222,10 @@ function NewAudit() {
                   id="start-url"
                   ref={startRef}
                   value={startUrl}
-                  onChange={(event) => setStartUrl(event.target.value)}
+                  onChange={(event) => {
+                    setStartUrl(event.target.value)
+                    setErrors((current) => withoutError(current, "startUrl"))
+                  }}
                   className="font-mono text-sm"
                   autoComplete="off"
                   {...aria}
@@ -229,7 +242,10 @@ function NewAudit() {
                 <Textarea
                   id="key-pages"
                   value={pages}
-                  onChange={(event) => setPages(event.target.value)}
+                  onChange={(event) => {
+                    setPages(event.target.value)
+                    setErrors((current) => withoutError(current, "pages"))
+                  }}
                   rows={5}
                   placeholder={`${site.origin}/product\n${site.origin}/checkout`}
                   className="font-mono text-sm"

@@ -124,9 +124,11 @@ function ClientPage() {
                   if (!isOpen) setUrlError(undefined)
                 }}
               >
-                <DialogTrigger asChild>
-                  <Button>Add site</Button>
-                </DialogTrigger>
+                {sites.length > 0 ? (
+                  <DialogTrigger asChild>
+                    <Button>Add site</Button>
+                  </DialogTrigger>
+                ) : null}
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add site</DialogTitle>
@@ -154,7 +156,8 @@ function ClientPage() {
                       />
                       {urlError === undefined ? (
                         <p className="text-xs text-muted-foreground">
-                          https:// is added when you leave it out.
+                          https:// is added when you leave it out (http:// for localhost and private
+                          addresses).
                         </p>
                       ) : (
                         <p id="site-url-error" role="alert" className="text-sm text-destructive">

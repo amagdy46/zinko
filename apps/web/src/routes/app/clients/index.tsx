@@ -64,17 +64,21 @@ function Clients() {
         title="Clients"
         actions={
           <>
-            <Input
-              aria-label="Search clients"
-              placeholder="Search clients…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="w-44"
-            />
+            {clients.length > 0 ? (
+              <Input
+                aria-label="Search clients"
+                placeholder="Search clients…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="w-44"
+              />
+            ) : null}
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>New client</Button>
-              </DialogTrigger>
+              {clients.length > 0 ? (
+                <DialogTrigger asChild>
+                  <Button>New client</Button>
+                </DialogTrigger>
+              ) : null}
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>New client</DialogTitle>
@@ -96,7 +100,9 @@ function Clients() {
           </>
         }
       />
-      <FirstRun organizationId={session.activeOrganizationId ?? ""} clients={clients} />
+      {clients.length > 0 ? (
+        <FirstRun organizationId={session.activeOrganizationId ?? ""} clients={clients} />
+      ) : null}
       {clients.length === 0 ? (
         <EmptyState
           title="Add your first client"

@@ -203,8 +203,21 @@ export const searchTargets = createServerFn({ method: "GET" })
           .where(and(eq(audit.orgId, orgId), text === "" ? undefined : ilike(site.name, pattern)))
           .orderBy(desc(audit.createdAt))
           .limit(RECENT_AUDITS)
+        const details = yield* auditDetails(
+          orgId,
+          audits.map((a) => a.id),
+        )
+        const scores = yield* scoresOf(orgId, details)
         return {
-          audits,
+          audits: audits.map((a) => ({
+            id: a.id,
+            createdAt: a.createdAt,
+            status: a.status,
+            siteName: a.siteName,
+            score: SETTLED.some((status) => status === a.status)
+              ? (scores.get(a.id) ?? null)
+              : null,
+          })),
           clients: clients.slice(0, SEARCH_LIMIT),
           sites: sites.slice(0, SEARCH_LIMIT),
           clientsCapped: clients.length > SEARCH_LIMIT,
@@ -356,6 +369,43 @@ export const createSite = createServerFn({ method: "POST" })
               .values({ orgId, clientId: owner.id, name, origin, host })
               .returning()
             return { id: created?.id ?? "" }
+          }),
+        )
+      }),
+    ),
+  )
+
+/**
+ * Changes a site's address. A site without audits may move to any address; one with audits keeps
+ * its host and port (so its history still describes the same site) and may change its scheme, which
+ * is the usual fix for a localhost site saved as https. Earlier audits keep the URLs they captured.
+ */
+export const updateSiteAddress = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.String, url: Schema.String })))
+  .handler(({ context, data }) =>
+    respond(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        yield* siteInOrg(orgId, data.id)
+        const next = yield* parseSiteUrl(data.url)
+        const { db } = yield* Database
+        return yield* atomically(
+          Effect.gen(function* () {
+            const found = yield* siteInOrg(orgId, data.id, true)
+            if (found.archivedAt !== null)
+              return yield* new Invalid({ message: "This site is archived." })
+            const sameServer = new URL(next.origin).host === new URL(found.origin).host
+            if (!sameServer && (yield* auditCount(orgId, [found.id])) > 0)
+              return yield* new Invalid({
+                message:
+                  "This site has audits, so its address can only change between http:// and https://. Add the new address as a new site.",
+              })
+            yield* db
+              .update(site)
+              .set({ origin: next.origin, host: next.host })
+              .where(and(eq(site.orgId, orgId), eq(site.id, found.id)))
+            return { origin: next.origin }
           }),
         )
       }),

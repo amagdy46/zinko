@@ -88,7 +88,7 @@ const preflight = (typed: string, start: string, target: { host: string; origin:
             message:
               cause instanceof DOMException && cause.name === "TimeoutError"
                 ? `${typed} did not answer within ${PREFLIGHT_TIMEOUT_MS / 1000} seconds. Check that the site is up.`
-                : `${typed} could not be reached. Check the address and that the site is up.`,
+                : `${typed} could not be reached. Check the address and that the site is up.${typed.startsWith("https:") ? " If it only serves http, change the site address to http://." : ""}`,
           }),
       })
       yield* Effect.promise(() => response.body?.cancel() ?? Promise.resolve())

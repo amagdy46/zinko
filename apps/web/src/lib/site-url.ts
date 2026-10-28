@@ -1,3 +1,5 @@
+import { isPrivateHost } from "@repo/capture-contract"
+
 const parse = (url: string): URL | null => (URL.canParse(url) ? new URL(url) : null)
 
 /** The hostname of a URL: lowercase, punycode as `URL` gives it, one trailing dot removed. Null when it does not parse. */
@@ -42,8 +44,21 @@ export const withoutCredentials = (url: string): string => {
   return parsed.href
 }
 
-/** What someone typed as an address, with `https://` in front when it has no scheme (`shop.example`, `localhost:4400`). */
+/**
+ * What someone typed as an address, with a scheme in front when it has none: `https://` for
+ * public hosts (`shop.example`), `http://` for localhost and private networks, which rarely serve TLS.
+ */
 export const withScheme = (text: string): string => {
   const trimmed = text.trim()
-  return trimmed === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
+  if (trimmed === "" || /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)) return trimmed
+  const host = canonicalHost(`http://${trimmed}`)
+  return host !== null && isPrivateHost(host) ? `http://${trimmed}` : `https://${trimmed}`
+}
+
+/** A page of the site written with the site's own scheme, so an address fixed from https to http carries its saved pages along. */
+export const onSiteScheme = (url: string, site: { origin: string }): string => {
+  const parsed = parse(url)
+  if (parsed === null) return url
+  parsed.protocol = new URL(site.origin).protocol
+  return parsed.href
 }
