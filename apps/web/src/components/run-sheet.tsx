@@ -142,7 +142,7 @@ export function RunSheet({
             ) : null}
             {run.errors.length > 0 ? (
               <Collapsible>
-                <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
                   Technical details
                   <ChevronDown
                     aria-hidden="true"

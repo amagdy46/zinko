@@ -1002,7 +1002,7 @@ function HitRow({
         <button
           type="button"
           title={item.event}
-          className="block h-8 max-w-40 truncate px-2 text-left font-mono leading-8 font-medium outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="block h-8 max-w-40 truncate px-2 text-left font-mono leading-8 font-medium outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           onClick={onSelect}
         >
           {item.event}
@@ -1080,7 +1080,7 @@ function PushRow({
           type="button"
           aria-expanded={group?.open}
           className={cn(
-            "inline-flex h-8 items-center gap-1 px-2 text-left font-mono outline-none focus-visible:rounded-sm focus-visible:ring-[3px] focus-visible:ring-ring/50",
+            "inline-flex h-8 items-center gap-1 px-2 text-left font-mono outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
             nested && "pl-5",
           )}
           onClick={(event) => {
