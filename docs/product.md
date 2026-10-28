@@ -27,7 +27,7 @@ The secondary user is the agency's **client**, who sees the white-label report.
 6. **Tag matrix:** every vendor and destination ID, showing which events fired on which page in which consent scenario. This is the "what fires where" view consultants currently build in spreadsheets.
 7. **Hit explorer:** a per-run timeline of decoded hits and `dataLayer` pushes. Think of it as Omnibug in the browser, filterable.
 8. **Report:** a white-label report with the agency's logo, accent color and client name. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
-9. **Re-run and compare:** run the audit again and see findings marked new, fixed or unchanged since the last run.
+9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (verified by the re-run), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
 
 ### Checks in v0.1 (about 20 deterministic rules)
 

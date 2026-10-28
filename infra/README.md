@@ -10,7 +10,7 @@
 | `pnpm run deploy --stage <name>`  | `alchemy deploy`: builds `apps/web` and deploys it to Cloudflare. Without `--stage` it uses `$ALCHEMY_STAGE`, then `live_$USER`.               |
 | `pnpm run destroy --stage <name>` | `alchemy destroy`: removes every resource of that stage.                                                                                       |
 
-Use `pnpm run deploy`: plain `pnpm deploy` is pnpm's own workspace command.
+Use `pnpm run deploy`: plain `pnpm deploy` is pnpm's own workspace command. The step-by-step guide, with its list of what is untested, is [docs/self-hosting.md](../docs/self-hosting.md).
 
 Copy `.env.example` to `.env` for local values (setup in [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-web-app-locally); `BROWSER_URL` replaces the container on `dev` stages only). Deploying needs `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_ACCOUNT_ID` (and `DATABASE_URL` for Postgres) in the environment.

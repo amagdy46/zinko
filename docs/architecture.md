@@ -39,6 +39,12 @@ Postgres (Neon) via Hyperdrive — app data, clients, sites, audits, runs, hits 
 R2 — per run: screenshot.png and capture.json (the immutable capture); PDFs later
 ```
 
+## Comparing two audits (M6)
+
+A comparison is never stored: it is a pure function of two audits' derived rows, computed on every read (`apps/web/src/lib/compare.ts`, read by `server/compare-data.ts`). The unit is a cell: page × scenario × viewport × journey, built by one function (`cellKeyOf`) from the run and the audit's config, so the comparison, the regression history and the re-check targets cannot drift apart. A finding is judged only on the cells both audits ran and checked with the same consent outcome and banner detection, and only when the rules did not change between their versions (`RULE_CHANGES` in `packages/rules`); every cell that failed before stays in the picture until it is positively resolved, so a missing, failed or incompatible cell is never "fixed". The states are new, regressed (a cell-level search of up to ten earlier audits), unchanged (with narrowed, widened or moved), fixed, verdict changed and not comparable.
+
+What a person decides is stored and nothing else: the baseline link (`audit.baseline_audit_id`), the triage and report edits copied once into a new audit with their origin, and re-checks. A re-check is an ordinary audit with `kind = 'narrow'` whose runs carry a role (target, banner-detection companion, extra); every reader of results filters to the targets, and the finding rows of a narrow audit are rebuilt from them. The report freezes the part a client sees (`ReportModel.changes`, projected through the author's exclusions); its publication stamp fingerprints what the comparison read so a re-check finishing during a publish forces a re-read.
+
 ## Stack
 
 | Layer | Choice | Why |

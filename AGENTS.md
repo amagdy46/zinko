@@ -222,3 +222,11 @@ Zero errors and zero warnings are the bar.
 
 - A re-check is an `audit` with `kind = 'narrow'`, made only through `createAudit` (`recheck` in `server/recheck.ts`). Its runs carry `run.role`: `target` (a cell it re-checks), `companion` (accept or reject, run only to detect the cookie banner) or `extra` (the rest of the cross product). Every reader of results through a run (findings, overview, matrix, hits, report, register, digest, compare) filters `eq(run.role, "target")`; only `bannerDetection` reads all roles, and counts of what ran (progress, cap, estimate, the run list) use every run. Add the filter to any new reader.
 - `findingsOf` rebuilds a narrow audit's findings from its target runs' check results with `lib/findings-from.ts` (also used by the workflow's `finish`); the stored `finding` rows of a narrow audit are not read.
+
+## Compare
+
+- A comparison is computed on read from two audits' derived rows (`lib/compare.ts`, `server/compare-data.ts`); nothing about it is stored except the human acts: the baseline link, copied triage and edits (with their origin), and re-checks. Do not add an `audit_comparison` table or write a comparison from the workflow.
+- The unit is `CellKey` from `cellKeyOf` (and `sameCell`-style equality through `cellId`): use it for anything that matches runs across audits (history, re-check targets, confirmations). Identity is structural; what a run observed (consent class, banner detection, rules version) is compared before a verdict is trusted, never part of identity. A cell that failed before is never "fixed" because it is missing, failed to capture, or is incompatible now.
+- `@repo/rules` is read for `RULES_VERSION`, `RULE_CHANGES`, `ruleChangedBetween` and `VOLATILE_RULES`; titles and severities in a comparison come from stored `check_result` rows. Add the changed rules to `RULE_CHANGES` whenever `RULES_VERSION` is raised.
+- A new comparison read goes through `auditInOrg` for both audits; the second must be an earlier evaluated full audit of the same site; any failure is the same 404.
+- The report's `changes` section carries stored titles, counts, enums and vendor labels, projected through the author's exclusions first, and names no page. Its every leaf has a validator in `LEAF_VALIDATORS`.
