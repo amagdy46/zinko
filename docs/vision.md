@@ -213,7 +213,7 @@ Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/pla
 
 ### Compare and polish (M6, v0.1 release)
 
-Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/plan.md) (proposed 2026-10-28, 16 tasks). A comparison is a pure function of two audits' derived rows, computed on read, cell by cell (page × scenario × viewport × journey); only the baseline link and the carried-over triage and report edits are stored. The workflow does not change. No tests, no new dependency.
+Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/plan.md) (proposed 2026-10-28, revised after review round 1, 18 tasks). A comparison is a pure function of two audits' derived rows, computed on read, cell by cell (page × scenario × viewport × journey); only the baseline link and the carried-over triage and report edits are stored. The workflow does not change. No tests, no new dependency.
 
 | Feature | How we build it | Status |
 |---|---|---|
@@ -222,10 +222,10 @@ Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/p
 | Tag diff | Disappeared, new, destination changed, events changed, per tag across the cells both runs captured completely (ObservePoint compares 3 tags; this compares every one) | planned |
 | Accepted risks and notes carry over | At audit creation, the baseline's accepted risks and report edits (note, leave out, owner) are copied by `rule_id` with `carried_from_audit_id`; "Fixed" triage marks are not (the re-run verifies or contradicts them) | planned |
 | Flaky verdicts | No double capture. Changes on volatile rules, rules that flip between audits, or resting on one run are labelled Low confidence, with **Re-run these pages** | planned |
-| Per-finding re-verify | **Verify fix**: a `narrow` audit of the pages and scenarios the finding failed on, excluded from latest-audit selection and score trends. Single-run retry in place is after v0.1 | planned |
+| Per-finding re-verify | **Re-check these pages** / **Verify fix**: a `narrow` audit of the target cells taken from the comparison (works for a fixed finding too), visible in the site history, excluded from latest-audit selection, score trends and aggregates. Single-run retry in place gets its own plan after v0.1 | planned |
 | **"What changed" briefing** | Up to six deterministic lines at the top of the re-run's Overview and in the report (`ReportModel.changes`, model version 4, `UPGRADES[3]`, a validator per leaf, no page names) (DataTrue's Briefing) | planned |
 | **Tag disappeared** | A tag on a compared cell before and gone now (Elevar's missing-embed alert) | planned |
-| Self-host guide, public demo | A deploy spike first (the container image and `alchemy deploy` are untried), then `docs/self-hosting.md`; a read-only demo stage seeded from a local run of the `drift` fixture, sign-up closed, mutations refused in one place | planned |
+| Self-host guide, public demo | Deploy preparation offline first (image build without sudo, run locally, stage isolation), the real deploy only after the owner approves the account and budget; `docs/self-hosting.md` marked unverified until then. A local demo seed from the `drift` fixture; a hosted read-only demo (explicit mutation gate, deny-by-default auth, no capture engine) only if the owner decides to host one | planned |
 
 ### v0.2: configured vs fired, funnels
 
