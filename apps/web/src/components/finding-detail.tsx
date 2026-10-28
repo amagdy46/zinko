@@ -181,6 +181,9 @@ function TriageMenu({
                 A reason is required to accept a risk.
               </p>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              The reason is printed in client reports.
+            </p>
             {error === null ? null : (
               <p role="alert" className="text-sm text-destructive">
                 {error}

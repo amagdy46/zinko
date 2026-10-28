@@ -1,9 +1,15 @@
 import { COOKIE_FAMILY_LABELS } from "@repo/rules"
-import { isKnownDestination, knownEvent, VENDOR_LABELS } from "@repo/llm"
+import {
+  canonicalJson,
+  type DigestEvidence,
+  isKnownDestination,
+  knownEvent,
+  VENDOR_LABELS,
+} from "@repo/llm"
 import { Data, Effect } from "effect"
 import { AREAS, ERROR_TEXT, FAILURE_TEXT, SCENARIOS } from "./audit-labels"
 import { ACCENTS } from "./report-accent"
-import type { DisclosureLevel, ReportModel } from "./report-model"
+import type { DisclosureLevel, EvidenceRow, ReportModel } from "./report-model"
 
 /*
  * The disclosure projection: the only place that turns stored data into a string a report prints.
@@ -45,6 +51,84 @@ export function pageLabel(
 /** The name of a vendor as the report prints it; anything the decoders do not know is "Other vendor". */
 export const vendorLabel = (vendor: string): string =>
   new Map<string, string>(Object.entries(VENDOR_LABELS)).get(vendor) ?? "Other vendor"
+
+const OTHER_COOKIE = "Other cookie"
+const CUSTOM_EVENT = "custom event"
+const EMPTY_ROW: EvidenceRow = {
+  kind: "hit",
+  vendor: null,
+  event: null,
+  destination: null,
+  timing: null,
+  adStorage: null,
+  analyticsStorage: null,
+  category: null,
+  status: null,
+  blocked: null,
+  cookie: null,
+  command: null,
+  redirects: null,
+}
+
+/** Only destination IDs with their vendors' own shape pass: Standard keeps the Google ones, Detailed every shaped one. */
+const destinationLabel = (id: string, detail: DisclosureLevel): string | null => {
+  if (id.startsWith("Destination ")) return null
+  if (/^G-[A-Z0-9]{4,12}$/.test(id) || /^AW-\d{6,17}$/.test(id)) return id
+  return detail === "detailed" ? id : null
+}
+
+/**
+ * One piece of evidence as report rows, from a digest's facts (which already replaced every
+ * page-controlled string: cookies by family, events and destinations by known forms or numbered
+ * aliases). Here the aliases become fixed words, and Meta and TikTok IDs stay out under Standard.
+ * Sorted by their canonical JSON so equal evidence prints the same.
+ */
+export function evidenceRows(
+  evidence: ReadonlyArray<DigestEvidence>,
+  detail: DisclosureLevel,
+): EvidenceRow[] {
+  return evidence
+    .map((fact): EvidenceRow => {
+      switch (fact.kind) {
+        case "hit":
+          return {
+            ...EMPTY_ROW,
+            kind: "hit",
+            vendor: fact.vendor,
+            event: fact.event.startsWith(CUSTOM_EVENT) ? CUSTOM_EVENT : fact.event,
+            destination: destinationLabel(fact.destination, detail),
+            timing: fact.timing,
+            adStorage: fact.adStorage,
+            analyticsStorage: fact.analyticsStorage,
+          }
+        case "request":
+          return {
+            ...EMPTY_ROW,
+            kind: "request",
+            category: fact.category,
+            timing: fact.timing,
+            status: fact.status,
+            blocked: fact.blocked,
+            adStorage: fact.adStorage,
+            analyticsStorage: fact.analyticsStorage,
+          }
+        case "cookie":
+          return {
+            ...EMPTY_ROW,
+            kind: "cookie",
+            cookie: COOKIE_FAMILY_LABELS.includes(fact.name) ? fact.name : OTHER_COOKIE,
+          }
+        case "push":
+          return { ...EMPTY_ROW, kind: "push", command: fact.command }
+        default:
+          return { ...EMPTY_ROW, kind: "document", redirects: fact.redirects }
+      }
+    })
+    .toSorted((a, b) => {
+      const [x, y] = [canonicalJson(a), canonicalJson(b)]
+      return x < y ? -1 : Number(x > y)
+    })
+}
 
 const NO_REASON = "The run failed"
 const PARTIAL_REASON = "Some data is missing"
@@ -175,7 +259,7 @@ const finding = {
   "evidence.rows[].category": nullable(oneOf("category", ["consent-ping", "collection", "other"])),
   "evidence.rows[].status": nullable(count),
   "evidence.rows[].blocked": nullable(flag),
-  "evidence.rows[].cookie": nullable(oneOf("cookie", COOKIE_FAMILY_LABELS)),
+  "evidence.rows[].cookie": nullable(oneOf("cookie", [...COOKIE_FAMILY_LABELS, OTHER_COOKIE])),
   "evidence.rows[].command": nullable(oneOf("command", PUSH_COMMANDS)),
   "evidence.rows[].redirects": nullable(count),
 } satisfies Record<string, Validator>

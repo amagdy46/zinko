@@ -3,7 +3,7 @@ import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, hit, run } from "@repo/db"
 import { and, eq } from "drizzle-orm"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Option, Result, Schema } from "effect"
 import { isUuid, NotFound } from "./server-fn"
 
 /*
@@ -62,6 +62,35 @@ export const readCapture = (captureKey: string | null) =>
     if (Option.isNone(stored)) return yield* new NotFound({ message: "Not found" })
     const text = yield* Effect.promise(() => new Response(stored.value.body).text())
     return yield* decodeStoredCapture(text).pipe(Effect.orDie)
+  })
+
+export type CaptureRead =
+  | { found: true; capture: CaptureResult }
+  | { found: false; reason: "missing" | "storage" | "body" | "decode" }
+
+/**
+ * The run's stored capture for a caller that can do without it: it never fails. A null key or an
+ * absent object is `missing`, a storage error `storage`, an unreadable body `body` and a capture
+ * that does not decode `decode`. Each miss logs one warning with the reason and the run id, never
+ * content. The strict `readCapture` stays for screens that need the capture.
+ */
+export const readCaptureTolerant = (captureKey: string | null, runId: string) =>
+  Effect.gen(function* () {
+    const miss = (reason: "missing" | "storage" | "body" | "decode") =>
+      Effect.logWarning("capture not readable", { reason, runId }).pipe(
+        Effect.as({ found: false, reason } satisfies CaptureRead),
+      )
+    if (captureKey === null) return yield* miss("missing")
+    const storage = yield* Storage
+    const stored = yield* storage.get(captureKey).pipe(Effect.result)
+    if (Result.isFailure(stored)) return yield* miss("storage")
+    if (Option.isNone(stored.success)) return yield* miss("missing")
+    const { body } = stored.success.value
+    const text = yield* Effect.tryPromise(() => new Response(body).text()).pipe(Effect.result)
+    if (Result.isFailure(text)) return yield* miss("body")
+    const decoded = yield* decodeStoredCapture(text.success).pipe(Effect.result)
+    if (Result.isFailure(decoded)) return yield* miss("decode")
+    return { found: true, capture: decoded.success } satisfies CaptureRead
   })
 
 /** A hit of the run, by its natural key, with the raw request it was decoded from. */

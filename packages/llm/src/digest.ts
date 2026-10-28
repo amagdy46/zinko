@@ -88,6 +88,12 @@ export interface DigestFinding {
   knownRuns: number
 }
 
+/** What the digest reads of a hit: never its parameters, IDs or URL. */
+export type DigestHit = Pick<
+  DecodedHit,
+  "requestId" | "batchIndex" | "vendor" | "destinationId" | "event" | "consent" | "startedAt"
+>
+
 /** One failing run with its stored capture and decoded hits, and the failing check's evidence. */
 export interface DigestRun {
   /** The page in the audit's configured list: its position, the URL as entered, whether it is the start URL. */
@@ -96,7 +102,7 @@ export interface DigestRun {
   viewport: CaptureRequest["viewport"]
   journey: boolean
   capture: CaptureResult
-  hits: readonly DecodedHit[]
+  hits: readonly DigestHit[]
   evidence: readonly EvidenceRef[]
 }
 

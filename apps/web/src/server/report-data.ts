@@ -1,23 +1,43 @@
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, client, findingTriage, hit, orgBranding, run, site } from "@repo/db"
-import { canonicalJson } from "@repo/llm"
+import {
+  audit,
+  checkResult,
+  client,
+  finding as findingTable,
+  findingTriage,
+  hit,
+  orgBranding,
+  run,
+  site,
+} from "@repo/db"
+import { buildDigest, canonicalJson } from "@repo/llm"
 import { and, asc, count, eq, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
 import { count as plural } from "@/lib/format"
 import {
   byText,
+  byFindingOrder,
   type ConsultantPayload,
   type DisclosureLevel,
   headlinesOf,
+  type ReportFinding,
   REPORT_MODEL_VERSION,
   type ReportModel,
 } from "@/lib/report-model"
-import { assertProjected, pageLabel, runReasonLabel, vendorLabel } from "@/lib/report-projection"
+import {
+  assertProjected,
+  evidenceRows,
+  pageLabel,
+  runReasonLabel,
+  vendorLabel,
+} from "@/lib/report-projection"
 import { vendorRank } from "@/lib/tag-matrix"
 import { brandingOf } from "./branding-data"
-import { auditInOrg } from "./audit-data"
+import { auditInOrg, type CaptureRead, readCaptureTolerant } from "./audit-data"
+import { type CandidateRun, candidateRunsOf, digestRunOf } from "./digest-data"
+import { decodeFix } from "./findings"
 import { findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { coverageOf, decodeConsent } from "./matrix-data"
 import { scoreSummaryOf } from "./score-summary"
@@ -52,6 +72,10 @@ export type ReportBuild =
       consultant: ConsultantPayload
       stamp: ReportStamp
     }
+
+/** At most this many failing runs are tried, in run order, for a finding's one evidence item. */
+const EVIDENCE_CANDIDATES = 5
+const VIEWPORT_WORDS = { desktop: "Desktop", mobile: "Mobile" } as const
 
 const KNOWN_VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
 
@@ -238,6 +262,24 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           .innerJoin(run, eq(run.id, hit.runId))
           .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId)))
           .groupBy(vendorSql, run.scenario)
+        const wording = yield* db
+          .select({ ruleId: findingTable.ruleId, why: findingTable.why, fix: findingTable.fix })
+          .from(findingTable)
+          .where(
+            and(
+              eq(findingTable.auditId, auditId),
+              eq(findingTable.orgId, orgId),
+              eq(findingTable.kind, "fail"),
+            ),
+          )
+        const candidates = new Map<string, ReadonlyArray<CandidateRun>>()
+        for (const f of found.findings)
+          if (f.kind === "fail")
+            candidates.set(
+              f.ruleId,
+              (yield* candidateRunsOf(orgId, auditId, f, { candidates: EVIDENCE_CANDIDATES }))
+                .candidates,
+            )
         const branding = yield* brandingOf(orgId)
         const [brandingRow] = yield* db
           .select({ updatedAt: orgBranding.updatedAt })
@@ -248,10 +290,22 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           .select({ updatedAt: max(findingTriage.updatedAt), rows: count() })
           .from(findingTriage)
           .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
-        return { head, config, found, runs, failed, hitCells, branding, brandingRow, triage }
+        return {
+          head,
+          config,
+          found,
+          runs,
+          failed,
+          hitCells,
+          wording,
+          candidates,
+          branding,
+          brandingRow,
+          triage,
+        }
       }),
     )
-    const { head, config, found, runs, failed, hitCells, branding } = read
+    const { head, config, found, runs, failed, hitCells, wording, candidates, branding } = read
     if (head.status === "queued" || head.status === "running")
       return { available: false, reason: "running" } as const
     if (found.coverage.evaluatedRuns === 0)
@@ -310,6 +364,92 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
       totalRuns: found.coverage.totalRuns,
       unresolvedRules: found.uncertainty.rules,
       bannerUncertainRuns: found.uncertainty.bannerUncertainRuns,
+    }
+    const wordingOf = new Map(wording.map((w) => [w.ruleId, w]))
+    const captures = new Map<string, CaptureRead>()
+    const captureOf = (candidate: CandidateRun) =>
+      Effect.gen(function* () {
+        const key = candidate.run.captureKey
+        const cached = key === null ? undefined : captures.get(key)
+        if (cached !== undefined) return cached
+        const fetched = yield* readCaptureTolerant(key, candidate.run.id)
+        if (key !== null) captures.set(key, fetched)
+        return fetched
+      })
+    const findings: ReportFinding[] = []
+    for (const f of failing.toSorted(byFindingOrder)) {
+      const stored = wordingOf.get(f.ruleId)
+      if (stored === undefined) continue
+      const affected = f.runIds.flatMap((id) => {
+        const r = runById.get(id)
+        return r === undefined ? [] : [r]
+      })
+      const pageOrder = (r: (typeof affected)[number]) => {
+        const target = r.pageUrl.split(/[?#]/)[0]
+        return (
+          Number(r.journey) * config.pages.length +
+          config.pages.findIndex((p) => p === r.pageUrl || p.split(/[?#]/)[0] === target)
+        )
+      }
+      const pages = [
+        ...new Map(
+          affected
+            .toSorted((a, b) => pageOrder(a) - pageOrder(b))
+            .map((r) => [label(r.pageUrl, r.journey), r]),
+        ).keys(),
+      ]
+      let evidence: ReportFinding["evidence"] = null
+      for (const candidate of candidates.get(f.ruleId) ?? []) {
+        const fetched = yield* captureOf(candidate)
+        if (!fetched.found) continue
+        const digestRun = yield* digestRunOf(candidate, fetched.capture)
+        const digest = buildDigest(
+          {
+            ruleId: f.ruleId,
+            rulesVersions: f.rulesVersions,
+            area: f.area,
+            severity: f.severity,
+            title: f.title,
+            why: stored.why,
+            fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
+            failingRuns: f.failingRuns,
+            knownRuns: f.knownRuns,
+          },
+          [digestRun],
+          { includePagePaths: false },
+        )
+        const rows = evidenceRows(digest.cases[0]?.evidence ?? [], detail)
+        if (rows.length === 0) continue
+        const { run: r } = candidate
+        evidence = {
+          caption: `Seen on ${label(r.pageUrl, r.journey)}, ${scenarioLabel(r.scenario)}, ${
+            VIEWPORT_WORDS[digestRun.viewport]
+          }`,
+          rows,
+        }
+        break
+      }
+      findings.push({
+        ruleId: f.ruleId,
+        severity: f.severity,
+        area: f.area,
+        title: f.title,
+        why: stored.why,
+        fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
+        owner: f.owner,
+        ownerSource: f.owner === null ? "none" : "rule",
+        failingRuns: f.failingRuns,
+        knownRuns: f.knownRuns,
+        pages,
+        scenarios: scenarioLabels(f.runIds),
+        bannerUncertainRuns: f.bannerUncertainRuns,
+        triage: {
+          status: f.triage.status,
+          reason: f.triage.status === "accepted_risk" ? f.triage.reason : null,
+        },
+        note: null,
+        evidence,
+      })
     }
     const generatedAt = new Date()
     const model: ReportModel = {
@@ -376,7 +516,7 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         mixedVersions: scored.mixedVersions,
       },
       consent: consentSummaryOf(config.scenarios, runs, hitCells),
-      findings: [],
+      findings,
       leftOut: [],
       actionPlan: [],
       appendix: { couldNotCheck: [], notEvaluated: [], rules: [] },

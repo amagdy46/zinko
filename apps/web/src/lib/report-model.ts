@@ -8,6 +8,15 @@ const Count = Schema.Int
 const Amount = Schema.Finite
 const Severity = Schema.Literals(["critical", "warning", "info"])
 const OwnerId = Schema.Literals(["consent-platform", "tag-manager", "developer"])
+export type OwnerId = typeof OwnerId.Type
+
+/** Who usually fixes a failing rule, in words; the labels live here because the client must not import the rules. */
+export const OWNER_LABELS: Record<OwnerId, string> = {
+  "consent-platform": "Consent platform admin",
+  "tag-manager": "Tag manager or marketing",
+  developer: "Site developer",
+}
+
 const Detail = Schema.Literals(["standard", "detailed"])
 const Band = Schema.Literals(["critical", "attention", "minor", "no-failures"])
 const ConsentState = Schema.Literals(["granted", "denied", "unknown"])
@@ -211,6 +220,7 @@ export const ReportModel = Schema.Struct({
   }),
 })
 
+export type EvidenceRow = typeof EvidenceRow.Type
 export type ReportModel = typeof ReportModel.Type
 export type ReportFinding = typeof ReportFinding.Type
 export type DisclosureLevel = ReportModel["detail"]

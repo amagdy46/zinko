@@ -1,23 +1,21 @@
-import { Scenario } from "@repo/capture-contract"
 import { Llm, type LlmIdentity, type LlmModel } from "@repo/core/llm"
 import { Database } from "@repo/core/Database"
-import { checkResult, finding, hit, member, run, user } from "@repo/db"
+import { finding, member, user } from "@repo/db"
 import {
   buildDigest,
   buildExplainPrompt,
-  type DigestRun,
   EXPLAIN_PROMPT_VERSION,
   evidenceHash,
   type Explanation,
   type FindingDigest,
   parseExplanation,
 } from "@repo/llm"
-import type { DecodedHit, EvidenceRef } from "@repo/rules"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, count, eq, inArray } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { aiPolicyOf } from "./ai-policy-data"
-import { auditInOrg, decodeHitColumns, readCapture } from "./audit-data"
+import { auditInOrg, readCapture } from "./audit-data"
+import { candidateRunsOf, digestRunOf } from "./digest-data"
 import {
   cachedFor,
   type CachedExplanation,
@@ -30,17 +28,10 @@ import {
   reserve,
   settle,
 } from "./explain-ledger"
-import { decodeEvidence, decodeFix } from "./findings"
+import { decodeFix } from "./findings"
 import { decodeSeverity } from "./findings-data"
 import { requireSession } from "./require-session"
 import { Forbidden, Invalid, isManager, membership, NotFound, read, respond } from "./server-fn"
-
-const Viewport = Schema.Literals(["desktop", "mobile"])
-const Vendor = Schema.Literals(["ga4", "meta", "google-ads", "tiktok"])
-const decodeShape = Schema.decodeUnknownEffect(
-  Schema.Struct({ scenario: Scenario, viewport: Viewport }),
-)
-const decodeVendor = Schema.decodeUnknownEffect(Vendor)
 
 const FindingInput = Schema.Struct({ auditId: Schema.String, ruleId: Schema.String })
 const ExplainInput = Schema.Struct({
@@ -91,103 +82,13 @@ const digestOf = (
   includePagePaths: boolean,
 ) =>
   Effect.gen(function* () {
-    const { db } = yield* Database
-    const runs = yield* db
-      .select({
-        id: run.id,
-        pageUrl: run.pageUrl,
-        scenario: run.scenario,
-        viewport: run.viewport,
-        journey: run.journey,
-        captureKey: run.captureKey,
-      })
-      .from(run)
-      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId)))
-      .orderBy(asc(run.ordinal))
-    const pages = [...new Set(runs.map((r) => r.pageUrl))]
-    const checks = yield* db
-      .select({ runId: checkResult.runId, evidence: checkResult.evidence })
-      .from(checkResult)
-      .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(
-        and(
-          eq(run.auditId, auditId),
-          eq(run.orgId, orgId),
-          eq(checkResult.orgId, orgId),
-          eq(checkResult.ruleId, f.ruleId),
-          eq(checkResult.status, "fail"),
-          inArray(run.id, f.runIds),
-        ),
-      )
-    const [known] = yield* db
-      .select({ n: count() })
-      .from(checkResult)
-      .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(
-        and(
-          eq(run.auditId, auditId),
-          eq(run.orgId, orgId),
-          eq(checkResult.orgId, orgId),
-          eq(checkResult.ruleId, f.ruleId),
-          inArray(checkResult.status, ["pass", "fail"]),
-        ),
-      )
-    const evidenceByRun = new Map<string, readonly EvidenceRef[]>()
-    for (const check of checks)
-      evidenceByRun.set(check.runId, yield* decodeEvidence(check.evidence).pipe(Effect.orDie))
-    const failing = runs.filter((r) => evidenceByRun.has(r.id))
-    const requestIds = new Set<string>()
-    for (const refs of evidenceByRun.values())
-      for (const ref of refs)
-        if (ref.kind === "hit" || ref.kind === "request") requestIds.add(ref.requestId)
-    const hitRows =
-      failing.length === 0 || requestIds.size === 0
-        ? []
-        : yield* db
-            .select()
-            .from(hit)
-            .where(
-              and(
-                eq(hit.orgId, orgId),
-                inArray(
-                  hit.runId,
-                  failing.map((r) => r.id),
-                ),
-                inArray(hit.requestId, [...requestIds]),
-              ),
-            )
+    const { candidates, known } = yield* candidateRunsOf(orgId, auditId, f, "all")
     const digestRuns = yield* Effect.forEach(
-      failing,
-      (r) =>
+      candidates,
+      (candidate) =>
         Effect.gen(function* () {
-          const capture = yield* readCapture(r.captureKey)
-          const shape = yield* decodeShape(r).pipe(Effect.orDie)
-          const hits: DecodedHit[] = []
-          for (const row of hitRows) {
-            const request = capture.requests.find((q) => q.id === row.requestId)
-            if (row.runId !== r.id || request === undefined) continue
-            hits.push({
-              vendor: yield* decodeVendor(row.vendor).pipe(Effect.orDie),
-              destinationId: row.destinationId,
-              event: row.event,
-              batchIndex: row.batchIndex,
-              requestId: row.requestId,
-              documentId: row.documentId,
-              startedAt: request.startedAt,
-              host: row.host,
-              url: row.url,
-              ...(yield* decodeHitColumns(row).pipe(Effect.orDie)),
-            })
-          }
-          const index = pages.indexOf(r.pageUrl)
-          return {
-            page: { index, url: r.pageUrl, start: index === 0 },
-            ...shape,
-            journey: r.journey,
-            capture,
-            hits,
-            evidence: evidenceByRun.get(r.id) ?? [],
-          } satisfies DigestRun
+          const capture = yield* readCapture(candidate.run.captureKey)
+          return yield* digestRunOf(candidate, capture)
         }),
       { concurrency: READ_CONCURRENCY },
     )
@@ -201,7 +102,7 @@ const digestOf = (
         why: f.why,
         fix: yield* decodeFix(f.fix).pipe(Effect.orDie),
         failingRuns: f.failingRuns,
-        knownRuns: known?.n ?? 0,
+        knownRuns: known,
       },
       digestRuns,
       { includePagePaths },

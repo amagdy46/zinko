@@ -7,6 +7,7 @@ export {
   type DigestCase,
   type DigestEvidence,
   type DigestFinding,
+  type DigestHit,
   type DigestRun,
   type FindingDigest,
   type Policy,

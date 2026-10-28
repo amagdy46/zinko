@@ -35,7 +35,6 @@ export type {
   Rule,
   RunInput,
 } from "./types.js"
-export { OWNER_LABELS } from "./types.js"
 export { googleConsentFromCcm, isCcmRequest, isNonGoogle, withoutConsent } from "./consent-state.js"
 export { COOKIE_FAMILY_LABELS, cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
 export { decodeHits } from "./decode.js"
