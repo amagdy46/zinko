@@ -59,7 +59,14 @@ export const notPersistedAcrossNavigation: Rule = {
     const later = documents.filter(
       (document) => document.navigation !== "start" && document.startedAt > actionAt,
     )
-    if (later.length === 0) return notApplicable(id, "no page was loaded after the consent choice")
+    // A step that failed or a deadline that cut the journey short leaves pages unvisited (a first
+    // step that timed out, a reload refused because the page came from a POST).
+    const cut = input.capture.errors.find((error) => CUT_SHORT.has(error.code))
+    if (later.length === 0) {
+      return cut === undefined
+        ? notApplicable(id, "no page was loaded after the consent choice")
+        : inconclusive(id, `the run ended before any later page (${cut.code}: ${cut.message})`)
+    }
 
     // The signals the choice granted, read at the end of the page it was made on.
     const reference = documents.findLast((document) => document.startedAt <= actionAt)
@@ -103,9 +110,6 @@ export const notPersistedAcrossNavigation: Rule = {
         `${distinct(failures).join("; ")} after the visitor ${outcome === "accepted" ? "accepted" : "rejected"}`,
         cited,
       )
-    // A step that failed or a deadline that cut the journey short leaves pages unvisited (a
-    // reload refused because the page came from a POST, or dropped by the deadline).
-    const cut = input.capture.errors.find((error) => CUT_SHORT.has(error.code))
     if (cut !== undefined)
       unresolved.push(`the pages the run did not reach (${cut.code}: ${cut.message})`)
     if (unresolved.length > 0)
