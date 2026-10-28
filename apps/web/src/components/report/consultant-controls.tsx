@@ -1,6 +1,8 @@
 import { useParams, useRouter } from "@tanstack/react-router"
 import { useState } from "react"
+import { ChangeGlyph } from "@/components/change-badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -11,6 +13,8 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { CHANGE_WORDS } from "@/lib/compare-text"
+import { cn } from "@/lib/utils"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Sheet,
@@ -394,5 +398,81 @@ export function DisclosureDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * "Include what changed" and the changes since the baseline, with the ones left out dimmed. A Fixed
+ * change has no finding of this audit, so leaving it out names the earlier audit it was found in.
+ */
+export function ChangesControls({
+  auditId,
+  includeChanges,
+  rows,
+}: {
+  auditId: string
+  includeChanges: boolean
+  rows: NonNullable<ConsultantPayload["changeRows"]>
+}) {
+  const save = useSave(() => undefined)
+  return (
+    <div
+      className="space-y-3 rounded-md border border-dashed p-3 print:hidden"
+      data-testid="changes-controls"
+    >
+      <div className="flex items-center gap-2">
+        <Checkbox
+          id="include-changes"
+          checked={includeChanges}
+          disabled={save.pending}
+          onCheckedChange={(next) =>
+            void save.run(() =>
+              saveReportEdit({ data: { auditId, includeChanges: next === true } }),
+            )
+          }
+        />
+        <Label htmlFor="include-changes">Include what changed in the report</Label>
+      </div>
+      {rows.items.length === 0 ? null : (
+        <ul className="space-y-1">
+          {rows.items.map((row) => (
+            <li
+              key={row.ruleId}
+              className={cn(
+                "flex flex-wrap items-center gap-x-2 gap-y-1",
+                row.hidden && "opacity-60",
+              )}
+            >
+              <span className="inline-flex items-center gap-1.5 font-medium">
+                <ChangeGlyph state={row.state} className="size-3.5" />
+                {CHANGE_WORDS[row.state]}
+              </span>
+              <span className="min-w-0 [overflow-wrap:anywhere]">{row.title}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8"
+                disabled={save.pending}
+                onClick={() =>
+                  void save.run(() =>
+                    saveFindingEdit({
+                      data: {
+                        auditId,
+                        ruleId: row.ruleId,
+                        hidden: !row.hidden,
+                        ...(row.state === "fixed" ? { against: rows.against } : {}),
+                      },
+                    }),
+                  )
+                }
+              >
+                {row.hidden ? "Show again" : "Leave out of the report"}
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Feedback error={save.error} warning={null} />
+    </div>
   )
 }

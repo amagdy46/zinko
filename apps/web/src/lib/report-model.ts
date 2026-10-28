@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 3
+export const REPORT_MODEL_VERSION = 4
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -112,8 +112,63 @@ export const ReportFinding = Schema.Struct({
   ),
 })
 
+const ChangeItem = Schema.Struct({
+  ruleId: Schema.String,
+  state: Schema.Literals(["new", "regressed", "fixed", "verdict_changed"]),
+  severity: Severity,
+  title: Schema.String,
+  /** Pages the change is on and pages compared for the rule; counted, never named (aliases differ between audits). */
+  pages: Count,
+  pagesCompared: Count,
+  confidence: Schema.Literals(["normal", "low"]),
+  confirmation: Schema.Literals(["none", "repeated", "not_repeated", "incomplete"]),
+  qualifier: Schema.NullOr(Schema.Literal("partly_unknown_before")),
+})
+
+const ChangeTag = Schema.Struct({
+  change: Schema.Literals(["disappeared", "new", "destination_changed", "events_changed"]),
+  vendor: Schema.String,
+  destination: Schema.NullOr(Schema.String),
+  eventsAdded: Schema.Array(Schema.String),
+  eventsRemoved: Schema.Array(Schema.String),
+  cellsAffected: Count,
+  cellsCompared: Count,
+})
+
+/** What changed since the baseline audit, frozen with the snapshot; null when there is no baseline or the author switched it off. */
+const Changes = Schema.Struct({
+  baselineDate: Schema.String,
+  counts: Schema.Struct({
+    new: Count,
+    regressed: Count,
+    fixed: Count,
+    unchanged: Count,
+    verdictChanged: Count,
+    notComparable: Count,
+  }),
+  /** Changed findings left out of the detail: counted, never named. */
+  omitted: Count,
+  score: Schema.Struct({
+    before: Schema.NullOr(Count),
+    now: Schema.NullOr(Count),
+    delta: Schema.NullOr(Schema.Int),
+  }),
+  items: Schema.Array(ChangeItem),
+  tags: Schema.Array(ChangeTag),
+  notices: Schema.Array(
+    Schema.Literals([
+      "rules_changed",
+      "scope_differs",
+      "banner_differs",
+      "consent_differs",
+      "score_not_comparable",
+    ]),
+  ),
+  lines: Schema.Array(Schema.String),
+})
+
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -197,6 +252,7 @@ export const ReportModel = Schema.Struct({
     rows: Schema.Array(ConsentRow),
   }),
   findings: Schema.Array(ReportFinding),
+  changes: Schema.NullOr(Changes),
   leftOut: Schema.Array(Schema.Struct({ ruleId: Schema.String, title: Schema.String })),
   actionPlan: Schema.Array(
     Schema.Struct({
@@ -275,6 +331,7 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
       },
     }
   },
+  3: (json) => (isRecord(json) ? { ...json, changes: null } : json),
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{
@@ -300,8 +357,18 @@ export type DisclosureLevel = ReportModel["detail"]
 
 /** What only the consultant sees: never serialised into a snapshot, a share response or the CSV. */
 export interface ConsultantPayload {
-  edits: { summary: string | null; detail: DisclosureLevel }
+  edits: { summary: string | null; detail: DisclosureLevel; includeChanges: boolean }
   hiddenFindings: ReportFinding[]
+  /** The changes since the baseline, each with whether the author left it out, for the switch and the dimmed list. Null with no baseline. */
+  changeRows: {
+    against: string
+    items: ReadonlyArray<{
+      ruleId: string
+      title: string
+      state: "new" | "regressed" | "fixed" | "verdict_changed"
+      hidden: boolean
+    }>
+  } | null
   /** Notes printed in the report that were carried over from an earlier audit and not edited since. */
   carriedNotes: number
   /** What switching to Detailed would print beyond Standard: the entered page paths and ad-platform IDs. */

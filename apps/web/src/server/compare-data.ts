@@ -1,7 +1,7 @@
 import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, hit, run } from "@repo/db"
+import { audit, checkResult, findingTriage, hit, run } from "@repo/db"
 import { ruleChangedBetween, VOLATILE_RULES } from "@repo/rules"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -66,7 +66,7 @@ const refOf = (row: { id: string; createdAt: Date; status: string }): AuditRef =
 })
 
 /** Earlier evaluated full audits of the site, before `thanId` in creation order. */
-const earlierAudits = (orgId: string, siteId: string, thanId: string) =>
+export const earlierAudits = (orgId: string, siteId: string, thanId: string) =>
   and(
     eq(audit.orgId, orgId),
     eq(audit.siteId, siteId),
@@ -570,4 +570,68 @@ export const briefingOf = (orgId: string, auditId: string) =>
       .filter((c) => c.change === "disappeared" && c.cellsAffected === c.cellsCompared)
       .map((c) => `${vendorName(c.vendor)} ${c.destinationId}`)
     return { since: comparison.before.createdAt, lines: changesBriefing(comparison, gone) }
+  })
+
+/**
+ * A fingerprint of what the audit's comparison reads besides the audit itself, in order: the stored
+ * baseline and when it finished, the earlier audits the regression history would search (ids and
+ * finish times), the re-checks that came after (ids, rule, cells, finish times) and the baseline's
+ * triage rows as full-row text, `updated_at` included (the wording "Marked fixed on <date>" reads
+ * it). A change in any of them can change what the report says, so publication re-reads on a
+ * difference. Empty without a baseline.
+ */
+export const comparisonStampOf = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const [own] = yield* db
+      .select({ siteId: audit.siteId, baselineId: audit.baselineAuditId })
+      .from(audit)
+      .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (own === undefined || own.baselineId === null) return ""
+    const [baseline] = yield* db
+      .select({ finishedAt: audit.finishedAt })
+      .from(audit)
+      .where(and(eq(audit.id, own.baselineId), eq(audit.orgId, orgId)))
+    const earlier = yield* db
+      .select({ id: audit.id, finishedAt: audit.finishedAt })
+      .from(audit)
+      .where(earlierAudits(orgId, own.siteId, own.baselineId))
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(HISTORY_AUDITS)
+    const rechecks = yield* db
+      .select({
+        id: audit.id,
+        ruleId: audit.narrowRuleId,
+        cells: audit.narrowCells,
+        finishedAt: audit.finishedAt,
+      })
+      .from(audit)
+      .where(
+        and(
+          eq(audit.orgId, orgId),
+          eq(audit.siteId, own.siteId),
+          eq(audit.kind, "narrow"),
+          sql`(${audit.createdAt}, ${audit.id}) > (select o.created_at, o.id from audit o where o.id = ${auditId})`,
+        ),
+      )
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(CONFIRMATION_AUDITS)
+    const [triage] = yield* db
+      .select({
+        text: sql<string>`coalesce(string_agg(${findingTriage}::text, '|' order by ${findingTriage.ruleId}), '')`,
+      })
+      .from(findingTriage)
+      .where(and(eq(findingTriage.auditId, own.baselineId), eq(findingTriage.orgId, orgId)))
+    const text = JSON.stringify([
+      own.baselineId,
+      baseline?.finishedAt?.toISOString() ?? null,
+      earlier.map((a) => [a.id, a.finishedAt?.toISOString() ?? null]),
+      rechecks.map((a) => [a.id, a.ruleId, a.cells, a.finishedAt?.toISOString() ?? null]),
+      triage?.text ?? "",
+    ])
+    const bytes = yield* Effect.promise(() =>
+      crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)),
+    )
+    return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, "0")).join("")
   })

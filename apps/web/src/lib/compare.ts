@@ -127,6 +127,8 @@ export interface FindingChange {
   qualifier: "partly_unknown_before" | null
   resolution: Record<Resolution, number>
   cells: { common: number; failedBefore: number; failedNow: number; outside: number }
+  /** Distinct pages the change is on, and the pages compared for this rule (aliases differ between audits, so only counts). */
+  pages: { changed: number; compared: number }
   /** `cell` indexes `Comparison.cells`. A finding that fails on the same cells as before lists only a few. */
   cellChanges: { cell: number; before: Verdict; now: Verdict | Resolution }[]
   cellChangesTotal: number
@@ -652,6 +654,15 @@ export const compareAudits = (input: Input) => {
         failedBefore: baselineFails.size,
         failedNow: failsNow.size,
         outside: [...failsNow].filter((cell) => !commonCells.has(cell)).length,
+      },
+      pages: {
+        changed: new Set(
+          [...changedCells].flatMap(
+            (c) => b.runByCell.get(c)?.cell.page ?? n.runByCell.get(c)?.cell.page ?? [],
+          ),
+        ).size,
+        compared: new Set([...commonCells].flatMap((c) => b.runByCell.get(c)?.cell.page ?? []))
+          .size,
       },
       cellChanges,
       cellChangesTotal: listed.length,

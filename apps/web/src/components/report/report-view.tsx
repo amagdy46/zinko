@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react"
 import type { ReportFinding, ReportModel } from "@/lib/report-model"
 import { ActionPlan } from "./action-plan"
+import { Changes } from "./changes"
 import { Appendix } from "./appendix"
 import { ConsentSummary } from "./consent-summary"
 import { Cover } from "./cover"
@@ -15,6 +16,8 @@ import { Summary } from "./summary"
  */
 export interface ReportControls {
   summary: ReactNode
+  /** The switch and the changes list with their edit controls. */
+  changes: ReactNode
   Finding: ComponentType<{ finding: ReportFinding; hidden: boolean }>
   hiddenFindings: ReadonlyArray<ReportFinding>
 }
@@ -57,6 +60,7 @@ export function ReportView({
         standalone={standalone}
       />
       <Summary model={model} actions={controls?.summary} />
+      <Changes model={model} extra={controls?.changes} />
       <Scope model={model} />
       <ConsentSummary model={model} />
       <Findings model={model} controls={controls} />

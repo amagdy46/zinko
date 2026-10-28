@@ -4,6 +4,7 @@ import { useRef, useState } from "react"
 import { EmptyState } from "@/components/empty-state"
 import {
   DisclosureDialog,
+  ChangesControls,
   EditSummary,
   FindingActions,
 } from "@/components/report/consultant-controls"
@@ -186,6 +187,14 @@ function ReportScreen() {
                     headlines={draft.model.summary.headlines}
                   />
                 ),
+                changes:
+                  draft.consultant.changeRows === null ? undefined : (
+                    <ChangesControls
+                      auditId={auditId}
+                      includeChanges={draft.consultant.edits.includeChanges}
+                      rows={draft.consultant.changeRows}
+                    />
+                  ),
                 Finding: FindingActions,
                 hiddenFindings: draft.consultant.hiddenFindings,
               }

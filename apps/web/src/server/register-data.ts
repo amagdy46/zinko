@@ -17,6 +17,8 @@ import { OWNER_LABELS } from "@/lib/report-model"
 import { pageLabel } from "@/lib/report-projection"
 import { pageIndexOf, withoutTestClickIds } from "@/lib/page-match"
 import { auditInOrg } from "./audit-data"
+import { CHANGE_WORDS } from "@/lib/compare-text"
+import { comparisonOf } from "./compare-data"
 import { findingsOf } from "./findings-data"
 import { NotFound } from "./server-fn"
 
@@ -24,6 +26,9 @@ const decodeConfig = Schema.decodeUnknownEffect(AuditConfig)
 const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 
 const MAX_PAGE_LABELS = 20
+
+const changeWord = (state: keyof typeof CHANGE_WORDS | undefined) =>
+  state === undefined ? "" : CHANGE_WORDS[state]
 
 const OWNER_LABELS_BY_ID = new Map<string, string>(Object.entries(OWNER_LABELS))
 
@@ -50,6 +55,8 @@ export const REGISTER_COLUMNS = [
   "Rules version",
   "Why it matters",
   "Fix steps",
+  "Change since baseline",
+  "Baseline date",
 ]
 
 /**
@@ -107,6 +114,9 @@ export const registerOf = (orgId: string, auditId: string) =>
     const wordingOf = new Map(wording.map((w) => [w.ruleId, w]))
     const editOf = new Map(edits.map((e) => [e.ruleId, e]))
     const date = (head.finishedAt ?? head.createdAt).toISOString().slice(0, 10)
+    const { comparison } = yield* comparisonOf(orgId, auditId, undefined)
+    const changeOf = new Map((comparison?.findings ?? []).map((f) => [f.ruleId, f]))
+    const baselineDate = comparison === null ? "" : comparison.before.createdAt.slice(0, 10)
     const rows = yield* Effect.forEach(found.findings, (f) =>
       Effect.gen(function* () {
         const affected = f.runIds.flatMap((id) => {
@@ -158,12 +168,44 @@ export const registerOf = (orgId: string, auditId: string) =>
           f.rulesVersions.join(", "),
           stored?.why ?? "",
           fix.join(" | "),
+          changeWord(changeOf.get(f.ruleId)?.state),
+          baselineDate,
         ]
       }),
     )
+    // a finding of the baseline that this audit's re-run verified fixed has no row above
+    const fixedRows = (comparison?.findings ?? [])
+      .filter((f) => f.state === "fixed" && !found.findings.some((x) => x.ruleId === f.ruleId))
+      .map((f) => {
+        const edited = editOf.get(f.ruleId)
+        return [
+          head.siteName,
+          date,
+          f.ruleId,
+          f.title,
+          f.severity,
+          AREAS[f.area] ?? f.area,
+          "Fixed (verified by the re-run)",
+          (f.owner === null ? undefined : OWNER_LABELS_BY_ID.get(f.owner)) ?? "Owner not assigned",
+          0,
+          f.cells.common,
+          f.pages.changed,
+          "",
+          "",
+          TRIAGE_WORD[f.triage.now.status],
+          "",
+          edited?.note ?? "",
+          edited?.hidden === true ? "Left out" : "Yes",
+          "",
+          "",
+          "",
+          CHANGE_WORDS.fixed,
+          baselineDate,
+        ]
+      })
     return {
       host: head.host,
       date,
-      csv: csvFile([REGISTER_COLUMNS, ...rows]),
+      csv: csvFile([REGISTER_COLUMNS, ...rows, ...fixedRows]),
     }
   })

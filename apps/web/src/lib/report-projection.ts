@@ -131,6 +131,25 @@ export function evidenceRows(
     })
 }
 
+const VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
+
+/** A destination of a changed tag: the same shape rules as an evidence row's; null where Standard keeps it out. */
+export const tagDestination = (
+  vendor: string,
+  id: string,
+  detail: DisclosureLevel,
+): string | null => {
+  if (/^G-[A-Z0-9]{4,12}$/.test(id) || /^AW-\d{6,17}$/.test(id)) return id
+  const known = VENDORS.find((v) => v === vendor)
+  return detail === "detailed" && known !== undefined && isKnownDestination(known, id) ? id : null
+}
+
+/** An event name of a changed tag: a known one, else "custom event" (a page controls the rest). */
+export const tagEvent = (vendor: string, event: string): string => {
+  const known = VENDORS.find((v) => v === vendor)
+  return known !== undefined && knownEvent(known, event) ? event : CUSTOM_EVENT
+}
+
 const NO_REASON = "The run failed"
 const PARTIAL_REASON = "Some data is missing"
 
@@ -162,6 +181,7 @@ const count: Validator = (v) =>
   typeof v === "number" && Number.isInteger(v) && v >= 0 ? null : "count"
 const amount: Validator = (v) =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 ? null : "amount"
+const signed: Validator = (v) => (typeof v === "number" && Number.isInteger(v) ? null : "signed")
 const flag: Validator = (v) => (typeof v === "boolean" ? null : "flag")
 /** An object that is absent: its own path is the leaf. */
 const absent: Validator = (v) => (v === null ? null : "absent")
@@ -208,8 +228,6 @@ const REASONS = [
   PARTIAL_REASON,
 ]
 const PUSH_COMMANDS = ["consent default", "consent update", "config", "event", "push"]
-
-const VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
 
 const vendorLabelValidator = oneOf("vendorLabel", [...Object.values(VENDOR_LABELS), "Other vendor"])
 const eventName: Validator = (v) => {
@@ -375,6 +393,51 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["consent.rows[].cells[].choice.hitsBefore", count],
   ["consent.rows[].cells[].choice.hitsAfter", count],
   ...under("findings[]", finding),
+  ["changes", absent],
+  ["changes.baselineDate", date],
+  ["changes.counts.new", count],
+  ["changes.counts.regressed", count],
+  ["changes.counts.fixed", count],
+  ["changes.counts.unchanged", count],
+  ["changes.counts.verdictChanged", count],
+  ["changes.counts.notComparable", count],
+  ["changes.omitted", count],
+  ["changes.score.before", nullable(count)],
+  ["changes.score.now", nullable(count)],
+  ["changes.score.delta", nullable(signed)],
+  ["changes.items[].ruleId", ruleId],
+  ["changes.items[].state", oneOf("state", ["new", "regressed", "fixed", "verdict_changed"])],
+  ["changes.items[].severity", oneOf("severity", SEVERITIES)],
+  ["changes.items[].title", stored],
+  ["changes.items[].pages", count],
+  ["changes.items[].pagesCompared", count],
+  ["changes.items[].confidence", oneOf("confidence", ["normal", "low"])],
+  [
+    "changes.items[].confirmation",
+    oneOf("confirmation", ["none", "repeated", "not_repeated", "incomplete"]),
+  ],
+  ["changes.items[].qualifier", nullable(oneOf("qualifier", ["partly_unknown_before"]))],
+  [
+    "changes.tags[].change",
+    oneOf("tagChange", ["disappeared", "new", "destination_changed", "events_changed"]),
+  ],
+  ["changes.tags[].vendor", vendorLabelValidator],
+  ["changes.tags[].destination", nullable(destination)],
+  ["changes.tags[].eventsAdded[]", eventName],
+  ["changes.tags[].eventsRemoved[]", eventName],
+  ["changes.tags[].cellsAffected", count],
+  ["changes.tags[].cellsCompared", count],
+  [
+    "changes.notices[]",
+    oneOf("notice", [
+      "rules_changed",
+      "scope_differs",
+      "banner_differs",
+      "consent_differs",
+      "score_not_comparable",
+    ]),
+  ],
+  ["changes.lines[]", generated],
   ["leftOut[].ruleId", ruleId],
   ["leftOut[].title", stored],
   ["actionPlan[].owner", nullable(oneOf("owner", OWNERS))],

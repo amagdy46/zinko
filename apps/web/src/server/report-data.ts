@@ -39,7 +39,9 @@ import {
   vendorLabel,
 } from "@/lib/report-projection"
 import { vendorRank } from "@/lib/tag-matrix"
+import { changesOf } from "@/lib/report-changes"
 import { brandingOf } from "./branding-data"
+import { comparisonOf, comparisonStampOf, tagDiffOf } from "./compare-data"
 import { auditInOrg, type CaptureRead, readCaptureTolerant } from "./audit-data"
 import { type CandidateRun, candidateRunsOf, digestRunOf } from "./digest-data"
 import { decodeFix } from "./findings"
@@ -68,6 +70,8 @@ export interface ReportStamp {
   edit: string
   findingEdits: string
   triage: string
+  /** The ids and values the comparison read: baseline, earlier audits, re-checks, the baseline's triage. */
+  comparison: string
 }
 
 export type ReportBuild =
@@ -287,6 +291,7 @@ export const readStamp = (orgId: string, auditId: string) =>
       edit: edit?.fingerprint ?? "",
       findingEdits: findingEdits?.fingerprint ?? "",
       triage: triage?.fingerprint ?? "",
+      comparison: yield* comparisonStampOf(orgId, auditId),
     } satisfies ReportStamp
   })
 
@@ -432,6 +437,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           .select({
             summary: reportEdit.summary,
             detail: reportEdit.detail,
+            includeChanges: reportEdit.includeChanges,
             updatedAt: reportEdit.updatedAt,
           })
           .from(reportEdit)
@@ -449,8 +455,13 @@ export const buildReport = (orgId: string, auditId: string) =>
           .from(reportFindingEdit)
           .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
         const branding = yield* brandingOf(orgId)
+        const { comparison } = yield* comparisonOf(orgId, auditId, undefined)
+        const tags =
+          comparison === null ? null : yield* tagDiffOf(orgId, auditId, comparison.before.id)
         const stamp = yield* readStamp(orgId, auditId)
         return {
+          comparison,
+          tags,
           head,
           config,
           found,
@@ -468,6 +479,8 @@ export const buildReport = (orgId: string, auditId: string) =>
       }),
     )
     const {
+      comparison,
+      tags,
       head,
       config,
       found,
@@ -517,6 +530,10 @@ export const buildReport = (orgId: string, auditId: string) =>
         .map(scenarioLabel)
 
     const leftOutIds = new Set(findingEdits.filter((e) => e.hidden).map((e) => e.ruleId))
+    const changed =
+      comparison === null || tags === null
+        ? null
+        : changesOf({ comparison, tags, hidden: leftOutIds, detail })
     const detailed = failing.filter((f) => !leftOutIds.has(f.ruleId))
     const open = detailed
       .filter((f) => f.triage.status === "open")
@@ -774,6 +791,7 @@ export const buildReport = (orgId: string, auditId: string) =>
       },
       consent: consentSummaryOf(config.scenarios, runs, hitCells),
       findings,
+      changes: edit?.includeChanges === false ? null : (changed?.changes ?? null),
       leftOut: hiddenFindings
         .map((f) => ({ ruleId: f.ruleId, title: f.title }))
         .toSorted((a, b) => byText(a.ruleId, b.ruleId)),
@@ -805,7 +823,15 @@ export const buildReport = (orgId: string, auditId: string) =>
           ? null
           : { key: branding.logoKey, type: branding.logoType, sha256: branding.logoSha256 },
       consultant: {
-        edits: { summary: edit?.summary ?? null, detail },
+        edits: {
+          summary: edit?.summary ?? null,
+          detail,
+          includeChanges: edit?.includeChanges !== false,
+        },
+        changeRows:
+          comparison === null || changed === null
+            ? null
+            : { against: comparison.before.id, items: changed.rows },
         hiddenFindings,
         carriedNotes: findings.filter(
           (f) => f.note !== null && editOf.get(f.ruleId)?.carried === true,

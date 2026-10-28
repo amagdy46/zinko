@@ -1,12 +1,13 @@
 import { Database } from "@repo/core/Database"
-import { finding, reportEdit, reportFindingEdit } from "@repo/db"
+import { audit as auditTable, finding, reportEdit, reportFindingEdit } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { hasPersonalData } from "./branding-data"
 import { auditInOrg } from "./audit-data"
+import { earlierAudits } from "./compare-data"
 import { requireSession } from "./require-session"
-import { Invalid, membership, NotFound, mutation } from "./server-fn"
+import { Invalid, isUuid, membership, NotFound, mutation } from "./server-fn"
 
 const SUMMARY_MAX = 2000
 const NOTE_MAX = 1000
@@ -17,6 +18,7 @@ const SaveReportInput = Schema.Struct({
   auditId: Schema.String,
   summary: Schema.optional(Schema.String),
   detail: Schema.optional(Schema.Literals(["standard", "detailed"])),
+  includeChanges: Schema.optional(Schema.Boolean),
 })
 
 const SaveFindingInput = Schema.Struct({
@@ -25,6 +27,11 @@ const SaveFindingInput = Schema.Struct({
   note: Schema.optional(Schema.String),
   hidden: Schema.optional(Schema.Boolean),
   owner: Schema.optional(Schema.NullOr(OwnerId)),
+  /**
+   * An earlier audit of the site: lets the edit name a finding that this audit no longer has
+   * because the re-run fixed it ("Leave out of the report" on a Fixed change).
+   */
+  against: Schema.optional(Schema.String),
 })
 
 /**
@@ -51,6 +58,7 @@ export const saveReportEdit = createServerFn({ method: "POST" })
         const sent = {
           ...(summary === undefined ? {} : { summary: summary || null }),
           ...(data.detail === undefined ? {} : { detail: data.detail }),
+          ...(data.includeChanges === undefined ? {} : { includeChanges: data.includeChanges }),
         }
         const stamp = { updatedBy: userId, updatedAt: new Date() }
         yield* db
@@ -79,17 +87,44 @@ export const saveFindingEdit = createServerFn({ method: "POST" })
         if (note !== undefined && note.length > NOTE_MAX)
           return yield* new Invalid({ message: `A note can be at most ${NOTE_MAX} characters.` })
         const { db } = yield* Database
-        const [found] = yield* db
-          .select({ ruleId: finding.ruleId })
-          .from(finding)
-          .where(
-            and(
-              eq(finding.auditId, auditId),
-              eq(finding.orgId, orgId),
-              eq(finding.ruleId, data.ruleId),
-            ),
-          )
-          .limit(1)
+        const findingOf = (id: string) =>
+          db
+            .select({ ruleId: finding.ruleId })
+            .from(finding)
+            .where(
+              and(
+                eq(finding.auditId, id),
+                eq(finding.orgId, orgId),
+                eq(finding.ruleId, data.ruleId),
+              ),
+            )
+            .limit(1)
+        const [current] = yield* findingOf(auditId)
+        let found = current
+        if (data.against !== undefined) {
+          // Only a finding of the earlier audit that this one no longer has (a Fixed change) may be
+          // named through it; one that still fails is edited as the audit's own finding.
+          if (!isUuid(data.against) || data.against === auditId || current !== undefined)
+            return yield* new NotFound({ message: "Not found" })
+          const [audit] = yield* db
+            .select({ siteId: auditTable.siteId })
+            .from(auditTable)
+            .where(and(eq(auditTable.id, auditId), eq(auditTable.orgId, orgId)))
+          const [valid] =
+            audit === undefined
+              ? []
+              : yield* db
+                  .select({ id: auditTable.id })
+                  .from(auditTable)
+                  .where(
+                    and(
+                      earlierAudits(orgId, audit.siteId, auditId),
+                      eq(auditTable.id, data.against),
+                    ),
+                  )
+          if (valid === undefined) return yield* new NotFound({ message: "Not found" })
+          ;[found] = yield* findingOf(valid.id)
+        }
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
         const sent = {
           ...(note === undefined ? {} : { note: note || null }),
