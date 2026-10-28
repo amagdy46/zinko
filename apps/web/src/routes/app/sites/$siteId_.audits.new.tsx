@@ -38,7 +38,7 @@ const decodeConfig = Schema.decodeUnknownOption(AuditConfig)
 
 const VIEWPORTS = ["desktop", "mobile"] as const
 
-type SiteScope = { host: string; origin: string }
+type SiteScope = { host: string; origin: string; measuredHosts: ReadonlyArray<string> }
 
 const urlError = (value: string, site: SiteScope) => {
   if (!URL.canParse(value)) return "Enter a valid URL."

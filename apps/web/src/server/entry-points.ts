@@ -41,6 +41,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "clients.getClient": "read",
   "clients.createSite": "mutation",
   "clients.updateSiteAddress": "mutation",
+  "clients.updateMeasuredHosts": "mutation",
   "clients.archiveSite": "mutation",
   "clients.deleteSite": "mutation",
   "clients.getSite": "read",

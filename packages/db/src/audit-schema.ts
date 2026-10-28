@@ -49,6 +49,11 @@ export const site = pgTable(
     name: text().notNull(),
     origin: text().notNull(),
     host: text().notNull(),
+    /**
+     * Other hosts the owner declares belong to the site (at most 3): a visitor should keep their
+     * consent and identity there. The only definition of "related" the rules use.
+     */
+    measuredHosts: jsonb("measured_hosts").$type<string[]>().notNull().default([]),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (t) => [index("site_org_client_idx").on(t.orgId, t.clientId)],
@@ -111,6 +116,8 @@ export const run = pgTable(
     journey: boolean().notNull().default(false),
     /** `target`, or for a re-check `companion` (banner detection) or `extra` (cross-product runs). */
     role: text().notNull().default("target"),
+    /** The declared host a cross-host run follows a link to; null for every other run. */
+    followHost: text("follow_host"),
     status: text().notNull(),
     engine: jsonb(),
     decoderVersion: text("decoder_version"),

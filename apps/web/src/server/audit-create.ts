@@ -19,7 +19,7 @@ export const ACTIVE_STATUSES = ["queued", "running"] as const
  */
 export const normalizePages = (
   pages: ReadonlyArray<string>,
-  target: { host: string; origin: string },
+  target: { host: string; origin: string; measuredHosts?: ReadonlyArray<string> },
 ) =>
   Effect.gen(function* () {
     const hrefs: string[] = []
@@ -264,7 +264,8 @@ export const createAudit = (input: CreateAudit) =>
           })
       }
       const pages = yield* normalizePages(input.config.pages, target)
-      const config = { ...input.config, pages }
+      // the site's declared hosts at creation: the workflow reads this copy, never the live site
+      const config = { ...input.config, pages, measuredHosts: target.measuredHosts }
       const urls = yield* captureUrls(pages, config.clickIds)
       const [created] = yield* db
         .insert(audit)

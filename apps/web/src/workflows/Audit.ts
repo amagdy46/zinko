@@ -292,7 +292,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
     if (yield* exists(keys.capture))
       return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
 
-    const { blockVendorRequests, pages, reload } = yield* decodeConfig(config)
+    const { blockVendorRequests, measuredHosts, pages, reload } = yield* decodeConfig(config)
     const { scenario, viewport } = yield* decodeRunShape(current)
     yield* db
       .update(run)
@@ -325,7 +325,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
               }
             : {}),
           blockVendorRequests,
-          allowedHosts: [host],
+          allowedHosts: [host, ...(measuredHosts ?? [])],
         },
         { instance: grant.engine },
       )

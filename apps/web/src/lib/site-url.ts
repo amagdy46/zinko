@@ -13,10 +13,14 @@ export const canonicalHost = (url: string): string | null => {
 export const originHost = (origin: string): string => new URL(origin).host
 
 /**
- * A URL belongs to a site when it is http(s), has no credentials, its host is the site's host or a
- * subdomain of it, and it uses the same port as the site's origin (another port is another server).
+ * A URL belongs to a site when it is http(s), has no credentials, its host is the site's host, one
+ * of its declared measured hosts or a subdomain of either, and it uses the same port as the site's
+ * origin (another port is another server).
  */
-export const isOnSite = (url: string, site: { host: string; origin: string }): boolean => {
+export const isOnSite = (
+  url: string,
+  site: { host: string; origin: string; measuredHosts?: ReadonlyArray<string> },
+): boolean => {
   const parsed = parse(url)
   if (parsed === null) return false
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false
@@ -24,7 +28,9 @@ export const isOnSite = (url: string, site: { host: string; origin: string }): b
   const host = canonicalHost(url)
   return (
     host !== null &&
-    (host === site.host || host.endsWith(`.${site.host}`)) &&
+    [site.host, ...(site.measuredHosts ?? [])].some(
+      (own) => host === own || host.endsWith(`.${own}`),
+    ) &&
     parsed.port === new URL(site.origin).port
   )
 }

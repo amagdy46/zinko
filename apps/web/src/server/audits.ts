@@ -49,7 +49,11 @@ const PREFLIGHT_MAX_REDIRECTS = 5
  * 410 or 5xx answer is refused; 401, 403 and 429 are left to the capture, which names bot blocks.
  * Messages start with the URL as typed so the form can show them under that field.
  */
-const preflight = (typed: string, start: string, target: { host: string; origin: string }) =>
+const preflight = (
+  typed: string,
+  start: string,
+  target: { host: string; origin: string; measuredHosts?: ReadonlyArray<string> },
+) =>
   Effect.gen(function* () {
     const allowPrivate = yield* allowPrivateSites
     let url = start

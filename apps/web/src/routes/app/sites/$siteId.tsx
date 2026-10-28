@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,7 +43,13 @@ import { count, relativeTime, shortDateTime, useTimeZone } from "@/lib/format"
 import { formField } from "@/lib/form"
 import { withScheme } from "@/lib/site-url"
 import { Button } from "@/components/ui/button"
-import { archiveSite, deleteSite, getSite, updateSiteAddress } from "@/server/clients"
+import {
+  archiveSite,
+  deleteSite,
+  getSite,
+  updateMeasuredHosts,
+  updateSiteAddress,
+} from "@/server/clients"
 
 const Page = Schema.Int.check(Schema.isGreaterThan(0))
 
@@ -67,6 +74,8 @@ function SitePage() {
   const [rerunOpen, setRerunOpen] = useState(false)
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [urlError, setUrlError] = useState<string>()
+  const [declaring, setDeclaring] = useState(false)
+  const [hostsError, setHostsError] = useState<string>()
   const timeZone = useTimeZone()
 
   async function saveAddress(event: FormEvent<HTMLFormElement>) {
@@ -82,6 +91,28 @@ function SitePage() {
       }
       setEditing(false)
       toast.success("Address saved")
+      await router.invalidate()
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function saveHosts(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPending(true)
+    try {
+      const result = await updateMeasuredHosts({
+        data: {
+          id: site.id,
+          hosts: formField(new FormData(event.currentTarget), "hosts").split("\n"),
+        },
+      })
+      if (!result.ok) {
+        setHostsError(result.message)
+        return
+      }
+      setDeclaring(false)
+      toast.success("Other hosts saved")
       await router.invalidate()
     } finally {
       setPending(false)
@@ -107,9 +138,16 @@ function SitePage() {
           { label: site.name },
         ]}
         description={
-          <span className="font-mono break-all" data-testid="site-origin">
-            {site.origin}
-          </span>
+          <>
+            <span className="font-mono break-all" data-testid="site-origin">
+              {site.origin}
+            </span>
+            {site.measuredHosts.length === 0 ? null : (
+              <span className="mt-1 block text-sm" data-testid="site-measured-hosts">
+                Also measured on <span className="font-mono">{site.measuredHosts.join(", ")}</span>
+              </span>
+            )}
+          </>
         }
         meta={site.archived ? <Badge variant="secondary">Archived</Badge> : undefined}
         actions={
@@ -134,6 +172,9 @@ function SitePage() {
                   </DropdownMenuItem>
                   {canManage ? (
                     <>
+                      <DropdownMenuItem onSelect={() => setDeclaring(true)}>
+                        Other hosts
+                      </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => setConfirming("archive")}>
                         Archive
                       </DropdownMenuItem>
@@ -195,6 +236,55 @@ function SitePage() {
             </div>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Save address"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={declaring}
+        onOpenChange={(isOpen) => {
+          setDeclaring(isOpen)
+          if (!isOpen) setHostsError(undefined)
+        }}
+      >
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            menuButton.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Other hosts</DialogTitle>
+            <DialogDescription>
+              Only add hosts where a visitor should not be asked for consent again and where your
+              tags should recognise them. Zinko may open them and any of their subdomains. Enter the
+              host a link actually arrives at: www.shop.example and shop.example are different
+              hosts. At most 3, one per line.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveHosts} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="site-hosts">Hosts</Label>
+              <Textarea
+                id="site-hosts"
+                name="hosts"
+                rows={3}
+                autoComplete="off"
+                defaultValue={site.measuredHosts.join("\n")}
+                placeholder="checkout.shop.example"
+                className="font-mono text-sm"
+                aria-invalid={hostsError !== undefined}
+                aria-describedby={hostsError === undefined ? undefined : "site-hosts-error"}
+                onChange={() => setHostsError(undefined)}
+              />
+              {hostsError === undefined ? null : (
+                <p id="site-hosts-error" role="alert" className="text-sm text-destructive">
+                  {hostsError}
+                </p>
+              )}
+            </div>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save hosts"}
             </Button>
           </form>
         </DialogContent>

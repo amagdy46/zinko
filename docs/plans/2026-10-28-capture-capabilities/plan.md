@@ -405,3 +405,14 @@ Re-run after the fixes: the README matrix on Playwright (desktop, and mobile for
 - The Ads label is part of the match key with (vendor, destination, transaction id): two conversions of one order under different labels are different conversions.
 - Verified on both engines (`/capture` through the CLI, `--scenario all --rules --block-vendors --goto <site>/thank-you --reload`): `purchase-reload` and `duplicate-purchase` fail in all four scenarios (5 and 7 evidence refs); `clean` pass in all four; `purchase-missing-fields` could not check in all four; `clean --goto /product --reload` not applicable ("no Google purchase was sent before the reload"); `clean` on one page not applicable. The `clean` journey baseline (every other rule, all four scenarios) is identical to the run before the change. A stored `purchase-reload` capture whose second-document destination IDs were edited passes ("not a repeat"), checked offline with `evaluateRun`'s rule on the stored JSON.
 - **Decision 11 (deployed timing) is not done:** no deployed build is available, so the audit form's reload default stays off.
+
+## Execution status (branch `capture/cross-host`: Tasks 5 to 8)
+
+Engines for this branch: Playwright on :8093, Scrapling on :8094, fixtures on :4440 (`FIXTURES_PORT`), dev server on :1337 with `BROWSER_URL=http://localhost:8093`, database `zinko_cap`.
+
+### Task 5
+
+- `AuditConfig.crossHost` is added in Task 6, where it is first read (an unused optional field in Task 5 would have no reader).
+- `RunInput.measuredHosts` is added with its first reader (Task 7), not here.
+- The workflow already sends `allowedHosts: [site.host, ...config.measuredHosts]` from the config snapshot in this task, because the verification of the snapshot needs a step that reads it.
+- Private-host refusal cannot be exercised on the dev stage (`ALLOW_PRIVATE_SITES` is on there); it is the same `isPrivateHost` check as `parseSiteUrl`, and `checkout.shop.localhost` is private by that function.

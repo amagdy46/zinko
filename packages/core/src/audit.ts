@@ -36,6 +36,11 @@ export const AuditConfig = Schema.Struct({
    * consent choice survives it. Only meaningful with `journey`; optional, so older configs decode.
    */
   reload: Schema.optionalKey(Schema.Boolean),
+  /**
+   * The site's declared measured hosts, copied when the audit is created so that editing the site
+   * later changes nothing in a running or retried audit. Optional, so older configs decode.
+   */
+  measuredHosts: Schema.optionalKey(Schema.Array(Schema.String).check(Schema.isMaxLength(3))),
 })
 export type AuditConfig = typeof AuditConfig.Type
 

@@ -32,12 +32,10 @@ import {
 
 const AUDITS_PER_PAGE = 20
 
-const requireManager = (role: string) =>
+const requireManager = (role: string, action = "archive or delete") =>
   isManager(role)
     ? Effect.void
-    : Effect.fail(
-        new Forbidden({ message: "Only organization owners and admins can archive or delete." }),
-      )
+    : Effect.fail(new Forbidden({ message: `Only organization owners and admins can ${action}.` }))
 
 const parseName = (value: string) => {
   const name = value.trim()
@@ -62,6 +60,49 @@ const parseSiteUrl = (value: string) =>
         message: "This address is private and cannot be audited. Use the site's public URL.",
       })
     return { origin: url.origin, host }
+  })
+
+const MAX_MEASURED_HOSTS = 3
+
+/** A bare host (an optional http(s):// and trailing slash are tolerated), as `URL` writes it; null for a port, path, user name or anything else. */
+const measuredHostOf = (value: string) => {
+  const text = value
+    .trim()
+    .replace(/^https?:\/\//i, "")
+    .replace(/\/$/, "")
+  if (!/^[^\s/:?#@[\]]+$/.test(text)) return null
+  const href = `http://${text}`
+  return URL.canParse(href) ? new URL(href).hostname.replace(/\.$/, "") : null
+}
+
+/**
+ * The declared measured hosts: canonical, at least two labels, no IP literal and no port, none
+ * private (unless private sites are allowed), none the site's own host, each once, at most three.
+ */
+const parseMeasuredHosts = (values: ReadonlyArray<string>, siteHost: string) =>
+  Effect.gen(function* () {
+    const allowPrivate = yield* allowPrivateSites
+    const hosts: string[] = []
+    for (const value of values) {
+      if (value.trim() === "") continue
+      const host = measuredHostOf(value)
+      if (host === null || host.split(".").length < 2 || /^[\d.]+$/.test(host))
+        return yield* new Invalid({
+          message: `${value.trim()} is not a host name. Enter a name such as checkout.shop.example, without a port, path or IP address.`,
+        })
+      if (isPrivateHost(host) && !allowPrivate)
+        return yield* new Invalid({
+          message: `${host} is a private address and cannot be audited.`,
+        })
+      if (host === siteHost)
+        return yield* new Invalid({ message: `${host} is the site's own host.` })
+      if (!hosts.includes(host)) hosts.push(host)
+    }
+    if (hosts.length > MAX_MEASURED_HOSTS)
+      return yield* new Invalid({
+        message: `A site can declare at most ${MAX_MEASURED_HOSTS} other hosts.`,
+      })
+    return hosts
   })
 
 const IdInput = Schema.Struct({ id: Schema.String })
@@ -440,6 +481,47 @@ export const updateSiteAddress = createServerFn({ method: "POST" })
     ),
   )
 
+/**
+ * Declares the other hosts that belong to a site (see `site.measured_hosts`). Owners and admins
+ * only, checked here; another organization's site is a 404. Audits already started keep the list
+ * they were created with.
+ */
+export const updateMeasuredHosts = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(
+    Schema.toStandardSchemaV1(
+      Schema.Struct({
+        id: Schema.String,
+        hosts: Schema.Array(Schema.String.check(Schema.isMaxLength(300))).check(
+          Schema.isMaxLength(10),
+        ),
+      }),
+    ),
+  )
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        yield* siteInOrg(orgId, data.id)
+        yield* requireManager(role, "declare a site's other hosts")
+        const { db } = yield* Database
+        return yield* atomically(
+          Effect.gen(function* () {
+            const found = yield* siteInOrg(orgId, data.id, true)
+            if (found.archivedAt !== null)
+              return yield* new Invalid({ message: "This site is archived." })
+            const hosts = yield* parseMeasuredHosts(data.hosts, found.host)
+            yield* db
+              .update(site)
+              .set({ measuredHosts: hosts })
+              .where(and(eq(site.orgId, orgId), eq(site.id, found.id)))
+            return { hosts }
+          }),
+        )
+      }),
+    ),
+  )
+
 export const archiveSite = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
@@ -526,6 +608,7 @@ export const getSite = createServerFn({ method: "GET" })
             name: found.name,
             origin: found.origin,
             host: found.host,
+            measuredHosts: found.measuredHosts,
             archived: found.archivedAt !== null,
           },
           client: { id: owner.id, name: owner.name },
