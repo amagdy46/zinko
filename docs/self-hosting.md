@@ -47,7 +47,7 @@ Never set `ALLOW_PRIVATE_NETWORKS` or `BROWSER_URL` for a deployed stage: the en
 
 ## Deploy from GitHub
 
-`.github/workflows/deploy.yml` is manual (`workflow_dispatch`) and takes a required `stage` and a `destroy` checkbox. Create a GitHub environment named after the stage, put the secrets above (plus `ALCHEMY_PASSWORD`) in it, and run the workflow. The stage `prod` is refused unless its environment has a required-reviewers rule, which the workflow reads with the repository secret `ENVIRONMENT_READ_TOKEN`. `image-build.yml` (manual, no secrets) builds the capture image and starts it under 4 GiB and half a vCPU, to check the image on its own.
+`.github/workflows/deploy.yml` is manual (`workflow_dispatch`) and takes a required `stage` and a `destroy` checkbox. Create a GitHub environment named after the stage, put the secrets above (plus `ALCHEMY_PASSWORD`) in it, and run the workflow. It installs, builds, migrates the stage's database (`pnpm db:migrate` with the stage's `DATABASE_URL`) and only then deploys, in that order; a destroy skips build and migrate. The stage `prod` is refused unless its environment has a required-reviewers rule, which the workflow reads with the repository secret `ENVIRONMENT_READ_TOKEN`. `image-build.yml` (manual, no secrets) builds the capture image and starts it under 4 GiB and half a vCPU, to check the image on its own.
 
 ## What to check after the first deploy
 

@@ -77,6 +77,14 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build
+        if: ${{ !inputs.destroy }}
+        run: pnpm build
+      # Before the Worker goes out, so new code never meets an old schema. DATABASE_URL is this
+      # stage's own database (the name check above), from the stage's environment secrets.
+      - name: Migrate the stage's database
+        if: ${{ !inputs.destroy }}
+        run: pnpm db:migrate
       - name: Deploy
         if: ${{ !inputs.destroy }}
         run: pnpm exec alchemy deploy infra/alchemy.run.ts --yes
