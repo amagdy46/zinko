@@ -81,6 +81,8 @@ Other sites keep the query string on internal links (`keepQuery`), so only `lost
 
 Any page accepts `?delay=<ms>` (at most 300000): the response is held that long, for timing checks against the capture deadline.
 
+`/post-form/timed?after=<ms>` and `/post-form/pagehide` answer a GET page that submits a POST form to `/post-form/received` by itself (after the delay, or when the page is hidden or left); they test that a `reload` step refuses a page that became a POST. They are not sites.
+
 `/r?to=<url>` answers `302` to any URL; it exists to test the capture engine's SSRF policy.
 
 ## inspect

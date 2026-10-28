@@ -952,13 +952,25 @@ const runStep = async (
   await observeConsent()
   await checkpoint()
   await unhide()
-  const method = before === undefined ? undefined : documentMethod.get(before)
-  if (step.action === "reload" && method !== undefined && method !== "GET") {
-    error(
-      "JourneyStep",
-      `step ${index + 1} reload of ${current.url()}: the page was loaded with ${method}, and a reload would send it again`,
+  // Checked last, right before the reload: a form the page submits by itself (on a timer, or on the
+  // pagehide the flush above causes) can swap the document while this step waited.
+  if (step.action === "reload") {
+    const method = currentDocument === undefined ? undefined : documentMethod.get(currentDocument)
+    const navigating = [...inflight].some(
+      (request) => request.isNavigationRequest() && request.frame() === current.mainFrame(),
     )
-    return false
+    const refusal =
+      currentDocument !== before
+        ? "the page navigated by itself"
+        : navigating
+          ? "the page is navigating"
+          : method === "GET"
+            ? undefined
+            : `the page was loaded with ${method ?? "an unknown method"}, and a reload would send it again`
+    if (refusal !== undefined) {
+      error("JourneyStep", `step ${index + 1} reload of ${current.url()}: ${refusal}`)
+      return false
+    }
   }
   if (step.action === "goto" || step.action === "reload") {
     emit({ type: "cookies", snapshot: held })

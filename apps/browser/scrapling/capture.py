@@ -402,6 +402,12 @@ class Capture:
         }
         self.dirty.add(rid)
 
+    def is_main_navigation(self, req) -> bool:
+        try:
+            return req.is_navigation_request() and req.frame == self.page.main_frame
+        except Exception:
+            return False
+
     def on_request(self, req) -> None:
         self.last_activity = time.monotonic()
         self.inflight.add(req)
@@ -1152,13 +1158,22 @@ class Capture:
         await self.observe_consent()
         await self.checkpoint()
         await self.unhide()
-        method = self.document_method.get(before) if before is not None else None
-        if step["action"] == "reload" and method not in (None, "GET"):
-            self.error(
-                "JourneyStep",
-                f"step {index + 1} reload of {self.page.url}: the page was loaded with {method}, and a reload would send it again",
-            )
-            return False
+        # Checked last, right before the reload: a form the page submits by itself (on a timer, or on
+        # the pagehide the flush above causes) can swap the document while this step waited.
+        if step["action"] == "reload":
+            method = self.document_method.get(self.current_document) if self.current_document is not None else None
+            navigating = any(self.is_main_navigation(request) for request in self.inflight)
+            if self.current_document != before:
+                refusal = "the page navigated by itself"
+            elif navigating:
+                refusal = "the page is navigating"
+            elif method == "GET":
+                refusal = None
+            else:
+                refusal = f"the page was loaded with {method or 'an unknown method'}, and a reload would send it again"
+            if refusal is not None:
+                self.error("JourneyStep", f"step {index + 1} reload of {self.page.url}: {refusal}")
+                return False
         if step["action"] in ("goto", "reload"):
             emit({"type": "cookies", "snapshot": held})
             self.pending_navigation = step["action"]

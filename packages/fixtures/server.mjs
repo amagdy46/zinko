@@ -114,6 +114,29 @@ async function handle(req, res) {
     return handleControl(req, res, url)
   }
 
+  // A GET page that submits a POST form by itself, to test the reload step: `/post-form/timed`
+  // after `?after=<ms>` (default 500), `/post-form/pagehide` when the page is hidden or left.
+  if (path === "/post-form/timed" || path === "/post-form/pagehide") {
+    const after = Math.min(Number(url.searchParams.get("after")) || 500, 30_000)
+    const trigger =
+      path === "/post-form/timed"
+        ? `setTimeout(() => form.submit(), ${after})`
+        : `addEventListener("pagehide", () => form.submit())`
+    return send(
+      res,
+      200,
+      { "content-type": "text/html; charset=utf-8" },
+      `<!doctype html><title>post-form</title><form id="f" method="post" action="/post-form/received"></form><script>const form = document.getElementById("f"); ${trigger}</script>`,
+    )
+  }
+  if (path === "/post-form/received")
+    return send(
+      res,
+      200,
+      { "content-type": "text/html; charset=utf-8" },
+      `<!doctype html><title>received</title><h1>received by ${req.method}</h1>`,
+    )
+
   if (path === "/r") {
     const to = url.searchParams.get("to")
     if (!to || !/^[\x21-\x7e]+$/.test(to)) {
