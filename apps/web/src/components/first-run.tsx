@@ -3,13 +3,16 @@ import { Link } from "@tanstack/react-router"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
 import { StatusBadge } from "@/components/status-badge"
-import { relativeTime } from "@/lib/format"
+import { count, relativeTime } from "@/lib/format"
 
 type Result = {
   createdAt: Date | string
   status: string
   coverage: "full" | "partial" | "not-evaluated"
   couldNotCheck: number
+  incompleteRuns: number
+  score: number | null
+  sites: number
   openFindings: { critical: number; warning: number; info: number }
 }
 
@@ -28,15 +31,31 @@ export function LastAudit({ latest, running }: { latest: Result | null; running:
           <time title={relativeTime(latest.createdAt).title}>
             {relativeTime(latest.createdAt).text}
           </time>
+          {latest.score === null ? null : (
+            <span className="font-medium tabular-nums">
+              {latest.sites > 1 ? "Lowest " : ""}
+              {latest.score}/100
+            </span>
+          )}
         </div>
       ) : (
         <span className="text-muted-foreground">Not audited</span>
       )}
+      {latest !== null && latest.incompleteRuns > 0 ? (
+        <p className="text-muted-foreground">
+          {count(latest.incompleteRuns, "run")} could not finish
+        </p>
+      ) : null}
     </div>
   )
 }
 
 const severityLabel = { critical: "Critical", warning: "Warning", info: "Info" } as const
+
+const gap = (latest: Result) =>
+  latest.couldNotCheck > 0
+    ? `${count(latest.couldNotCheck, "check")} could not run`
+    : "not fully checked"
 
 function NoFindings({ latest, full }: { latest: Result; full: boolean }) {
   if (latest.coverage === "not-evaluated") {
@@ -45,7 +64,7 @@ function NoFindings({ latest, full }: { latest: Result; full: boolean }) {
   return (
     <span className="flex items-center gap-1.5">
       <StatusGlyph meaning={full ? "pass" : "could-not-check"} />
-      {full ? "No open findings" : "0 open · not fully checked"}
+      {full ? "No open findings" : `0 open · ${gap(latest)}`}
     </span>
   )
 }
@@ -65,7 +84,7 @@ export function OpenFindings({ latest }: { latest: Result | null }) {
         <p className="text-muted-foreground">
           {latest.coverage === "not-evaluated"
             ? "Not evaluated on every site"
-            : "Not fully checked"}
+            : gap(latest).replace(/^./, (c) => c.toUpperCase())}
         </p>
       ) : null}
     </div>

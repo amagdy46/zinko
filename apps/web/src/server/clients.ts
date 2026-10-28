@@ -2,13 +2,13 @@ import { Database } from "@repo/core/Database"
 import { audit, client, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm"
-import { Config, Effect, Option, Schema } from "effect"
-import { WorkerConfig } from "effect-cf"
+import { Effect, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost } from "@/lib/site-url"
-import { auditDetails, clientSummary, SETTLED, siteSummaries } from "./client-summary"
+import { auditDetails, clientSummary, scoresOf, SETTLED, siteSummaries } from "./client-summary"
 import { requireSession } from "./require-session"
 import {
+  allowPrivateSites,
   atomically,
   Forbidden,
   Invalid,
@@ -30,13 +30,6 @@ const requireManager = (role: string) =>
         new Forbidden({ message: "Only organization owners and admins can archive or delete." }),
       )
 
-/** `ALLOW_PRIVATE_SITES` is set by infra/alchemy.run.ts on local dev stages only. */
-const allowPrivateSites = Effect.gen(function* () {
-  const provider = yield* WorkerConfig.provider
-  const value = yield* Config.option(Config.String("ALLOW_PRIVATE_SITES")).parse(provider)
-  return Option.isSome(value) && value.value === "true"
-}).pipe(Effect.orDie)
-
 const parseName = (value: string) => {
   const name = value.trim()
   return name.length >= 1 && name.length <= 100
@@ -49,11 +42,12 @@ const parseSiteUrl = (value: string) =>
     const text = value.trim()
     const url = URL.canParse(text) ? new URL(text) : null
     if (url === null || (url.protocol !== "http:" && url.protocol !== "https:"))
-      return yield* new Invalid({ message: "Enter a full URL starting with http:// or https://." })
+      return yield* new Invalid({ message: "Enter a valid address, such as shop.example." })
     if (url.username !== "" || url.password !== "")
       return yield* new Invalid({ message: "The URL must not contain a user name or password." })
     const host = canonicalHost(text)
-    if (host === null) return yield* new Invalid({ message: "Enter a valid URL." })
+    if (host === null)
+      return yield* new Invalid({ message: "Enter a valid address, such as shop.example." })
     if (isPrivateHost(host) && !(yield* allowPrivateSites))
       return yield* new Invalid({
         message: "This address is private and cannot be audited. Use the site's public URL.",
@@ -155,13 +149,14 @@ export const listClients = createServerFn({ method: "GET" })
   )
 
 const SEARCH_LIMIT = 20
+const RECENT_AUDITS = 5
 
 const SearchInput = Schema.Struct({ query: Schema.String.check(Schema.isMaxLength(100)) })
 
 /** Escapes `\`, `%` and `_` so the text matches literally inside `ilike`. */
 const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
 
-/** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. An empty query lists the first by name. */
+/** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. An empty query lists the first by name. `audits` are the newest few, of sites matching the query. */
 export const searchTargets = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SearchInput))
@@ -196,7 +191,20 @@ export const searchTargets = createServerFn({ method: "GET" })
           )
           .orderBy(site.name)
           .limit(SEARCH_LIMIT + 1)
+        const audits = yield* db
+          .select({
+            id: audit.id,
+            createdAt: audit.createdAt,
+            status: audit.status,
+            siteName: site.name,
+          })
+          .from(audit)
+          .innerJoin(site, eq(site.id, audit.siteId))
+          .where(and(eq(audit.orgId, orgId), text === "" ? undefined : ilike(site.name, pattern)))
+          .orderBy(desc(audit.createdAt))
+          .limit(RECENT_AUDITS)
         return {
+          audits,
           clients: clients.slice(0, SEARCH_LIMIT),
           sites: sites.slice(0, SEARCH_LIMIT),
           clientsCapped: clients.length > SEARCH_LIMIT,
@@ -425,6 +433,7 @@ export const getSite = createServerFn({ method: "GET" })
           orgId,
           audits.map((a) => a.id),
         )
+        const scores = yield* scoresOf(orgId, summaries)
         const [latest] = yield* db
           .select({ config: audit.config })
           .from(audit)
@@ -448,7 +457,14 @@ export const getSite = createServerFn({ method: "GET" })
               status: a.status,
               error: a.error,
               createdAt: a.createdAt,
-              runs: { total: summary?.total ?? 0, finished: summary?.finished ?? 0 },
+              runs: {
+                total: summary?.total ?? 0,
+                finished: summary?.finished ?? 0,
+                incomplete: summary?.incomplete ?? 0,
+              },
+              score: SETTLED.some((status) => status === a.status)
+                ? (scores.get(a.id) ?? null)
+                : null,
               findings:
                 summary === undefined ||
                 summary.evaluated === 0 ||

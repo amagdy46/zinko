@@ -2,6 +2,8 @@ import { Database } from "@repo/core/Database"
 import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
 import { and, count, desc, eq, inArray, max, sql } from "drizzle-orm"
 import { Effect } from "effect"
+import { healthScore, type ScoreFinding } from "@/lib/health-score"
+import { decodeSeverity } from "./findings-data"
 
 type Latest = {
   auditId: string
@@ -9,6 +11,11 @@ type Latest = {
   status: string
   coverage: "full" | "partial" | "not-evaluated"
   couldNotCheck: number
+  /** Runs that ended partial or failed. */
+  incompleteRuns: number
+  /** The health score; the lowest of the sites' when `sites` is more than 1. Null when not evaluated. */
+  score: number | null
+  sites: number
   openFindings: { critical: number; warning: number; info: number }
 }
 
@@ -29,6 +36,10 @@ export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
           sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and ${run.status} in ('complete', 'partial', 'failed'))`.mapWith(
             Number,
           ),
+        incomplete:
+          sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and ${run.status} in ('partial', 'failed'))`.mapWith(
+            Number,
+          ),
         evaluated:
           sql<number>`(select count(*) from ${run} where ${runsWhere(orgId)} and exists (select 1 from ${checkResult} where ${checkResult.runId} = ${run.id} and ${checkResult.orgId} = ${orgId}))`.mapWith(
             Number,
@@ -47,15 +58,82 @@ export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
 
 type AuditDetail = Effect.Success<ReturnType<typeof auditDetails>>[number]
 
+const NO_UNCERTAINTY = { checks: 0, runs: 0, rules: 0, ruleTitles: [], bannerUncertainRuns: 0 }
+
+/**
+ * The health score of each audit (a missing key: not evaluated), from the stored findings and
+ * check results in two queries for all of them. Only the number is used, so the uncertainty
+ * and versions that the Overview prints are left empty.
+ */
+export const scoresOf = (orgId: string, details: readonly AuditDetail[]) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const ids = details.filter((d) => d.evaluated > 0).map((d) => d.id)
+    const scores = new Map<string, number>()
+    if (ids.length === 0) return scores
+    const failing = yield* db
+      .select({
+        auditId: finding.auditId,
+        ruleId: finding.ruleId,
+        title: finding.title,
+        severity: finding.severity,
+        failingRuns: finding.failingRuns,
+      })
+      .from(finding)
+      .where(and(eq(finding.orgId, orgId), inArray(finding.auditId, ids), eq(finding.kind, "fail")))
+    const known = yield* db
+      .select({ auditId: run.auditId, ruleId: checkResult.ruleId, n: count() })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+          inArray(run.auditId, ids),
+          inArray(checkResult.status, ["pass", "fail"]),
+        ),
+      )
+      .groupBy(run.auditId, checkResult.ruleId)
+    const knownRuns = new Map(known.map((k) => [`${k.auditId}/${k.ruleId}`, k.n]))
+    const byAudit = new Map<string, ScoreFinding[]>()
+    for (const f of failing) {
+      const list = byAudit.get(f.auditId) ?? []
+      list.push({
+        ruleId: f.ruleId,
+        title: f.title,
+        severity: yield* decodeSeverity(f.severity).pipe(Effect.orDie),
+        failingRuns: f.failingRuns,
+        knownRuns: Math.max(knownRuns.get(`${f.auditId}/${f.ruleId}`) ?? 0, f.failingRuns),
+        bannerUncertainRuns: 0,
+      })
+      byAudit.set(f.auditId, list)
+    }
+    for (const d of details) {
+      const result = healthScore({
+        findings: byAudit.get(d.id) ?? [],
+        uncertainty: NO_UNCERTAINTY,
+        evaluatedRuns: d.evaluated,
+        totalRuns: d.total,
+        versions: [],
+      })
+      if (result.evaluated) scores.set(d.id, result.score)
+    }
+    return scores
+  })
+
 const latestOf = (
   head: { id: string; createdAt: Date; status: string },
   detail: AuditDetail,
+  score: number | undefined,
 ): Latest => ({
   auditId: head.id,
   createdAt: head.createdAt,
   status: head.status,
   coverage: coverageOf(detail),
   couldNotCheck: detail.couldNotCheck,
+  incompleteRuns: detail.incomplete,
+  score: score ?? null,
+  sites: 1,
   openFindings: { critical: detail.critical, warning: detail.warning, info: detail.info },
 })
 
@@ -109,10 +187,14 @@ export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
       picked.flatMap((p) => (p.last === undefined ? [] : [p.last.id])),
     )
     const detailById = new Map(details.map((d) => [d.id, d]))
+    const scores = yield* scoresOf(orgId, details)
     for (const { siteId, counts: own, last } of picked) {
       const detail = last === undefined ? undefined : detailById.get(last.id)
       summaries.set(siteId, {
-        latest: last === undefined || detail === undefined ? null : latestOf(last, detail),
+        latest:
+          last === undefined || detail === undefined
+            ? null
+            : latestOf(last, detail, scores.get(last.id)),
         running: own?.running ?? 0,
         auditCount: own?.total ?? 0,
         lastAuditAt: own?.lastAuditAt ?? null,
@@ -143,6 +225,11 @@ const worstCoverage = (results: readonly Latest[], siteCount: number): Latest["c
     : "partial"
 }
 
+const lowestScore = (results: readonly Latest[]) => {
+  const scores = results.flatMap((r) => (r.score === null ? [] : [r.score]))
+  return scores.length === 0 ? null : Math.min(...scores)
+}
+
 export const clientSummary = (sites: readonly SiteSummary[]) => {
   const results = sites
     .flatMap((s) => (s.latest === null ? [] : [s.latest]))
@@ -155,6 +242,9 @@ export const clientSummary = (sites: readonly SiteSummary[]) => {
           ...newest,
           coverage: worstCoverage(results, sites.length),
           couldNotCheck: results.reduce((n, r) => n + r.couldNotCheck, 0),
+          incompleteRuns: results.reduce((n, r) => n + r.incompleteRuns, 0),
+          score: lowestScore(results),
+          sites: results.length,
           openFindings: results.reduce(
             (n, r) => ({
               critical: n.critical + r.openFindings.critical,

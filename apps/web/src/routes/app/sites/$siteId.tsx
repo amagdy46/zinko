@@ -1,3 +1,4 @@
+import { NotFound } from "@/components/not-found"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState } from "react"
 import { MoreHorizontal } from "lucide-react"
@@ -23,7 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { relativeTime } from "@/lib/format"
+import { count, relativeTime } from "@/lib/format"
 import { Button } from "@/components/ui/button"
 import { archiveSite, deleteSite, getSite } from "@/server/clients"
 
@@ -34,7 +35,7 @@ export const Route = createFileRoute("/app/sites/$siteId")({
     Schema.is(Page)(search.page) ? { page: search.page } : {},
   loaderDeps: ({ search }) => ({ page: search.page ?? 0 }),
   loader: ({ params, deps }) => getSite({ data: { id: params.siteId, page: deps.page } }),
-  notFoundComponent: () => <p className="text-sm text-muted-foreground">Site not found.</p>,
+  notFoundComponent: () => <NotFound what="Site" />,
   component: SitePage,
 })
 
@@ -143,6 +144,7 @@ function SitePage() {
               <TableHead>Started</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Runs</TableHead>
+              <TableHead>Score</TableHead>
               <TableHead>Findings</TableHead>
             </TableRow>
           </TableHeader>
@@ -165,6 +167,18 @@ function SitePage() {
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {a.runs.finished} of {a.runs.total}
+                  {a.runs.incomplete > 0 ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {count(a.runs.incomplete, "run")} could not finish
+                    </span>
+                  ) : null}
+                </TableCell>
+                <TableCell className="tabular-nums">
+                  {a.score === null ? (
+                    <span className="text-muted-foreground">–</span>
+                  ) : (
+                    `${a.score}/100`
+                  )}
                 </TableCell>
                 <TableCell>
                   <AuditFindings audit={a} />

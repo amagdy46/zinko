@@ -1,3 +1,4 @@
+import { NotFound } from "@/components/not-found"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
@@ -34,11 +35,12 @@ import { count, relativeTime } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
+import { withScheme } from "@/lib/site-url"
 import { archiveClient, createSite, deleteClient, getClient } from "@/server/clients"
 
 export const Route = createFileRoute("/app/clients/$clientId")({
   loader: ({ params }) => getClient({ data: { id: params.clientId } }),
-  notFoundComponent: () => <p className="text-sm text-muted-foreground">Client not found.</p>,
+  notFoundComponent: () => <NotFound what="Client" />,
   component: ClientPage,
 })
 
@@ -49,6 +51,7 @@ function ClientPage() {
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
+  const [urlError, setUrlError] = useState<string>()
 
   async function addSite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -57,12 +60,18 @@ function ClientPage() {
     setPending(true)
     try {
       const result = await createSite({
-        data: { clientId: client.id, name: formField(data, "name"), url: formField(data, "url") },
+        data: {
+          clientId: client.id,
+          name: formField(data, "name"),
+          url: withScheme(formField(data, "url")),
+        },
       })
       if (!result.ok) {
-        toast.error(result.message)
+        if (/URL|address/.test(result.message)) setUrlError(result.message)
+        else toast.error(result.message)
         return
       }
+      setUrlError(undefined)
       form.reset()
       setOpen(false)
       await router.navigate({ to: "/app/sites/$siteId", params: { siteId: result.value.id } })
@@ -108,7 +117,13 @@ function ClientPage() {
         actions={
           <>
             {!client.archived ? (
-              <Dialog open={open} onOpenChange={setOpen}>
+              <Dialog
+                open={open}
+                onOpenChange={(isOpen) => {
+                  setOpen(isOpen)
+                  if (!isOpen) setUrlError(undefined)
+                }}
+              >
                 <DialogTrigger asChild>
                   <Button>Add site</Button>
                 </DialogTrigger>
@@ -129,10 +144,23 @@ function ClientPage() {
                       <Input
                         id="site-url"
                         name="url"
-                        type="url"
+                        inputMode="url"
+                        autoComplete="off"
                         required
-                        placeholder="https://shop.example"
+                        placeholder="shop.example"
+                        aria-invalid={urlError !== undefined}
+                        aria-describedby={urlError === undefined ? undefined : "site-url-error"}
+                        onChange={() => setUrlError(undefined)}
                       />
+                      {urlError === undefined ? (
+                        <p className="text-xs text-muted-foreground">
+                          https:// is added when you leave it out.
+                        </p>
+                      ) : (
+                        <p id="site-url-error" role="alert" className="text-sm text-destructive">
+                          {urlError}
+                        </p>
+                      )}
                     </div>
                     <Button type="submit" disabled={pending}>
                       {pending ? "Creating…" : "Create site"}
