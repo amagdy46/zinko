@@ -15,7 +15,7 @@ import { AREAS, scenarioLabel } from "@/lib/audit-labels"
 import { csvFile } from "@/lib/csv"
 import { OWNER_LABELS } from "@/lib/report-model"
 import { pageLabel } from "@/lib/report-projection"
-import { pageIndexOf } from "@/lib/page-match"
+import { pageIndexOf, withoutTestClickIds } from "@/lib/page-match"
 import { auditInOrg } from "./audit-data"
 import { findingsOf } from "./findings-data"
 import { NotFound } from "./server-fn"
@@ -123,6 +123,9 @@ export const registerOf = (orgId: string, auditId: string) =>
               .map((r) => pageLabel(config.pages, r.pageUrl, r.journey, detail)),
           ),
         ]
+        // The count is of distinct URLs, whatever the labels say: Standard labels and a journey
+        // label can merge or split pages that the URLs keep apart.
+        const pages = new Set(affected.map((r) => withoutTestClickIds(r.pageUrl))).size
         const shown =
           labels.length > MAX_PAGE_LABELS
             ? [...labels.slice(0, MAX_PAGE_LABELS), `+${labels.length - MAX_PAGE_LABELS} more`]
@@ -143,7 +146,7 @@ export const registerOf = (orgId: string, auditId: string) =>
           (owner === null ? undefined : OWNER_LABELS_BY_ID.get(owner)) ?? "Owner not assigned",
           f.failingRuns,
           f.knownRuns,
-          labels.length,
+          pages,
           shown.join("; "),
           scenarios.map(scenarioLabel).join("; "),
           TRIAGE_WORD[f.triage.status],
