@@ -182,7 +182,7 @@ Run on the local stack (`pnpm dev` with `BROWSER_URL`, the engine on :8080, fixt
 
 ### Report (M5)
 
-Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/plan.md) (proposed 2026-10-28, revised after review round 1, 16 tasks; implementation starts from `main` after the UX batches merge). The report is a read model over the M3 and M4 rows, built on read into one validated JSON document (`ReportModel`); sharing freezes it. No tests, no new dependency. No personal data by construction: a report-specific disclosure projection (aliases for pages by default, a per-report "detailed" level for paths, stored messages and capture errors never printed, a fail-closed guard) sits between stored data and every report surface (draft, snapshot, public HTML, print, CSV).
+Plan: [`docs/plans/2026-10-28-m5-report/plan.md`](plans/2026-10-28-m5-report/plan.md) (proposed 2026-10-28, revised after review rounds 1 and 2, 16 tasks; implementation starts from `main` after the UX batches merge). The report is a read model over the M3 and M4 rows, built on read into one validated JSON document (`ReportModel`); sharing freezes it. No tests, no new dependency. No personal data by construction: a report-specific disclosure projection (aliases for pages by default, a per-report "detailed" level for paths, stored messages and capture errors never printed, a fail-closed guard) sits between stored data and every report surface (draft, snapshot, public HTML, print, CSV).
 
 | Feature | How we build it | Status |
 |---|---|---|
