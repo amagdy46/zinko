@@ -34,7 +34,10 @@ function definite(state: ConsentState | "unset"): "granted" | "denied" | undefin
  * The state one request carries for one signal. `gcs` names ad and analytics storage, `gcd` all
  * four; when both say something and disagree, the request is an explicit `unknown`.
  */
-function hitState(hit: DecodedHit, signal: Signal): "granted" | "denied" | "unknown" | undefined {
+export function hitState(
+  hit: DecodedHit,
+  signal: Signal,
+): "granted" | "denied" | "unknown" | undefined {
   const gcs: Partial<Record<Signal, ConsentState>> = {
     ad_storage: hit.consent.adStorage,
     analytics_storage: hit.consent.analyticsStorage,

@@ -1,5 +1,6 @@
 -- SYNTHETIC STRESS DATA, not a real capture. One audit at the supported maximum:
--- (20 pages + 1 journey) x 4 scenarios x 2 viewports = 168 runs, 40 destinations on every captured run.
+-- (20 pages + 1 journey) x 4 scenarios x 2 viewports = 168 runs, plus 3 cross-host runs (ordinals 168 to 170: accept,
+-- desktop, journey, one per declared host) = 171, 40 destinations on every captured run.
 -- Usage: psql <url> -v org=<org id> -v site=<site id> -v user=<user id> -f seed-max.sql
 -- Re-running replaces the audit (fixed id). Rule metadata for the 19 real rules is copied from
 -- stored check_result rows of an existing audit; 47 more rules are synthetic ("syn.rule-NN").
@@ -12,23 +13,26 @@ insert into audit (id, org_id, created_at, site_id, created_by, config, status, 
 select :audit::uuid, :'org', now() - interval '1 hour', :'site'::uuid, :'user',
   jsonb_build_object(
     'pages', (select jsonb_agg('http://localhost:4400/syn/page-' || lpad(p::text, 2, '0') || '/' order by p) from generate_series(0, 19) p),
-    'journey', true, 'clickIds', false,
+    'journey', true, 'clickIds', false, 'crossHost', true,
+    'measuredHosts', '["checkout.syn.localhost","pay.syn.localhost","blog.syn.localhost"]'::jsonb,
     'scenarios', '["none","accept","reject","gpc"]'::jsonb,
     'viewports', '["desktop","mobile"]'::jsonb,
     'blockVendorRequests', true),
   'partial', now() - interval '1 hour', now() - interval '30 minutes';
 
--- ordinal g: viewport = g % 2, scenario = (g / 2) % 4, page = g / 8 (page 20 is the journey from page 0)
+-- ordinal g: viewport = g % 2, scenario = (g / 2) % 4, page = g / 8 (page 20 is the journey from page 0);
+-- ordinals 168 to 170 are the cross-host runs (accept, desktop, journey from page 0, one per declared host)
 insert into run (id, org_id, created_at, audit_id, failure, ordinal, page_url, scenario, viewport, journey,
-                 status, consent, hit_count, started_at, finished_at, complete, truncated)
+                 follow_host, status, consent, hit_count, started_at, finished_at, complete, truncated)
 select
   md5('syn-run-' || g)::uuid, :'org', now() - interval '1 hour', :audit::uuid,
   case when st = 'failed' then 'synthetic: capture timed out' end,
   g,
-  'http://localhost:4400/syn/page-' || lpad((case when g / 8 = 20 then 0 else g / 8 end)::text, 2, '0') || '/',
-  (array['none','accept','reject','gpc'])[(g / 2) % 4 + 1],
-  (array['desktop','mobile'])[g % 2 + 1],
-  g / 8 = 20,
+  'http://localhost:4400/syn/page-' || lpad((case when g / 8 = 20 or g >= 168 then 0 else g / 8 end)::text, 2, '0') || '/',
+  case when g >= 168 then 'accept' else (array['none','accept','reject','gpc'])[(g / 2) % 4 + 1] end,
+  case when g >= 168 then 'desktop' else (array['desktop','mobile'])[g % 2 + 1] end,
+  g / 8 = 20 or g >= 168,
+  case when g >= 168 then (array['checkout.syn.localhost','pay.syn.localhost','blog.syn.localhost'])[g - 167] end,
   st,
   case when st = 'failed' then null else jsonb_build_object(
     'cmp', case when outcome in ('accepted','rejected') then 'cookieconsent3' end,
@@ -48,7 +52,7 @@ from (
     case when sc in ('none','gpc') then 'none'
          when abs(hashtext('outcome' || g)) % 100 < 10 then 'not-found'
          when sc = 'accept' then 'accepted' else 'rejected' end as outcome
-  from (select g, (array['none','accept','reject','gpc'])[(g / 2) % 4 + 1] as sc from generate_series(0, 167) g) q
+  from (select g, case when g >= 168 then 'accept' else (array['none','accept','reject','gpc'])[(g / 2) % 4 + 1] end as sc from generate_series(0, 170) g) q
 ) r(g, sc, st, outcome);
 
 -- 40 destinations per captured run: 14 ga4, 10 google-ads, 8 meta, 8 tiktok; 30 to 45 hits each

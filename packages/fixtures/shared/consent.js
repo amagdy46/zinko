@@ -65,9 +65,10 @@ function runBanner() {
 }
 
 function reportConsent() {
+  const grants = window.zinkoConfig.acceptGrants
   window.zinkoConsent(
-    window.CookieConsent.acceptedCategory("analytics"),
-    window.zinkoConfig.acceptGrants === "all" && window.CookieConsent.acceptedCategory("marketing"),
+    grants !== "ads" && window.CookieConsent.acceptedCategory("analytics"),
+    grants !== "analytics" && window.CookieConsent.acceptedCategory("marketing"),
   )
 }
 

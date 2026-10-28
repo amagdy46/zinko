@@ -33,6 +33,15 @@
     ...(cfg.consentModeV2 && { ad_user_data: "denied", ad_personalization: "denied" }),
   }
 
+  // the host a link on this page leads to (see page.mjs), for the cross-domain linker
+  const [hostName = ""] = location.host.split(":")
+  const isSource = hostName === "localhost" || hostName.startsWith("www.")
+  const otherHost = (() => {
+    if (hostName.startsWith("www.")) return "checkout." + hostName.slice(4)
+    if (hostName.startsWith("checkout.")) return "www." + hostName.slice(9)
+    return hostName === "localhost" ? "127.0.0.1" : "localhost"
+  })()
+
   window.dataLayer = window.dataLayer || []
   function gtag() {
     window.dataLayer.push(arguments)
@@ -41,6 +50,12 @@
 
   if (cfg.consentDefault === "early")
     gtag("consent", "default", { ...denied, wait_for_update: 500 })
+  if (cfg.consentDefault === "granted")
+    gtag("consent", "default", {
+      ad_storage: "granted",
+      analytics_storage: "granted",
+      ...(cfg.consentModeV2 && { ad_user_data: "granted", ad_personalization: "granted" }),
+    })
   let googleStarted = false
   // Basic Consent Mode: the Google tag does not load until the visitor accepts something.
   function startGoogle() {
@@ -72,8 +87,14 @@
           "&gtm_auth=ZinkoPreviewAuth01&gtm_preview=env-3&gtm_cookies_win=x",
       )
     }
+    if (cfg.linker !== "none")
+      ga4Config.linker = {
+        domains: [otherHost],
+        ...(cfg.linker === "no-accept" ? { accept_incoming: false } : {}),
+      }
     gtag("config", ID.ga4, ga4Config)
-    if (cfg.secondGa4) gtag("config", ID.ga4Second)
+    if (cfg.secondGa4 === true || (cfg.secondGa4 === "source" && isSource))
+      gtag("config", ID.ga4Second, cfg.linker === "first-only" ? { cookie_prefix: "s2" } : {})
     gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
     if (cfg.consentDefault === "late") gtag("consent", "default", denied)
 

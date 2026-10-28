@@ -1,5 +1,6 @@
 import type { CaptureResult } from "@repo/capture-contract"
 import { inconclusive } from "./results.js"
+import { crossdomainLinkerMissing } from "./rules/clickids/crossdomain-linker-missing.js"
 import { cookieMissing } from "./rules/clickids/cookie-missing.js"
 import { lostAcrossNavigation } from "./rules/clickids/lost-across-navigation.js"
 import { lostOnRedirect } from "./rules/clickids/lost-on-redirect.js"
@@ -49,7 +50,7 @@ export { RULE_CHANGES, ruleChangedBetween, VOLATILE_RULES } from "./changes.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "10"
+export const RULES_VERSION = "11"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -64,6 +65,7 @@ export const rules: readonly Rule[] = [
   cookieMissing,
   lostOnRedirect,
   lostAcrossNavigation,
+  crossdomainLinkerMissing,
   purchaseMissingFields,
   invalidCurrency,
   noPageView,

@@ -3,7 +3,7 @@
 // Meta and TikTok loaded only once marketing is accepted, one purchase on /thank-you.
 export const defaults = {
   cmp: true,
-  consentDefault: "early", // "early" | "late" | "none"
+  consentDefault: "early", // "early" | "late" | "none" | "granted" (everything granted before any choice)
   meta: "consent", // "consent" | "immediate" | "delayed"
   tiktok: "consent", // "consent" | "after-choice" | "immediate"
   purchase: "once", // "once" | "twice"
@@ -17,7 +17,7 @@ export const defaults = {
   purchaseOrderId: true, // false: the GA4 purchase and the Ads conversion carry no transaction_id
   currency: "EUR",
   ga4PageView: true, // false: gtag config sends no page_view
-  secondGa4: false, // a second GA4 measurement ID configured on every page
+  secondGa4: false, // a second GA4 measurement ID configured on every page; "source": only on the first host (`www.` or `localhost`)
   metaInit: "once", // "once" | "twice"
   metaEventId: "unique", // "unique" | "none" | "shared" (one id on every Meta hit of the page, and /product adds two AddToCart under it)
   piiInUrl: false, // an email appears in the page's query string
@@ -30,11 +30,12 @@ export const defaults = {
   regionFlip: false, // the consent default is denied, then a script grants everything about 3 s later, after the first denied pings with no visitor choice
   consentPersist: true, // false: the banner library's cookie is removed on every load, so the choice is never kept
   consentRestore: "update", // "update" | "never": whether a stored choice is reported to the tags again on later loads
-  acceptGrants: "all", // "all" | "analytics": what "Accept all" grants
+  acceptGrants: "all", // "all" | "analytics" | "ads": what "Accept all" grants
   conflictOnReload: false, // 2 s after a reloaded document loads, a request whose gcs and gcd contradict each other
   cmpBreaksAfterChoice: false, // the banner library's script answers 404 once the visitor's choice is stored
   ghostBanner: false, // once a choice is stored, banner markup is kept in the page but invisible (visibility hidden, as a CMP that animates out leaves it)
   reloadAfterChoice: false, // the banner library reloads the page 1.5 s after the first choice, as some CMPs do
+  linker: "none", // "none" | "domains" | "no-accept" | "first-only": the Google tag's cross-domain linker towards the page's other host
   consentScope: "host", // "host" | "domain": the banner library's cookie is host-only, or set for the parent of a www. or checkout. host
   consentCookie: "cc_cookie", // the banner library's cookie name (anything else is a name no CMP list knows)
   consentPath: "/", // "/" | "restricted": the banner library's cookie is limited to /<site>/thank-you
@@ -85,6 +86,12 @@ export const sites = {
   "consent-subdomain-renamed": { consentCookie: "zk_choice" },
   "consent-subdomain-path": { consentScope: "domain", consentPath: "restricted" },
   "consent-subdomain-storage": { consentStorage: "localStorage" },
+  "linker-missing": { consentDefault: "granted" },
+  "linker-set": { consentDefault: "granted", linker: "domains" },
+  "linker-no-accept": { consentDefault: "granted", linker: "no-accept" },
+  "linker-ads-only": { acceptGrants: "ads" },
+  "linker-two-streams": { consentDefault: "granted", linker: "first-only", secondGa4: true },
+  "linker-one-sided": { consentDefault: "granted", linker: "domains", secondGa4: "source" },
   "consent-template-only": { consentDefault: "none", consentRestore: "never" },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },

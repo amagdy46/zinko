@@ -319,6 +319,9 @@ function isHttpUrl(value: string): boolean {
   return (protocol === "http:" || protocol === "https:") && hostname !== ""
 }
 
+/** The `_gl` linker parameter carries analytics identifiers: its presence is shown, its value is not. */
+const withoutLinkerValue = (url: string) => url.replace(/([?&])_gl=[^&#]*/, "$1_gl=(value omitted)")
+
 /** A bare host name as `URL` writes it, for `--follow` and `--allow-host`. */
 function hostOf(value: string): string {
   const host = URL.canParse(`http://${value}`) ? new URL(`http://${value}`).hostname : ""
@@ -452,7 +455,12 @@ async function runFrom(
         {
           scenario,
           engine,
-          documents,
+          documents: documents.map((document) =>
+            Object.assign({}, document, {
+              url: withoutLinkerValue(document.url),
+              redirects: document.redirects.map(withoutLinkerValue),
+            }),
+          ),
           consent,
           hits,
           cookies,
