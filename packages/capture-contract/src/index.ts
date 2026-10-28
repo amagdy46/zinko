@@ -23,6 +23,7 @@ export type Scenario = typeof Scenario.Type
 export const JourneyStep = Schema.Union([
   Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
   Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
+  Schema.Struct({ action: Schema.Literal("reload") }),
 ])
 export type JourneyStep = typeof JourneyStep.Type
 
@@ -45,7 +46,7 @@ export const CaptureRequest = Schema.Struct({
   url: TargetUrl,
   scenario: Scenario,
   viewport: Schema.Literals(["desktop", "mobile"]),
-  journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(5))),
+  journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(8))),
   blockVendorRequests: Schema.optionalKey(Schema.Boolean),
   /**
    * The site's hosts. A top-level navigation (the start URL, each redirect hop, each journey step)
@@ -67,6 +68,16 @@ export const CapturedDocument = Schema.Struct({
   title: Schema.NullOr(Schema.String),
   /** The final response status of the navigation; absent in captures stored before it was recorded. */
   status: Schema.optionalKey(Schema.Finite),
+  /**
+   * How the document was reached, set by engines from the reload step on; absent in captures
+   * stored before it was recorded ("predates", as opposed to an observed absence).
+   */
+  navigation: Schema.optionalKey(Schema.Literals(["start", "goto", "click", "follow", "reload"])),
+  /**
+   * Whether the consent banner was shown in a document loaded after a verified accept or reject,
+   * observed for the detected CMP over a bounded window. `unknown` when it could not be told.
+   */
+  banner: Schema.optionalKey(Schema.Literals(["shown", "hidden", "unknown"])),
 })
 export type CapturedDocument = typeof CapturedDocument.Type
 
@@ -118,6 +129,8 @@ export const ConsentObservation = Schema.Struct({
   at: Ms,
   source: Schema.Literals(["tcf", "google", "cmp"]),
   state: Schema.Json,
+  /** The document it was read in (`tcf` and `google`); absent in older captures. */
+  documentId: Schema.optionalKey(Schema.String),
 })
 export type ConsentObservation = typeof ConsentObservation.Type
 

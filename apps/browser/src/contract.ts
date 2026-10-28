@@ -11,6 +11,7 @@ export const Scenario = Schema.Literals(["none", "accept", "reject", "gpc"])
 const JourneyStep = Schema.Union([
   Schema.Struct({ action: Schema.Literal("goto"), url: TargetUrl }),
   Schema.Struct({ action: Schema.Literal("click"), selector: Schema.String }),
+  Schema.Struct({ action: Schema.Literal("reload") }),
 ])
 
 const CanonicalHost = Schema.String.check(
@@ -28,7 +29,7 @@ export const CaptureRequest = Schema.Struct({
   url: TargetUrl,
   scenario: Scenario,
   viewport: Schema.Literals(["desktop", "mobile"]),
-  journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(5))),
+  journey: Schema.optionalKey(Schema.Array(JourneyStep).check(Schema.isMaxLength(8))),
   blockVendorRequests: Schema.optionalKey(Schema.Boolean),
   allowedHosts: Schema.optionalKey(Schema.Array(CanonicalHost).check(Schema.isMaxLength(20))),
 })
@@ -42,6 +43,16 @@ const CapturedDocument = Schema.Struct({
   title: Schema.NullOr(Schema.String),
   /** The final response status of the navigation; absent in captures stored before it was recorded. */
   status: Schema.optionalKey(Schema.Finite),
+  /**
+   * How the document was reached, set by engines from the reload step on; absent in captures
+   * stored before it was recorded ("predates", as opposed to an observed absence).
+   */
+  navigation: Schema.optionalKey(Schema.Literals(["start", "goto", "click", "follow", "reload"])),
+  /**
+   * Whether the consent banner was shown in a document loaded after a verified accept or reject,
+   * observed for the detected CMP over a bounded window. `unknown` when it could not be told.
+   */
+  banner: Schema.optionalKey(Schema.Literals(["shown", "hidden", "unknown"])),
 })
 
 const CapturedRequest = Schema.Struct({
@@ -80,6 +91,7 @@ const ConsentObservation = Schema.Struct({
   at: Ms,
   source: Schema.Literals(["tcf", "google", "cmp"]),
   state: Schema.Json,
+  documentId: Schema.optionalKey(Schema.String),
 })
 
 const DataLayerPush = Schema.Struct({ at: Ms, documentId: Schema.String, value: Schema.Json })

@@ -94,7 +94,7 @@ function send(res, status, headers, body) {
   res.end(body)
 }
 
-function handle(req, res) {
+async function handle(req, res) {
   const url = new URL(req.url ?? "/", "http://localhost")
   const path = url.pathname
 
@@ -166,6 +166,10 @@ function handle(req, res) {
   }
   if (!Object.hasOwn(pages, rest))
     return send(res, 404, { "content-type": "text/plain" }, "not found")
+
+  // ?delay=<ms> holds the response, for timing checks against the capture deadline
+  const delay = Math.min(Number(url.searchParams.get("delay")) || 0, 300_000)
+  if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay))
 
   const gpcHeader = req.headers["sec-gpc"]
   const body = renderPage({ name, page: pages[rest], flags, query: url.search, gpcHeader })

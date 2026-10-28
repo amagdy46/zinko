@@ -155,6 +155,18 @@
     if (results.length === 0) return false
     return check === "any" ? results.some(Boolean) : results.every(Boolean)
   }
+  async function popupShown(instance, cmp) {
+    const dom = instance.domActions
+    const loose = dom.elementVisible
+    dom.elementVisible = strictlyVisible
+    try {
+      return Boolean(await cmp.detectPopup())
+    } catch {
+      return null
+    } finally {
+      dom.elementVisible = loose
+    }
+  }
   const helpers = {
     normalize,
     drain: () => queue.splice(0),
@@ -203,15 +215,23 @@
       } catch {
         return null
       }
-      const dom = instance.domActions
-      const loose = dom.elementVisible
-      dom.elementVisible = strictlyVisible
+      return popupShown(instance, cmp)
+    },
+    // In a document loaded after the choice: true while the banner of CMP `name` is shown, false
+    // when the CMP's own popup check finds none (also when the CMP leaves no markup at all once
+    // consent is stored, which `bannerShown` would call undetected), null while the page loads or
+    // when the check cannot run. The engines poll it, so a banner that appears late is still seen.
+    bannerWatch: async (name) => {
+      const instance = window[AUTOCONSENT]
+      if (!instance || document.readyState !== "complete") return null
+      const cmp = instance.rules.find((rule) => rule.name === name)
+      if (!cmp) return null
+      // Autoconsent's own visibility test: nothing is fading out in a document that just loaded,
+      // and a banner whose wrapper has no box of its own (vanilla-cookieconsent) still counts.
       try {
         return Boolean(await cmp.detectPopup())
       } catch {
         return null
-      } finally {
-        dom.elementVisible = loose
       }
     },
   }

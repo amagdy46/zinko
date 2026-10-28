@@ -62,6 +62,7 @@ on the visitor's choice; Meta and TikTok load only when marketing is accepted.
 | `ga4-gateway`             | GA4 is configured with `transport_url` set to `<origin>/metrics`, so its hits are `POST /metrics/g/collect?v=2&tid=…&en=…` on the site's own host, the way the Google tag gateway and a first-party server-side GTM endpoint send them. The real gateway's path shape is unconfirmed (see `docs/vision.md`); this fixture stands for the `/g/collect` form. Not a bug: it tests that first-party GA4 is recognised and judged like any other. |
 | `ga4-client-and-server`   | gtag sends GA4 to Google as usual, and a second sender (a plugin or a second container) posts the same `page_view`, and on `/thank-you` the same `purchase` (`T-1001`), to `POST /metrics/g/collect` on the site's own host about 1.2 s after load.                                                                                                                                                                                           |
 | `consent-mode-basic`      | Basic Consent Mode: the consent `default` (all denied) is pushed at load, but the Google tag (`gtag.js`) is not loaded until the visitor accepts analytics or marketing. Before the choice, and after a reject, no Google request is sent. `clean` is the advanced counterpart: its tag loads at once and sends cookieless pings with `gcs=G100`.                                                                                             |
+| `consent-delayed-cmp`     | A CMP that loads late: the banner library starts 3 s after load (`cmpDelay`, in the main frame; autoconsent's `cookieconsent3` rule does not run in iframes). Otherwise as `clean`. Expected result sets come with the rules that use it (Task 3).                                                                                                                                                                                            |
 | `consent-region-default`  | No banner. The consent `default` (all denied) is pushed at load and the Google tag runs at once, then a script pushes `consent update` (all granted) about 3 s later (after the first denied pings) with no visitor choice: the region-based default a site uses to grant consent where the law allows it. The first Google pings say `gcs=G100`, the later ones `G111`.                                                                      |
 
 Other sites keep the query string on internal links (`keepQuery`), so only `lost-gclid` drops it.
@@ -69,6 +70,8 @@ Other sites keep the query string on internal links (`keepQuery`), so only `lost
 `/g/collect` (any method) answers `500`; only `sgtm-errors` sends there.
 
 `/server-error/` answers `500` with a small HTML page, and any unknown path answers `404` (for example `/nope-404/`); they test how a key page that fails to load is reported. They are not sites and fire no tags.
+
+Any page accepts `?delay=<ms>` (at most 300000): the response is held that long, for timing checks against the capture deadline.
 
 `/r?to=<url>` answers `302` to any URL; it exists to test the capture engine's SSRF policy.
 

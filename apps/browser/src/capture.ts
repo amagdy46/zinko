@@ -23,9 +23,14 @@ import { startEgressProxy, type Refusal } from "./egress-proxy.ts"
 import { watchProcessTree } from "./process-tree.ts"
 
 export const LIMITS = {
-  /** Plus `perStepMs` for each journey step: a page costs its windows and gtag's batch delay. */
+  /**
+   * Plus `perStepMs` for each journey step: a page costs its windows and gtag's batch delay. An
+   * average budget, not a guarantee: the steps run in order, so a deadline cuts the last ones.
+   */
   durationMs: 60_000,
   perStepMs: 15_000,
+  /** The ceiling whatever the step count; the engine finalizes `finalizeBeforeMs` before it. */
+  maxDurationMs: 200_000,
   /** Asks the engine to flush what it has this long before the hard deadline. */
   finalizeBeforeMs: 6_000,
   requests: 2_000,
@@ -317,7 +322,12 @@ const capture = async (
   options: CaptureOptions,
 ): Promise<CaptureResult> => {
   const startedAt = Date.now()
-  const deadline = startedAt + LIMITS.durationMs + LIMITS.perStepMs * (request.journey?.length ?? 0)
+  const deadline =
+    startedAt +
+    Math.min(
+      LIMITS.durationMs + LIMITS.perStepMs * (request.journey?.length ?? 0),
+      LIMITS.maxDurationMs,
+    )
   const at = () => Date.now() - startedAt
   const proxy = await startEgressProxy({
     allowPrivate: options.allowPrivate,

@@ -349,3 +349,13 @@ Round 3 (GPT-6.1 Sol, high): ready after fixes; round 2 points 1–5 closed. App
 2. **The timing probe targets the effective deadline.** The deadline is 150 s for six steps and 180 s for eight (plus 6 s finalization); the 200 s ceiling is unreachable in the supported configurations. Probe (a) asserts the timeout and grant release at about 150 s; probe (b) asserts against 180 s.
 
 Noted: Scrapling exposes `req.frame` (`capture.py:397`); exact-host matching deliberately excludes www/apex aliases, so the declared host must be the actual arrival host (the settings field says so); `gcs`/`gcd` disagreement frequency on real sites is unmeasured and is checked during the real-site pass of Task 4.
+
+## Execution status
+
+Branch `capture/reload` (Tasks 1 to 3). Deviations are recorded where the plan was wrong about the code.
+
+### Task 1
+
+- **Gate: `hidden` works, but not as specified.** The plan's `hidden` needs "a definite `false` from a frame with the CMP detected". `bannerShown` returns `null` until `detectCmp` passes, and vanilla-cookieconsent renders no markup once consent is stored, so every poll on a restored-consent document was `null` (measured). Its strict visibility test (width and height above 0) also cannot say `shown`: `.cm-wrapper` has no box. Smallest correct change: a second shim function, `bannerWatch(cmp)`, for the window only (`bannerShown`, which verifies the choice, is untouched): autoconsent's own `detectPopup` for the CMP found at the action, autoconsent's normal visibility test, `false` also when the CMP left no markup, `null` while the document is loading or the instance is missing. `hidden` therefore means "the known CMP's popup check found no banner during the whole window", which also holds when the CMP failed to load; Tasks 3 and 7 pair it with signal evidence.
+- **`consent-delayed-cmp` is main-frame, not an iframe.** The `cookieconsent3` rule has no `runContext.frame`, so autoconsent never runs in an iframe for it and no accept could be applied. The banner is created 3 s after load (`cmpDelay`) in the main frame.
+- `MAX_DURATION_MS` is `LIMITS.maxDurationMs` in `capture.ts`. Page-initiated navigations (a script redirect, a CMP that reloads) are recorded as `navigation: "click"`.

@@ -27,6 +27,7 @@ export const defaults = {
   tiktokEventId: "unique", // "unique" | "none": an event_id on the TikTok pixel's events
   ga4Collector: "google", // "google" | "gateway" (GA4 hits go to this host's /metrics/g/collect, as the Google tag gateway does) | "both" (gtag to Google, plus a second sender posting page_view and purchase to /metrics/g/collect)
   regionFlip: false, // the consent default is denied, then a script grants everything about 3 s later, after the first denied pings with no visitor choice
+  cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
 
@@ -57,6 +58,7 @@ export const sites = {
   "ga4-gateway": { ga4Collector: "gateway" },
   "ga4-client-and-server": { ga4Collector: "both" },
   "consent-mode-basic": { googleLoad: "consent" },
+  "consent-delayed-cmp": { cmpDelay: 3000 },
   "consent-region-default": { cmp: false, regionFlip: true },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },
   // Changes between audits only through an explicit POST (/_release, /_flaky); see README "Releases and scripted flakiness".

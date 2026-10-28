@@ -66,6 +66,11 @@ const CONSENT_STEP_MS = 15_000
 const VERIFY_MS = 10_000
 const VERIFY_POLL_MS = 500
 const BANNER_CHECK_MS = 2_000
+// The banner window of a document loaded after the consent action: polled every 500 ms, each frame
+// with its own 1.5 s timeout, until the observation window ends but not before 4 s.
+const BANNER_MIN_MS = 4_000
+const BANNER_POLL_MS = 500
+const BANNER_FRAME_MS = 1_500
 const NAVIGATION_TIMEOUT_MS = 30_000
 const CLICK_TIMEOUT_MS = 5_000
 const MAX_URL = 8_192
@@ -116,11 +121,13 @@ const autoconsentBundle = readFileSync(job.files.autoconsent, "utf8")
 if (!autoconsentBundle.includes(AUTOCONSENT_INSTANCE))
   throw new Error("the autoconsent bundle changed: no instance to name for the banner check")
 const autoconsentScript = autoconsentBundle.replace(AUTOCONSENT_INSTANCE, AUTOCONSENT_HANDLE)
-const initReply = `autoconsentReceiveMessage(${JSON.stringify({
-  type: "initResp",
-  config: AUTOCONSENT_CONFIG,
-  rules: fromJson(Schema.Json, readFileSync(job.files.rules, "utf8")),
-})})`
+const autoconsentRules = fromJson(Schema.Json, readFileSync(job.files.rules, "utf8"))
+const initReplyFor = (config: typeof AUTOCONSENT_CONFIG) =>
+  `autoconsentReceiveMessage(${JSON.stringify({ type: "initResp", config, rules: autoconsentRules })})`
+const initReply = initReplyFor(AUTOCONSENT_CONFIG)
+// Watch mode, once the choice is settled: autoconsent only detects, so the banner check works in
+// later documents, and it hides nothing. Only `runConsent` ever sends an opt-in or opt-out.
+const watchReply = initReplyFor({ ...AUTOCONSENT_CONFIG, enableCosmeticRules: false })
 
 const at = () => Math.max(0, Math.round(Date.now() - job.startedAt))
 const remainingMs = () => Math.max(0, Math.round(job.finalizeAt - Date.now()))
@@ -155,8 +162,12 @@ let consentSent = ""
 let truncatedSent = false
 let admitted = 0
 let endTaken = false
-let autoconsentActive = scenario === "accept" || scenario === "reject"
+const autoconsentActive = scenario === "accept" || scenario === "reject"
 let afterConsentTaken = false
+let watchMode = false
+let actionsSent = 0
+// How the next top-level document is reached; a navigation no step asked for is a click.
+let pendingNavigation: Document["navigation"]
 const messages: Message[] = []
 const listeners = new Set<() => void>()
 
@@ -191,7 +202,14 @@ const onRequest = (req: Request) => {
       documentOfRequest.set(req, document.id)
     } else {
       const id = `d${documents.size + 1}`
-      documents.set(id, { id, url: req.url(), redirects: [], startedAt: at(), title: null })
+      documents.set(id, {
+        id,
+        url: req.url(),
+        redirects: [],
+        startedAt: at(),
+        title: null,
+        navigation: documents.size === 0 ? "start" : (pendingNavigation ?? "click"),
+      })
       currentDocument = id
       documentOfRequest.set(req, id)
     }
@@ -484,13 +502,19 @@ const observeConsent = async () => {
         at: entry.at,
         source: "google",
         state: { command: value[1] ?? null, params: value[2] ?? null },
+        documentId: entry.documentId,
       })
   }
   googleObserved = dataLayer.length
   if (!committed) return
   const tcf = await evaluate("window.__zinko ? window.__zinko.tcf() : null").catch(() => null)
   if (tcf !== null && tcf !== undefined)
-    consent.observations.push({ at: at(), source: "tcf", state: JSON.parse(JSON.stringify(tcf)) })
+    consent.observations.push({
+      at: at(),
+      source: "tcf",
+      state: JSON.parse(JSON.stringify(tcf)),
+      ...(currentDocument === undefined ? {} : { documentId: currentDocument }),
+    })
 }
 
 const snapshot = async (label: Snapshot["label"]): Promise<Snapshot> => ({
@@ -555,7 +579,7 @@ const injectAutoconsent = async (frame: Frame) => {
 const onAutoconsent = async (frame: Frame, message: unknown) => {
   if (!isRecord(message)) return
   if (message.type === "init") {
-    await frame.evaluate(initReply)
+    await frame.evaluate(watchMode ? watchReply : initReply)
     return
   }
   if (message.type === "eval") {
@@ -622,12 +646,17 @@ const consentUpdate = (action: ConsentAction, since: number) => {
   return updates.some((params) => choiceMatches(action, params)) ? "matching" : "contradicting"
 }
 
-const bannerShown = async (frame: Frame, cmp: string): Promise<boolean | null> => {
+const bannerShown = async (
+  frame: Frame,
+  cmp: string,
+  check: "bannerShown" | "bannerWatch" = "bannerShown",
+  timeoutMs = BANNER_CHECK_MS,
+): Promise<boolean | null> => {
   // A CMP in an iframe can remove its frame along with the banner.
   if (frame.isDetached()) return false
   const shown = await Promise.race([
-    frame.evaluate(`window.__zinko ? window.__zinko.bannerShown(${JSON.stringify(cmp)}) : null`),
-    sleep(BANNER_CHECK_MS),
+    frame.evaluate(`window.__zinko ? window.__zinko.${check}(${JSON.stringify(cmp)}) : null`),
+    sleep(timeoutMs),
   ]).catch((cause: unknown) => log(`banner check: ${firstLine(cause)}`))
   return typeof shown === "boolean" ? shown : null
 }
@@ -646,6 +675,45 @@ const bannerNow = async (frame: Frame, cmp: string, newDocument: boolean) => {
   )
   if (states.includes(true)) return true
   return states.includes(false) ? false : null
+}
+
+/** One poll of every live frame in parallel: shown anywhere is shown, else hidden on a definite no. */
+const probeBanner = async (cmp: string): Promise<boolean | null> => {
+  if (page === undefined) return null
+  const states = await Promise.allSettled(
+    page
+      .frames()
+      .filter((each) => !each.isDetached())
+      .map((each) => bannerShown(each, cmp, "bannerWatch", BANNER_FRAME_MS)),
+  )
+  const values = states.map((state) => (state.status === "fulfilled" ? state.value : null))
+  if (values.some((value) => value === true)) return true
+  return values.some((value) => value === false) ? false : null
+}
+
+/**
+ * Whether the banner of the detected CMP is shown in a document loaded after the consent action.
+ * Polls from the document's commit until the observation window has ended, for at least
+ * `BANNER_MIN_MS` and at most `WINDOW_CAP_MS`. `shown` is sticky (the first poll that sees it
+ * wins), `hidden` needs a definite no from a frame with the CMP detected and no yes, anything
+ * else is `unknown`.
+ */
+const observeBanner = async (documentId: string, cmp: string, windowEnded: () => boolean) => {
+  const start = Date.now()
+  const poll = async (seenHidden: boolean): Promise<"shown" | "hidden" | "unknown"> => {
+    const state = await probeBanner(cmp)
+    if (state === true) return "shown"
+    const hidden = seenHidden || state === false
+    const elapsed = Date.now() - start
+    if (elapsed >= WINDOW_CAP_MS || (elapsed >= BANNER_MIN_MS && windowEnded()))
+      return hidden ? "hidden" : "unknown"
+    await sleep(BANNER_POLL_MS)
+    return poll(hidden)
+  }
+  const result = await poll(false)
+  const document = documents.get(documentId)
+  if (document !== undefined) documents.set(documentId, { ...document, banner: result })
+  log(`banner window ${documentId}: ${result} after ${Date.now() - start} ms`)
 }
 
 type Verification = {
@@ -699,7 +767,7 @@ const settleConsent = () => {
   const state = verification
   if (state === undefined) return
   verification = undefined
-  autoconsentActive = false
+  watchMode = true
   const { action, cmp, bannerShown: shown, consentUpdate: seenUpdate } = state
   const evidence = [
     ...(shown === false ? ["banner-closed"] : []),
@@ -765,6 +833,7 @@ const runConsent = async (loadedAt: number) => {
   const actionAt = at()
   const document = currentDocument
   consent.actionAt = actionAt
+  actionsSent += 1
   await found.frame.evaluate(`autoconsentReceiveMessage({ type: "${action}" })`)
   const result = await waitMessage((message) => message.type === `${action}Result`, CONSENT_STEP_MS)
   const done = await waitMessage((message) => message.type === "autoconsentDone", CONSENT_STEP_MS)
@@ -788,17 +857,18 @@ const runConsent = async (loadedAt: number) => {
 
 // --- the capture --------------------------------------------------------------------------------
 
-const navigate = async (url: string, code: "Navigation" | "JourneyStep") => {
+const navigate = async (
+  label: string,
+  code: "Navigation" | "JourneyStep",
+  go: (timeout: number) => Promise<Response | null>,
+) => {
   if (page === undefined) return false
   let response: Response | null
   try {
-    response = await page.goto(url, {
-      waitUntil: "load",
-      timeout: Math.min(NAVIGATION_TIMEOUT_MS, remainingMs()),
-    })
+    response = await go(Math.min(NAVIGATION_TIMEOUT_MS, remainingMs()))
   } catch (cause) {
     // A refused off-site hop has its own `Navigation` error.
-    if (leftSite === undefined) error(code, `${url}: ${firstLine(cause)}`)
+    if (leftSite === undefined) error(code, `${label}: ${firstLine(cause)}`)
     await checkpoint()
     return false
   }
@@ -808,8 +878,8 @@ const navigate = async (url: string, code: "Navigation" | "JourneyStep") => {
   const document = currentDocument === undefined ? undefined : documents.get(currentDocument)
   if (document !== undefined) documents.set(document.id, { ...document, status: response.status() })
   if (response.headers()["cf-mitigated"] === "challenge" || CHALLENGE_TITLES.has(title))
-    error("BotBlocked", `${url}: the page answered with a bot challenge (${response.status()})`)
-  else if (response.status() >= 400) error("HttpStatus", `${url}: HTTP ${response.status()}`)
+    error("BotBlocked", `${label}: the page answered with a bot challenge (${response.status()})`)
+  else if (response.status() >= 400) error("HttpStatus", `${label}: HTTP ${response.status()}`)
   return true
 }
 
@@ -817,27 +887,53 @@ const runStep = async (
   index: number,
   step: NonNullable<EngineJob["request"]["journey"]>[number],
 ) => {
-  if (page === undefined || leftSite !== undefined) return false
+  const current = page
+  if (current === undefined || leftSite !== undefined) return false
   const before = currentDocument
   await flushBeacons()
   const held = await snapshot("document-end")
+  await observeConsent()
   await checkpoint()
   await unhide()
-  if (step.action === "goto") {
+  if (step.action === "goto" || step.action === "reload") {
     emit({ type: "cookies", snapshot: held })
-    if (!(await navigate(step.url, "JourneyStep"))) return false
+    pendingNavigation = step.action
+    const opened =
+      step.action === "goto"
+        ? await navigate(step.url, "JourneyStep", (timeout) =>
+            current.goto(step.url, { waitUntil: "load", timeout }),
+          )
+        : await navigate(`step ${index + 1} reload of ${current.url()}`, "JourneyStep", (timeout) =>
+            current.reload({ waitUntil: "load", timeout }),
+          )
+    if (!opened) {
+      pendingNavigation = undefined
+      return false
+    }
   } else {
+    pendingNavigation = "click"
     try {
-      await page.click(step.selector, { timeout: CLICK_TIMEOUT_MS })
-      await page.waitForLoadState("load", {
+      await current.click(step.selector, { timeout: CLICK_TIMEOUT_MS })
+      await current.waitForLoadState("load", {
         timeout: Math.min(NAVIGATION_TIMEOUT_MS, remainingMs()),
       })
     } catch (cause) {
+      pendingNavigation = undefined
       error("JourneyStep", `step ${index + 1} click ${step.selector}: ${firstLine(cause)}`)
       return false
     }
   }
-  await observeWindow()
+  pendingNavigation = undefined
+  let windowEnded = false
+  const settled = observeWindow().then(() => {
+    windowEnded = true
+  })
+  const watched = consent.outcome === "accepted" || consent.outcome === "rejected"
+  const banner =
+    watched && consent.cmp !== null && currentDocument !== undefined && currentDocument !== before
+      ? observeBanner(currentDocument, consent.cmp, () => windowEnded)
+      : undefined
+  await Promise.all([settled, banner])
   if (step.action === "click" && currentDocument !== before)
     emit({ type: "cookies", snapshot: held })
   // A click can start an off-site navigation after `load` has already resolved.
@@ -976,7 +1072,12 @@ const run = async () => {
     })
   }
 
-  if (!(await navigate(captureRequest.url, "Navigation"))) return finish()
+  if (
+    !(await navigate(captureRequest.url, "Navigation", (timeout) =>
+      main.goto(captureRequest.url, { waitUntil: "load", timeout }),
+    ))
+  )
+    return finish()
   const loadedAt = Date.now()
   await injectAutoconsent(main)
   await observeWindow()
@@ -1031,6 +1132,7 @@ const settle = async (work: Promise<void>) => {
       )
     }
   }
+  log(`actionsSent=${actionsSent}`)
   emit({ type: "done" })
   // Node kills this process and the browser once it reads `done`.
   setInterval(() => undefined, 60_000)

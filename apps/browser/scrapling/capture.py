@@ -63,6 +63,11 @@ CONSENT_STEP_S = 15.0
 VERIFY_S = 10.0
 VERIFY_POLL_S = 0.5
 BANNER_CHECK_S = 2.0
+# The banner window of a document loaded after the consent action: polled every 500 ms, each frame
+# with its own 1.5 s timeout, until the observation window ends but not before 4 s.
+BANNER_MIN_S = 4.0
+BANNER_POLL_S = 0.5
+BANNER_FRAME_S = 1.5
 NAVIGATION_TIMEOUT_MS = 30_000
 CLICK_TIMEOUT_MS = 5_000
 CHALLENGE_TITLES = ("Just a moment...", "Attention Required! | Cloudflare")
@@ -249,6 +254,11 @@ class Capture:
         self.arrived = asyncio.Event()
         self.autoconsent_active = self.scenario in ("accept", "reject")
         self.after_consent_taken = False
+        # Once the choice is settled autoconsent only watches: it detects but hides and clicks nothing.
+        self.watch_mode = False
+        self.actions_sent = 0
+        # How the next top-level document is reached; a navigation no step asked for is a click.
+        self.pending_navigation: str | None = None
         # What verification of the consent action has seen, until `settle_consent` turns it into the outcome.
         self.verification: dict | None = None
         self.verify_task: asyncio.Future | None = None
@@ -411,6 +421,7 @@ class Capture:
                     "redirects": [],
                     "startedAt": self.at(),
                     "title": None,
+                    "navigation": "start" if not self.documents else (self.pending_navigation or "click"),
                 }
                 self.current_document = doc_id
             self.document_of_request[req] = doc_id
@@ -660,7 +671,9 @@ class Capture:
             value = entry["value"]
             if isinstance(value, list) and len(value) >= 2 and value[0] == "consent":
                 state = {"command": value[1], "params": value[2] if len(value) > 2 else None}
-                self.consent["observations"].append({"at": entry["at"], "source": "google", "state": state})
+                self.consent["observations"].append(
+                    {"at": entry["at"], "source": "google", "state": state, "documentId": entry["documentId"]}
+                )
         self.google_observed = len(self.data_layer)
         if not self.committed:
             return
@@ -670,7 +683,10 @@ class Capture:
             log(f"tcf: {exc}")
             return
         if tcf is not None:
-            self.consent["observations"].append({"at": self.at(), "source": "tcf", "state": tcf})
+            observation = {"at": self.at(), "source": "tcf", "state": tcf}
+            if self.current_document is not None:
+                observation["documentId"] = self.current_document
+            self.consent["observations"].append(observation)
 
     async def snapshot(self, label: str) -> dict:
         cookies = await self.context.cookies()
@@ -728,7 +744,7 @@ class Capture:
         frame = source["frame"]
         kind = message.get("type")
         if kind == "init":
-            await frame.evaluate(self.init_reply, isolated_context=False)
+            await frame.evaluate(self.watch_reply if self.watch_mode else self.init_reply, isolated_context=False)
             return
         if kind == "eval":
             try:
@@ -777,15 +793,15 @@ class Capture:
             return None
         return "matching" if any(choice_matches(action, params) for params in updates) else "contradicting"
 
-    async def banner_shown(self, frame, cmp: str) -> bool | None:
+    async def banner_shown(self, frame, cmp: str, check: str = "bannerShown", timeout_s: float = BANNER_CHECK_S) -> bool | None:
         # A CMP in an iframe can remove its frame along with the banner.
         if frame.is_detached():
             return False
         try:
             check = frame.evaluate(
-                f"window.__zinko ? window.__zinko.bannerShown({json.dumps(cmp)}) : null", isolated_context=False
+                f"window.__zinko ? window.__zinko.{check}({json.dumps(cmp)}) : null", isolated_context=False
             )
-            shown = await asyncio.wait_for(check, BANNER_CHECK_S)
+            shown = await asyncio.wait_for(check, timeout_s)
         except Exception as exc:
             log(f"banner check: {exc}")
             return None
@@ -800,6 +816,42 @@ class Capture:
         if True in states:
             return True
         return False if False in states else None
+
+    async def probe_banner(self, cmp: str) -> bool | None:
+        """One poll of every live frame in parallel: shown anywhere is shown, else hidden on a definite no."""
+        states = await asyncio.gather(
+            *(self.banner_shown(f, cmp, "bannerWatch", BANNER_FRAME_S) for f in self.page.frames if not f.is_detached()),
+            return_exceptions=True,
+        )
+        values = [state if isinstance(state, bool) else None for state in states]
+        if True in values:
+            return True
+        return False if False in values else None
+
+    async def observe_banner(self, document_id: str, cmp: str, window_ended) -> None:
+        """Whether the banner of the detected CMP is shown in a document loaded after the consent action.
+
+        Polls from the document's commit until the observation window has ended, for at least
+        `BANNER_MIN_S` and at most `WINDOW_CAP_S`. `shown` is sticky (the first poll that sees it
+        wins), `hidden` needs a definite no from a frame with the CMP detected and no yes, anything
+        else is `unknown`."""
+        start = time.monotonic()
+        result = "unknown"
+        while True:
+            state = await self.probe_banner(cmp)
+            if state is True:
+                result = "shown"
+                break
+            if state is False:
+                result = "hidden"
+            elapsed = time.monotonic() - start
+            if elapsed >= WINDOW_CAP_S or (elapsed >= BANNER_MIN_S and window_ended()):
+                break
+            await asyncio.sleep(BANNER_POLL_S)
+        document = self.documents.get(document_id)
+        if document is not None:
+            document["banner"] = result
+        log(f"banner window {document_id}: {result} after {round((time.monotonic() - start) * 1000)} ms")
 
     async def verify_choice(self, frame, document: str | None, deadline: float) -> None:
         """Watches for evidence that the choice took effect, the banner gone or a matching consent
@@ -824,7 +876,7 @@ class Capture:
         state, self.verification = self.verification, None
         if state is None:
             return
-        self.autoconsent_active = False
+        self.watch_mode = True
         action, cmp, shown, update = state["action"], state["cmp"], state["bannerShown"], state["consentUpdate"]
         evidence = [
             name
@@ -887,6 +939,7 @@ class Capture:
         action_at = self.at()
         document = self.current_document
         self.consent["actionAt"] = action_at
+        self.actions_sent += 1
         await found["frame"].evaluate(f"autoconsentReceiveMessage({{ type: '{action}' }})", isolated_context=False)
         result = await self.wait_message(lambda m: m.get("type") == f"{action}Result", CONSENT_STEP_S)
         done = await self.wait_message(lambda m: m.get("type") == "autoconsentDone", CONSENT_STEP_S)
@@ -946,6 +999,8 @@ class Capture:
         rules = json.loads(open(files["rules"], encoding="utf-8").read())
         init = {"type": "initResp", "config": AUTOCONSENT_CONFIG, "rules": rules}
         self.init_reply = f"autoconsentReceiveMessage({json.dumps(init)})"
+        watch = {**init, "config": {**AUTOCONSENT_CONFIG, "enableCosmeticRules": False}}
+        self.watch_reply = f"autoconsentReceiveMessage({json.dumps(watch)})"
         await self.launch()
         ctx = self.context
         if self.scenario == "gpc":
@@ -968,7 +1023,11 @@ class Capture:
             await self.page.expose_binding("autoconsentSendMessage", self.on_autoconsent)
             self.page.on("framenavigated", lambda frame: asyncio.ensure_future(self.inject_autoconsent(frame)))
 
-        if not await self.navigate(self.request["url"], "Navigation"):
+        if not await self.navigate(
+            self.request["url"],
+            "Navigation",
+            lambda timeout: self.page.goto(self.request["url"], wait_until="load", timeout=timeout),
+        ):
             await self.finish()
             return
         loaded_at = time.monotonic()
@@ -1000,14 +1059,14 @@ class Capture:
 
         await self.finish()
 
-    async def navigate(self, url: str, code: str) -> bool:
+    async def navigate(self, label: str, code: str, go) -> bool:
         timeout = min(NAVIGATION_TIMEOUT_MS, self.remaining_ms())
         try:
-            response = await self.page.goto(url, wait_until="load", timeout=timeout)
+            response = await go(timeout)
         except Exception as exc:
             # A refused off-site hop has its own `Navigation` error.
             if self.left_site is None:
-                self.error(code, f"{url}: {exc}".split("\n")[0])
+                self.error(code, f"{label}: {exc}".split("\n")[0])
             await self.checkpoint()
             return False
         self.committed = True
@@ -1022,9 +1081,9 @@ class Capture:
         if document is not None:
             document["status"] = response.status
         if response.headers.get("cf-mitigated") == "challenge" or title in CHALLENGE_TITLES:
-            self.error("BotBlocked", f"{url}: the page answered with a bot challenge ({response.status})")
+            self.error("BotBlocked", f"{label}: the page answered with a bot challenge ({response.status})")
         elif response.status >= 400:
-            self.error("HttpStatus", f"{url}: HTTP {response.status}")
+            self.error("HttpStatus", f"{label}: HTTP {response.status}")
         return True
 
     async def run_step(self, index: int, step: dict) -> bool:
@@ -1033,20 +1092,45 @@ class Capture:
         before = self.current_document
         await self.flush_beacons()
         held = await self.snapshot("document-end")
+        await self.observe_consent()
         await self.checkpoint()
         await self.unhide()
-        if step["action"] == "goto":
+        if step["action"] in ("goto", "reload"):
             emit({"type": "cookies", "snapshot": held})
-            if not await self.navigate(step["url"], "JourneyStep"):
+            self.pending_navigation = step["action"]
+            if step["action"] == "goto":
+                opened = await self.navigate(
+                    step["url"],
+                    "JourneyStep",
+                    lambda timeout: self.page.goto(step["url"], wait_until="load", timeout=timeout),
+                )
+            else:
+                opened = await self.navigate(
+                    f"step {index + 1} reload of {self.page.url}",
+                    "JourneyStep",
+                    lambda timeout: self.page.reload(wait_until="load", timeout=timeout),
+                )
+            if not opened:
+                self.pending_navigation = None
                 return False
         else:
+            self.pending_navigation = "click"
             try:
                 await self.page.click(step["selector"], timeout=CLICK_TIMEOUT_MS)
                 await self.page.wait_for_load_state("load", timeout=min(NAVIGATION_TIMEOUT_MS, self.remaining_ms()))
             except Exception as exc:
+                self.pending_navigation = None
                 self.error("JourneyStep", f"step {index + 1} click {step['selector']}: {exc}".split("\n")[0])
                 return False
-        await self.observe_window()
+        self.pending_navigation = None
+        window = asyncio.ensure_future(self.observe_window())
+        watched = self.consent["outcome"] in ("accepted", "rejected")
+        banner = (
+            self.observe_banner(self.current_document, self.consent["cmp"], window.done)
+            if watched and self.consent["cmp"] is not None and self.current_document not in (None, before)
+            else asyncio.sleep(0)
+        )
+        await asyncio.gather(window, banner)
         if step["action"] == "click" and self.current_document != before:
             emit({"type": "cookies", "snapshot": held})
         # A click can start an off-site navigation after `load` has already resolved.
@@ -1106,6 +1190,7 @@ async def main() -> None:
                 await asyncio.wait_for(capture.finish(), 4)
             except Exception as finish_exc:
                 log(f"finish after failure: {finish_exc}")
+    log(f"actionsSent={capture.actions_sent}")
     emit({"type": "done"})
     # Node kills this process and the browser once it reads `done`.
     await asyncio.Event().wait()
