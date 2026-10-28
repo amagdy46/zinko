@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, finding, run } from "@repo/db"
+import { audit, checkResult, run } from "@repo/db"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
 import { briefingOf } from "./compare-data"
-import { findingsOf, SEVERITY_ORDER } from "./findings-data"
+import { findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { requireSession } from "./require-session"
 import { scoreSummaryOf } from "./score-summary"
@@ -62,17 +62,7 @@ export const getOverview = createServerFn({ method: "GET" })
         const { db } = yield* Database
         let worst = null
         if (top !== undefined) {
-          const [stored] = yield* db
-            .select({ why: finding.why, fix: finding.fix })
-            .from(finding)
-            .where(
-              and(
-                eq(finding.auditId, auditId),
-                eq(finding.orgId, orgId),
-                eq(finding.ruleId, top.ruleId),
-              ),
-            )
-            .limit(1)
+          const { finding: stored } = yield* findingRowOf(orgId, auditId, top.ruleId)
           const [first] = yield* db
             .select({ runId: checkResult.runId, message: checkResult.message })
             .from(checkResult)
@@ -89,7 +79,7 @@ export const getOverview = createServerFn({ method: "GET" })
             )
             .orderBy(asc(run.ordinal))
             .limit(1)
-          if (stored !== undefined && first !== undefined)
+          if (first !== undefined)
             worst = {
               ruleId: top.ruleId,
               severity: top.severity,
@@ -180,7 +170,7 @@ export const getOverview = createServerFn({ method: "GET" })
                       Number,
                     ),
                   determinate:
-                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable'))`.mapWith(
+                    sql<number>`count(*) filter (where ${checkResult.status} in ('pass', 'fail', 'not_applicable') )`.mapWith(
                       Number,
                     ),
                 })
