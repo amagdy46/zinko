@@ -1,6 +1,13 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Check, Info } from "lucide-react"
-import { type ChangeEvent, type FormEvent, type ReactNode, useState } from "react"
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react"
 import { toast } from "sonner"
 import { pageTitle } from "@/lib/page-title"
 import { SettingsSection } from "@/components/settings-section"
@@ -28,15 +35,18 @@ type Branding = Awaited<ReturnType<typeof getBranding>>
 
 function CoverPreview({
   agencyName,
+  logoUrl,
   accent,
   footerText,
   showPoweredBy,
 }: {
   agencyName: string
+  logoUrl: string | null
   accent: AccentId
   footerText: string
   showPoweredBy: boolean
 }) {
+  const name = agencyName.trim() === "" ? "Your agency" : agencyName.trim()
   return (
     <div
       data-accent={accent}
@@ -44,9 +54,13 @@ function CoverPreview({
     >
       <div className="h-2 bg-report-accent" />
       <div className="space-y-6 p-5">
-        <p className="text-sm font-semibold text-report-accent [overflow-wrap:anywhere]">
-          {agencyName.trim() === "" ? "Your agency" : agencyName.trim()}
-        </p>
+        {logoUrl === null ? (
+          <p className="text-sm font-semibold text-report-accent [overflow-wrap:anywhere]">
+            {name}
+          </p>
+        ) : (
+          <img src={logoUrl} alt={name} className="max-h-14 max-w-40 object-contain" />
+        )}
         <div>
           <p className="text-xs text-muted-foreground">Tracking audit</p>
           <p className="text-lg font-semibold">Client name</p>
@@ -67,6 +81,12 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
   const router = useRouter()
   const [pending, setPending] = useState<"upload" | "remove" | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [refocus, setRefocus] = useState(0)
+  const uploadField = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (refocus > 0) uploadField.current?.focus()
+  }, [refocus])
 
   async function upload(event: ChangeEvent<HTMLInputElement>) {
     const input = event.currentTarget
@@ -79,6 +99,7 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
     const result = await uploadLogo({ data: form })
     setPending(null)
     input.value = ""
+    setRefocus((n) => n + 1)
     if (!result.ok) {
       setError(result.message)
       return
@@ -92,6 +113,7 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
     setError(null)
     const result = await removeLogo()
     setPending(null)
+    setRefocus((n) => n + 1)
     if (!result.ok) {
       setError(result.message)
       return
@@ -127,6 +149,7 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
             >
               {uploadLabel}
               <input
+                ref={uploadField}
                 id="branding-logo"
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
@@ -140,6 +163,9 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
                 {pending === "remove" ? "Removing…" : "Remove logo"}
               </Button>
             )}
+            <span className="text-xs text-muted-foreground">
+              Saved straight away, without Save branding.
+            </span>
           </div>
         ) : null}
         {error === null ? null : (
@@ -217,6 +243,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
                     name="accent"
                     value={id}
                     checked={accent === id}
+                    disabled={disabled}
                     onChange={() => setAccent(id)}
                     className="peer sr-only"
                   />
@@ -257,7 +284,8 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
               aria-describedby="branding-footer-count"
             />
             <p id="branding-footer-count" className="text-xs text-muted-foreground">
-              Plain text, printed as typed. {footerText.trim().length} of {FOOTER_MAX} characters.
+              Anyone with the link will see this text. Plain text, printed as typed.{" "}
+              {footerText.trim().length} of {FOOTER_MAX} characters.
             </p>
           </div>
           <div className="flex items-start gap-3">
@@ -281,8 +309,8 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
             <Alert>
               <Info aria-hidden="true" />
               <AlertDescription>
-                The name or footer contains what looks like an email address or phone number.
-                Reports print this text exactly as typed.
+                The agency name looks like it contains an email address or phone number. Reports
+                print it exactly as typed.
               </AlertDescription>
             </Alert>
           ) : null}
@@ -295,11 +323,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
             <Button type="submit" disabled={!dirty || saving}>
               {saving ? "Saving…" : "Save branding"}
             </Button>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Ask an owner or admin of this organization to change the branding.
-            </p>
-          )}
+          ) : null}
         </form>
       </SettingsSection>
       <SettingsSection
@@ -309,6 +333,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
         <div className="max-w-xs">
           <CoverPreview
             agencyName={agencyName}
+            logoUrl={branding.logoUrl}
             accent={accent}
             footerText={footerText}
             showPoweredBy={showPoweredBy}
@@ -324,6 +349,11 @@ function BrandingSettings() {
   const { logoUrl, ...fields } = data.branding
   return (
     <div className="space-y-6">
+      {data.canManage ? null : (
+        <p className="text-sm text-muted-foreground">
+          Only owners and admins can change branding. You can still edit and share reports.
+        </p>
+      )}
       <BrandingForm
         key={JSON.stringify(fields)}
         data={data}

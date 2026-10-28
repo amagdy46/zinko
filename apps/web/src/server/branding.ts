@@ -39,7 +39,7 @@ const view = (branding: Effect.Success<ReturnType<typeof brandingOf>>, canManage
         logoUrl,
       },
       canManage,
-      personalData: hasPersonalData(branding.agencyName) || hasPersonalData(branding.footerText),
+      personalData: hasPersonalData(branding.agencyName),
     }
   })
 
