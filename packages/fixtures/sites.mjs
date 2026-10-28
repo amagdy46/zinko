@@ -22,6 +22,9 @@ export const defaults = {
   piiInUrl: false, // an email appears in the page's query string
   sgtm: false, // GA4 hits go to this host's /g/collect, which answers 500
   locationOverride: false, // GA4 page_location points at another host
+  consentModeV2: true, // false: Consent Mode v1 only, default and update set ad_storage and analytics_storage and nothing else
+  debugLeak: false, // a GTM preview snippet (gtm_auth, gtm_preview) and GA4 debug_mode left on in production
+  tiktokEventId: "unique", // "unique" | "none": an event_id on the TikTok pixel's events
 }
 
 export const sites = {
@@ -45,5 +48,8 @@ export const sites = {
   "pii-in-url": { piiInUrl: true },
   "sgtm-errors": { sgtm: true },
   "location-mismatch": { locationOverride: true },
+  "consent-mode-v1": { consentModeV2: false },
+  "debug-leak": { debugLeak: true },
+  "tiktok-no-eventid": { tiktokEventId: "none" },
   "no-cmp": { cmp: false, consentDefault: "none", meta: "immediate", tiktok: "immediate" },
 }

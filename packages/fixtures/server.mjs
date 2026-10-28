@@ -105,6 +105,6 @@ export function startServer(port) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const server = await startServer(4400)
+  const server = await startServer(Number(process.env.FIXTURES_PORT ?? 4400))
   process.stdout.write(`fixtures on http://localhost:${server.address().port}\n`)
 }

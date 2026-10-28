@@ -3,14 +3,15 @@
 Small fake shops, each with one known tracking bug, for exercising Zinko's capture and checks.
 
 ```sh
-pnpm --filter @repo/fixtures serve                 # http://localhost:4400, each site at /<name>/
+pnpm --filter @repo/fixtures serve                 # http://localhost:4400, each site at /<name>/ (FIXTURES_PORT=4410 for another port)
 pnpm --filter @repo/fixtures inspect <site>[/page] [accept|reject]
 ```
 
 Every site has `/` (home), `/product` and `/thank-you`. The thank-you page fires `purchase` with
 `transaction_id: T-1001`, `value: 49.9`, `currency: EUR` (GA4 `purchase`, the Ads conversion `ZinkoConv01`,
 Meta `Purchase` with `value` and `currency`, TikTok `CompletePayment`). Every Meta event carries an
-`eventID` (`<page>-<Event>-<n>-<nonce>`, the nonce a random base-36 string per document load), there is one GA4 ID, and GA4 `page_location`
+`eventID` (`<page>-<Event>-<n>-<nonce>`, the nonce a random base-36 string per document load), every TikTok `ViewContent` and `CompletePayment` an
+`event_id` (`<page>-<Event>-<nonce>`), there is one GA4 ID, and GA4 `page_location`
 is the site's own URL (gtag drops the port: `http://localhost/clean/`, so compare host names, not `host`). The SDK scripts (gtag.js, fbevents.js,
 the TikTok pixel) load from the real CDNs.
 
@@ -55,6 +56,9 @@ on the visitor's choice; Meta and TikTok load only when marketing is accepted.
 | `pii-in-url`              | The page URL gets `?email=jane.doe@example.com` (`history.replaceState` before the tags run), so it reaches GA4 `page_location` and Meta `dl`.                                                                                                                                                                           |
 | `sgtm-errors`             | GA4 is configured with `transport_url` set to the fixture host, so its hits are `POST /g/collect?v=2&tid=…&en=…` to the fixture server, which answers `500`.                                                                                                                                                             |
 | `location-mismatch`       | The GA4 config overrides `page_location` to `https://staging.shop.example/<path>`; nothing navigates there. Meta `dl` stays on the real host.                                                                                                                                                                            |
+| `consent-mode-v1`         | Consent Mode v1 only: `default` and `update` set `ad_storage` and `analytics_storage` and never `ad_user_data` or `ad_personalization`, so every Google request carries `gcd=13p3p3l3l5l1` (`l` is "never set") before consent and `13r3r3l3l5l1` after accepting.                                                       |
+| `debug-leak`              | A GTM preview snippet and GA4 debug mode left on in production: `gtm.js?id=GTM-ZINKO01&gtm_auth=…&gtm_preview=env-3&gtm_cookies_win=x` loads on every page and the GA4 config sets `debug_mode: true` (its hits carry `ep.debug_mode=true`).                                                                             |
+| `tiktok-no-eventid`       | No TikTok event carries an `event_id`.                                                                                                                                                                                                                                                                                   |
 
 Other sites keep the query string on internal links (`keepQuery`), so only `lost-gclid` drops it.
 
@@ -84,7 +88,7 @@ answered locally and shown as `(unlisted)`; gtag sends some, for example `google
 
 ## Expected result sets
 
-The rules are the 19 in `docs/plans/2026-10-20-m3-rules-and-findings/plan.md`. Every run uses
+The rules are the 22 in `docs/plans/2026-10-20-m3-rules-and-findings/plan.md`. Every run uses
 `--block-vendors`, desktop and mobile alike, scenarios `none`, `accept`, `reject`, `gpc`. A rule not
 listed for a site is `pass` or `not_applicable` (n.a.). Facts below were observed with `inspect.mjs`
 and Chromium on `localhost`; where a rule's wording left a choice open, the choice is stated.
@@ -100,7 +104,9 @@ without a click ID in the run URL; `clickid.lost-on-redirect` without a click ID
 outside journey runs; `coverage.no-page-view` outside `accept`; the purchase rules
 (`coverage.purchase-missing-fields`, `coverage.invalid-currency`, `duplicates.purchase-sent-twice`) on pages without a
 purchase; the Meta rules when no Meta hit is sent (Meta loads only after marketing consent, so under `none`, `gpc`
-and `reject` there are none).
+and `reject` there are none); `dedup.tiktok-eventid-missing` the same way for TikTok; `debug.preview-or-debug-leak` never (it passes
+when no preview or debug marker is sent); `consent.mode-v2-incomplete` when no Google request carries Consent Mode state at all
+(`no-cmp`), or no Ads signal is sent.
 
 Behaviour the rules must cope with, all on `clean`:
 
@@ -153,18 +159,21 @@ Behaviour the rules must cope with, all on `clean`:
 
 ### New sites
 
-| Site                      | Rule                               | Status       | Where                                                                                                                                                                                                                                                                     |
-| ------------------------- | ---------------------------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `purchase-missing-fields` | `coverage.purchase-missing-fields` | fail         | `/thank-you`, all four scenarios (the Ads conversion lacks `transaction_id` in every one; the GA4 purchase too under accept and reject). Meta and TikTok are unaffected                                                                                                   |
-| `bad-currency`            | `coverage.invalid-currency`        | fail         | `/thank-you`, all four scenarios (the Ads conversion `currency_code=eur`; GA4 and Meta too wherever they are sent; the TikTok pixel uppercases it to `EUR` itself)                                                                                                        |
-| `no-page-view`            | `coverage.no-page-view`            | fail         | accept, every page: `/product` (`view_item`), `/thank-you` (`purchase`) and `/` (`user_engagement`, which gtag sends when the engine hides the page before the `end` snapshot; `inspect` does not hide it and sees no GA4 hit on `/`). Other scenarios: n.a.              |
-| `multiple-ga4`            | `duplicates.multiple-ga4-ids`      | fail         | every page, all four scenarios (both `page_view`s are sent before any choice)                                                                                                                                                                                             |
-| `meta-init-twice`         | `duplicates.meta-loaded-twice`     | fail         | every page, accept only (Meta loads after marketing consent): two `PageView`s with different `eventID`s; the second `signals/config` request may be served from cache, so the rule must accept two `PageView`s alone. none, gpc, reject: n.a.                             |
-| `meta-no-eventid`         | `dedup.meta-eventid-missing`       | fail         | accept, `/product` (`ViewContent`) and `/thank-you` (`Purchase`). `/` has only `PageView` (exempt): pass. Other scenarios: n.a.                                                                                                                                           |
-| `meta-eventid-reused`     | `dedup.meta-eventid-reused`        | fail         | accept, `/product` (two `AddToCart`s with `evt-1`). Different events sharing `evt-1` (`PageView` and `ViewContent`, `PageView` and `Purchase`) are not duplicates for Meta, whose key is pixel, event name and event ID: `/` and `/thank-you` pass. Other scenarios: n.a. |
-| `pii-in-url`              | `hygiene.pii-in-hits`              | fail         | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`, the Ads `url` and the TikTok payload). The document URL gains the email by `replaceState`, so the rule must read hit URLs and params, not only the navigation URL              |
-| `sgtm-errors`             | `hygiene.tag-errors`               | inconclusive | every page, all four scenarios with `--block-vendors`: first-party `POST /g/collect?v=2` is now answered locally with 204, like the other recognized collectors. Without blocking, the fixture returns 500 and this rule fails                                            |
-| `location-mismatch`       | `hygiene.location-mismatch`        | fail         | every page, all four scenarios (GA4 `page_location` host `staging.shop.example`, document host `localhost`). Meta `dl` matches: pass                                                                                                                                      |
+| Site                      | Rule                               | Status       | Where                                                                                                                                                                                                                                                                                                |
+| ------------------------- | ---------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `purchase-missing-fields` | `coverage.purchase-missing-fields` | fail         | `/thank-you`, all four scenarios (the Ads conversion lacks `transaction_id` in every one; the GA4 purchase too under accept and reject). Meta and TikTok are unaffected                                                                                                                              |
+| `bad-currency`            | `coverage.invalid-currency`        | fail         | `/thank-you`, all four scenarios (the Ads conversion `currency_code=eur`; GA4 and Meta too wherever they are sent; the TikTok pixel uppercases it to `EUR` itself)                                                                                                                                   |
+| `no-page-view`            | `coverage.no-page-view`            | fail         | accept, every page: `/product` (`view_item`), `/thank-you` (`purchase`) and `/` (`user_engagement`, which gtag sends when the engine hides the page before the `end` snapshot; `inspect` does not hide it and sees no GA4 hit on `/`). Other scenarios: n.a.                                         |
+| `multiple-ga4`            | `duplicates.multiple-ga4-ids`      | fail         | every page, all four scenarios (both `page_view`s are sent before any choice)                                                                                                                                                                                                                        |
+| `meta-init-twice`         | `duplicates.meta-loaded-twice`     | fail         | every page, accept only (Meta loads after marketing consent): two `PageView`s with different `eventID`s; the second `signals/config` request may be served from cache, so the rule must accept two `PageView`s alone. none, gpc, reject: n.a.                                                        |
+| `meta-no-eventid`         | `dedup.meta-eventid-missing`       | fail         | accept, `/product` (`ViewContent`) and `/thank-you` (`Purchase`). `/` has only `PageView` (exempt): pass. Other scenarios: n.a.                                                                                                                                                                      |
+| `meta-eventid-reused`     | `dedup.meta-eventid-reused`        | fail         | accept, `/product` (two `AddToCart`s with `evt-1`). Different events sharing `evt-1` (`PageView` and `ViewContent`, `PageView` and `Purchase`) are not duplicates for Meta, whose key is pixel, event name and event ID: `/` and `/thank-you` pass. Other scenarios: n.a.                            |
+| `pii-in-url`              | `hygiene.pii-in-hits`              | fail         | every page, all four scenarios (email in GA4 `page_location`; under accept also Meta `dl`, the Ads `url` and the TikTok payload). The document URL gains the email by `replaceState`, so the rule must read hit URLs and params, not only the navigation URL                                         |
+| `sgtm-errors`             | `hygiene.tag-errors`               | inconclusive | every page, all four scenarios with `--block-vendors`: first-party `POST /g/collect?v=2` is now answered locally with 204, like the other recognized collectors. Without blocking, the fixture returns 500 and this rule fails                                                                       |
+| `location-mismatch`       | `hygiene.location-mismatch`        | fail         | every page, all four scenarios (GA4 `page_location` host `staging.shop.example`, document host `localhost`). Meta `dl` matches: pass                                                                                                                                                                 |
+| `consent-mode-v1`         | `consent.mode-v2-incomplete`       | fail         | every page, all four scenarios: the Consent Mode ping and the GA4 and Ads hits say `ad_user_data` and `ad_personalization` were never set while an Ads signal (a `ccm` ping to `AW-100000001`) is sent. The rule does not branch on the consent action: an unset signal is unset before and after it |
+| `debug-leak`              | `debug.preview-or-debug-leak`      | fail         | every page, all four scenarios (the `gtm.js` request with `gtm_auth` and `gtm_preview`, and the GA4 hits with `ep.debug_mode=true`)                                                                                                                                                                  |
+| `tiktok-no-eventid`       | `dedup.tiktok-eventid-missing`     | fail         | accept, `/product` (`ViewContent`) and `/thank-you` (`Purchase`; the pixel sends `CompletePayment` as `Purchase`). `/` has only `Pageview` (exempt): pass. Other scenarios: n.a. (TikTok loads after marketing consent)                                                                              |
 
 Every other rule for the new sites is as in the baseline, including `hygiene.tag-errors` inconclusive when collectors are answered locally.
 

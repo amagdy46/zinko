@@ -7,6 +7,7 @@
     meta: "100000000000001",
     ads: "AW-100000001",
     tiktok: "ZINKOTT0001",
+    gtm: "GTM-ZINKO01",
   }
   const purchase = { transaction_id: "T-1001", value: 49.9, currency: cfg.currency }
   const trackedPurchase = cfg.purchaseOrderId
@@ -15,8 +16,7 @@
   const denied = {
     ad_storage: "denied",
     analytics_storage: "denied",
-    ad_user_data: "denied",
-    ad_personalization: "denied",
+    ...(cfg.consentModeV2 && { ad_user_data: "denied", ad_personalization: "denied" }),
   }
 
   window.dataLayer = window.dataLayer || []
@@ -42,6 +42,15 @@
   if (cfg.sgtm) ga4Config.transport_url = location.origin
   if (cfg.locationOverride)
     ga4Config.page_location = "https://staging.shop.example" + location.pathname
+  if (cfg.debugLeak) {
+    ga4Config.debug_mode = true
+    // the snippet GTM gives for a preview environment, left on the page after testing
+    void runSnippet(
+      "https://www.googletagmanager.com/gtm.js?id=" +
+        ID.gtm +
+        "&gtm_auth=ZinkoPreviewAuth01&gtm_preview=env-3&gtm_cookies_win=x",
+    )
+  }
   gtag("config", ID.ga4, ga4Config)
   if (cfg.secondGa4) gtag("config", ID.ga4Second)
   gtag("config", ID.ads, cfg.conversionLinker ? {} : { conversion_linker: false })
@@ -136,9 +145,17 @@
     if (tiktokLoaded) return
     tiktokLoaded = true
     await runSnippet("/_vendor/tiktok-pixel/snippet.js")
-    if (cfg.page === "product") window.ttq.track("ViewContent", { currency: "EUR", value: 49.9 })
+    const track = (event, params) =>
+      window.ttq.track(
+        event,
+        params,
+        cfg.tiktokEventId === "none"
+          ? undefined
+          : { event_id: cfg.page + "-" + event + "-" + documentNonce },
+      )
+    if (cfg.page === "product") track("ViewContent", { currency: "EUR", value: 49.9 })
     if (cfg.page === "thank-you") {
-      window.ttq.track("CompletePayment", { value: purchase.value, currency: purchase.currency })
+      track("CompletePayment", { value: purchase.value, currency: purchase.currency })
     }
   }
 
@@ -146,11 +163,14 @@
   if (cfg.tiktok === "immediate") void loadTikTok()
 
   window.zinkoConsent = (analytics, marketing) => {
+    const marketingState = marketing ? "granted" : "denied"
     gtag("consent", "update", {
       analytics_storage: analytics ? "granted" : "denied",
-      ad_storage: marketing ? "granted" : "denied",
-      ad_user_data: marketing ? "granted" : "denied",
-      ad_personalization: marketing ? "granted" : "denied",
+      ad_storage: marketingState,
+      ...(cfg.consentModeV2 && {
+        ad_user_data: marketingState,
+        ad_personalization: marketingState,
+      }),
     })
     if (cfg.meta === "consent" && marketing) void loadMeta()
     if (cfg.meta === "delayed") setTimeout(() => void loadMeta(), 3000)
