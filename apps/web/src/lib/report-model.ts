@@ -251,6 +251,27 @@ export const byFindingOrder = (
   b.failingRuns * a.knownRuns - a.failingRuns * b.knownRuns ||
   byText(a.ruleId, b.ruleId)
 
+const OWNER_ORDER = ["consent-platform", "tag-manager", "developer", null] as const
+
+/**
+ * What to fix first, grouped by who usually fixes it (consent platform, tag manager, developer,
+ * then not assigned): the open findings only, each with its first fix step, in the order the
+ * findings come in.
+ */
+export function actionPlanOf(findings: ReadonlyArray<ReportFinding>): ReportModel["actionPlan"] {
+  return OWNER_ORDER.flatMap((owner) => {
+    const items = findings
+      .filter((f) => f.triage.status === "open" && f.owner === owner)
+      .map((f) => ({
+        ruleId: f.ruleId,
+        severity: f.severity,
+        title: f.title,
+        firstStep: f.fix[0] ?? f.title,
+      }))
+    return items.length === 0 ? [] : [{ owner, items }]
+  })
+}
+
 const dateFormat = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "long",

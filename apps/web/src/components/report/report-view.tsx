@@ -1,4 +1,6 @@
 import type { ReportModel } from "@/lib/report-model"
+import { ActionPlan } from "./action-plan"
+import { Appendix } from "./appendix"
 import { ConsentSummary } from "./consent-summary"
 import { Cover } from "./cover"
 import { Findings } from "./findings"
@@ -29,6 +31,8 @@ export function ReportView({
       <Scope model={model} />
       <ConsentSummary model={model} />
       <Findings model={model} />
+      <ActionPlan model={model} />
+      <Appendix model={model} />
     </article>
   )
 }

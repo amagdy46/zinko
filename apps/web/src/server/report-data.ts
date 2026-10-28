@@ -14,10 +14,11 @@ import {
 import { buildDigest, canonicalJson } from "@repo/llm"
 import { and, asc, count, eq, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
-import { SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
+import { AREAS, SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
 import { count as plural } from "@/lib/format"
 import {
   byText,
+  actionPlanOf,
   byFindingOrder,
   type ConsultantPayload,
   type DisclosureLevel,
@@ -38,7 +39,7 @@ import { brandingOf } from "./branding-data"
 import { auditInOrg, type CaptureRead, readCaptureTolerant } from "./audit-data"
 import { type CandidateRun, candidateRunsOf, digestRunOf } from "./digest-data"
 import { decodeFix } from "./findings"
-import { findingsOf, SEVERITY_ORDER } from "./findings-data"
+import { decodeSeverity, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { coverageOf, decodeConsent } from "./matrix-data"
 import { scoreSummaryOf } from "./score-summary"
 import { atomically, NotFound } from "./server-fn"
@@ -76,6 +77,51 @@ export type ReportBuild =
 /** At most this many failing runs are tried, in run order, for a finding's one evidence item. */
 const EVIDENCE_CANDIDATES = 5
 const VIEWPORT_WORDS = { desktop: "Desktop", mobile: "Mobile" } as const
+
+const viewportOf = (viewport: string) => (viewport === "mobile" ? "mobile" : "desktop")
+
+interface RuleStat {
+  ruleId: string
+  version: string
+  title: string
+  area: string
+  severity: string
+  status: string
+  n: number
+}
+
+/**
+ * The rules this audit was judged by, from its own check results: the wording of the newest rules
+ * version of each rule and what happened to it across the runs. A rule added to the registry later
+ * does not appear here.
+ */
+const rulesListOf = (stats: ReadonlyArray<RuleStat>) =>
+  Effect.gen(function* () {
+    const rules: ReportModel["appendix"]["rules"][number][] = []
+    for (const ruleId of new Set(stats.map((s) => s.ruleId))) {
+      const own = stats.filter((s) => s.ruleId === ruleId)
+      const [newest] = own.toSorted((a, b) => byVersion(b.version, a.version))
+      if (newest === undefined) continue
+      const total = (status: string) =>
+        own.filter((s) => s.status === status).reduce((n, s) => n + s.n, 0)
+      rules.push({
+        ruleId,
+        title: newest.title,
+        area: newest.area,
+        severity: yield* decodeSeverity(newest.severity).pipe(Effect.orDie),
+        version: newest.version,
+        pass: total("pass"),
+        fail: total("fail"),
+        couldNotCheck: total("inconclusive"),
+        notApplicable: total("not_applicable"),
+      })
+    }
+    return rules.toSorted(
+      (a, b) =>
+        Object.keys(AREAS).indexOf(a.area) - Object.keys(AREAS).indexOf(b.area) ||
+        byText(a.ruleId, b.ruleId),
+    )
+  })
 
 const KNOWN_VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
 
@@ -262,6 +308,27 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           .innerJoin(run, eq(run.id, hit.runId))
           .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(hit.orgId, orgId)))
           .groupBy(vendorSql, run.scenario)
+        const ruleStats = yield* db
+          .select({
+            ruleId: checkResult.ruleId,
+            version: checkResult.rulesVersion,
+            title: checkResult.title,
+            area: checkResult.area,
+            severity: checkResult.severity,
+            status: checkResult.status,
+            n: count(),
+          })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+          .groupBy(
+            checkResult.ruleId,
+            checkResult.rulesVersion,
+            checkResult.title,
+            checkResult.area,
+            checkResult.severity,
+            checkResult.status,
+          )
         const wording = yield* db
           .select({ ruleId: findingTable.ruleId, why: findingTable.why, fix: findingTable.fix })
           .from(findingTable)
@@ -297,6 +364,7 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
           runs,
           failed,
           hitCells,
+          ruleStats,
           wording,
           candidates,
           branding,
@@ -305,7 +373,18 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
         }
       }),
     )
-    const { head, config, found, runs, failed, hitCells, wording, candidates, branding } = read
+    const {
+      head,
+      config,
+      found,
+      runs,
+      failed,
+      hitCells,
+      ruleStats,
+      wording,
+      candidates,
+      branding,
+    } = read
     if (head.status === "queued" || head.status === "running")
       return { available: false, reason: "running" } as const
     if (found.coverage.evaluatedRuns === 0)
@@ -518,8 +597,22 @@ export const buildReport = (orgId: string, auditId: string, detail: DisclosureLe
       consent: consentSummaryOf(config.scenarios, runs, hitCells),
       findings,
       leftOut: [],
-      actionPlan: [],
-      appendix: { couldNotCheck: [], notEvaluated: [], rules: [] },
+      actionPlan: actionPlanOf(findings),
+      appendix: {
+        couldNotCheck: found.findings
+          .filter((f) => f.inconclusiveRuns > 0)
+          .map((f) => ({ ruleId: f.ruleId, checkTitle: f.checkTitle, runs: f.inconclusiveRuns }))
+          .toSorted((a, b) => byText(a.checkTitle, b.checkTitle) || byText(a.ruleId, b.ruleId)),
+        notEvaluated: runs
+          .filter((r) => r.status === "partial" || r.status === "failed")
+          .map((r) => ({
+            page: label(r.pageUrl, r.journey),
+            scenario: scenarioLabel(r.scenario),
+            viewport: VIEWPORT_WORDS[viewportOf(r.viewport)],
+            reason: runReasonLabel(r) ?? "The run did not finish",
+          })),
+        rules: yield* rulesListOf(ruleStats),
+      },
     }
     yield* assertProjected(model, detail)
     return {
