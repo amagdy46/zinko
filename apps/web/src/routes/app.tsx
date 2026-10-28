@@ -50,7 +50,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
       <Link
         to="/"
         onClick={onNavigate}
-        className="flex h-9 items-center gap-2 rounded-md px-2 font-semibold focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex h-9 items-center gap-2 rounded-md px-2 font-semibold focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
         aria-label="Zinko home"
       >
         <LogoMark className="size-6" />
@@ -65,7 +65,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
         type="button"
         data-find-return
         onClick={onFind}
-        className="flex h-9 items-center gap-2 rounded-md border bg-card px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="flex h-9 items-center gap-2 rounded-md border bg-card px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Find…</span>
@@ -78,7 +78,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
             to={to}
             onClick={onNavigate}
             aria-current={sections.some((name) => name === section) ? "page" : undefined}
-            className="relative flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 last:mt-auto before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground aria-[current=page]:before:bg-primary"
+            className="relative flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 last:mt-auto before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground aria-[current=page]:before:bg-primary"
           >
             <Icon className="size-4" />
             {label}
@@ -112,11 +112,14 @@ function AppShell() {
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[14rem_minmax(0,1fr)]">
       <a
         href="#main"
-        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:flex focus-visible:h-8 focus-visible:items-center focus-visible:rounded-md focus-visible:border focus-visible:bg-background focus-visible:px-3 focus-visible:text-sm focus-visible:font-medium focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-2 focus-visible:left-2 focus-visible:z-50 focus-visible:flex focus-visible:h-8 focus-visible:items-center focus-visible:rounded-md focus-visible:border focus-visible:bg-background focus-visible:px-3 focus-visible:text-sm focus-visible:font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
         Skip to content
       </a>
-      <aside className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex">
+      <aside
+        aria-label="Sidebar"
+        className="sticky top-0 hidden h-dvh flex-col gap-4 border-r bg-sidebar p-3 md:flex"
+      >
         <SidebarContent onFind={() => setFindOpen(true)} />
       </aside>
       <div className="flex min-w-0 flex-col">
@@ -152,7 +155,7 @@ function AppShell() {
         <main
           id="main"
           tabIndex={-1}
-          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-[3px] [&_h1:focus-visible]:ring-ring/50 [&_h1:focus-visible]:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset md:p-6"
+          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-2 [&_h1:focus-visible]:ring-ring [&_h1:focus-visible]:ring-offset-2 [&_h1:focus-visible]:ring-offset-background [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6"
         >
           <Outlet />
         </main>

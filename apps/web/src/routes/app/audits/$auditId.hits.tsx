@@ -25,6 +25,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { scenarioLabel } from "@/lib/audit-labels"
 import { searchText, searchValues } from "@/lib/hits-filter"
 import { hasClickIds, runPageLabel } from "@/lib/page-label"
@@ -84,6 +85,7 @@ const parseHit = (run: string | undefined, hit: string | undefined): HitRef | un
 }
 
 export const Route = createFileRoute("/app/audits/$auditId/hits")({
+  head: ({ matches }: TitleContext) => auditTabTitle("Hits", matches),
   validateSearch: (search: Record<string, unknown>): HitsSearch => ({
     source: SOURCES.find((s) => s === search.source),
     runId: searchValues(search.runId),
@@ -743,7 +745,7 @@ function Timeline({
       <aside
         aria-label="Hit detail"
         tabIndex={0}
-        className="sticky top-4 max-h-[calc(100svh-2rem)] overflow-y-auto rounded-lg border bg-card p-3 text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="sticky top-4 max-h-[calc(100svh-2rem)] overflow-y-auto rounded-lg border bg-card p-3 text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {detail}
       </aside>
@@ -757,6 +759,7 @@ function Timeline({
       )}
     >
       <div className="min-w-0 space-y-2">
+        <h2 className="sr-only">Hits</h2>
         <p className="text-xs text-muted-foreground">
           Time: ms since the capture started. Status: the HTTP status, or Answered locally. Consent:
           Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in full.
@@ -767,6 +770,7 @@ function Timeline({
             data-testid="timeline"
             data-pane={paneOpen ? "open" : "closed"}
           >
+            <caption className="sr-only">Decoded hits and dataLayer pushes, in time order</caption>
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
                 {singleRun ? null : <th className="px-2 font-medium">Run</th>}

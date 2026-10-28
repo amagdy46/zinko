@@ -36,6 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { pageTitle } from "@/lib/page-title"
 import { count, relativeTime, shortDateTime, useTimeZone } from "@/lib/format"
 import { formField } from "@/lib/form"
 import { withScheme } from "@/lib/site-url"
@@ -49,6 +50,7 @@ export const Route = createFileRoute("/app/sites/$siteId")({
     Schema.is(Page)(search.page) ? { page: search.page } : {},
   loaderDeps: ({ search }) => ({ page: search.page ?? 0 }),
   loader: ({ params, deps }) => getSite({ data: { id: params.siteId, page: deps.page } }),
+  head: ({ loaderData }) => pageTitle(loaderData?.site.name ?? "Site", "Clients"),
   notFoundComponent: () => <NotFound what="Site" />,
   component: SitePage,
 })

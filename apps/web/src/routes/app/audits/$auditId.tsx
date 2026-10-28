@@ -16,14 +16,17 @@ import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { pageTitle } from "@/lib/page-title"
 import { remainingTime, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count, duration, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
+import { tabLink } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
 import { getAudit } from "@/server/audits"
 
 export const Route = createFileRoute("/app/audits/$auditId")({
   loader: ({ params }) => getAudit({ data: { id: params.auditId } }),
+  head: ({ loaderData }) => pageTitle(`Audit of ${loaderData?.site.name ?? ""}`.trim()),
   notFoundComponent: () => <NotFound what="Audit" />,
   component: AuditPage,
 })
@@ -97,6 +100,9 @@ function AuditPage() {
   const remainingUnits = runs
     .filter((run) => run.status === "pending" || run.status === "running")
     .reduce((total, run) => total + units(run), 0)
+  // Announce about every fifth of the runs, not every tick of the progress bar.
+  const announceStep = Math.max(1, Math.ceil(runs.length / 5))
+  const announced = Math.floor(done / announceStep) * announceStep
   const progressNote = waiting
     ? "Waiting for a capture slot"
     : remainingTime(remainingUnits, elapsed, workUnits)
@@ -145,13 +151,11 @@ function AuditPage() {
     { label: "Tag matrix", link: { to: "/app/audits/$auditId/matrix", params } },
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
   ]
-  const navClass =
-    "shrink-0 border-b-2 border-transparent pt-1 pb-2 whitespace-nowrap text-muted-foreground hover:text-foreground data-[status=active]:border-primary data-[status=active]:text-foreground"
   const findingsLink = (
     <Link
       to="/app/audits/$auditId/findings"
       params={{ auditId: audit.id }}
-      className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
     >
       {findingsText}
       <span className="max-sm:sr-only">{findingsSplit}</span>
@@ -204,7 +208,7 @@ function AuditPage() {
               to="/app/sites/$siteId"
               params={{ siteId: site.id }}
               aria-label={`Back to ${site.name}`}
-              className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 max-sm:min-w-8 max-sm:justify-center"
+              className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-sm:min-w-8 max-sm:justify-center"
             >
               <ChevronLeft className="size-4" aria-hidden="true" />
               <span className="max-sm:sr-only">{site.name}</span>
@@ -234,7 +238,7 @@ function AuditPage() {
                 params={{ auditId: audit.id }}
                 search={{ view: "list" }}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   failed > 0
                     ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
                     : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
@@ -250,6 +254,9 @@ function AuditPage() {
       )}
       {active ? (
         <div className="space-y-3">
+          <p role="status" className="sr-only">
+            {announced} of {runs.length} runs finished
+          </p>
           <Progress value={done} max={Math.max(1, runs.length)} aria-label="Finished runs" />
           <div className="flex flex-wrap gap-x-4 gap-y-2 text-sm tabular-nums">
             <span>
@@ -316,17 +323,10 @@ function AuditPage() {
       ) : null}
       <nav
         aria-label="Audit"
-        className="scroll-edges flex gap-4 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
+        className="scroll-edges -mx-1.5 flex gap-2.5 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
       >
         {tabs.map((tab) => (
-          <Link
-            key={tab.label}
-            {...tab.link}
-            className={cn(
-              navClass,
-              "inline-flex min-h-8 items-center outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-            )}
-          >
+          <Link key={tab.label} {...tab.link} className={tabLink}>
             {tab.label}
           </Link>
         ))}

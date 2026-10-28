@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { SettingsSection } from "@/components/settings-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { pageTitle } from "@/lib/page-title"
 import { formField } from "@/lib/form"
 import { getAiPolicy, saveAiPolicy } from "@/server/ai-policy"
 import {
@@ -24,6 +25,7 @@ import {
 } from "@/server/ai-settings"
 
 export const Route = createFileRoute("/app/settings/ai")({
+  head: () => pageTitle("AI", "Settings"),
   loader: async () => {
     const settings = await getLlmSettings()
     return { settings, policy: settings === null ? null : await getAiPolicy() }

@@ -9,6 +9,7 @@ import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -25,6 +26,7 @@ import { getOverview } from "@/server/overview"
 const auditRoute = getRouteApi("/app/audits/$auditId")
 
 export const Route = createFileRoute("/app/audits/$auditId/overview")({
+  head: ({ matches }: TitleContext) => auditTabTitle("Overview", matches),
   loader: ({ params }) => getOverview({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   component: OverviewScreen,
@@ -317,7 +319,8 @@ function Caveats({
   )
 }
 
-const focusRing = "outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+const focusRing =
+  "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 /** A paragraph whose first sentence is the point (foreground) and the rest is support (muted). */
 function Lead({ text }: { text: string }) {
@@ -489,7 +492,7 @@ function ScoreBlock({
             <PopoverContent
               align="start"
               collisionPadding={16}
-              className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="max-h-[min(36rem,var(--radix-popover-content-available-height))] w-[min(30rem,calc(100vw-2rem))] space-y-3 overflow-y-auto text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
             >
               <Arithmetic score={score} scope={scope} />
             </PopoverContent>
@@ -556,9 +559,11 @@ function StatTile({
       <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
         <StatusGlyph meaning={glyph} />
         {label}
+        <span className="sr-only">: </span>
       </span>
       <span className="mt-1 block text-2xl font-semibold leading-none tabular-nums">
         {n}
+        <span className="sr-only"> </span>
         <span className="ml-1.5 text-xs font-normal text-muted-foreground">{note}</span>
       </span>
     </>

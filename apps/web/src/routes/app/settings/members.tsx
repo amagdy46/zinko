@@ -31,10 +31,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 
-export const Route = createFileRoute("/app/settings/members")({ component: Members })
+export const Route = createFileRoute("/app/settings/members")({
+  head: () => pageTitle("Members", "Settings"),
+  component: Members,
+})
 
 const roles = ["member", "admin", "owner"] as const
 const roleLabels = { member: "Member", admin: "Admin", owner: "Owner" }
@@ -293,6 +297,8 @@ function Members() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      className="text-destructive hover:text-destructive"
+                      aria-label={`Remove ${member.user.email}`}
                       disabled={busy !== null}
                       onClick={(event) =>
                         ask(event, { kind: "remove", id: member.id, who: member.user.email })
@@ -340,6 +346,8 @@ function Members() {
                       <Button
                         variant="ghost"
                         size="sm"
+                        className="text-destructive hover:text-destructive"
+                        aria-label={`Cancel invitation for ${invitation.email}`}
                         disabled={busy !== null}
                         onClick={(event) =>
                           ask(event, { kind: "cancel", id: invitation.id, who: invitation.email })

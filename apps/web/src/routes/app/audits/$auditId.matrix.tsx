@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { SectionHeading } from "@/components/section-heading"
 import { MatrixControls, TagMatrixTable, TagPager } from "@/components/tag-matrix"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { count } from "@/lib/format"
 import { type MatrixView, matrixView, TAGS_PER_PAGE } from "@/lib/tag-matrix"
 import { getTagMatrix } from "@/server/matrix"
@@ -19,6 +20,7 @@ type Search = {
 }
 
 export const Route = createFileRoute("/app/audits/$auditId/matrix")({
+  head: ({ matches }: TitleContext) => auditTabTitle("Tag matrix", matches),
   validateSearch: (search: Record<string, unknown>): Search => {
     const view = matrixView(search)
     return {

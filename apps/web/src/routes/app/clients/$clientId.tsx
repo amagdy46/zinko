@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { pageTitle } from "@/lib/page-title"
 import { count, relativeTime } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -41,6 +42,7 @@ import { archiveClient, createSite, deleteClient, getClient } from "@/server/cli
 
 export const Route = createFileRoute("/app/clients/$clientId")({
   loader: ({ params }) => getClient({ data: { id: params.clientId } }),
+  head: ({ loaderData }) => pageTitle(loaderData?.client.name ?? "Client", "Clients"),
   notFoundComponent: () => <NotFound what="Client" />,
   component: ClientPage,
 })
@@ -230,40 +232,45 @@ function ClientPage() {
           }
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Site</TableHead>
-              <TableHead>Origin</TableHead>
-              <TableHead>Last audit</TableHead>
-              <TableHead>Open findings</TableHead>
-              <TableHead>Audits</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sites.map((s) => (
-              <TableRow key={s.id} className="relative">
-                <TableCell className="font-medium">
-                  <Link
-                    to="/app/sites/$siteId"
-                    params={{ siteId: s.id }}
-                    className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    {s.name}
-                  </Link>
-                </TableCell>
-                <TableCell className="font-mono text-xs">{s.origin}</TableCell>
-                <TableCell>
-                  <LastAudit latest={s.latest} running={s.running} />
-                </TableCell>
-                <TableCell>
-                  <OpenFindings latest={s.latest} />
-                </TableCell>
-                <TableCell className="tabular-nums">{s.auditCount}</TableCell>
+        <section aria-labelledby="sites-heading" className="space-y-2">
+          <h2 id="sites-heading" className="sr-only">
+            Sites
+          </h2>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Site</TableHead>
+                <TableHead>Origin</TableHead>
+                <TableHead>Last audit</TableHead>
+                <TableHead>Open findings</TableHead>
+                <TableHead>Audits</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {sites.map((s) => (
+                <TableRow key={s.id} className="relative">
+                  <TableCell className="font-medium">
+                    <Link
+                      to="/app/sites/$siteId"
+                      params={{ siteId: s.id }}
+                      className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      {s.name}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{s.origin}</TableCell>
+                  <TableCell>
+                    <LastAudit latest={s.latest} running={s.running} />
+                  </TableCell>
+                  <TableCell>
+                    <OpenFindings latest={s.latest} />
+                  </TableCell>
+                  <TableCell className="tabular-nums">{s.auditCount}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </section>
       )}
     </PageContainer>
   )

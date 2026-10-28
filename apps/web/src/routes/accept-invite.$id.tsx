@@ -2,10 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { AuthCard } from "@/components/auth-card"
 import { Button } from "@/components/ui/button"
+import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { getSession } from "@/server/session"
 
 export const Route = createFileRoute("/accept-invite/$id")({
+  head: () => pageTitle("Join an organization"),
   loader: async () => ({ session: await getSession() }),
   component: AcceptInvite,
 })

@@ -209,6 +209,9 @@ export function TagMatrixTable({
     })
   return (
     <Table className="border-separate border-spacing-0">
+      <caption className="sr-only">
+        {matrix.by === "scenario" ? "Tags by scenario" : "Tags by page"}
+      </caption>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead className="sticky left-0 z-20 min-w-44 border-b bg-background align-top">
@@ -598,7 +601,7 @@ function CellDetailBody({
 }
 
 const LINK_CLASS =
-  "inline-flex h-8 items-center rounded-md px-1 text-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+  "inline-flex h-8 items-center rounded-md px-1 text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
 function HitsLinks({
   auditId,
@@ -684,7 +687,7 @@ function CellPopover({
     <button
       type="button"
       aria-label={label}
-      className="flex min-h-8 w-full cursor-pointer rounded-md px-2 py-1.5 text-left outline-none hover:bg-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      className="flex min-h-8 w-full cursor-pointer rounded-md px-2 py-1.5 text-left outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
     >
       {children}
     </button>
@@ -695,7 +698,7 @@ function CellPopover({
         tabIndex={0}
         role="region"
         aria-label="Cell details"
-        className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
       >
         <div>
           <p className="text-xs text-muted-foreground">

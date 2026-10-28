@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -55,6 +56,7 @@ const listOf = (value: string | undefined) => (value === undefined ? [] : value.
 type Search = { finding?: string; triage?: Triage; severity?: string; area?: string }
 
 export const Route = createFileRoute("/app/audits/$auditId/findings")({
+  head: ({ matches }: TitleContext) => auditTabTitle("Findings", matches),
   validateSearch: (search: Record<string, unknown>): Search => ({
     finding: Option.getOrUndefined(decodeText(search.finding)),
     triage: Option.getOrUndefined(decodeTriage(search.triage)),
@@ -166,8 +168,9 @@ function FindingsScreen() {
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div
           tabIndex={0}
+          role="region"
           aria-label="Findings list"
-          className="min-w-0 space-y-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:min-h-0 lg:overflow-y-auto lg:pr-2"
+          className="min-w-0 space-y-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:min-h-0 lg:overflow-y-auto lg:pr-2"
         >
           <Tabs
             value={triage}
@@ -305,9 +308,9 @@ function FindingsScreen() {
         </div>
         {below ? null : (
           <aside
-            aria-label="Finding"
+            aria-label="Finding detail"
             tabIndex={0}
-            className="overflow-hidden rounded-lg border bg-card text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 lg:min-h-0 lg:overflow-y-auto"
+            className="overflow-hidden rounded-lg border bg-card text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:min-h-0 lg:overflow-y-auto"
           >
             {selected === undefined ? (
               <p className="p-4 text-muted-foreground">Select a finding to see its evidence.</p>
@@ -586,9 +589,9 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
       data-selected={selected}
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         failing ? SeverityMark[row.severity] : "border-l-2 border-l-transparent",
-        selected && "bg-accent ring-1 ring-primary/40 ring-inset hover:bg-accent",
+        selected && "bg-accent shadow-[inset_-2px_0_0_var(--primary)] hover:bg-accent",
       )}
     >
       {failing ? null : <StatusGlyph meaning="could-not-check" className="mt-0.5" />}

@@ -1,9 +1,9 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { AuthCard } from "@/components/auth-card"
+import { AuthField, FormError } from "@/components/auth-field"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 import { useHydrated } from "@/lib/use-hydrated"
@@ -11,6 +11,7 @@ import { redirectSearch, safeRedirect } from "@/lib/redirect"
 import { getSession } from "@/server/session"
 
 export const Route = createFileRoute("/sign-in")({
+  head: () => pageTitle("Sign in"),
   validateSearch: redirectSearch,
   beforeLoad: async ({ search }) => {
     if ((await getSession()) !== null) throw redirect({ href: safeRedirect(search.redirect) })
@@ -21,21 +22,31 @@ export const Route = createFileRoute("/sign-in")({
 function SignIn() {
   const { redirect: next } = Route.useSearch()
   const [error, setError] = useState<string | null>(null)
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({})
   const [pending, setPending] = useState(false)
   const hydrated = useHydrated()
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
-    setPending(true)
+    const email = formField(form, "email").trim()
+    const password = formField(form, "password")
+    const invalid = {
+      ...(email === "" ? { email: "Enter your email address." } : {}),
+      ...(password === "" ? { password: "Enter your password." } : {}),
+    }
     setError(null)
-    const { error: failure } = await authClient.signIn.email({
-      email: formField(form, "email"),
-      password: formField(form, "password"),
-    })
+    setFieldErrors(invalid)
+    if (invalid.email !== undefined || invalid.password !== undefined) {
+      document.getElementById(invalid.email === undefined ? "password" : "email")?.focus()
+      return
+    }
+    setPending(true)
+    const { error: failure } = await authClient.signIn.email({ email, password })
     if (failure) {
       setError(failure.message ?? "Could not sign in")
       setPending(false)
+      document.getElementById("email")?.focus()
       return
     }
     window.location.assign(safeRedirect(next))
@@ -58,27 +69,25 @@ function SignIn() {
         </>
       }
     >
-      <form method="post" onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-          />
-          <p className="text-xs text-muted-foreground">Password reset is not available yet.</p>
-        </div>
-        {error === null ? null : (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+      <form method="post" noValidate onSubmit={onSubmit} className="space-y-4">
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          autoComplete="email"
+          error={fieldErrors.email}
+          formError={error !== null}
+        />
+        <AuthField
+          id="password"
+          label="Password"
+          type="password"
+          autoComplete="current-password"
+          error={fieldErrors.password}
+          formError={error !== null}
+          hint="Password reset is not available yet."
+        />
+        <FormError message={error} />
         <Button type="submit" className="w-full" disabled={pending || !hydrated}>
           {pending ? "Signing in…" : "Sign in"}
         </Button>

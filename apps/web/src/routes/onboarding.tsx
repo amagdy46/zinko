@@ -4,11 +4,13 @@ import { AuthCard } from "@/components/auth-card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 import { getSession } from "@/server/session"
 
 export const Route = createFileRoute("/onboarding")({
+  head: () => pageTitle("Create your organization"),
   beforeLoad: async () => {
     const session = await getSession()
     if (session === null) throw redirect({ to: "/sign-in" })

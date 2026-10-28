@@ -25,10 +25,12 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { pageTitle } from "@/lib/page-title"
 import { formField } from "@/lib/form"
 import { createClient, listClients } from "@/server/clients"
 
 export const Route = createFileRoute("/app/clients/")({
+  head: () => pageTitle("Clients"),
   loader: () => listClients(),
   component: Clients,
 })

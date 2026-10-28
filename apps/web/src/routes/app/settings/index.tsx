@@ -5,10 +5,14 @@ import { Button } from "@/components/ui/button"
 import { SettingsSection } from "@/components/settings-section"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
 
-export const Route = createFileRoute("/app/settings/")({ component: Profile })
+export const Route = createFileRoute("/app/settings/")({
+  head: () => pageTitle("Profile", "Settings"),
+  component: Profile,
+})
 
 function Profile() {
   const { session } = Route.useRouteContext()

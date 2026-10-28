@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Textarea } from "@/components/ui/textarea"
+import { pageTitle } from "@/lib/page-title"
 import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { isOnSite, onSiteScheme, originHost, withoutCredentials } from "@/lib/site-url"
@@ -24,6 +25,7 @@ import { getSite } from "@/server/clients"
 
 export const Route = createFileRoute("/app/sites/$siteId_/audits/new")({
   loader: ({ params }) => getSite({ data: { id: params.siteId } }),
+  head: ({ loaderData }) => pageTitle("New audit", loaderData?.site.name ?? "Site"),
   notFoundComponent: () => <NotFound what="Site" />,
   component: NewAudit,
 })

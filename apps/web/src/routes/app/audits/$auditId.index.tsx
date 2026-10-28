@@ -3,6 +3,7 @@ import { Option, Schema } from "effect"
 import { RunMatrix } from "@/components/run-matrix"
 import { RunSheet } from "@/components/run-sheet"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
 const View = Schema.Literals(["matrix", "list", "thumbnails"])
@@ -10,6 +11,7 @@ const decodeView = Schema.decodeUnknownOption(View)
 const decodeRun = Schema.decodeUnknownOption(Schema.String)
 
 export const Route = createFileRoute("/app/audits/$auditId/")({
+  head: ({ matches }: TitleContext) => auditTabTitle("Runs", matches),
   validateSearch: (
     search: Record<string, unknown>,
   ): { view?: "matrix" | "list" | "thumbnails"; run?: string } => ({
