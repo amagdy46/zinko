@@ -6,7 +6,7 @@
 :root {
   color-scheme: light;
   --radius: 0.5rem;
-  --background: oklch(0.985 0.003 285);
+  --background: oklch(0.97 0.004 285);
   --foreground: oklch(0.19 0.012 285);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.19 0.012 285);
@@ -14,17 +14,17 @@
   --popover-foreground: oklch(0.19 0.012 285);
   --primary: oklch(0.52 0.19 286);
   --primary-foreground: oklch(0.99 0.003 285);
-  --secondary: oklch(0.965 0.005 285);
+  --secondary: oklch(0.945 0.006 285);
   --secondary-foreground: oklch(0.25 0.012 285);
-  --muted: oklch(0.965 0.005 285);
+  --muted: oklch(0.945 0.006 285);
   --muted-foreground: oklch(0.5 0.016 285);
-  --accent: oklch(0.955 0.012 286);
+  --accent: oklch(0.925 0.02 286);
   --accent-foreground: oklch(0.25 0.04 286);
   --destructive: oklch(0.52 0.2 25);
-  --border: oklch(0.915 0.007 285);
-  --input: oklch(0.66 0.012 285);
+  --border: oklch(0.9 0.008 285);
+  --input: oklch(0.62 0.012 285);
   --ring: oklch(0.52 0.19 286 / 55%);
-  --sidebar: oklch(0.972 0.004 285);
+  --sidebar: oklch(0.945 0.007 285);
   --sev-critical: oklch(0.47 0.19 25);
   --sev-critical-bg: oklch(0.965 0.02 25);
   --sev-critical-border: oklch(0.88 0.06 25);
@@ -41,6 +41,14 @@
   --status-pass-bg: oklch(0.965 0.03 155);
   --status-pass-border: oklch(0.88 0.06 155);
   --status-pass-solid: oklch(0.6 0.15 155);
+  --status-active: oklch(0.45 0.17 286);
+  --status-active-bg: oklch(0.95 0.03 286);
+  --status-active-border: oklch(0.86 0.07 286);
+  --status-active-solid: oklch(0.55 0.19 286);
+  --status-neutral: oklch(0.45 0.016 285);
+  --status-neutral-bg: oklch(0.945 0.006 285);
+  --status-neutral-border: oklch(0.86 0.01 285);
+  --status-neutral-solid: oklch(0.6 0.014 285);
 }
 
 .dark {
@@ -51,12 +59,12 @@
   --card-foreground: oklch(0.945 0.007 286);
   --popover: oklch(0.225 0.012 285);
   --popover-foreground: oklch(0.945 0.007 286);
-  --primary: oklch(0.657 0.176 286);
-  --primary-foreground: oklch(0.145 0.008 285);
+  --primary: oklch(0.56 0.18 286);
+  --primary-foreground: oklch(0.99 0.003 285);
   --secondary: oklch(0.245 0.012 285);
   --secondary-foreground: oklch(0.945 0.007 286);
   --muted: oklch(0.245 0.012 285);
-  --muted-foreground: oklch(0.72 0.02 286);
+  --muted-foreground: oklch(0.76 0.02 286);
   --accent: oklch(0.27 0.03 286);
   --accent-foreground: oklch(0.945 0.007 286);
   --destructive: oklch(0.714 0.146 21);
@@ -64,7 +72,7 @@
   --input: oklch(1 0 0 / 34%);
   --ring: oklch(0.657 0.176 286 / 60%);
   --sidebar: oklch(0.145 0.008 285);
-  --sev-critical: oklch(0.76 0.13 21);
+  --sev-critical: oklch(0.79 0.12 21);
   --sev-critical-bg: oklch(0.714 0.146 21 / 13%);
   --sev-critical-border: oklch(0.714 0.146 21 / 30%);
   --sev-critical-solid: oklch(0.68 0.17 22);
@@ -72,7 +80,7 @@
   --sev-warning-bg: oklch(0.8 0.119 77 / 13%);
   --sev-warning-border: oklch(0.8 0.119 77 / 30%);
   --sev-warning-solid: oklch(0.8 0.14 77);
-  --sev-info: oklch(0.77 0.1 250);
+  --sev-info: oklch(0.8 0.09 250);
   --sev-info-bg: oklch(0.72 0.12 250 / 14%);
   --sev-info-border: oklch(0.72 0.12 250 / 32%);
   --sev-info-solid: oklch(0.7 0.14 250);
@@ -80,6 +88,14 @@
   --status-pass-bg: oklch(0.756 0.107 161 / 13%);
   --status-pass-border: oklch(0.756 0.107 161 / 30%);
   --status-pass-solid: oklch(0.76 0.12 161);
+  --status-active: oklch(0.8 0.1 286);
+  --status-active-bg: oklch(0.7 0.13 286 / 14%);
+  --status-active-border: oklch(0.7 0.13 286 / 32%);
+  --status-active-solid: oklch(0.7 0.14 286);
+  --status-neutral: oklch(0.82 0.018 286);
+  --status-neutral-bg: oklch(1 0 0 / 6%);
+  --status-neutral-border: oklch(1 0 0 / 14%);
+  --status-neutral-solid: oklch(0.66 0.016 286);
 }
 
 @theme inline {
@@ -106,6 +122,14 @@
   --color-status-pass-bg: var(--status-pass-bg);
   --color-status-pass-border: var(--status-pass-border);
   --color-status-pass-solid: var(--status-pass-solid);
+  --color-status-active: var(--status-active);
+  --color-status-active-bg: var(--status-active-bg);
+  --color-status-active-border: var(--status-active-border);
+  --color-status-active-solid: var(--status-active-solid);
+  --color-status-neutral: var(--status-neutral);
+  --color-status-neutral-bg: var(--status-neutral-bg);
+  --color-status-neutral-border: var(--status-neutral-border);
+  --color-status-neutral-solid: var(--status-neutral-solid);
   --text-2xs: 0.6875rem;
   --text-2xs--line-height: 1rem;
   --text-xs: 0.75rem;
@@ -161,6 +185,11 @@
   .animate-spin,
   .animate-pulse {
     animation: none;
+  }
+  [data-state="open"],
+  [data-state="closed"] {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
   }
 }
 
