@@ -95,12 +95,22 @@ const verdictChangedLine = (f: FindingChange) => {
   return "A check that could not run before now has a result, or the other way round."
 }
 
+const newlyFailing = (f: FindingChange) => `Fails on ${count(f.cells.failedNow, "run")}.`
+
+/** What the reader must know before trusting "it passed before": unchecked runs, and runs the last audit did not have. */
+const caveats = (f: FindingChange) =>
+  [
+    f.qualifier === null ? "" : " On some of these runs it could not be checked in the last audit.",
+    f.cells.outside === 0
+      ? ""
+      : ` ${count(f.cells.outside, "run")} of the failing runs were not in the last audit.`,
+  ].join("")
+
 const LINES: Record<ChangeState, (f: FindingChange) => string> = {
   new: (f) =>
-    f.qualifier === null
-      ? `Fails on ${count(f.cells.failedNow, "run")}; it did not fail on these runs before.`
-      : `Fails on ${count(f.cells.failedNow, "run")}; some could not be checked before.`,
-  regressed: (f) => `Fails on ${count(f.cells.failedNow, "run")}; it passed in the last audit.`,
+    `${newlyFailing(f)} It did not fail on the compared runs in the last audit.${caveats(f)}`,
+  regressed: (f) =>
+    `${newlyFailing(f)} It did not fail on the compared runs in the last audit, and it failed in an earlier one.${caveats(f)}`,
   fixed: (f) =>
     `${failedLine(f)}. ${f.fixedHow === "no_longer_applies" ? "It no longer applies" : "It passes now"} on every run that failed.`,
   unchanged: (f) =>
