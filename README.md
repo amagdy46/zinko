@@ -34,12 +34,16 @@ Needs Node 24.11+ or 26+ (not 25), pnpm, Docker for Postgres, and Python 3.12+ w
 git clone https://github.com/ovriq/zinko.git && cd zinko
 pnpm install && pnpm build
 cp .env.example .env                       # fill the three secrets with: openssl rand -base64 32
-docker compose up -d && pnpm db:migrate
+docker compose up -d && pnpm db:migrate    # reads DATABASE_URL from .env; a variable already in your shell wins
 (cd apps/browser/scrapling && uv sync --frozen && .venv/bin/patchright install chromium)
 ALLOW_PRIVATE_NETWORKS=true PORT=8080 pnpm --filter browser start   # the capture engine
 pnpm --filter @repo/fixtures serve                                  # the fixture sites on :4400
-BROWSER_URL=http://localhost:8080 pnpm dev                          # the app on http://localhost:1337
+pnpm dev                                                            # the app on http://localhost:1337
 ```
+
+`.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). Vite takes the next free port if 1337 is busy; the URL is printed on start. To pin another port: `pnpm dev -- --port 3000`.
+
+Then open the app and sign up. Create an organization, then a client (Clients > New client), then a site with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only), and choose New audit on the site. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ## Known limits
 
@@ -96,7 +100,7 @@ ALLOW_PRIVATE_NETWORKS=true pnpm --filter browser start     # engine on http://l
 pnpm --filter @repo/fixtures serve                          # fixtures on http://localhost:4400
 ```
 
-To run the web app against that engine, set `BROWSER_URL=http://localhost:8080` in `.env` ([CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#running-the-web-app-locally)).
+To run the web app against that engine, see the quickstart above ([CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#running-the-web-app-locally)).
 
 Then capture a fixture. `meta-before-consent` fires a Meta `PageView` before the visitor chooses, so it fires even when they reject:
 

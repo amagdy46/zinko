@@ -28,7 +28,7 @@ Never set `ALLOW_PRIVATE_NETWORKS` or `BROWSER_URL` for a deployed stage: the en
 
 ## Deploy from your machine
 
-1. Create the stage's database and migrate it with an explicit URL (`pnpm db:migrate` reads the process environment, not `.env`):
+1. Create the stage's database and migrate it with an explicit URL (`pnpm db:migrate` reads `.env` too, but an exported variable wins, so set it explicitly for a deployed stage):
 
    ```sh
    export DATABASE_URL='postgres://USER:PASSWORD@HOST/zinko_prod?sslmode=require'

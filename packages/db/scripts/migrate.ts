@@ -2,8 +2,13 @@ import { PgClient } from "@effect/sql-pg"
 import * as PgDrizzle from "drizzle-orm/effect-postgres"
 import { migrate } from "drizzle-orm/effect-postgres/migrator"
 import { Config, Effect, Redacted } from "effect"
+import { existsSync } from "node:fs"
 
 // `pnpm db:migrate`: applies packages/db/drizzle/* to DATABASE_URL (default: the docker-compose database).
+// Reads the repository's `.env` like the app does; a variable already in the process environment wins.
+const envFile = new URL("../../../.env", import.meta.url)
+if (existsSync(envFile)) process.loadEnvFile(envFile)
+
 const url = Config.Redacted("DATABASE_URL").pipe(
   Config.withDefault(Redacted.make("postgres://postgres:postgres@localhost:5432/app")),
 )
