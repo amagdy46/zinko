@@ -111,6 +111,39 @@ const narrowFindingRows = (orgId: string, auditId: string) =>
   })
 
 /**
+ * The audit's stored findings with their triage. A narrow audit's rows are rebuilt from its target
+ * runs (its stored `finding` rows also count companion and extra runs), so every consumer of a
+ * finding reads this, never the table directly.
+ */
+export const findingRowsOf = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const [head] = yield* db
+      .select({ kind: audit.kind })
+      .from(audit)
+      .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (head === undefined) return yield* new NotFound({ message: "Not found" })
+    return head.kind === "narrow"
+      ? yield* narrowFindingRows(orgId, auditId)
+      : yield* db
+          .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
+          .from(finding)
+          .leftJoin(findingTriage, triageJoin)
+          .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
+  })
+
+/** One finding of an audit by rule id, or a 404. */
+export const findingRowOf = (orgId: string, auditId: string, ruleId: string) =>
+  Effect.gen(function* () {
+    const found = (yield* findingRowsOf(orgId, auditId)).find(
+      (row) => row.finding.ruleId === ruleId,
+    )
+    if (found === undefined) return yield* new NotFound({ message: "Not found" })
+    return found
+  })
+
+/**
  * The audit's findings, failing ones first by severity, then those that could not be checked.
  * `coverage.evaluatedRuns` counts the runs with check results: 0 means the audit was not
  * evaluated (an M2 audit, or no run reached `persist`), never that it is clean. `coverage.runs`

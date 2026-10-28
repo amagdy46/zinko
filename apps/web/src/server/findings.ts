@@ -1,7 +1,7 @@
 import { CookieSnapshot } from "@repo/capture-contract"
 import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { checkResult, finding, findingTriage, member, run, user } from "@repo/db"
+import { checkResult, findingTriage, member, run, user } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq, inArray } from "drizzle-orm"
 import { Effect, Schema } from "effect"
@@ -12,9 +12,8 @@ import {
   decodeOwner,
   decodeKind,
   decodeSeverity,
+  findingRowOf,
   findingsOf,
-  triageJoin,
-  originExists,
   triageOf,
   TriageStatus,
 } from "./findings-data"
@@ -72,19 +71,7 @@ export const getFinding = createServerFn({ method: "GET" })
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { db } = yield* Database
-        const [found] = yield* db
-          .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
-          .from(finding)
-          .leftJoin(findingTriage, triageJoin)
-          .where(
-            and(
-              eq(finding.auditId, auditId),
-              eq(finding.orgId, orgId),
-              eq(finding.ruleId, data.ruleId),
-            ),
-          )
-          .limit(1)
-        if (found === undefined) return yield* new NotFound({ message: "Not found" })
+        const found = yield* findingRowOf(orgId, auditId, data.ruleId)
         const { finding: f } = found
         const [actor] =
           found.triage === null
@@ -189,18 +176,7 @@ export const setTriage = createServerFn({ method: "POST" })
             message: `The reason can be at most ${MAX_REASON} characters.`,
           })
         const { db } = yield* Database
-        const [found] = yield* db
-          .select({ ruleId: finding.ruleId })
-          .from(finding)
-          .where(
-            and(
-              eq(finding.auditId, auditId),
-              eq(finding.orgId, orgId),
-              eq(finding.ruleId, data.ruleId),
-            ),
-          )
-          .limit(1)
-        if (found === undefined) return yield* new NotFound({ message: "Not found" })
+        const { finding: found } = yield* findingRowOf(orgId, auditId, data.ruleId)
         const values = { status: data.status, reason, updatedBy: userId, updatedAt: new Date() }
         // an edit is this audit's own call, so a carried-over marker goes
         const written = { ...values, inheritedFromAuditId: null, inheritedFromAt: null }

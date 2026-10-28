@@ -1,7 +1,7 @@
 import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, run, site, client, finding, findingTriage, checkResult } from "@repo/db"
+import { audit, run, site, client, checkResult } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, count, eq, countDistinct, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -15,7 +15,7 @@ import {
   normalizePages,
   rerunBaseline,
 } from "./audit-create"
-import { triageJoin } from "./findings-data"
+import { findingRowsOf } from "./findings-data"
 import { requireSession } from "./require-session"
 import {
   allowPrivateSites,
@@ -362,18 +362,14 @@ export const getAudit = createServerFn({ method: "GET" })
             }
           }),
         )
-        const findings = yield* db
-          .select({
-            ruleId: finding.ruleId,
-            title: finding.title,
-            kind: finding.kind,
-            severity: finding.severity,
-            runIds: finding.runIds,
-            triage: findingTriage.status,
-          })
-          .from(finding)
-          .leftJoin(findingTriage, triageJoin)
-          .where(and(eq(finding.auditId, found.audit.id), eq(finding.orgId, orgId)))
+        const findings = (yield* findingRowsOf(orgId, found.audit.id)).map((row) => ({
+          ruleId: row.finding.ruleId,
+          title: row.finding.title,
+          kind: row.finding.kind,
+          severity: row.finding.severity,
+          runIds: row.finding.runIds,
+          triage: row.triage?.status ?? null,
+        }))
         const [evaluation] = yield* db
           .select({ total: countDistinct(checkResult.runId) })
           .from(checkResult)

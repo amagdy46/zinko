@@ -29,9 +29,9 @@ import {
   settle,
 } from "./explain-ledger"
 import { decodeFix } from "./findings"
-import { decodeSeverity } from "./findings-data"
+import { decodeSeverity, findingRowOf } from "./findings-data"
 import { requireSession } from "./require-session"
-import { Forbidden, Invalid, isManager, membership, NotFound, read, mutation } from "./server-fn"
+import { Forbidden, Invalid, isManager, membership, read, mutation } from "./server-fn"
 
 const FindingInput = Schema.Struct({ auditId: Schema.String, ruleId: Schema.String })
 const ExplainInput = Schema.Struct({
@@ -52,19 +52,7 @@ const authorize = (session: Parameters<typeof membership>[0], data: typeof Findi
   Effect.gen(function* () {
     const { organizationId: orgId, userId, role } = yield* membership(session)
     const auditId = yield* auditInOrg(orgId, data.auditId)
-    const { db } = yield* Database
-    const [found] = yield* db
-      .select()
-      .from(finding)
-      .where(
-        and(
-          eq(finding.auditId, auditId),
-          eq(finding.orgId, orgId),
-          eq(finding.ruleId, data.ruleId),
-        ),
-      )
-      .limit(1)
-    if (found === undefined) return yield* new NotFound({ message: "Not found" })
+    const { finding: found } = yield* findingRowOf(orgId, auditId, data.ruleId)
     if (found.kind !== "fail")
       return yield* new Invalid({ message: "Only a failing finding can be explained." })
     return { orgId, userId, role, auditId, finding: found, policy: yield* aiPolicyOf(orgId) }
