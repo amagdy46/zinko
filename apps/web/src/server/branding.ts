@@ -1,3 +1,4 @@
+import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { orgBranding } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
@@ -17,17 +18,30 @@ const SaveInput = Schema.Struct({
   showPoweredBy: Schema.Boolean,
 })
 
-const view = (branding: Effect.Success<ReturnType<typeof brandingOf>>, canManage: boolean) => ({
-  branding: {
-    agencyName: branding.agencyName,
-    accent: branding.accent,
-    footerText: branding.footerText,
-    showPoweredBy: branding.showPoweredBy,
-    hasLogo: branding.logoKey !== null,
-  },
-  canManage,
-  personalData: hasPersonalData(branding.agencyName) || hasPersonalData(branding.footerText),
-})
+/** Long enough to look at the preview; the page asks again when it reloads. */
+const LOGO_URL_SECONDS = 5 * 60
+
+const view = (branding: Effect.Success<ReturnType<typeof brandingOf>>, canManage: boolean) =>
+  Effect.gen(function* () {
+    const storage = yield* Storage
+    const logoUrl =
+      branding.logoKey === null
+        ? null
+        : yield* storage
+            .signedUrl(branding.logoKey, { expiresInSeconds: LOGO_URL_SECONDS })
+            .pipe(Effect.orDie)
+    return {
+      branding: {
+        agencyName: branding.agencyName,
+        accent: branding.accent,
+        footerText: branding.footerText,
+        showPoweredBy: branding.showPoweredBy,
+        logoUrl,
+      },
+      canManage,
+      personalData: hasPersonalData(branding.agencyName) || hasPersonalData(branding.footerText),
+    }
+  })
 
 /** The organization's branding and whether the caller may change it. Any member may read it. */
 export const getBranding = createServerFn({ method: "GET" })
@@ -36,7 +50,7 @@ export const getBranding = createServerFn({ method: "GET" })
     read(
       Effect.gen(function* () {
         const { organizationId, role } = yield* membership(context.session)
-        return view(yield* brandingOf(organizationId), isManager(role))
+        return yield* view(yield* brandingOf(organizationId), isManager(role))
       }),
     ),
   )
@@ -75,7 +89,7 @@ export const saveBranding = createServerFn({ method: "POST" })
           .insert(orgBranding)
           .values({ orgId: organizationId, ...values })
           .onConflictDoUpdate({ target: orgBranding.orgId, set: values })
-        return view(yield* brandingOf(organizationId), true)
+        return yield* view(yield* brandingOf(organizationId), true)
       }),
     ),
   )
