@@ -1,5 +1,11 @@
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
-import { BAND_LABEL, scoreCoverage, type Band, type ScoreCoverage } from "@/lib/health-score"
+import {
+  BAND_LABEL,
+  scoreCoverage,
+  tooLittleCaptured,
+  type Band,
+  type ScoreCoverage,
+} from "@/lib/health-score"
 import { cn } from "@/lib/utils"
 
 const BAND_GLYPH: Record<Band, StatusMeaning> = {
@@ -35,8 +41,7 @@ export function ScoreFigure({
   const { state, notes } = scoreCoverage(coverage)
   const full = state !== "runs"
   const number = cn("tabular-nums", !full && "text-muted-foreground")
-  const captured = Math.min(coverage.evaluatedRuns, coverage.totalRuns - coverage.unfinishedRuns)
-  const sparse = captured * 2 <= coverage.totalRuns
+  const sparse = tooLittleCaptured(coverage)
   if (sparse && size === "inline")
     return (
       <span className={cn("inline-flex items-center gap-1 text-muted-foreground", className)}>

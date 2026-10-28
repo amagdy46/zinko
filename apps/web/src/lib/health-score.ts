@@ -164,3 +164,9 @@ export function scoreCoverage(c: ScoreCoverage): {
   if (runNotes.length > 0) return { state: "runs", notes }
   return { state: checkNotes.length > 0 ? "checks" : "full", notes }
 }
+
+/** Half the runs or fewer were captured (evaluated and finished): too little to put a number on. */
+export function tooLittleCaptured(c: ScoreCoverage): boolean {
+  const captured = Math.min(c.evaluatedRuns, c.totalRuns - c.unfinishedRuns)
+  return captured * 2 <= c.totalRuns
+}

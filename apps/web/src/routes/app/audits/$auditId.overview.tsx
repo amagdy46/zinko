@@ -12,7 +12,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { CRITICAL_CAP, type HealthScore, WEIGHT } from "@/lib/health-score"
+import {
+  CRITICAL_CAP,
+  type HealthScore,
+  scoreCoverage as coverageOf,
+  tooLittleCaptured,
+  WEIGHT,
+} from "@/lib/health-score"
 import { vendorName } from "@/lib/tag-matrix"
 import { getOverview } from "@/server/overview"
 
@@ -103,7 +109,7 @@ function OverviewScreen() {
         couldNotCheck={couldNotCheck}
         bannerUncertain={bannerUncertain}
       />
-      <WorstFinding auditId={audit.id} worst={worst} />
+      <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       <AreaStrip auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
     </div>
@@ -325,16 +331,33 @@ function Lead({ text }: { text: string }) {
   )
 }
 
-function WorstFinding({ auditId, worst }: { auditId: string; worst: Overview["worst"] }) {
-  if (worst === null)
+function WorstFinding({
+  auditId,
+  worst,
+  coverage,
+}: {
+  auditId: string
+  worst: Overview["worst"]
+  coverage: Overview["scoreCoverage"]
+}) {
+  if (worst === null) {
+    // a pass glyph only when the runs were all captured: "nothing failed" says little about a page
+    // that never loaded
+    const partial = coverageOf(coverage).state === "runs"
+    let text = "No open failing findings"
+    if (partial)
+      text = tooLittleCaptured(coverage)
+        ? "Too little was captured to say whether anything fails"
+        : "No open failing findings in the runs that were captured"
     return (
       <section aria-label="Worst finding" className="rounded-lg border bg-card p-4 text-sm">
         <p className="flex items-center gap-2" data-testid="no-open-findings">
-          <StatusGlyph meaning="pass" />
-          No open failing findings
+          <StatusGlyph meaning={partial ? "partial" : "pass"} />
+          {text}
         </p>
       </section>
     )
+  }
   return (
     <section
       aria-label="Worst finding"
