@@ -416,6 +416,8 @@ export const compareAudits = (input: Input) => {
     let fixedHow: FindingChange["fixedHow"] = null
     let qualifier: FindingChange["qualifier"] = null
     let earlierFailure: FindingChange["earlierFailure"] = null
+    // common cells where only the verdict changed to or from Could not check
+    const shown: string[] = []
 
     if (input.ruleChanged(ruleId, versions)) {
       state = "not_comparable"
@@ -472,6 +474,7 @@ export const compareAudits = (input: Input) => {
         const is = rowsNow.get(cell)?.status === "inconclusive"
         if (was && is) both = true
         else if (was !== is) changed = true
+        if (was || is) shown.push(cell)
       }
       if (changed) state = "verdict_changed"
       else if (both) state = "unchanged"
@@ -481,6 +484,12 @@ export const compareAudits = (input: Input) => {
     const listed: { cell: string; before: Verdict; now: Verdict | Resolution }[] = []
     for (const cell of fresh.toSorted(codeUnitOrder))
       listed.push({ cell, before: verdictOf(rowsBefore?.get(cell)?.status), now: "fail" })
+    for (const cell of shown.toSorted(codeUnitOrder))
+      listed.push({
+        cell,
+        before: verdictOf(rowsBefore?.get(cell)?.status),
+        now: verdictOf(rowsNow?.get(cell)?.status),
+      })
     const resolved = [...resolutionOf].toSorted(
       ([x, ra], [y, rb]) => RESOLUTION_RANK[ra] - RESOLUTION_RANK[rb] || codeUnitOrder(x, y),
     )
