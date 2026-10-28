@@ -22,6 +22,7 @@ export const modeClassified: Rule = {
   id,
   area: "consent",
   severity: "info",
+  owner: "tag-manager",
   title: "Consent Mode type",
   checkTitle: "Consent Mode type is known",
   why: "Consent Mode has two modes. In advanced mode the Google tag loads before consent and sends cookieless pings that say storage is denied; Google uses them to model conversions it cannot observe. In basic mode the tag does not load until the visitor consents, so no ping is sent and Google has nothing to model from. Neither is a defect: the mode explains why modelled conversions are present or missing, and it is a choice to make knowingly. This check never fails.",

@@ -15,6 +15,7 @@ export const previewOrDebugLeak: Rule = {
   id,
   area: "hygiene",
   severity: "warning",
+  owner: "tag-manager",
   title: "Tag Manager preview or GA4 debug mode left on",
   checkTitle: "No preview or debug mode in production",
   why: "A Tag Manager container loaded from a preview environment runs unpublished changes for every visitor, and GA4 hits in debug mode go to DebugView instead of the reports. Both usually mean a test snippet or setting was left in place, and the data collected under it is missing or wrong.",

@@ -30,6 +30,7 @@ export const tiktokEventIdMissing: Rule = {
   id,
   area: "dedup",
   severity: "warning",
+  owner: "developer",
   title: "TikTok event sent without an event ID",
   checkTitle: "TikTok events carry an event ID",
   why: "TikTok merges a browser event with the same event from its Events API only when both carry the same event name and event ID. Without one, an event sent both ways is counted twice, so conversions and their value are overstated. Zinko sees the browser side only: it cannot tell whether the Events API is also in use.",

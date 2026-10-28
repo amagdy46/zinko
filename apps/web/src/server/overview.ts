@@ -4,11 +4,11 @@ import { audit, checkResult, finding, run } from "@repo/db"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
-import { healthScore } from "@/lib/health-score"
 import { auditInOrg } from "./audit-data"
 import { findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { requireSession } from "./require-session"
+import { scoreSummaryOf } from "./score-summary"
 import { membership, read } from "./server-fn"
 
 const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
@@ -18,9 +18,6 @@ const decodeStartPage = Schema.decodeUnknownEffect(
 const decodeErrors = Schema.decodeUnknownEffect(
   Schema.NullOr(Schema.Array(Schema.Struct({ code: Schema.String, message: Schema.String }))),
 )
-
-const LOAD_FAILURES = new Set(["Navigation", "HttpStatus", "Timeout"])
-const withoutQuery = (url: string) => url.split("?")[0]
 
 /**
  * What the Overview shows, computed from the stored findings and check results on every read:
@@ -149,49 +146,22 @@ export const getOverview = createServerFn({ method: "GET" })
             errors: errors ?? [],
           })),
         )
-        const startRuns = runs.filter(
-          (r) => startUrl !== undefined && withoutQuery(r.pageUrl) === withoutQuery(startUrl),
-        )
-        const loadFailed = (r: (typeof runs)[number]) =>
-          r.status === "failed" ||
-          (r.status === "partial" && r.errors.some((e) => LOAD_FAILURES.has(e.code)))
-        const startFailed = startRuns.length > 0 && startRuns.every(loadFailed)
-        const pages = new Map<string, Array<(typeof runs)[number]>>()
-        for (const r of runs) {
-          const page = r.pageUrl.split("?")[0] ?? r.pageUrl
-          if (!startRuns.includes(r)) pages.set(page, [...(pages.get(page) ?? []), r])
-        }
-        const brokenPages = [...pages].flatMap(([page, [first, ...rest]]) =>
-          first !== undefined && [first, ...rest].every(loadFailed)
-            ? [{ page, reason: runReason(first) }]
-            : [],
-        )
-        const unfinished = runs.filter((r) => r.status === "failed" || r.status === "partial")
         const openOf = (severity: string) =>
           failing.filter((f) => f.severity === severity && f.triage.status === "open").length
-        const withoutAcceptedScore = healthScore({
-          findings: failing.filter((f) => f.triage.status !== "accepted_risk"),
+        const summary = scoreSummaryOf({
+          findings: failing,
           uncertainty,
-          evaluatedRuns: coverage.evaluatedRuns,
-          totalRuns: coverage.totalRuns,
-          versions: coverage.rulesVersions,
+          coverage,
+          runs,
+          startUrl,
+          reasonOf: runReason,
         })
         return {
-          runHealth: {
-            startFailed,
-            startPage: startUrl ?? null,
-            startReason: startFailed && startRuns[0] ? runReason(startRuns[0]) : null,
-            brokenPages,
-            unfinishedRuns: unfinished.length,
-            incomplete:
-              startFailed ||
-              brokenPages.length > 0 ||
-              (runs.length > 0 && unfinished.length * 2 >= runs.length),
-          },
+          runHealth: summary.runHealth,
           scoreCoverage: {
             totalRuns: coverage.totalRuns,
             evaluatedRuns: coverage.evaluatedRuns,
-            unfinishedRuns: unfinished.length,
+            unfinishedRuns: summary.runHealth.unfinishedRuns,
             checks: checked.reduce((n, c) => n + c.checks, 0),
             unresolvedChecks: checked.reduce((n, c) => n + c.unresolved, 0),
             unauditedSites: 0,
@@ -207,18 +177,12 @@ export const getOverview = createServerFn({ method: "GET" })
             titles: unchecked.map((f) => f.checkTitle).toSorted(),
           },
           checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
-          withoutAccepted: withoutAcceptedScore.evaluated ? withoutAcceptedScore.score : null,
+          withoutAccepted: summary.withoutAccepted,
           worst,
           tags,
           status,
           coverage,
-          score: healthScore({
-            findings: failing,
-            uncertainty,
-            evaluatedRuns: coverage.evaluatedRuns,
-            totalRuns: coverage.totalRuns,
-            versions: coverage.rulesVersions,
-          }),
+          score: summary.score,
           bannerUncertain: failing
             .filter((f) => f.bannerUncertainRuns > 0)
             .map((f) => ({ ruleId: f.ruleId, title: f.title, runs: f.bannerUncertainRuns })),

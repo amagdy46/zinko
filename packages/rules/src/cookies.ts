@@ -12,6 +12,9 @@ const FAMILIES: readonly (readonly [RegExp, string])[] = [
   [/^(IDE|test_cookie)$/, "Google ad cookie"],
 ]
 
+/** Every label `cookieFamily` can return. */
+export const COOKIE_FAMILY_LABELS: readonly string[] = FAMILIES.map(([, label]) => label)
+
 /**
  * The fixed label of the ad or analytics cookie family a name belongs to, or `null` for any other
  * cookie. The patterns accept arbitrary suffixes (`_gcl_<anything>`), so the label is what to show,

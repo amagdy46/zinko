@@ -18,6 +18,7 @@ export const modeV2Incomplete: Rule = {
   id,
   area: "consent",
   severity: "warning",
+  owner: "tag-manager",
   title: "Consent Mode v2 signals missing",
   checkTitle: "Google tags send all four Consent Mode signals",
   why: "Since March 2024 Google Ads and GA4 need ad_user_data and ad_personalization as well as ad_storage and analytics_storage to use data from visitors in the EEA and UK. When the tag never sets the two newer ones, Google treats them as not provided: remarketing audiences and conversion measurement for those visitors are limited or stop.",

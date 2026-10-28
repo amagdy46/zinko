@@ -37,7 +37,7 @@ export type {
 } from "./types.js"
 export { OWNER_LABELS } from "./types.js"
 export { googleConsentFromCcm, isCcmRequest, isNonGoogle, withoutConsent } from "./consent-state.js"
-export { cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
+export { COOKIE_FAMILY_LABELS, cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
 export { decodeHits } from "./decode.js"
 export { pushesByDocument } from "./documents.js"
 export { scrubPersonalData } from "./personal-data.js"

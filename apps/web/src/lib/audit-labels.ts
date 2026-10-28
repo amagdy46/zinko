@@ -102,7 +102,7 @@ export const pageLabels = (pageUrls: ReadonlyArray<string>) => {
 export const runPage = (run: { pageUrl: string; journey: boolean }) =>
   run.journey ? `Journey from ${pagePath(run.pageUrl)}` : pagePath(run.pageUrl)
 
-const ERROR_TEXT: Record<string, string> = {
+export const ERROR_TEXT: Record<string, string> = {
   BotBlocked: "Blocked as a bot",
   Timeout: "The page timed out",
   CmpNotFound: "Consent banner not found",
@@ -115,7 +115,7 @@ const ERROR_TEXT: Record<string, string> = {
   EngineFailure: "The browser engine failed",
 }
 
-const FAILURE_TEXT: Record<string, string> = {
+export const FAILURE_TEXT: Record<string, string> = {
   EngineBusy: "Zinko was busy, re-run the audit",
   EngineFailure: "The browser engine failed",
   PersistFailure: "Captured, but the results could not be saved",

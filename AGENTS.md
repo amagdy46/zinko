@@ -151,6 +151,13 @@ Zero errors and zero warnings are the bar.
 - The accent is one of the eight presets in `lib/report-accent.ts`, selected with a `data-accent` attribute whose variables live in `styles.css` (keep the two in step; each is at least 4.5:1 on white). `.report-paper` re-declares the light tokens so a report stays light in the dark theme. No inline `style`, no custom hex.
 - Logo (`server/branding-logo.ts`, `uploadLogo` takes `FormData`, which works in a server function under workerd, so no base64 fallback is needed): owners and admins only, checked before the file is read; PNG, JPEG or WebP by `sniffImageType` (`@repo/core/image-type`) on the first bytes, never the client's type or name (SVG and GIF are refused); at most 512 KB, checked on `file.size` before the bytes are read; SHA-256 stored in `logo_sha256`. Every upload writes a new key `branding/<orgId>/<uuid>`, updates the row, then deletes the previous object; nothing overwrites a key. Only the consultant's own preview gets a 5-minute signed `/files/` URL; the public never receives one. EXIF in a JPEG is not stripped, and Settings says so.
 
+### The report
+
+- The report is a read model: `buildReport` (`server/report-data.ts`) reads the database in one `REPEATABLE READ` read-only transaction (`atomically`, the isolation statement first), commits, then builds the model without touching the database, then `assertProjected` validates it. Draft reads go through `getReportDraft` (`server/report.ts`).
+- Every string a report prints comes from `lib/report-projection.ts` (`pageLabel`, `runReasonLabel`, and the vendor, event and evidence helpers as later tasks add them). Never print `check_result.message`, a capture error message or `runReason` output. A new field in `ReportModel` needs a validator in `LEAF_VALIDATORS` for each leaf path (an object that can be `null` needs its own path too); without one the report does not render.
+- The Overview and the report share `scoreSummaryOf` (`server/score-summary.ts`) and `ScoreArithmetic` (`components/score-arithmetic.tsx`); change a figure there, not in one of the two.
+- `ReportView` (`components/report/`) is pure: no hooks, router links or fetching.
+
 ## Realtime
 
 - The realtime extra's generated public room (`Room`, `Realtime`, `useRoom`, `/ws/rooms/*`) was replaced by the audit room; `efforge.jsonc` still lists the old files, leave it alone.

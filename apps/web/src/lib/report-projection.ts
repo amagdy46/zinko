@@ -1,0 +1,333 @@
+import { COOKIE_FAMILY_LABELS } from "@repo/rules"
+import { isKnownDestination, knownEvent, VENDOR_LABELS } from "@repo/llm"
+import { Data, Effect } from "effect"
+import { AREAS, ERROR_TEXT, FAILURE_TEXT, SCENARIOS } from "./audit-labels"
+import { ACCENTS } from "./report-accent"
+import type { DisclosureLevel, ReportModel } from "./report-model"
+
+/*
+ * The disclosure projection: the only place that turns stored data into a string a report prints.
+ * Report builders, the snapshot writer and the CSV writer call these functions and nothing else
+ * that reads a page, a hit or a capture. `assertProjected` then checks the finished model field by
+ * field and fails closed: a leaf path with no registered validator is a defect, so a field added
+ * later without review cannot reach a client.
+ */
+
+const MAX_PATH_LENGTH = 120
+
+const withoutQueryAndFragment = (url: string) => {
+  const { pathname } = new URL(url)
+  return pathname.slice(0, MAX_PATH_LENGTH)
+}
+
+/**
+ * The label of a page of the audit. Standard: its position in the audit's configured list
+ * ("Page 2", the first is "Page 1 (start page)"; a journey run is "Journey from Page 1"). Detailed:
+ * the entered path without query or fragment, capped. `pages` are the configured pages; a page URL
+ * is matched by its address without query, because the start URL may carry added click IDs.
+ */
+export function pageLabel(
+  pages: ReadonlyArray<string>,
+  pageUrl: string,
+  journey: boolean,
+  detail: DisclosureLevel,
+): string {
+  const target = pageUrl.split(/[?#]/)[0]
+  const index = pages.findIndex((page) => page === pageUrl || page.split(/[?#]/)[0] === target)
+  const found = pages[index]
+  if (found === undefined)
+    throw new ProjectionViolation({ path: "pageLabel", rule: "unknown page" })
+  const prefix = journey ? "Journey from " : ""
+  if (detail === "detailed") return `${prefix}${withoutQueryAndFragment(found)}`
+  return `${prefix}Page ${index + 1}${index === 0 && !journey ? " (start page)" : ""}`
+}
+
+const NO_REASON = "The run failed"
+const PARTIAL_REASON = "Some data is missing"
+
+/**
+ * Plain words for why a run did not finish, from the two static maps only. Unlike `runReason` it
+ * never falls back to an error message or reads one for the network detail: those are built from
+ * the page.
+ */
+export function runReasonLabel(run: {
+  status: string
+  failure: string | null
+  errors: ReadonlyArray<{ code: string }>
+}): string | null {
+  if (run.status !== "partial" && run.status !== "failed") return null
+  if (run.failure !== null) return FAILURE_TEXT[run.failure] ?? NO_REASON
+  const [first] = run.errors
+  if (first === undefined) return run.status === "partial" ? PARTIAL_REASON : NO_REASON
+  return ERROR_TEXT[first.code] ?? NO_REASON
+}
+
+export class ProjectionViolation extends Data.TaggedError("ProjectionViolation")<{
+  readonly path: string
+  readonly rule: string
+}> {}
+
+type Validator = (value: unknown, detail: DisclosureLevel) => string | null
+
+const count: Validator = (v) =>
+  typeof v === "number" && Number.isInteger(v) && v >= 0 ? null : "count"
+const amount: Validator = (v) =>
+  typeof v === "number" && Number.isFinite(v) && v >= 0 ? null : "amount"
+const flag: Validator = (v) => (typeof v === "boolean" ? null : "flag")
+/** An object that is absent: its own path is the leaf. */
+const absent: Validator = (v) => (v === null ? null : "absent")
+const nullable =
+  (inner: Validator): Validator =>
+  (v, detail) =>
+    v === null ? null : inner(v, detail)
+const oneOf =
+  (name: string, values: Iterable<string>): Validator =>
+  (v) => {
+    const set = new Set(values)
+    return typeof v === "string" && set.has(v) ? null : name
+  }
+const matching =
+  (name: string, pattern: RegExp, max = 400): Validator =>
+  (v) =>
+    typeof v === "string" && v.length <= max && pattern.test(v) ? null : name
+/** Stored rule wording: static text written in the repository, trusted by origin, length-bounded. */
+const stored: Validator = (v) =>
+  typeof v === "string" && v.length >= 1 && v.length <= 1200 ? null : "stored"
+/** A generated sentence over stored titles and counts. */
+const generated: Validator = (v) =>
+  typeof v === "string" && v.length >= 1 && v.length <= 600 ? null : "generated"
+const author =
+  (max: number): Validator =>
+  (v) =>
+    typeof v === "string" && v.length <= max ? null : "author"
+const digest = matching("digest", /^[0-9a-f]{64}$/, 64)
+const date = matching("date", /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/, 40)
+const ruleId = matching("ruleId", /^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$/, 80)
+const ruleVersion = matching("ruleVersion", /^\d{1,4}$/, 4)
+const host = matching("host", /^[A-Za-z0-9.:[\]-]{1,255}$/, 255)
+
+const SEVERITIES = ["critical", "warning", "info"]
+const OWNERS = ["consent-platform", "tag-manager", "developer"]
+const CONSENT_STATES = ["granted", "denied", "unknown"]
+const SCENARIO_LABELS = SCENARIOS.map((s) => s.label)
+const VIEWPORT_LABELS = ["Desktop", "Mobile"]
+const CONSENT_OUTCOMES = ["accepted", "rejected", "none", "not-found", "not-applied"]
+const REASONS = [
+  ...Object.values(ERROR_TEXT),
+  ...Object.values(FAILURE_TEXT),
+  NO_REASON,
+  PARTIAL_REASON,
+]
+const PUSH_COMMANDS = ["consent default", "consent update", "config", "event", "push"]
+
+const VENDORS = ["ga4", "google-ads", "meta", "tiktok"] as const
+
+const vendorLabel = oneOf("vendorLabel", [...Object.values(VENDOR_LABELS), "Other vendor"])
+const eventName: Validator = (v) => {
+  if (v === "custom event") return null
+  return typeof v === "string" && VENDORS.some((vendor) => knownEvent(vendor, v)) ? null : "event"
+}
+const pageLabelValidator: Validator = (v, detail) => {
+  if (typeof v !== "string") return "pageLabel"
+  if (detail === "standard")
+    return /^(Journey from )?Page \d{1,2}( \(start page\))?$/.test(v) ? null : "pageLabel"
+  return /^(Journey from )?\/[^?#\s]{0,119}$/.test(v) && !v.includes("://") ? null : "pageLabel"
+}
+const destination: Validator = (v, detail) => {
+  if (typeof v !== "string") return "destination"
+  if (/^G-[A-Z0-9]{4,12}$/.test(v) || /^AW-\d{6,17}$/.test(v)) return null
+  if (detail === "standard") return "destination"
+  return VENDORS.some((vendor) => isKnownDestination(vendor, v)) ? null : "destination"
+}
+
+const finding = {
+  ruleId: ruleId,
+  severity: oneOf("severity", SEVERITIES),
+  area: oneOf("area", Object.keys(AREAS)),
+  title: stored,
+  why: stored,
+  "fix[]": stored,
+  owner: nullable(oneOf("owner", OWNERS)),
+  ownerSource: oneOf("ownerSource", ["rule", "author", "none"]),
+  failingRuns: count,
+  knownRuns: count,
+  "pages[]": pageLabelValidator,
+  "scenarios[]": oneOf("scenario", SCENARIO_LABELS),
+  bannerUncertainRuns: count,
+  "triage.status": oneOf("triage", ["open", "accepted_risk", "fixed"]),
+  "triage.reason": nullable(author(1000)),
+  note: nullable(author(1000)),
+  evidence: absent,
+  "evidence.caption": generated,
+  "evidence.rows[].kind": oneOf("kind", ["hit", "request", "cookie", "push", "document"]),
+  "evidence.rows[].vendor": nullable(vendorLabel),
+  "evidence.rows[].event": nullable(eventName),
+  "evidence.rows[].destination": nullable(destination),
+  "evidence.rows[].timing": nullable(
+    oneOf("timing", ["before-choice", "after-choice", "no-choice"]),
+  ),
+  "evidence.rows[].adStorage": nullable(oneOf("consentState", CONSENT_STATES)),
+  "evidence.rows[].analyticsStorage": nullable(oneOf("consentState", CONSENT_STATES)),
+  "evidence.rows[].category": nullable(oneOf("category", ["consent-ping", "collection", "other"])),
+  "evidence.rows[].status": nullable(count),
+  "evidence.rows[].blocked": nullable(flag),
+  "evidence.rows[].cookie": nullable(oneOf("cookie", COOKIE_FAMILY_LABELS)),
+  "evidence.rows[].command": nullable(oneOf("command", PUSH_COMMANDS)),
+  "evidence.rows[].redirects": nullable(count),
+} satisfies Record<string, Validator>
+
+const under = (prefix: string, table: Record<string, Validator>) =>
+  Object.entries(table).map(([path, validator]): [string, Validator] => [
+    `${prefix}.${path}`,
+    validator,
+  ])
+
+/**
+ * Every leaf path of `ReportModel` and what may stand there. `[]` stands for an array element. A
+ * leaf path that is not listed fails `assertProjected`.
+ */
+const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validator>([
+  ["modelVersion", (v) => (v === 1 ? null : "modelVersion")],
+  ["generatedAt", date],
+  ["detail", oneOf("detail", ["standard", "detailed"])],
+  ["branding.agencyName", author(80)],
+  [
+    "branding.accent",
+    oneOf(
+      "accent",
+      ACCENTS.map((a) => a.id),
+    ),
+  ],
+  ["branding.footerText", nullable(author(300))],
+  ["branding.showPoweredBy", flag],
+  ["branding.logoDigest", nullable(digest)],
+  ["cover.clientName", author(200)],
+  ["cover.siteName", author(200)],
+  ["cover.host", host],
+  ["cover.auditedAt", date],
+  ["cover.scope.pages[]", pageLabelValidator],
+  ["cover.scope.scenarios[]", oneOf("scenario", SCENARIO_LABELS)],
+  ["cover.scope.viewports[]", oneOf("viewport", VIEWPORT_LABELS)],
+  ["cover.scope.journey", flag],
+  ["cover.scope.clickIds", flag],
+  ["summary.source", oneOf("source", ["generated", "author"])],
+  ["summary.text", nullable(author(2000))],
+  ["summary.score.evaluated", (v) => (v === true ? null : "evaluated")],
+  ["summary.score.version", count],
+  ["summary.score.score", count],
+  ["summary.score.band", oneOf("band", ["critical", "attention", "minor", "no-failures"])],
+  ["summary.score.coverage", oneOf("coverage", ["full", "partial"])],
+  ["summary.score.resolution", oneOf("resolution", ["resolved", "unresolved"])],
+  ["summary.score.lines[].ruleId", ruleId],
+  ["summary.score.lines[].title", stored],
+  ["summary.score.lines[].severity", oneOf("severity", SEVERITIES)],
+  ["summary.score.lines[].failing", count],
+  ["summary.score.lines[].known", count],
+  ["summary.score.lines[].points", amount],
+  ["summary.score.lines[].bannerUncertain", count],
+  ["summary.score.total", amount],
+  ["summary.score.capped", flag],
+  ["summary.score.uncertainty.checks", count],
+  ["summary.score.uncertainty.runs", count],
+  ["summary.score.uncertainty.rules", count],
+  ["summary.score.uncertainty.ruleTitles[]", stored],
+  ["summary.score.uncertainty.bannerUncertainRuns", count],
+  ["summary.score.versions[]", ruleVersion],
+  ["summary.score.mixedVersions", flag],
+  ["summary.withoutAccepted", nullable(count)],
+  ["summary.runHealth.startFailed", flag],
+  ["summary.runHealth.startPage", nullable(pageLabelValidator)],
+  ["summary.runHealth.startReason", nullable(oneOf("reason", REASONS))],
+  ["summary.runHealth.brokenPages[].page", pageLabelValidator],
+  ["summary.runHealth.brokenPages[].reason", nullable(oneOf("reason", REASONS))],
+  ["summary.runHealth.unfinishedRuns", count],
+  ["summary.runHealth.incomplete", flag],
+  ["summary.counts.critical", count],
+  ["summary.counts.warning", count],
+  ["summary.counts.info", count],
+  ["summary.counts.couldNotCheck", count],
+  ["summary.counts.acceptedRisk", count],
+  ["summary.counts.fixed", count],
+  ["summary.headlines[]", generated],
+  ["summary.coverage.evaluatedRuns", count],
+  ["summary.coverage.totalRuns", count],
+  ["summary.coverage.unresolvedRules", count],
+  ["summary.coverage.bannerUncertainRuns", count],
+  ["summary.worst", absent],
+  ["summary.worst.ruleId", ruleId],
+  ["summary.worst.severity", oneOf("severity", SEVERITIES)],
+  ["summary.worst.title", stored],
+  ["summary.worst.scopeLine", generated],
+  ["method.rulesVersions[]", ruleVersion],
+  ["method.scoreVersion", count],
+  ["method.runs.complete", count],
+  ["method.runs.partial", count],
+  ["method.runs.failed", count],
+  ["method.mixedVersions", flag],
+  ["consent.scenarios[]", oneOf("scenario", SCENARIO_LABELS)],
+  ["consent.rows[].vendor", vendorLabel],
+  ["consent.rows[].cells[].scenario", oneOf("scenario", SCENARIO_LABELS)],
+  ["consent.rows[].cells[].runs.total", count],
+  ["consent.rows[].cells[].runs.complete", count],
+  ["consent.rows[].cells[].runs.partial", count],
+  ["consent.rows[].cells[].runs.none", count],
+  ["consent.rows[].cells[].outcomes[].outcome", oneOf("outcome", CONSENT_OUTCOMES)],
+  ["consent.rows[].cells[].outcomes[].runs", count],
+  ["consent.rows[].cells[].runsWithHits", count],
+  ["consent.rows[].cells[].hits", count],
+  ["consent.rows[].cells[].choice.observed", count],
+  ["consent.rows[].cells[].choice.hitsBefore", count],
+  ["consent.rows[].cells[].choice.hitsAfter", count],
+  ...under("findings[]", finding),
+  ["leftOut[].ruleId", ruleId],
+  ["leftOut[].title", stored],
+  ["actionPlan[].owner", nullable(oneOf("owner", OWNERS))],
+  ["actionPlan[].items[].ruleId", ruleId],
+  ["actionPlan[].items[].severity", oneOf("severity", SEVERITIES)],
+  ["actionPlan[].items[].title", stored],
+  ["actionPlan[].items[].firstStep", stored],
+  ["appendix.couldNotCheck[].ruleId", ruleId],
+  ["appendix.couldNotCheck[].checkTitle", stored],
+  ["appendix.couldNotCheck[].runs", count],
+  ["appendix.notEvaluated[].page", pageLabelValidator],
+  ["appendix.notEvaluated[].scenario", oneOf("scenario", SCENARIO_LABELS)],
+  ["appendix.notEvaluated[].viewport", oneOf("viewport", VIEWPORT_LABELS)],
+  ["appendix.notEvaluated[].reason", oneOf("reason", REASONS)],
+  ["appendix.rules[].ruleId", ruleId],
+  ["appendix.rules[].title", stored],
+  ["appendix.rules[].area", oneOf("area", Object.keys(AREAS))],
+  ["appendix.rules[].severity", oneOf("severity", SEVERITIES)],
+  ["appendix.rules[].version", ruleVersion],
+  ["appendix.rules[].pass", count],
+  ["appendix.rules[].fail", count],
+  ["appendix.rules[].couldNotCheck", count],
+  ["appendix.rules[].notApplicable", count],
+])
+
+const leavesOf = (value: unknown, path: string, out: Array<[string, unknown]>) => {
+  if (Array.isArray(value)) {
+    for (const item of value) leavesOf(item, `${path}[]`, out)
+    return out
+  }
+  if (value !== null && typeof value === "object") {
+    for (const [key, item] of Object.entries(value))
+      leavesOf(item, path === "" ? key : `${path}.${key}`, out)
+    return out
+  }
+  out.push([path, value])
+  return out
+}
+
+/**
+ * Fails (a defect, never a silent drop) when any leaf of the model has no registered validator or
+ * fails its own. The message names the path and the rule, never the value: it may be personal data.
+ */
+export const assertProjected = (model: ReportModel, detail: DisclosureLevel) =>
+  Effect.suspend(() => {
+    for (const [path, value] of leavesOf(model, "", [])) {
+      const validator = LEAF_VALIDATORS.get(path)
+      const failure = validator === undefined ? "unregistered path" : validator(value, detail)
+      if (failure !== null) return Effect.die(new ProjectionViolation({ path, rule: failure }))
+    }
+    return Effect.void
+  })

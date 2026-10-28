@@ -150,6 +150,7 @@ function AuditPage() {
     },
     { label: "Tag matrix", link: { to: "/app/audits/$auditId/matrix", params } },
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
+    { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
   const findingsLink = (
     <Link

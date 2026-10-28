@@ -49,6 +49,7 @@ export const clientAndServerGa4: Rule = {
   id,
   area: "duplicates",
   severity: "warning",
+  owner: "tag-manager",
   title: "The same GA4 event is sent to Google and to a first-party collector",
   checkTitle: "Each GA4 event goes to one collector",
   why: "When a page sends an event to Google and the same event to a server-side or gateway endpoint on the site's own domain, GA4 receives it twice. Page views, events and sessions are inflated, and a purchase is only saved when GA4 drops the repeat of its transaction ID, which it does not for other events. It usually comes from a Google tag left in place when a server-side container was added, or from a plugin that sends on its own.",

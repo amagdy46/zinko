@@ -543,3 +543,20 @@ Round 3 (GPT-6.1 Sol, high): ready after fixes. Round 2 points 2 to 7 closed; po
 
 1. **Score values can be fractional.** `HealthScore.lines[].points` and `total` are not integers (one warning failing on one of three runs costs 5.33). Added the `amount` validator (finite, non-negative) for the score paths, plus `flag` and `nullable`, and Task 4 now tabulates every leaf path of `ReportModel` with its validator and verifies a fractional-score report.
 - **Note (not a finding): transient capture reads.** A storage or body-read failure during phase 2 would change evidence availability and so the content hash. Publication now fails with a retry message in that case; missing and undecodable captures still publish as "Evidence is not available".
+
+## Execution status
+
+Implementation on branch `m5/report` (worktree `zinko.m5-report`), database `zinko_m5`. Tasks 1 to 4 are built and committed one by one; each ran `pnpm check && pnpm typecheck && pnpm build` clean. Deviations and findings so far:
+
+- **Task 1.** `pnpm db:migrate` reads `DATABASE_URL` from the process environment, not from `.env`; run it with the variable exported (`export DATABASE_URL=$(grep ^DATABASE_URL .env | cut -d= -f2-)`), or it migrates the default `app` database. The first run of this task did that by mistake: the two nullable owner columns were added to `app` for about a minute and then removed again (columns dropped, the migration row deleted), so `app` is as before. The owner mixed-version case was checked with a SQL mirror of `findingsFrom`, not the TypeScript itself.
+- **Task 2.** Accent variables are keyed on `[data-accent="<id>"]` (not only `.report-paper[data-accent]`) so the Settings swatches can use them outside a report. The personal-data warning is computed on the server (`scrubPersonalData` would pull all the rules into the client bundle) and shown after saving and on load, not while typing. The presets were all at 5.7:1 or better on first try; none was darkened (Violet 6.5, Blue 6.1, Teal 5.7, Green 6.2, Amber 6.7, Red 6.6, Pink 6.6, Slate 7.4; against their tints 5.1 to 6.6).
+- **Task 3.** `FormData` reaches a server function under workerd (a 481 KB PNG uploaded), so no base64 fallback. `curl -sI` cannot be used on `/files/`: the route answers GET only and HEAD falls through to a 404, so headers were read with `curl -s -D - -o /dev/null`.
+- **Task 4.**
+  - `outcomes` in a consent cell is an array of `{ outcome, runs }` (not a `Record`), so every leaf path is static.
+  - `summary.score` is typed as the evaluated `HealthScore` only: a report exists only for an evaluated audit.
+  - `publicationHashOf` lives in `server/report-data.ts` (it needs `canonicalJson` from `@repo/llm`, which must stay out of the client bundle) and `buildReport` returns the hash. `@repo/llm` now exports `canonicalJson` and `VENDOR_LABELS`; `@repo/rules` exports `COOKIE_FAMILY_LABELS`.
+  - `scoreSummaryOf` takes `startUrl` and a `reasonOf` function instead of `config`, so the Overview keeps `runReason` and the report uses `runReasonLabel`.
+  - `cover.scope` and `method` are filled in Task 4 (the cover needs the scope); Task 5 adds the consent summary and the scope and method sections.
+  - An object that can be `null` (`summary.worst`, `findings[].evidence`) needs its own validator path, because the null is the leaf.
+  - `getReportDraft` also returns `logoUrl` (a 5-minute signed URL for the consultant's preview) outside the model.
+  - The Detailed level has no UI before Task 8, so Detailed was exercised by a throwaway script that bundles `report-projection.ts` with esbuild (hostile paths pass under Detailed and fail under Standard; a query, an unknown event name and a non-vendor destination fail under both); the live hostile audit was checked under Standard.
