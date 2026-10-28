@@ -29,7 +29,7 @@ The secondary user is the agency's **client**, who sees the white-label report.
 8. **Report:** a white-label report with the agency's logo, accent color and client name. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
 9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (confirmed only when the re-run passes every run that failed), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
 
-### Checks in v0.1 (25 deterministic rules)
+### Checks in v0.1 (26 deterministic rules)
 
 | Area | Rules |
 |---|---|
@@ -51,7 +51,7 @@ Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 | Scheduled audits, volume-drop alerts, Slack | v0.3, the first paid cloud feature |
 | Tracking plan (YAML), plan drift, GitHub Action | v0.4 |
 | Billing | When the cloud version launches |
-| CLI `audit` | The CLI has `decode` and `capture` (with `--rules`, the same 25 checks as the app); a full audit stays in the web app |
+| CLI `audit` | The CLI has `decode` and `capture` (with `--rules`, the same 26 checks as the app); a full audit stays in the web app |
 | Ad tracker, product analytics | Not planned |
 
 ## Success for v0.1
