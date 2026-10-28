@@ -9,13 +9,18 @@
     tiktok: "ZINKOTT0001",
     gtm: "GTM-ZINKO01",
   }
-  const purchase = { transaction_id: "T-1001", value: 49.9, currency: cfg.currency }
+  // "new-order": a reload of /thank-you is tracked as a different order (a regenerated id)
+  const orderKey = "zinko-tracked-order"
+  const orderId =
+    cfg.purchaseOnReload === "new-order" && sessionStorage.getItem(orderKey) !== null
+      ? "T-1002"
+      : "T-1001"
+  const purchase = { transaction_id: orderId, value: 49.9, currency: cfg.currency }
   const trackedPurchase = cfg.purchaseOrderId
     ? purchase
     : { value: purchase.value, currency: purchase.currency }
   // A thank-you page that remembers the order it tracked (as a correct site does), so a reload of it
   // sends nothing again; "every-load" is the bug.
-  const orderKey = "zinko-tracked-order"
   const trackedBefore =
     cfg.page === "thank-you" &&
     cfg.purchaseOnReload === "guarded" &&

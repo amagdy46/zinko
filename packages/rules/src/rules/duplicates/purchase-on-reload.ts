@@ -83,9 +83,15 @@ export const purchaseOnReload: Rule = {
         "a purchase after the reload carried no transaction ID, so it cannot be matched to the earlier ones",
         evidence,
       )
+    if (later.length > 0)
+      return inconclusive(
+        id,
+        "a purchase after the reload matched no earlier one: a new transaction ID cannot be told from another order or from regenerated tracking data",
+        evidence,
+      )
     return pass(
       id,
-      `${count(earlier.length, "Google purchase")} before the reload, each with a transaction ID, and none sent again after it`,
+      `${count(earlier.length, "Google purchase")} before the reload, each with a transaction ID, and none sent after it`,
       evidence,
     )
   },
