@@ -59,12 +59,6 @@ function snapshotLeaving(
   )
 }
 
-function pathOf(url: string): string {
-  if (!URL.canParse(url)) return url
-  const { pathname, search } = new URL(url)
-  return pathname + search
-}
-
 export const lostAcrossNavigation: Rule = {
   id,
   area: "clickids",
@@ -98,7 +92,7 @@ export const lostAcrossNavigation: Rule = {
 
     let checked = 0
     const lost: { message: string; evidence: EvidenceRef[] }[] = []
-    const unseen: string[] = []
+    let unseen = 0
     later.forEach((document, index) => {
       const last = index === later.length - 1
       for (const vendor of vendors) {
@@ -110,7 +104,7 @@ export const lostAcrossNavigation: Rule = {
         if (without.length === 0) continue
         const snapshot = snapshotLeaving(input, document, last)
         if (snapshot === undefined) {
-          unseen.push(pathOf(document.url))
+          unseen += 1
           continue
         }
         const carried = snapshot.cookies.some(
@@ -118,7 +112,7 @@ export const lostAcrossNavigation: Rule = {
         )
         if (carried) continue
         lost.push({
-          message: `${count(without.length, vendor.what)} on ${pathOf(document.url)} without ${vendor.idKey} and no ${vendor.cookie} cookie the page can read`,
+          message: `${count(without.length, vendor.what)} on a later page without ${vendor.idKey} and no ${vendor.cookie} cookie the page can read`,
           evidence: [...without.map(hitRef), documentRef(document.id)],
         })
       }
@@ -126,8 +120,8 @@ export const lostAcrossNavigation: Rule = {
 
     const evidence = nonEmpty(lost.flatMap((l) => l.evidence))
     if (evidence !== null) return fail(id, lost.map((l) => l.message).join("; "), evidence)
-    if (unseen.length > 0)
-      return inconclusive(id, `no cookie snapshot when leaving ${unseen.join(", ")}`)
+    if (unseen > 0)
+      return inconclusive(id, `no cookie snapshot when leaving ${count(unseen, "later page")}`)
     const params = vendors.map((vendor) => vendor.param).join(" and ")
     if (checked === 0)
       return notApplicable(id, `no later page sent a hit that should carry ${params}`)

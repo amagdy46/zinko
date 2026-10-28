@@ -35,7 +35,7 @@ export const lostOnRedirect: Rule = {
       return pass(id, `${names} survived ${hops === 1 ? "the redirect" : `${hops} redirects`}`)
     return fail(
       id,
-      `${lost.map(({ param }) => param).join(", ")} lost after ${hops === 1 ? "1 redirect" : `${hops} redirects`}: the page landed on ${landing.url}`,
+      `${lost.map(({ param }) => param).join(", ")} lost after ${hops === 1 ? "1 redirect" : `${hops} redirects`}: the page landed without ${lost.length === 1 ? "it" : "them"}`,
       [documentRef(landing.id)],
     )
   },

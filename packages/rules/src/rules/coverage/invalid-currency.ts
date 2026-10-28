@@ -28,12 +28,10 @@ export const invalidCurrency: Rule = {
     const evidence = nonEmpty(invalid.map(hitRef))
     if (evidence === null)
       return pass(id, `${count(priced.length, "purchase hit")} sent a valid currency code`)
-    const what = distinct(
-      invalid.map((hit) => `${vendorName(hit.vendor)} "${String(hit.params.currency)}"`),
-    ).join(", ")
+    const what = distinct(invalid.map((hit) => vendorName(hit.vendor))).join(", ")
     return fail(
       id,
-      `${count(invalid.length, "purchase hit")} with an invalid currency: ${what}`,
+      `${count(invalid.length, "purchase hit")} with a currency that is not a three-letter uppercase code: ${what}`,
       evidence,
     )
   },

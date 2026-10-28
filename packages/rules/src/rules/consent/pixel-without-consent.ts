@@ -1,5 +1,6 @@
 import { consentTimeline, isNonGoogle, withoutConsent } from "../../consent-state.js"
 import { count, distinct, hitRef } from "../../documents.js"
+import { eventLabel } from "../../event-names.js"
 import { fail, inconclusive, nonEmpty, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
@@ -33,7 +34,7 @@ export const pixelWithoutConsent: Rule = {
           : "no Meta or TikTok hit was sent",
       )
     }
-    const what = `${count(hits.length, "hit")} (${distinct(hits.map((h) => `${h.vendor} ${h.event}`)).join(", ")})`
+    const what = `${count(hits.length, "hit")} (${distinct(hits.map((h) => eventLabel(h))).join(", ")})`
     if (timeline.kind === "action") return fail(id, `${what} before the consent action`, evidence)
     if (input.scenario === "gpc")
       return fail(id, `${what} despite the GPC signal: the GPC signal was ignored`, evidence)

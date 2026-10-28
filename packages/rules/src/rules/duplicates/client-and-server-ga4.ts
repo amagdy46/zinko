@@ -1,4 +1,5 @@
 import { count, distinct, groupBy, hitRef } from "../../documents.js"
+import { eventLabel } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import { transactionId } from "../../purchases.js"
 import type { DecodedHit, EvidenceRef, Rule } from "../../types.js"
@@ -84,7 +85,7 @@ export const clientAndServerGa4: Rule = {
         id,
         `${count(direct.length, "GA4 hit")} went to Google and ${firstParty.length} to the first-party collector, none of them the same event`,
       )
-    const events = distinct(found.map(([hit]) => hit.event)).join(", ")
+    const events = distinct(found.map(([hit]) => eventLabel(hit))).join(", ")
     return fail(
       id,
       `${count(found.length, "GA4 event")} sent both to Google and to a first-party collector (${events})`,

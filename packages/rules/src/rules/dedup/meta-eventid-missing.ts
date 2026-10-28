@@ -1,29 +1,9 @@
 import { count, distinct, hitRef } from "../../documents.js"
+import { META_STANDARD_EVENTS } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
 const id = "dedup.meta-eventid-missing"
-
-/** Meta's standard events, except PageView, which is rarely sent from the server as well. */
-const STANDARD_EVENTS = new Set([
-  "AddPaymentInfo",
-  "AddToCart",
-  "AddToWishlist",
-  "CompleteRegistration",
-  "Contact",
-  "CustomizeProduct",
-  "Donate",
-  "FindLocation",
-  "InitiateCheckout",
-  "Lead",
-  "Purchase",
-  "Schedule",
-  "Search",
-  "StartTrial",
-  "SubmitApplication",
-  "Subscribe",
-  "ViewContent",
-])
 
 export const metaEventIdMissing: Rule = {
   id,
@@ -40,7 +20,7 @@ export const metaEventIdMissing: Rule = {
   evaluate(input) {
     const meta = input.hits.filter((hit) => hit.vendor === "meta")
     if (meta.length === 0) return notApplicable(id, "no Meta hit was sent")
-    const standard = meta.filter((hit) => STANDARD_EVENTS.has(hit.event))
+    const standard = meta.filter((hit) => META_STANDARD_EVENTS.has(hit.event))
     const missing = standard.filter((hit) => !hit.ids.eventId)
     const evidence = nonEmpty(missing.map(hitRef))
     if (evidence === null) {

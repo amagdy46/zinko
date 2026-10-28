@@ -15,15 +15,11 @@ const CUT_SHORT: ReadonlySet<string> = new Set([
   "EngineFailure",
 ])
 
-function pathOf(url: string): string {
-  if (!URL.canParse(url)) return url
-  return new URL(url).pathname
-}
-
-/** `/product` (reached by goto) or the reload of it, for a message. */
-function describe(document: CapturedDocument): string {
-  const path = pathOf(document.url)
-  return document.navigation === "reload" ? `the reload of ${path}` : path
+/** The later page by its position, never its URL, for a message. */
+function describe(document: CapturedDocument, position: number): string {
+  return document.navigation === "reload"
+    ? `the reload (later page ${position})`
+    : `later page ${position}`
 }
 
 export const notPersistedAcrossNavigation: Rule = {
@@ -70,7 +66,7 @@ export const notPersistedAcrossNavigation: Rule = {
     if (later.length === 0) {
       return cut === undefined
         ? notApplicable(id, "no page was loaded after the consent choice")
-        : inconclusive(id, `the run ended before any later page (${cut.code}: ${cut.message})`)
+        : inconclusive(id, `the run ended before any later page (${cut.code})`)
     }
 
     // The signals the choice granted, read at the end of the page it was made on.
@@ -85,8 +81,8 @@ export const notPersistedAcrossNavigation: Rule = {
     const failures: string[] = []
     const evidence: EvidenceRef[] = []
     const unresolved: string[] = []
-    for (const document of later) {
-      const where = describe(document)
+    for (const [index, document] of later.entries()) {
+      const where = describe(document, index + 1)
       if (document.banner === "shown") {
         failures.push(`the banner was shown again on ${where}`)
         evidence.push(documentRef(document.id))
@@ -115,8 +111,7 @@ export const notPersistedAcrossNavigation: Rule = {
         `${distinct(failures).join("; ")} after the visitor ${outcome === "accepted" ? "accepted" : "rejected"}`,
         cited,
       )
-    if (cut !== undefined)
-      unresolved.push(`the pages the run did not reach (${cut.code}: ${cut.message})`)
+    if (cut !== undefined) unresolved.push(`the pages the run did not reach (${cut.code})`)
     if (unresolved.length > 0)
       return inconclusive(
         id,

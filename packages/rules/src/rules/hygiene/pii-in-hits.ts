@@ -29,6 +29,28 @@ function queryEntries(url: string): [string, string][] {
   return URL.canParse(url) ? [...new URL(url).searchParams] : []
 }
 
+/** Parameter names a message may print; a page picks the others, so they are "a custom parameter". */
+const NAMED_PARAMS: ReadonlySet<string> = new Set([
+  "page_location",
+  "page_referrer",
+  "page_title",
+  "dl",
+  "dr",
+  "dt",
+  "email",
+  "em",
+  "phone",
+  "ph",
+  "phone_number",
+  "tel",
+  "mobile",
+  "user_data",
+])
+
+function paramLabel(key: string): string {
+  return NAMED_PARAMS.has(key) ? key : "a custom parameter"
+}
+
 function emailIn(text: string): boolean {
   return hasEmail(decoded(text))
 }
@@ -48,8 +70,8 @@ function findingsIn(hit: DecodedHit): string[] {
   const found: string[] = []
   for (const [key, raw] of Object.entries(hit.params)) {
     const value = decoded(String(raw))
-    if (hasEmail(value)) found.push(`an email address in ${vendor} ${key}`)
-    if (phoneIn(key, value)) found.push(`a phone number in ${vendor} ${key}`)
+    if (hasEmail(value)) found.push(`an email address in ${vendor} ${paramLabel(key)}`)
+    if (phoneIn(key, value)) found.push(`a phone number in ${vendor} ${paramLabel(key)}`)
   }
   if (found.length > 0) return found
   // The raw request URL holds parameters no decoder surfaces.

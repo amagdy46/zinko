@@ -9,6 +9,7 @@ import {
   pushesByDocument,
   requestRef,
 } from "../../documents.js"
+import { eventLabel } from "../../event-names.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { EvidenceRef, Rule } from "../../types.js"
 
@@ -60,7 +61,7 @@ export const defaultAfterTag: Rule = {
         ...input.hits
           .filter((hit) => hit.documentId === documentId && isGoogle(hit.vendor))
           .map((hit) => ({
-            label: `${hit.vendor} ${hit.event}`,
+            label: eventLabel(hit),
             startedAt: hit.startedAt,
             carriesState:
               hit.consent.adStorage !== "unknown" || hit.consent.analyticsStorage !== "unknown",

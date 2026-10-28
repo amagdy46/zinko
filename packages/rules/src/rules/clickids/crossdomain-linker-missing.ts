@@ -1,5 +1,6 @@
 import { consentTimeline } from "../../consent-state.js"
 import { documentRef, hitRef } from "../../documents.js"
+import { destinationLabel } from "../../event-names.js"
 import {
   combineArrivals,
   fail,
@@ -62,7 +63,7 @@ export const crossdomainLinkerMissing: Rule = {
     if (arrivals.length === 0)
       return cut === undefined
         ? notApplicable(id, "no link to another host was followed")
-        : inconclusive(id, `the run did not reach another host (${cut.code}: ${cut.message})`)
+        : inconclusive(id, `the run did not reach another host (${cut.code})`)
     const timeline = consentTimeline(input)
     if (timeline.kind !== "action")
       return inconclusive(
@@ -99,20 +100,21 @@ export const crossdomainLinkerMissing: Rule = {
       const evidence: EvidenceRef[] = []
       const passed: string[] = []
       for (const destination of destinations) {
+        const label = destinationLabel(destination)
         const of = (documentId: string) =>
           ga4.filter((hit) => hit.documentId === documentId && hit.destinationId === destination)
         const before = eligible(of(first.id))
         const after = eligible(of(arrival.id))
         if (before.sent.length === 0) {
-          unresolved.push(`${destination}: analytics storage was not granted on the first host`)
+          unresolved.push(`${label}: analytics storage was not granted on the first host`)
         } else if (of(arrival.id).length === 0) {
-          unresolved.push(`${destination}: no hit on ${host}`)
+          unresolved.push(`${label}: no hit on ${host}`)
         } else if (after.sent.length === 0) {
-          unresolved.push(`${destination}: analytics storage was not granted on ${host}`)
+          unresolved.push(`${label}: analytics storage was not granted on ${host}`)
         } else if (before.ids.size !== 1 || after.ids.size !== 1) {
-          unresolved.push(`${destination}: no single client id on one of the hosts`)
+          unresolved.push(`${label}: no single client id on one of the hosts`)
         } else if ([...before.ids][0] === [...after.ids][0]) {
-          passed.push(destination)
+          passed.push(label)
         } else {
           const [seen] = before.sent
           const [arrived] = after.sent
@@ -120,8 +122,8 @@ export const crossdomainLinkerMissing: Rule = {
           if (arrived !== undefined) evidence.push(hitRef(arrived))
           failures.push(
             linked
-              ? `${destination}: the link carried a linker parameter but ${host} did not adopt it`
-              : `${destination}: the visitor was counted as a new user on ${host}, with no linker parameter on the link`,
+              ? `${label}: the link carried a linker parameter but ${host} did not adopt it`
+              : `${label}: the visitor was counted as a new user on ${host}, with no linker parameter on the link`,
           )
         }
       }

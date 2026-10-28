@@ -36,7 +36,7 @@ function unreachableBecause(cookie: Cookie, url: string): string | undefined {
   if (!hostMatches) return "is limited to the first host"
   if (cookie.secure && protocol !== "https:") return "is limited to https"
   if (!readableByScriptOn({ ...cookie, httpOnly: false }, url))
-    return `is limited to the path ${cookie.path}, which the arrival page is not under`
+    return "is limited to a path the arrival page is not under"
   return undefined
 }
 
@@ -69,7 +69,7 @@ export const lostAcrossSubdomain: Rule = {
     if (arrivals.length === 0)
       return cut === undefined
         ? notApplicable(id, "no link to another host was followed")
-        : inconclusive(id, `the run did not reach another host (${cut.code}: ${cut.message})`)
+        : inconclusive(id, `the run did not reach another host (${cut.code})`)
     const timeline = consentTimeline(input)
     if (timeline.kind !== "action")
       return inconclusive(
@@ -149,6 +149,6 @@ function cause(input: RunInput, firstId: string, arrivalUrl: string, bannerShown
   const cookie = snapshot?.cookies.find((candidate) => names.includes(candidate.name))
   if (cookie === undefined || cookie.httpOnly) return ""
   const reason = unreachableBecause(cookie, arrivalUrl)
-  if (reason !== undefined) return `. Its consent cookie ${cookie.name} ${reason}`
-  return `. Its consent cookie ${cookie.name} is readable on the arrival host but ${bannerShown ? "the banner was still shown" : "the consent state was still denied"}`
+  if (reason !== undefined) return `. Its consent cookie ${reason}`
+  return `. Its consent cookie is readable on the arrival host but ${bannerShown ? "the banner was still shown" : "the consent state was still denied"}`
 }

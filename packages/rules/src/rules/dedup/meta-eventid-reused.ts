@@ -1,4 +1,5 @@
 import { count, groupBy, hitRef } from "../../documents.js"
+import { eventLabel } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import { withoutRetransmissions } from "../../retransmissions.js"
 import type { Rule } from "../../types.js"
@@ -33,9 +34,7 @@ export const metaEventIdReused: Rule = {
         id,
         `${count(withId.length, "Meta hit")} with an event ID, none repeated for the same event`,
       )
-    const what = reused
-      .map((group) => `${group[0].event} "${group[0].ids.eventId}" ${group.length} times`)
-      .join("; ")
+    const what = reused.map((group) => `${eventLabel(group[0])} ${group.length} times`).join("; ")
     return fail(
       id,
       `the same event and event ID were sent more than once, so Meta keeps only the first: ${what}`,

@@ -1,5 +1,6 @@
 import { consentTimeline, isNonGoogle } from "../../consent-state.js"
 import { count, distinct, hitRef } from "../../documents.js"
+import { eventLabel } from "../../event-names.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
@@ -28,7 +29,7 @@ export const pixelAfterReject: Rule = {
     const hits = input.hits.filter((hit) => isNonGoogle(hit.vendor) && hit.startedAt >= actionAt)
     const evidence = nonEmpty(hits.map(hitRef))
     if (evidence === null) return pass(id, "no Meta or TikTok hit after the rejection")
-    const what = distinct(hits.map((h) => `${h.vendor} ${h.event}`)).join(", ")
+    const what = distinct(hits.map((h) => eventLabel(h))).join(", ")
     return fail(id, `${count(hits.length, "hit")} (${what}) after the rejection`, evidence)
   },
 }

@@ -70,9 +70,7 @@ export const purchaseSentTwice: Rule = {
     const what = repeated
       .map((group) => {
         const [first] = group.hits
-        const order = transactionId(first)
-        const name = `${vendorName(first.vendor)} ${order ?? first.event}`
-        return `${name} ${group.sends} times`
+        return `${vendorName(first.vendor)} purchase ${group.sends} times`
       })
       .join("; ")
     return fail(id, `the same purchase was sent more than once on one document: ${what}`, evidence)

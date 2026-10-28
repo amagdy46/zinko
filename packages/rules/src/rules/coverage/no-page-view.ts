@@ -1,4 +1,5 @@
 import { count, distinct, documentRef, groupBy, hitRef } from "../../documents.js"
+import { destinationLabel, eventLabel } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { EvidenceRef, Rule } from "../../types.js"
 
@@ -35,8 +36,8 @@ export const noPageView: Rule = {
     ])
     if (evidence === null) return pass(id, "every document with GA4 hits sent a page_view")
     const hits = without.flat()
-    const events = distinct(hits.map((hit) => hit.event)).join(", ")
-    const ids = distinct(hits.map((hit) => hit.destinationId)).join(", ")
+    const events = distinct(hits.map((hit) => eventLabel(hit))).join(", ")
+    const ids = distinct(hits.map((hit) => destinationLabel(hit.destinationId))).join(", ")
     return fail(
       id,
       `${count(documents.length, "document")} sent GA4 events (${events}) to ${ids} without a page_view`,

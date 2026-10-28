@@ -49,9 +49,8 @@ export const tagErrors: Rule = {
       )
     const where = distinct(
       failed.map((request) => {
-        const target = URL.canParse(request.url) ? new URL(request.url) : null
-        const path = target === null ? request.url : `${target.host}${target.pathname}`
-        return `${request.method} ${path} → ${request.status}`
+        const host = URL.canParse(request.url) ? new URL(request.url).host : "an unreadable URL"
+        return `${request.method} ${host} → ${request.status}`
       }),
     ).join(", ")
     return fail(

@@ -1,5 +1,5 @@
 import { consentTimeline } from "../../consent-state.js"
-import { cookieRef, isAdOrAnalyticsCookie, snapshotsLabelled } from "../../cookies.js"
+import { cookieFamily, cookieRef, snapshotsLabelled } from "../../cookies.js"
 import { distinct } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
@@ -32,9 +32,10 @@ export const cookiesWithoutConsent: Rule = {
       return inconclusive(id, `the run has no ${which} cookie snapshot`)
     }
     const found = snapshots.flatMap((snapshot) =>
-      snapshot.cookies
-        .filter((cookie) => isAdOrAnalyticsCookie(cookie.name))
-        .map((cookie) => ({ name: cookie.name, ref: cookieRef(snapshot, cookie) })),
+      snapshot.cookies.flatMap((cookie) => {
+        const family = cookieFamily(cookie.name)
+        return family === null ? [] : [{ name: family, ref: cookieRef(snapshot, cookie) }]
+      }),
     )
     const evidence = nonEmpty(found.map((f) => f.ref))
     if (evidence === null) {

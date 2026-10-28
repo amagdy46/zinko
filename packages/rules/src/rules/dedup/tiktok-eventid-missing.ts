@@ -1,30 +1,9 @@
 import { count, distinct, hitRef } from "../../documents.js"
+import { TIKTOK_STANDARD_EVENTS } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
 const id = "dedup.tiktok-eventid-missing"
-
-/**
- * TikTok's standard events as they appear on the wire: the pixel sends `CompletePayment` as
- * `Purchase`. `Pageview` is left out, as Meta's `PageView` is.
- */
-const STANDARD_EVENTS = new Set([
-  "AddPaymentInfo",
-  "AddToCart",
-  "AddToWishlist",
-  "ClickButton",
-  "CompletePayment",
-  "CompleteRegistration",
-  "Contact",
-  "Download",
-  "InitiateCheckout",
-  "PlaceAnOrder",
-  "Purchase",
-  "Search",
-  "SubmitForm",
-  "Subscribe",
-  "ViewContent",
-])
 
 export const tiktokEventIdMissing: Rule = {
   id,
@@ -41,7 +20,7 @@ export const tiktokEventIdMissing: Rule = {
   evaluate(input) {
     const tiktok = input.hits.filter((hit) => hit.vendor === "tiktok")
     if (tiktok.length === 0) return notApplicable(id, "no TikTok hit was sent")
-    const standard = tiktok.filter((hit) => STANDARD_EVENTS.has(hit.event))
+    const standard = tiktok.filter((hit) => TIKTOK_STANDARD_EVENTS.has(hit.event))
     const missing = standard.filter((hit) => !hit.ids.eventId)
     const evidence = nonEmpty(missing.map(hitRef))
     if (evidence === null) {
