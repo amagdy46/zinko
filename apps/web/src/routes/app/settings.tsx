@@ -11,6 +11,7 @@ const tabs = [
   { to: "/app/settings", label: "Profile" },
   { to: "/app/settings/members", label: "Members" },
   { to: "/app/settings/ai", label: "AI" },
+  { to: "/app/settings/branding", label: "Branding" },
 ] as const
 
 function SettingsLayout() {

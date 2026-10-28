@@ -3,7 +3,8 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root {
+:root,
+.report-paper {
   color-scheme: light;
   --radius: 0.5rem;
   --background: oklch(0.97 0.004 285);
@@ -162,6 +163,51 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-report-accent: var(--report-accent);
+  --color-report-tint: var(--report-tint);
+  --color-report-on-accent: oklch(1 0 0);
+}
+
+/* The report accent presets (mirrored in lib/report-accent.ts); each is at least 4.5:1 on white. */
+.report-paper,
+[data-accent="violet"] {
+  --report-accent: oklch(0.5 0.19 286);
+  --report-tint: oklch(0.96 0.025 286);
+}
+
+[data-accent="blue"] {
+  --report-accent: oklch(0.5 0.17 255);
+  --report-tint: oklch(0.96 0.025 255);
+}
+
+[data-accent="teal"] {
+  --report-accent: oklch(0.5 0.09 195);
+  --report-tint: oklch(0.96 0.025 195);
+}
+
+[data-accent="green"] {
+  --report-accent: oklch(0.48 0.12 155);
+  --report-tint: oklch(0.96 0.025 155);
+}
+
+[data-accent="amber"] {
+  --report-accent: oklch(0.48 0.1 65);
+  --report-tint: oklch(0.96 0.025 65);
+}
+
+[data-accent="red"] {
+  --report-accent: oklch(0.5 0.19 25);
+  --report-tint: oklch(0.96 0.025 25);
+}
+
+[data-accent="pink"] {
+  --report-accent: oklch(0.5 0.18 350);
+  --report-tint: oklch(0.96 0.025 350);
+}
+
+[data-accent="slate"] {
+  --report-accent: oklch(0.45 0.03 260);
+  --report-tint: oklch(0.96 0.01 260);
 }
 
 @layer base {

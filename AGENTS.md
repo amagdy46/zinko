@@ -145,6 +145,11 @@ Zero errors and zero warnings are the bar.
 - To add a rule: (1) add a fixture site in `packages/fixtures/sites.mjs` with the bug, and write its expected result set (rule × scenario × status) in `packages/fixtures/README.md` before the rule exists; (2) write the rule and register it; (3) prove it with `zinko capture <fixture-url> --scenario all --rules --block-vendors` (add `--mobile`, and `--goto` for a journey rule): the output must match the README for the new fixture, and `clean` must stay at its baseline. Paste the command and the result in the PR. No unit tests.
 - Findings and check results are derived rows (`check_result`, `finding`): `persist-<n>` writes a run's check results with its hits, `finish` rewrites the audit's findings from them. Triage (`finding_triage`) is stored apart and never rewritten. Do not give a derived row a random id or `defaultNow()`.
 
+## Report and branding
+
+- `org_branding` (one row per organization, `packages/db/src/report-schema.ts`) holds the agency name, accent, footer and Powered by switch; `server/branding-data.ts` owns `BRANDING_DEFAULTS` and `brandingOf` (the organization's name when no row exists). Only owners and admins save it (`isManager`, checked on the server); any member reads it. Every `report_*` table and `org_branding` reference `organization` with `on delete cascade`, and the workflow never writes them.
+- The accent is one of the eight presets in `lib/report-accent.ts`, selected with a `data-accent` attribute whose variables live in `styles.css` (keep the two in step; each is at least 4.5:1 on white). `.report-paper` re-declares the light tokens so a report stays light in the dark theme. No inline `style`, no custom hex.
+
 ## Realtime
 
 - The realtime extra's generated public room (`Room`, `Realtime`, `useRoom`, `/ws/rooms/*`) was replaced by the audit room; `efforge.jsonc` still lists the old files, leave it alone.

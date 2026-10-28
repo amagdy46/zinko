@@ -42,7 +42,7 @@ Sidebar: organization switcher, Find… (⌘K), Clients, Settings, account menu
 ├── Clients                       list → client → site
 │   └── Site                      history of audits, New audit
 │       └── Audit                 header, then tabs Overview · Runs · Findings · Tag matrix · Hits
-└── Settings                      Profile · Members · AI
+└── Settings                      Profile · Members · AI · Branding
 ```
 
 Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar and closes on navigation. Each page opens with a `PageHeader` (breadcrumb, title, meta line, actions). Tab order is a "Skip to content" link (visible only on focus), the navigation, then `<main id="main">`, which the link focuses.
@@ -78,6 +78,7 @@ Below `md` the sidebar is a left `Sheet` behind a menu button in a thin top bar 
 **Row language.** Clickable rows (run list, hits table, run matrix cells, finding rows) hover with `bg-muted/50`, show a keyboard-focused control with a ring (and the row tint), and when selected use `bg-accent` plus a 2px primary rule on the left (`selectableRow` in `lib/row-style.ts`); finding rows keep their severity rule on the left and mark selection with `bg-accent` and an inset primary ring.
 
 **Audit header on mobile.** Below `sm` the compact header is one row (back chevron, title, status) plus a meta line (open findings, duration) and the "could not finish" pill; the run count and date are hidden. The tab bar scrolls sideways with soft edges.
+**Settings.** Branding (owners and admins edit, members read: agency name 1 to 80 characters, eight accent swatches each with a glyph, a word and its contrast on white, footer text up to 300, "Show Powered by Zinko", a warning when the text looks like an email or phone number, and a live cover preview), Profile, Members (a table with avatar, role select for owners and admins, pending invitations with Copy link, an invite dialog) and AI (provider, model, the key's last four characters, "Save provider", test and remove; an Explanations card with two checkboxes, off by default, "Allow AI explanations" (saved with "Save explanation options") with a disclosure of what is sent and never sent shown while it is on, and "Include page paths in explanations" with a warning that paths can contain names or tokens; read-only for members).
 
 ## Shared building blocks
 
