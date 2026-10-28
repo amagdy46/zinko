@@ -26,7 +26,18 @@ const EXPIRIES = [
   { value: "never", label: "Never", days: null },
 ] as const
 
+/** `null` (Never) is a real answer, so this is a lookup by value, not a fallback on the result. */
+const DAYS: Record<(typeof EXPIRIES)[number]["value"], (typeof EXPIRIES)[number]["days"]> = {
+  "7": 7,
+  "30": 30,
+  "90": 90,
+  never: null,
+}
+
 type Versions = Extract<Awaited<ReturnType<typeof listShares>>, { ok: true }>["value"]
+
+const expiryText = (expiresAt: Date | string | null, timeZone: string | undefined) =>
+  expiresAt === null ? ", never expires" : `, expires ${shortDateTime(expiresAt, timeZone)}`
 
 const STATUS = { active: "Active", expired: "Expired", revoked: "Turned off" } as const
 
@@ -89,7 +100,7 @@ function ShareBody({
       data: {
         auditId,
         label,
-        expiresInDays: EXPIRIES.find((e) => e.value === expiry)?.days ?? 30,
+        expiresInDays: DAYS[expiry],
       },
     })
     setPending(false)
@@ -225,9 +236,7 @@ function ShareBody({
                           <span className="text-muted-foreground">
                             {" "}
                             · {STATUS[l.status]}
-                            {l.expiresAt !== null && l.status === "active"
-                              ? `, expires ${shortDateTime(l.expiresAt, timeZone)}`
-                              : ""}
+                            {l.status === "active" ? expiryText(l.expiresAt, timeZone) : ""}
                             {` · opened ${l.viewCount} ${l.viewCount === 1 ? "time" : "times"}`}
                             {l.lastViewedAt === null
                               ? ""
