@@ -181,14 +181,16 @@ export const versionsOf = (orgId: string, auditId: string) =>
   })
 
 /**
- * Before an organization is deleted: remember the keys of its logo objects in the outbox, replacing
- * what an earlier, abandoned attempt left. Throws (so the deletion does not happen) if it cannot.
+ * Before an organization is deleted: remember the keys of its logo objects in the outbox. It only
+ * adds (a repeat is a no-op) and never clears: a second, concurrent deletion collects after the first
+ * has cascaded the rows away and must not erase what the first recorded. Rows of an abandoned
+ * attempt are inert until the organization is gone, and deleting an object twice is harmless. Throws
+ * (so the deletion does not happen) if it cannot.
  */
 export const collectOrganizationFiles = (orgId: string) =>
   atomically(
     Effect.gen(function* () {
       const { db } = yield* Database
-      yield* db.delete(reportFileCleanup).where(eq(reportFileCleanup.orgId, orgId))
       const branding = yield* db
         .select({ key: orgBranding.logoKey })
         .from(orgBranding)
@@ -199,7 +201,10 @@ export const collectOrganizationFiles = (orgId: string) =>
         .where(eq(reportSnapshot.orgId, orgId))
       const keys = [...new Set([...branding, ...snapshots].flatMap((row) => row.key ?? []))]
       if (keys.length > 0)
-        yield* db.insert(reportFileCleanup).values(keys.map((key) => ({ orgId, key })))
+        yield* db
+          .insert(reportFileCleanup)
+          .values(keys.map((key) => ({ orgId, key })))
+          .onConflictDoNothing()
     }),
   )
 
