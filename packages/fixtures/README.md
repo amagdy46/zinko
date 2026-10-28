@@ -62,6 +62,7 @@ on the visitor's choice; Meta and TikTok load only when marketing is accepted.
 | `ga4-gateway`             | GA4 is configured with `transport_url` set to `<origin>/metrics`, so its hits are `POST /metrics/g/collect?v=2&tid=…&en=…` on the site's own host, the way the Google tag gateway and a first-party server-side GTM endpoint send them. The real gateway's path shape is unconfirmed (see `docs/vision.md`); this fixture stands for the `/g/collect` form. Not a bug: it tests that first-party GA4 is recognised and judged like any other. |
 | `ga4-client-and-server`   | gtag sends GA4 to Google as usual, and a second sender (a plugin or a second container) posts the same `page_view`, and on `/thank-you` the same `purchase` (`T-1001`), to `POST /metrics/g/collect` on the site's own host about 1.2 s after load.                                                                                                                                                                                           |
 | `consent-mode-basic`      | Basic Consent Mode: the consent `default` (all denied) is pushed at load, but the Google tag (`gtag.js`) is not loaded until the visitor accepts analytics or marketing. Before the choice, and after a reject, no Google request is sent. `clean` is the advanced counterpart: its tag loads at once and sends cookieless pings with `gcs=G100`.                                                                                             |
+| `consent-region-default`  | No banner. The consent `default` (all denied) is pushed at load and the Google tag runs at once, then a script pushes `consent update` (all granted) about 3 s later (after the first denied pings) with no visitor choice: the region-based default a site uses to grant consent where the law allows it. The first Google pings say `gcs=G100`, the later ones `G111`.                                                                      |
 
 Other sites keep the query string on internal links (`keepQuery`), so only `lost-gclid` drops it.
 
@@ -184,6 +185,14 @@ Behaviour the rules must cope with, all on `clean`:
 | `ga4-gateway` | `duplicates.client-and-server-ga4` | pass | every page, all four scenarios: every GA4 hit goes to the first-party collector, none to Google |
 | `sgtm-errors` | `duplicates.client-and-server-ga4` | pass | as `ga4-gateway` |
 | `consent-mode-basic` | `consent.mode-classified` | pass | accept, every page: no Google request before the click, the first after it (basic mode). none, reject, gpc: **inconclusive**, a consent default was pushed but the Google tag never ran, which a site without Google tags would also show |
+
+### Changed in v6
+
+`consent.mode-classified` calls a site advanced only when denied is the state it stays in until the visitor chooses. A Google request that says granted, sent in the same document after a denied one and before any consent action (or at all, under none and gpc), means the default was denied and then granted without a choice: **inconclusive** ("Consent was denied by default, then granted without a visitor choice"). Expected for `consent-region-default`: **inconclusive**, every page, all four scenarios (accept and reject: no banner, so the choice cannot be told; none and gpc: the flip). Every other row of the v5 list is unchanged: `clean`, `consent-default-late` and the others stay pass (advanced), `consent-mode-basic` stays pass under accept and inconclusive otherwise, `no-cmp` stays inconclusive.
+
+`consent-region-default`, other rules (no banner, so accept and reject cannot split the run, as `no-cmp`): under accept and reject every consent rule (`consent.cookies-without-consent`, `consent.pixel-without-consent`, `consent.pixel-after-reject`, `consent.google-without-denied-state`, `consent.default-after-tag`) is **inconclusive**, "the banner was not found". Under none and gpc: `consent.cookies-without-consent` **fail** (`_ga`, `_gcl_au`, `_ga_ZINKO00001` set with no choice), `consent.google-without-denied-state` **fail** (the granted hits after the flip count as Google hits with no consent given), `consent.default-after-tag` pass, `consent.pixel-without-consent` pass (no pixel loads), `consent.pixel-after-reject` n.a. `consent.mode-v2-incomplete`: pass. `hygiene.tag-errors`: inconclusive as in the baseline. Everything else as the baseline.
+
+`dedup.tiktok-eventid-missing` pass wording: "No TikTok standard event that needs an event ID was sent" when only TikTok-internal events (`Pageview`, `LandingPageView`, `EnrichAM`) were seen. Status unchanged.
 
 ### Rules added in v5
 

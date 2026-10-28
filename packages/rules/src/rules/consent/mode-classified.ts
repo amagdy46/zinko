@@ -11,8 +11,10 @@ import type { EvidenceRef, Rule } from "../../types.js"
 const id = "consent.mode-classified"
 
 interface Signal {
+  documentId: string
   startedAt: number
   denied: boolean
+  granted: boolean
   ref: EvidenceRef
 }
 
@@ -35,8 +37,11 @@ export const modeClassified: Rule = {
       ...input.hits
         .filter((hit) => isGoogle(hit.vendor))
         .map((hit) => ({
+          documentId: hit.documentId,
           startedAt: hit.startedAt,
           denied: hit.consent.adStorage === "denied" || hit.consent.analyticsStorage === "denied",
+          granted:
+            hit.consent.adStorage === "granted" || hit.consent.analyticsStorage === "granted",
           ref: hitRef(hit),
         })),
       ...input.capture.requests.flatMap((request) => {
@@ -45,8 +50,10 @@ export const modeClassified: Rule = {
           ? []
           : [
               {
+                documentId: request.documentId,
                 startedAt: request.startedAt,
                 denied: consent.adStorage === "denied" || consent.analyticsStorage === "denied",
+                granted: consent.adStorage === "granted" || consent.analyticsStorage === "granted",
                 ref: requestRef(request.id),
               },
             ]
@@ -72,6 +79,22 @@ export const modeClassified: Rule = {
     const denied = before.filter((signal) => signal.denied)
     const evidence = nonEmpty<EvidenceRef>(denied.map((signal) => signal.ref))
     if (evidence !== null) {
+      // Denied is the pre-choice state only if it holds: a granted request later in the same
+      // document, before any action, means a default (often per region) flipped without a choice.
+      const flipped = before.filter((signal) =>
+        denied.some(
+          (first) =>
+            first.documentId === signal.documentId &&
+            first.startedAt < signal.startedAt &&
+            signal.granted,
+        ),
+      )
+      if (flipped.length > 0)
+        return inconclusive(
+          id,
+          "Consent was denied by default, then granted without a visitor choice (a region-based default?)",
+          [...denied, ...flipped].map((signal) => signal.ref),
+        )
       const other = before.length - denied.length
       const note =
         other > 0

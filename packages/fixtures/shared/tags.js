@@ -83,6 +83,18 @@
     }
   }
   if (cfg.googleLoad === "immediate") startGoogle()
+  if (cfg.regionFlip) {
+    setTimeout(
+      () =>
+        gtag("consent", "update", {
+          ad_storage: "granted",
+          analytics_storage: "granted",
+          ad_user_data: "granted",
+          ad_personalization: "granted",
+        }),
+      3000,
+    )
+  }
 
   function runSnippet(src) {
     return new Promise((resolve) => {

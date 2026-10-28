@@ -47,7 +47,7 @@ export const tiktokEventIdMissing: Rule = {
       return pass(
         id,
         standard.length === 0
-          ? "no TikTok standard event other than Pageview was sent"
+          ? "No TikTok standard event that needs an event ID was sent"
           : `${count(standard.length, "TikTok standard event")} carried an event ID`,
       )
     }
