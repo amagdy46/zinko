@@ -41,6 +41,7 @@ export { COOKIE_FAMILY_LABELS, cookieFamily, isAdOrAnalyticsCookie } from "./coo
 export { decodeHits } from "./decode.js"
 export { pushesByDocument } from "./documents.js"
 export { scrubPersonalData } from "./personal-data.js"
+export { RULE_CHANGES, ruleChangedBetween } from "./changes.js"
 
 /**
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
