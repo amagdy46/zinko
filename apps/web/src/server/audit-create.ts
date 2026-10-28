@@ -265,7 +265,12 @@ export const createAudit = (input: CreateAudit) =>
       }
       const pages = yield* normalizePages(input.config.pages, target)
       // the site's declared hosts at creation: the workflow reads this copy, never the live site
-      const config = { ...input.config, pages, measuredHosts: target.measuredHosts }
+      // a re-check follows only hosts the site still declares; any other audit snapshots the whole list
+      const measuredHosts =
+        narrow === undefined
+          ? target.measuredHosts
+          : (input.config.measuredHosts ?? []).filter((host) => target.measuredHosts.includes(host))
+      const config = { ...input.config, pages, measuredHosts }
       const urls = yield* captureUrls(pages, config.clickIds)
       const [created] = yield* db
         .insert(audit)
@@ -295,6 +300,7 @@ export const createAudit = (input: CreateAudit) =>
         scenario: string
         viewport: string
         journey: boolean
+        followHost?: string
       }) => {
         if (narrow === undefined) return "target"
         const key = cellId(cellKeyOf(r, config))
@@ -327,11 +333,8 @@ export const createAudit = (input: CreateAudit) =>
       // after the others: one accept run per declared host that follows a link from the start URL
       const [firstViewport] = viewports
       const crossHostRuns =
-        narrow === undefined &&
-        config.crossHost === true &&
-        startUrl !== undefined &&
-        firstViewport !== undefined
-          ? target.measuredHosts.map((followHost, i) => ({
+        config.crossHost === true && startUrl !== undefined && firstViewport !== undefined
+          ? measuredHosts.map((followHost, i) => ({
               orgId,
               auditId: created.id,
               ordinal: planned.length + i,
@@ -340,7 +343,13 @@ export const createAudit = (input: CreateAudit) =>
               scenario: "accept",
               viewport: firstViewport,
               status: "pending",
-              role: "target",
+              role: roleOf({
+                pageUrl: startUrl,
+                scenario: "accept",
+                viewport: firstViewport,
+                journey: true,
+                followHost,
+              }),
               followHost,
             }))
           : []

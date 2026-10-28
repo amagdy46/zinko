@@ -858,12 +858,26 @@ export interface NarrowPlan {
   dropped: CellKey[]
 }
 
+/** The host a cross-host cell follows a link to, or `undefined` for any other cell. */
+export const followHostOf = (cell: CellKey): string | undefined =>
+  cell.itinerary?.find((step) => step.startsWith("follow "))?.slice("follow ".length)
+
 const narrowedOnce = (
   config: AuditConfig,
   targets: ReadonlyArray<CellKey>,
   bannerDependent: boolean,
+  declared: ReadonlyArray<string>,
 ): AuditConfig | null => {
-  const journey = targets.some((t) => t.itinerary !== null)
+  // a cross-host cell is reproduced by `crossHost`, not by walking the key pages
+  const journey = targets.some((t) => t.itinerary !== null && followHostOf(t) === undefined)
+  const followed = [
+    ...new Set(
+      targets.flatMap((t) => {
+        const host = followHostOf(t)
+        return host === undefined || !declared.includes(host) ? [] : [host]
+      }),
+    ),
+  ]
   const wanted = new Set(targets.map((t) => t.page))
   const pages = journey ? config.pages : config.pages.filter((p) => wanted.has(normalised(p)))
   const [first] = pages
@@ -882,6 +896,8 @@ const narrowedOnce = (
       targets.some((t) => t.injected && t.page === normalised(first)),
     blockVendorRequests: config.blockVendorRequests,
     ...(journey && pages.length > 1 ? { journey: true } : {}),
+    // the hosts a re-check follows are the declared ones among its targets, a snapshot like any audit's
+    ...(followed.length > 0 ? { crossHost: true, measuredHosts: followed } : {}),
   }
 }
 
@@ -890,15 +906,17 @@ const narrowedOnce = (
  * order (the whole list for a journey), click IDs only when the start page is a target that had them,
  * and accept and reject runs beside every `none` target of a banner-dependent rule. The result is
  * checked against `cellsOfConfig`: a target it cannot reproduce is dropped, never silently moved.
+ * A cross-host target is kept only while its host is still one of the site's `declared` hosts.
  */
 export const narrowedConfig = (
   config: AuditConfig,
   targets: ReadonlyArray<CellKey>,
   bannerDependent: boolean,
+  declared: ReadonlyArray<string>,
 ): NarrowPlan | null => {
   let kept = [...targets]
   for (let attempt = 0; attempt < 2; attempt++) {
-    const narrowed = narrowedOnce(config, kept, bannerDependent)
+    const narrowed = narrowedOnce(config, kept, bannerDependent, declared)
     if (narrowed === null) return null
     const produced = new Set(cellsOfConfig(narrowed).map(cellId))
     const reproducible = kept.filter((t) => produced.has(cellId(t)))

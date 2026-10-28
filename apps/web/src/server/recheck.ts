@@ -31,6 +31,7 @@ const planOf = (
       plan.config,
       plan.targets,
       BANNER_DEPENDENT_RULES.includes(data.ruleId),
+      site.measuredHosts,
     )
     let unavailable: string | null = null
     if (site.archivedAt !== null) unavailable = "This site is archived."
@@ -51,6 +52,7 @@ const summaryOf = (planned: Effect.Success<ReturnType<typeof planOf>>) => {
       config.journey === true && config.pages.length > 1
         ? Math.min(config.pages.length - 1, JOURNEY_STEPS)
         : 0,
+    crossHostRuns: config.crossHost === true ? (config.measuredHosts?.length ?? 0) : 0,
   })
   return {
     runs: breakdown.runs,
