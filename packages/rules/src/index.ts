@@ -20,6 +20,7 @@ import { tiktokEventIdMissing } from "./rules/dedup/tiktok-eventid-missing.js"
 import { clientAndServerGa4 } from "./rules/duplicates/client-and-server-ga4.js"
 import { metaLoadedTwice } from "./rules/duplicates/meta-loaded-twice.js"
 import { multipleGa4Ids } from "./rules/duplicates/multiple-ga4-ids.js"
+import { purchaseOnReload } from "./rules/duplicates/purchase-on-reload.js"
 import { purchaseSentTwice } from "./rules/duplicates/purchase-sent-twice.js"
 import { locationMismatch } from "./rules/hygiene/location-mismatch.js"
 import { piiInHits } from "./rules/hygiene/pii-in-hits.js"
@@ -47,7 +48,7 @@ export { RULE_CHANGES, ruleChangedBetween, VOLATILE_RULES } from "./changes.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "7"
+export const RULES_VERSION = "8"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -65,6 +66,7 @@ export const rules: readonly Rule[] = [
   invalidCurrency,
   noPageView,
   purchaseSentTwice,
+  purchaseOnReload,
   multipleGa4Ids,
   metaLoadedTwice,
   metaEventIdMissing,

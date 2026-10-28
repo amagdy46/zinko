@@ -395,3 +395,13 @@ Re-run after the fixes: the README matrix on Playwright (desktop, and mobile for
 3. **First step cut short.** The rule checks the cut-short errors (`JourneyStep`, `Timeout`, `Navigation`, `EngineFailure`) before it returns not applicable for "no later page": a capture with no later document and such an error is could not check ("the run ended before any later page"). Verified on a stored capture with its later documents removed (no error: not applicable; first-step click timeout: could not check). `evaluateRun` already answers could not check for every rule on any run with a non-consent error, which the CLI shows for a missing click selector.
 
 **Known limit (reload guard).** The reload guard validates the committed document immediately before `reload`, but a form the page submits in the few milliseconds between that final check and Chromium starting the reload can still be re-sent. Closing it would need Chromium to refuse the reload itself; it needs a timer within milliseconds of the check, and the workflow only reloads a page it reached with a `goto`.
+
+## Execution status (branch `capture/initiators`: Tasks 4, 9 and 10)
+
+### Task 4
+
+- `RULES_VERSION` is "8" (main was at "7"). 26 rules.
+- **`duplicate-purchase` tracks the order on every load** (`purchaseOnReload: "every-load"`). The plan expected it to fail the rule, but a guarded default would not send the purchase again after a reload, so the fixture gets the same flag as `purchase-reload`. Only `clean` and the other single-purchase sites are guarded.
+- The Ads label is part of the match key with (vendor, destination, transaction id): two conversions of one order under different labels are different conversions.
+- Verified on both engines (`/capture` through the CLI, `--scenario all --rules --block-vendors --goto <site>/thank-you --reload`): `purchase-reload` and `duplicate-purchase` fail in all four scenarios (5 and 7 evidence refs); `clean` pass in all four; `purchase-missing-fields` could not check in all four; `clean --goto /product --reload` not applicable ("no Google purchase was sent before the reload"); `clean` on one page not applicable. The `clean` journey baseline (every other rule, all four scenarios) is identical to the run before the change. A stored `purchase-reload` capture whose second-document destination IDs were edited passes ("not a repeat"), checked offline with `evaluateRun`'s rule on the stored JSON.
+- **Decision 11 (deployed timing) is not done:** no deployed build is available, so the audit form's reload default stays off.

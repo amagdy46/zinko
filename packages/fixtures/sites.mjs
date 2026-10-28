@@ -13,6 +13,7 @@ export const defaults = {
   cleanUrl: false, // true: the query string is removed from the address bar after the consent choice
   adEntry: false,
   gpcEcho: false,
+  purchaseOnReload: "guarded", // "guarded" | "every-load": whether /thank-you tracks its order again when it is reloaded
   purchaseOrderId: true, // false: the GA4 purchase and the Ads conversion carry no transaction_id
   currency: "EUR",
   ga4PageView: true, // false: gtag config sends no page_view
@@ -42,7 +43,8 @@ export const sites = {
   clean: {},
   "meta-before-consent": { meta: "immediate" },
   "tiktok-after-reject": { tiktok: "after-choice" },
-  "duplicate-purchase": { purchase: "twice" },
+  "duplicate-purchase": { purchase: "twice", purchaseOnReload: "every-load" },
+  "purchase-reload": { purchaseOnReload: "every-load" },
   "ga4-batch": { homeBatch: true },
   "consent-default-late": { consentDefault: "late" },
   "lost-gclid": { conversionLinker: false, keepQuery: false, cleanUrl: true },

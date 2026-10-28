@@ -13,6 +13,15 @@
   const trackedPurchase = cfg.purchaseOrderId
     ? purchase
     : { value: purchase.value, currency: purchase.currency }
+  // A thank-you page that remembers the order it tracked (as a correct site does), so a reload of it
+  // sends nothing again; "every-load" is the bug.
+  const orderKey = "zinko-tracked-order"
+  const trackedBefore =
+    cfg.page === "thank-you" &&
+    cfg.purchaseOnReload === "guarded" &&
+    sessionStorage.getItem(orderKey) === (trackedPurchase.transaction_id ?? "(none)")
+  if (cfg.page === "thank-you")
+    sessionStorage.setItem(orderKey, trackedPurchase.transaction_id ?? "(none)")
   const denied = {
     ad_storage: "denied",
     analytics_storage: "denied",
@@ -75,7 +84,7 @@
       gtag("event", "view_item_list", { item_list_id: "featured" })
       gtag("event", "select_promotion", { promotion_id: "P1" })
     }
-    if (cfg.page === "thank-you") {
+    if (cfg.page === "thank-you" && !trackedBefore) {
       gtag("event", "purchase", trackedPurchase)
       gtag("event", "conversion", { send_to: ID.ads + "/ZinkoConv01", ...trackedPurchase })
       if (cfg.purchase === "twice")
@@ -157,7 +166,7 @@
       track("AddToCart", { content_ids: ["SKU-1"], currency: "EUR", value: 49.9 })
       track("AddToCart", { content_ids: ["SKU-2"], currency: "EUR", value: 19.9 })
     }
-    if (cfg.page === "thank-you") {
+    if (cfg.page === "thank-you" && !trackedBefore) {
       track("Purchase", { value: purchase.value, currency: purchase.currency })
     }
   }
@@ -176,7 +185,7 @@
           : { event_id: cfg.page + "-" + event + "-" + documentNonce },
       )
     if (cfg.page === "product") track("ViewContent", { currency: "EUR", value: 49.9 })
-    if (cfg.page === "thank-you") {
+    if (cfg.page === "thank-you" && !trackedBefore) {
       track("CompletePayment", { value: purchase.value, currency: purchase.currency })
     }
   }
