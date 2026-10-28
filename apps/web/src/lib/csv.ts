@@ -1,5 +1,5 @@
-/** A spreadsheet runs a cell as a formula when it starts with one of these. */
-const FORMULA_PREFIX = /^[=+\-@\t\r\n]/
+/** A spreadsheet runs a cell as a formula when it starts with one of these, or with the full-width and small-form variants of = + - @ that some spreadsheets fold to them. */
+const FORMULA_PREFIX = /^[=+\-@\t\r\n\uFF1D\uFF0B\uFF0D\uFF20\u2212\uFE62\uFE63\uFE6B]/
 
 /**
  * One text cell: a leading `'` when it could be read as a formula, then RFC 4180 quoting. Numbers
