@@ -75,8 +75,10 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
             <StatusGlyph meaning="could-not-check" className="mt-0.5" />
             <span>
               Could not check: {count(coverage.unresolvedRules, "rule")}, on{" "}
-              {count(coverage.unresolvedRuns, "run")}. They are left out of the score, never counted
-              as passes.
+              {coverage.unresolvedRuns === null
+                ? "an unrecorded number of runs (this version of the report did not record it)"
+                : count(coverage.unresolvedRuns, "run")}
+              . They are left out of the score, never counted as passes.
             </span>
           </li>
         ) : null}

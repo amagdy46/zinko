@@ -1,8 +1,13 @@
-import { Schema } from "effect"
+import { Data, Effect, Schema } from "effect"
 import { count } from "./format"
 import { ACCENTS } from "./report-accent"
 
-export const REPORT_MODEL_VERSION = 1
+/**
+ * The shape of `ReportModel` as stored in a snapshot. A change to the model bumps this and adds a
+ * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
+ * record that a client may open months later).
+ */
+export const REPORT_MODEL_VERSION = 2
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -108,7 +113,7 @@ export const ReportFinding = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literal(REPORT_MODEL_VERSION),
+  modelVersion: Schema.Literals([1, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -160,7 +165,8 @@ export const ReportModel = Schema.Struct({
       evaluatedRuns: Count,
       totalRuns: Count,
       unresolvedRules: Count,
-      unresolvedRuns: Count,
+      /** Null in a snapshot from model version 1, which did not record it. */
+      unresolvedRuns: Schema.NullOr(Count),
       bannerUncertainRuns: Count,
     }),
     worst: Schema.NullOr(
@@ -226,6 +232,41 @@ export const ReportModel = Schema.Struct({
 })
 
 export const decodeReportModel = Schema.decodeUnknownEffect(ReportModel)
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** Each step turns the JSON stored at version `n` into version `n + 1`. */
+const UPGRADES: Record<number, (json: unknown) => unknown> = {
+  1: (json) => {
+    if (!isRecord(json) || !isRecord(json.summary) || !isRecord(json.summary.coverage)) return json
+    const { summary } = json
+    const { coverage } = json.summary
+    return {
+      ...json,
+      summary: {
+        ...summary,
+        coverage: { ...coverage, unresolvedRuns: coverage.unresolvedRuns ?? null },
+      },
+    }
+  },
+}
+
+export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{
+  version: number
+}> {}
+
+/** Decodes a stored snapshot with the rules of the version it was written under. */
+export const decodeStoredReportModel = Effect.fn("decodeStoredReportModel")(function* (
+  version: number,
+  json: unknown,
+) {
+  if (!Number.isInteger(version) || version < 1 || version > REPORT_MODEL_VERSION)
+    return yield* new UnknownModelVersion({ version })
+  let upgraded = json
+  for (let v = version; v < REPORT_MODEL_VERSION; v++) upgraded = UPGRADES[v]?.(upgraded)
+  return yield* decodeReportModel(upgraded)
+})
 
 export type EvidenceRow = typeof EvidenceRow.Type
 export type ReportModel = typeof ReportModel.Type

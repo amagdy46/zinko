@@ -10,6 +10,7 @@ import { Data, Effect } from "effect"
 import { AREAS, ERROR_TEXT, FAILURE_TEXT, SCENARIOS } from "./audit-labels"
 import { pageIndexOf } from "./page-match"
 import { ACCENTS } from "./report-accent"
+import { REPORT_MODEL_VERSION } from "./report-model"
 import type { DisclosureLevel, EvidenceRow, ReportModel } from "./report-model"
 
 /*
@@ -275,7 +276,7 @@ const under = (prefix: string, table: Record<string, Validator>) =>
  * leaf path that is not listed fails `assertProjected`.
  */
 const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validator>([
-  ["modelVersion", (v) => (v === 1 ? null : "modelVersion")],
+  ["modelVersion", (v) => (v === REPORT_MODEL_VERSION ? null : "modelVersion")],
   ["generatedAt", date],
   ["detail", oneOf("detail", ["standard", "detailed"])],
   ["branding.agencyName", author(80)],
@@ -342,7 +343,7 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["summary.coverage.evaluatedRuns", count],
   ["summary.coverage.totalRuns", count],
   ["summary.coverage.unresolvedRules", count],
-  ["summary.coverage.unresolvedRuns", count],
+  ["summary.coverage.unresolvedRuns", nullable(count)],
   ["summary.coverage.bannerUncertainRuns", count],
   ["summary.worst", absent],
   ["summary.worst.ruleId", ruleId],

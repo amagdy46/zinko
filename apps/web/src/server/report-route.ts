@@ -3,9 +3,9 @@ import { Database } from "@repo/core/Database"
 import { hashShareToken, looksLikeShareToken } from "@repo/core/share-token"
 import { reportShare, reportSnapshot } from "@repo/db"
 import { and, desc, eq, gt, sql } from "drizzle-orm"
-import { Effect, Option } from "effect"
+import { Effect, Option, Predicate, Result } from "effect"
 import { renderNoticePage, renderReportPage } from "@/components/report/public-page"
-import { decodeReportModel } from "@/lib/report-model"
+import { decodeStoredReportModel } from "@/lib/report-model"
 import appCss from "@/styles.css?url"
 import { statusOf } from "./report-share-data"
 import type { WorkerRoute } from "./routes"
@@ -34,6 +34,10 @@ const HTML = { "Content-Type": "text/html; charset=utf-8" }
 
 const page = (status: number, heading: string, agency: string | null = null) =>
   reportResponse(status, renderNoticePage({ stylesheet: appCss, heading, agency }), HTML)
+
+/** The snapshot exists but cannot be shown: never a 500, and the page names only the agency. */
+const unavailable = (agency: string | null) =>
+  page(503, "This report cannot be shown right now.", agency)
 
 const notFound = () => page(404, "This report was not found.")
 
@@ -81,12 +85,22 @@ const document = (token: string, link: Link) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const [snapshot] = yield* db
-      .select({ model: reportSnapshot.model })
+      .select({ model: reportSnapshot.model, modelVersion: reportSnapshot.modelVersion })
       .from(reportSnapshot)
       .where(eq(reportSnapshot.id, link.snapshotId))
       .limit(1)
     if (snapshot === undefined) return notFound()
-    const model = yield* decodeReportModel(snapshot.model).pipe(Effect.orDie)
+    const decoded = yield* decodeStoredReportModel(snapshot.modelVersion, snapshot.model).pipe(
+      Effect.result,
+    )
+    if (Result.isFailure(decoded)) {
+      // Names the cause and the stored version, never the content; the page names only the agency.
+      yield* Effect.logError(
+        `Report snapshot ${link.snapshotId} (model version ${snapshot.modelVersion}) cannot be rendered: ${Predicate.isTagged(decoded.failure, "UnknownModelVersion") ? "unknown model version" : "does not match the model"}`,
+      )
+      return unavailable(link.agency)
+    }
+    const model = decoded.success
     const [newer] = yield* db
       .select({ publishedAt: reportSnapshot.publishedAt })
       .from(reportSnapshot)
@@ -161,10 +175,10 @@ export const reportRoute: WorkerRoute = async (request) => {
         const link = found.value
         if (link.state !== "active") return ended(link.state, link.agency)
         return logoPath === undefined ? yield* document(token, link) : yield* logo(link)
-      }).pipe(Effect.orElseSucceed(() => reportResponse(502, "Report unavailable"))),
+      }).pipe(Effect.orElseSucceed(() => unavailable(null))),
     )
     .catch((error: unknown) => {
       console.error("Report unavailable:", error)
-      return reportResponse(500, "Report unavailable")
+      return unavailable(null)
     })
 }
