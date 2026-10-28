@@ -117,7 +117,11 @@ export function Appendix({ model }: { model: ReportModel }) {
             <thead>
               <tr className="border-b">
                 {RULE_HEADS.map(([head, width]) => (
-                  <th key={head} scope="col" className={`px-2 py-1 font-semibold [overflow-wrap:normal] ${width}`}>
+                  <th
+                    key={head}
+                    scope="col"
+                    className={`px-2 py-1 font-semibold [overflow-wrap:normal] ${width}`}
+                  >
                     {head}
                   </th>
                 ))}

@@ -1,5 +1,4 @@
 import { StatusGlyph } from "@/components/status-glyph"
-import { count } from "@/lib/format"
 import type { ReportModel } from "@/lib/report-model"
 
 type Cell = ReportModel["consent"]["rows"][number]["cells"][number]
