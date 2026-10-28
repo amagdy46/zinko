@@ -34,6 +34,7 @@ Zinko should feel like a professional debugging tool: dense, calm and fast, in t
 | Audit | Queued, Running, Finished (neutral: it says the audit ended, not that the site is fine), Partial, Failed, Not audited |
 | Run | Queued, Running, Captured (a run that loaded), Partial, Failed |
 | An audit without check results | Not evaluated, never shown as clean |
+| Change since the baseline | New, Regressed, Fixed (verified by a re-run; the author's mark stays "Marked fixed"), Unchanged, Verdict changed, Not comparable. Each is a glyph and a word; Fixed reuses the Pass colour, the rest are neutral |
 
 ## Navigation
 

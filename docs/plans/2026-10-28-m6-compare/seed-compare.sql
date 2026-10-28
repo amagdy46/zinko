@@ -9,7 +9,7 @@
 --
 -- What the comparison of CURRENT against BASELINE must show (the 6 flips; every other rule keeps its verdicts):
 --   syn.rule-01, syn.rule-02  fixed          fail on 28 and 30 baseline runs, pass on those runs now; findings become 'inconclusive'
---   syn.rule-03, syn.rule-04  new            baseline: no fail (fail -> pass); now fail on 31 and 39 runs
+--   syn.rule-03, syn.rule-04  regressed*     baseline: no fail (fail -> pass); now fail on 31 and 39 runs. *The OLDER audit is a copy of the unadjusted baseline, so it failed them on the same runs: cell-level history makes them regressed (Task 6), not new
 --   syn.rule-05               regressed      baseline: no fail; now fails on 30 runs; the OLDER audit failed on the same 30 runs
 --   syn.rule-06               verdict changed fails on 34 baseline runs; now those runs are 'inconclusive' (could not check)
 --   tags: SYNTT0032 (TikTok, 5,704 hits in the baseline) is removed; G-SYN000000 (GA4, 5,642 hits) becomes G-SYN000900

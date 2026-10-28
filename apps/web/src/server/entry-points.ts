@@ -22,6 +22,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "audits.rerunAudit": "mutation",
   "audits.setBaseline": "mutation",
   "audits.getAudit": "read",
+  "compare.getComparison": "read",
   "explain.explainFinding": "mutation",
   "explain.getExplanation": "read",
   "report-edit.saveReportEdit": "mutation",

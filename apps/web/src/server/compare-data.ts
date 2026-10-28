@@ -1,0 +1,349 @@
+import { CaptureResult } from "@repo/capture-contract"
+import { AuditConfig } from "@repo/core"
+import { Database } from "@repo/core/Database"
+import { audit, checkResult, run } from "@repo/db"
+import { ruleChangedBetween } from "@repo/rules"
+import { and, desc, eq, inArray, sql } from "drizzle-orm"
+import { Effect, Option, Schema } from "effect"
+import {
+  type AuditRef,
+  type CellRun,
+  type CheckRow,
+  compareAudits,
+  cellKeyOf,
+  type Comparison,
+  type HistoryAudit,
+  type RuleWording,
+  scoreDeltaOf,
+  type Side,
+  type TriageLine,
+} from "@/lib/compare"
+import { healthScore } from "@/lib/health-score"
+import { evaluatedAudit } from "./audit-create"
+import { auditInOrg } from "./audit-data"
+import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
+import { findingsOf } from "./findings-data"
+import { Invalid, isUuid, NotFound } from "./server-fn"
+
+/** How many earlier audits are searched for the last time a new failure was already there. */
+const HISTORY_AUDITS = 10
+const PICKER_AUDITS = 50
+
+const decodeConsent = Schema.decodeUnknownOption(CaptureResult.fields.consent)
+const decodeConfig = Schema.decodeUnknownEffect(AuditConfig)
+const isCheckStatus = Schema.is(Schema.Literals(["pass", "fail", "inconclusive", "not_applicable"]))
+const isSeverity = Schema.is(Schema.Literals(["critical", "warning", "info"]))
+
+/** Why there is no comparison to show. */
+export type NoComparison =
+  | "narrow"
+  | "audit_active"
+  | "audit_failed"
+  | "not_evaluated"
+  | "no_earlier"
+  | "no_baseline"
+
+export interface ComparisonView {
+  /** The earlier evaluated full audits of the site the picker may offer, newest first. */
+  candidates: AuditRef[]
+  /** The stored baseline link, which `against` does not change. */
+  baselineId: string | null
+  empty: NoComparison | null
+  comparison: Comparison | null
+}
+
+const refOf = (row: { id: string; createdAt: Date; status: string }): AuditRef => ({
+  id: row.id,
+  createdAt: row.createdAt.toISOString(),
+  status: row.status,
+})
+
+/** Earlier evaluated full audits of the site, before `thanId` in creation order. */
+const earlierAudits = (orgId: string, siteId: string, thanId: string) =>
+  and(
+    eq(audit.orgId, orgId),
+    eq(audit.siteId, siteId),
+    eq(audit.kind, "full"),
+    inArray(audit.status, ["complete", "partial"]),
+    evaluatedAudit(orgId),
+    sql`(${audit.createdAt}, ${audit.id}) < (select o.created_at, o.id from audit o where o.id = ${thanId})`,
+  )
+
+const cellRunsOf = (orgId: string, auditId: string, config: AuditConfig, withBanner: boolean) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const rows = yield* db
+      .select({
+        id: run.id,
+        pageUrl: run.pageUrl,
+        scenario: run.scenario,
+        viewport: run.viewport,
+        journey: run.journey,
+        consent: run.consent,
+        decoder: run.decoderVersion,
+      })
+      .from(run)
+      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(run.role, "target")))
+    const banners = withBanner ? yield* bannerDetection(orgId, auditId) : new Map()
+    return rows.map((r): CellRun => {
+      const outcome = Option.match(decodeConsent(r.consent), {
+        onNone: () => null,
+        onSome: (consent) => consent.outcome,
+      })
+      return {
+        id: r.id,
+        cell: cellKeyOf(r, config),
+        compat: {
+          consentClass:
+            outcome === "accepted" || outcome === "rejected" ? "applied" : "not_applied",
+          banner: r.scenario === "none" ? (banners.get(r.id) ?? "unknown") : null,
+        },
+        decoder: r.decoder,
+      }
+    })
+  })
+
+const checkRowsOf = (
+  orgId: string,
+  auditIds: ReadonlyArray<string>,
+  ruleIds?: ReadonlyArray<string>,
+) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    if (ruleIds?.length === 0) return []
+    const rows = yield* db
+      .select({
+        runId: checkResult.runId,
+        ruleId: checkResult.ruleId,
+        status: checkResult.status,
+        rulesVersion: checkResult.rulesVersion,
+      })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          inArray(run.auditId, [...auditIds]),
+          eq(run.orgId, orgId),
+          eq(run.role, "target"),
+          eq(checkResult.orgId, orgId),
+          ruleIds === undefined ? undefined : inArray(checkResult.ruleId, [...ruleIds]),
+        ),
+      )
+    return rows.flatMap((r): CheckRow[] =>
+      isCheckStatus(r.status) ? [{ ...r, status: r.status }] : [],
+    )
+  })
+
+/** The stored wording of every rule in the audit: the newest rules version's text. */
+const wordingOf = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const rows = yield* db
+      .select({
+        ruleId: checkResult.ruleId,
+        rulesVersion: checkResult.rulesVersion,
+        title: checkResult.title,
+        severity: checkResult.severity,
+        area: checkResult.area,
+        owner: checkResult.owner,
+      })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(and(eq(run.auditId, auditId), eq(run.orgId, orgId), eq(checkResult.orgId, orgId)))
+      .groupBy(
+        checkResult.ruleId,
+        checkResult.rulesVersion,
+        checkResult.title,
+        checkResult.severity,
+        checkResult.area,
+        checkResult.owner,
+      )
+    const newest = new Map<string, { version: number; wording: RuleWording }>()
+    for (const r of rows) {
+      if (!isSeverity(r.severity)) continue
+      const version = Number(r.rulesVersion)
+      const held = newest.get(r.ruleId)
+      if (held === undefined || version > held.version)
+        newest.set(r.ruleId, {
+          version,
+          wording: { title: r.title, severity: r.severity, area: r.area, owner: r.owner },
+        })
+    }
+    return new Map([...newest].map(([ruleId, { wording }]) => [ruleId, wording]))
+  })
+
+const sideOf = (orgId: string, auditId: string, config: AuditConfig) =>
+  Effect.gen(function* () {
+    const found = yield* findingsOf(orgId, auditId)
+    const runs = yield* cellRunsOf(orgId, auditId, config, true)
+    const checks = yield* checkRowsOf(orgId, [auditId])
+    const wording = yield* wordingOf(orgId, auditId)
+    const triage = new Map(
+      found.findings.map((f): [string, TriageLine] => [
+        f.ruleId,
+        {
+          status: f.triage.status,
+          at: f.triage.updatedAt?.toISOString() ?? null,
+          inheritedFrom:
+            f.triage.inheritedFrom === null
+              ? null
+              : {
+                  auditId: f.triage.inheritedFrom.auditId,
+                  at: f.triage.inheritedFrom.at.toISOString(),
+                },
+        },
+      ]),
+    )
+    const side: Side = { runs, checks, wording, triage }
+    const score = healthScore({
+      findings: found.findings.filter((f) => f.kind === "fail"),
+      uncertainty: found.uncertainty,
+      evaluatedRuns: found.coverage.evaluatedRuns,
+      totalRuns: found.coverage.totalRuns,
+      versions: found.coverage.rulesVersions,
+    })
+    return { side, score }
+  })
+
+/** The earlier audits, each with its cells and the check rows of the rules that may have regressed. */
+const historyOf = (
+  orgId: string,
+  audits: ReadonlyArray<{ id: string; createdAt: Date; config: unknown }>,
+  ruleIds: ReadonlyArray<string>,
+) =>
+  Effect.gen(function* () {
+    if (audits.length === 0 || ruleIds.length === 0) return []
+    const checks = yield* checkRowsOf(
+      orgId,
+      audits.map((a) => a.id),
+      ruleIds,
+    )
+    const { db } = yield* Database
+    const runRows = yield* db
+      .select({ id: run.id, auditId: run.auditId })
+      .from(run)
+      .where(
+        and(
+          inArray(
+            run.auditId,
+            audits.map((a) => a.id),
+          ),
+          eq(run.orgId, orgId),
+          eq(run.role, "target"),
+        ),
+      )
+    const auditOfRun = new Map(runRows.map((r) => [r.id, r.auditId]))
+    const history: HistoryAudit[] = []
+    for (const a of audits) {
+      const config = yield* decodeConfig(a.config).pipe(Effect.orDie)
+      const own = checks.filter((c) => auditOfRun.get(c.runId) === a.id)
+      const runs = (yield* cellRunsOf(orgId, a.id, config, false)).filter((r) =>
+        own.some((c) => c.runId === r.id),
+      )
+      history.push({ auditId: a.id, date: a.createdAt.toISOString(), runs, checks: own })
+    }
+    return history
+  })
+
+/**
+ * The comparison of `auditId` with `againstId` (default: its stored baseline). Both go through the
+ * organization; a missing, foreign, newer, other-site, narrow or unevaluated `against` is a 404.
+ */
+export const comparisonOf = (orgId: string, auditId: string, againstId: string | undefined) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const id = yield* auditInOrg(orgId, auditId)
+    if (againstId === id) return yield* new Invalid({ message: "Choose another audit." })
+    const [current] = yield* db
+      .select()
+      .from(audit)
+      .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (current === undefined) return yield* new NotFound({ message: "Not found" })
+    const candidates = (yield* db
+      .select({ id: audit.id, createdAt: audit.createdAt, status: audit.status })
+      .from(audit)
+      .where(earlierAudits(orgId, current.siteId, id))
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(PICKER_AUDITS)).map(refOf)
+    const view = (empty: NoComparison): ComparisonView => ({
+      candidates,
+      baselineId: current.baselineAuditId,
+      empty,
+      comparison: null,
+    })
+
+    let against = current.baselineAuditId
+    if (againstId !== undefined) {
+      if (!isUuid(againstId)) return yield* new NotFound({ message: "Not found" })
+      const [valid] = yield* db
+        .select({ id: audit.id })
+        .from(audit)
+        .where(and(earlierAudits(orgId, current.siteId, id), eq(audit.id, againstId)))
+        .limit(1)
+      if (valid === undefined) return yield* new NotFound({ message: "Not found" })
+      against = valid.id
+    }
+
+    if (current.kind === "narrow") return view("narrow")
+    if (current.status === "queued" || current.status === "running") return view("audit_active")
+    if (current.status === "failed") return view("audit_failed")
+    const [evaluated] = yield* db
+      .select({ ok: evaluatedAudit(orgId) })
+      .from(audit)
+      .where(eq(audit.id, id))
+    if (evaluated?.ok !== true) return view("not_evaluated")
+    const baselineRef = candidates.find((c) => c.id === against)
+    if (against === null || baselineRef === undefined)
+      return view(candidates.length === 0 ? "no_earlier" : "no_baseline")
+    const [baseline] = yield* db
+      .select({ config: audit.config, createdAt: audit.createdAt })
+      .from(audit)
+      .where(and(eq(audit.id, against), eq(audit.orgId, orgId)))
+      .limit(1)
+    if (baseline === undefined) return yield* new NotFound({ message: "Not found" })
+
+    const now = yield* sideOf(orgId, id, yield* decodeConfig(current.config).pipe(Effect.orDie))
+    const before = yield* sideOf(
+      orgId,
+      against,
+      yield* decodeConfig(baseline.config).pipe(Effect.orDie),
+    )
+    const failsBefore = new Set(
+      before.side.checks.filter((c) => c.status === "fail").map((c) => c.ruleId),
+    )
+    const newFailures = [
+      ...new Set(
+        now.side.checks
+          .filter((c) => c.status === "fail" && !failsBefore.has(c.ruleId))
+          .map((c) => c.ruleId),
+      ),
+    ]
+    const older = yield* db
+      .select({ id: audit.id, createdAt: audit.createdAt, config: audit.config })
+      .from(audit)
+      .where(earlierAudits(orgId, current.siteId, against))
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(HISTORY_AUDITS)
+    const history = yield* historyOf(orgId, older, newFailures)
+
+    const compared = compareAudits({
+      before: before.side,
+      now: now.side,
+      history,
+      bannerDependent: new Set(BANNER_DEPENDENT_RULES),
+      ruleChanged: ruleChangedBetween,
+    })
+    const comparison: Comparison = {
+      now: { id, createdAt: current.createdAt.toISOString(), status: current.status },
+      before: baselineRef,
+      ...compared,
+      score: scoreDeltaOf(before.score, now.score, compared.comparability),
+    }
+    return {
+      candidates,
+      baselineId: current.baselineAuditId,
+      empty: null,
+      comparison,
+    } satisfies ComparisonView
+  })
