@@ -261,30 +261,46 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       .where(and(eq(audit.id, id), eq(audit.orgId, orgId)))
       .limit(1)
     if (current === undefined) return yield* new NotFound({ message: "Not found" })
-    const candidates = (yield* db
+    const newest = yield* db
       .select({ id: audit.id, createdAt: audit.createdAt, status: audit.status })
       .from(audit)
       .where(earlierAudits(orgId, current.siteId, id))
       .orderBy(desc(audit.createdAt), desc(audit.id))
-      .limit(PICKER_AUDITS)).map(refOf)
+      .limit(PICKER_AUDITS)
+
+    // The selected baseline is validated on its own, not found in the capped picker list: an older
+    // baseline (stored or `?against=`) is still valid and joins the picker.
+    let against = current.baselineAuditId
+    if (againstId !== undefined) {
+      if (!isUuid(againstId)) return yield* new NotFound({ message: "Not found" })
+      against = againstId
+    }
+    const selected =
+      against === null
+        ? undefined
+        : (yield* db
+            .select({
+              id: audit.id,
+              createdAt: audit.createdAt,
+              status: audit.status,
+              config: audit.config,
+            })
+            .from(audit)
+            .where(and(earlierAudits(orgId, current.siteId, id), eq(audit.id, against)))
+            .limit(1))[0]
+    if (againstId !== undefined && selected === undefined)
+      return yield* new NotFound({ message: "Not found" })
+    const picker = [...newest]
+    if (selected !== undefined && !picker.some((c) => c.id === selected.id)) picker.push(selected)
+    const candidates = picker
+      .toSorted((x, y) => y.createdAt.getTime() - x.createdAt.getTime() || (x.id < y.id ? 1 : -1))
+      .map(refOf)
     const view = (empty: NoComparison): ComparisonView => ({
       candidates,
       baselineId: current.baselineAuditId,
       empty,
       comparison: null,
     })
-
-    let against = current.baselineAuditId
-    if (againstId !== undefined) {
-      if (!isUuid(againstId)) return yield* new NotFound({ message: "Not found" })
-      const [valid] = yield* db
-        .select({ id: audit.id })
-        .from(audit)
-        .where(and(earlierAudits(orgId, current.siteId, id), eq(audit.id, againstId)))
-        .limit(1)
-      if (valid === undefined) return yield* new NotFound({ message: "Not found" })
-      against = valid.id
-    }
 
     if (current.kind === "narrow") return view("narrow")
     if (current.status === "queued" || current.status === "running") return view("audit_active")
@@ -294,15 +310,10 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       .from(audit)
       .where(eq(audit.id, id))
     if (evaluated?.ok !== true) return view("not_evaluated")
-    const baselineRef = candidates.find((c) => c.id === against)
-    if (against === null || baselineRef === undefined)
-      return view(candidates.length === 0 ? "no_earlier" : "no_baseline")
-    const [baseline] = yield* db
-      .select({ config: audit.config, createdAt: audit.createdAt })
-      .from(audit)
-      .where(and(eq(audit.id, against), eq(audit.orgId, orgId)))
-      .limit(1)
-    if (baseline === undefined) return yield* new NotFound({ message: "Not found" })
+    if (selected === undefined) return view(candidates.length === 0 ? "no_earlier" : "no_baseline")
+    const baselineRef = refOf(selected)
+    const baseline = selected
+    against = selected.id
 
     const now = yield* sideOf(orgId, id, yield* decodeConfig(current.config).pipe(Effect.orDie))
     const before = yield* sideOf(
