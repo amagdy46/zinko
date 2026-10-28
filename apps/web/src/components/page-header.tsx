@@ -50,7 +50,9 @@ export function PageHeader({
       )}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight wrap-break-word">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight wrap-break-word sm:text-2xl">
+            {title}
+          </h1>
           {description && (
             <div className="max-w-prose text-sm text-muted-foreground">{description}</div>
           )}

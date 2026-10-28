@@ -74,6 +74,7 @@ function OverviewScreen() {
     return (
       <EmptyState
         title="Not evaluated"
+        dashed
         description="No run of this audit has check results: it ran before Zinko checked rules, or none of its runs was saved. Nothing can be said about its tracking, and it is not clean."
       />
     )

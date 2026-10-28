@@ -107,6 +107,11 @@ function Clients() {
         <EmptyState
           title="Add your first client"
           description="Group the sites you audit for one customer, then run your first audit."
+          steps={[
+            "Add a client, then a site address.",
+            "Start an audit: Zinko loads the site, accepts or rejects the banner and records every tag.",
+            "Read the findings with the evidence behind each one.",
+          ]}
           action={<Button onClick={() => setOpen(true)}>New client</Button>}
         />
       ) : null}

@@ -5,8 +5,9 @@ import { MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
-import { StatusBadge } from "@/components/status-badge"
+import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { PageHeader } from "@/components/page-header"
+import { SectionHeading } from "@/components/section-heading"
 import { EmptyState } from "@/components/empty-state"
 import { FindingCounts } from "@/components/first-run"
 import { Badge } from "@/components/ui/badge"
@@ -210,7 +211,7 @@ function SitePage() {
         returnFocus={menuButton}
         onConfirm={() => leave(deleteSite)}
       />
-      <h2 className="text-lg font-medium">Audits</h2>
+      <SectionHeading title="Audits" />
       {audits.length === 0 ? (
         <EmptyState
           title="No audits yet"
@@ -251,7 +252,7 @@ function SitePage() {
                   </Link>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={a.status} />
+                  <StatusBadge status={toBadgeStatus(a.status)} />
                 </TableCell>
                 <TableCell className="tabular-nums">
                   {a.runs.finished} of {a.runs.total}
