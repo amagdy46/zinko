@@ -287,6 +287,15 @@ function SitePage() {
                   <AuditFindings audit={a} />
                 </TableCell>
                 <TableCell className="text-right">
+                  {a.hasBaseline ? (
+                    <Link
+                      to="/app/audits/$auditId/compare"
+                      params={{ auditId: a.id }}
+                      className="relative inline-flex h-8 items-center rounded-sm px-2 text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    >
+                      Compare
+                    </Link>
+                  ) : null}
                   {a.kind === "full" && (a.status === "complete" || a.status === "partial") ? (
                     <Button
                       variant="ghost"

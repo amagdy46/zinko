@@ -5,6 +5,7 @@ import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
+import { briefingOf } from "./compare-data"
 import { findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { requireSession } from "./require-session"
@@ -164,7 +165,25 @@ export const getOverview = createServerFn({ method: "GET" })
           startUrl,
           reasonOf: runReason,
         })
+        const briefing = yield* briefingOf(orgId, auditId)
+        const [self] = yield* db
+          .select({ kind: audit.kind, ruleId: audit.narrowRuleId })
+          .from(audit)
+          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+        const rechecked = findings.find((f) => f.ruleId === self?.ruleId)
+        // a re-check's result: how many of the runs it re-checked still fail the check
+        const recheck =
+          self?.kind === "narrow" && self.ruleId !== null
+            ? {
+                ruleId: self.ruleId,
+                title: rechecked?.title ?? null,
+                failingRuns: rechecked?.failingRuns ?? 0,
+                runs: coverage.totalRuns,
+              }
+            : null
         return {
+          briefing,
+          recheck,
           runHealth: summary.runHealth,
           scoreCoverage: {
             totalRuns: coverage.totalRuns,

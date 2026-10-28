@@ -161,7 +161,8 @@ export const hit = pgTable(
   (t) => [
     primaryKey({ columns: [t.runId, t.requestId, t.batchIndex] }),
     index("hit_run_at_idx").on(t.runId, t.at, t.requestId, t.batchIndex),
-    index("hit_run_vendor_event_idx").on(t.runId, t.vendor, t.event),
+    // covers the tag scans (distinct tags per run) without visiting the table
+    index("hit_run_vendor_event_idx").on(t.runId, t.vendor, t.destinationId, t.event, t.orgId),
   ],
 )
 

@@ -21,6 +21,8 @@ import {
   type TriageLine,
 } from "@/lib/compare"
 import { healthScore } from "@/lib/health-score"
+import { changesBriefing } from "@/lib/compare-text"
+import { vendorName } from "@/lib/tag-matrix"
 import { diffTags, type TagRun, type TagTriple } from "@/lib/tag-diff"
 import { evaluatedAudit } from "./audit-create"
 import { storedCells } from "./cell-key"
@@ -551,4 +553,21 @@ export const recheckPlanOf = (
       config,
       targets: recheckTargets({ before: baseline, now }, ruleId),
     }
+  })
+
+/**
+ * The "What changed" lines of an audit against its stored baseline: null with no baseline, for a
+ * re-check, or while the audit has no results to compare. The tag lines are the tags that no longer
+ * fire on any run checked completely in both audits.
+ */
+export const briefingOf = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const view = yield* comparisonOf(orgId, auditId, undefined)
+    const { comparison } = view
+    if (comparison === null) return null
+    const tags = yield* tagDiffOf(orgId, auditId, comparison.before.id)
+    const gone = tags.changes
+      .filter((c) => c.change === "disappeared" && c.cellsAffected === c.cellsCompared)
+      .map((c) => `${vendorName(c.vendor)} ${c.destinationId}`)
+    return { since: comparison.before.createdAt, lines: changesBriefing(comparison, gone) }
   })

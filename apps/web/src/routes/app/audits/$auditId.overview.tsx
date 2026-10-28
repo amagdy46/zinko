@@ -20,6 +20,7 @@ import {
   tooLittleCaptured,
 } from "@/lib/health-score"
 import { vendorName } from "@/lib/tag-matrix"
+import { Briefing, RecheckResult } from "@/components/compare/briefing"
 import { getOverview } from "@/server/overview"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
@@ -60,6 +61,7 @@ function OverviewScreen() {
     scoreCoverage,
     open,
   } = Route.useLoaderData()
+  const { briefing, recheck } = Route.useLoaderData()
   if (status === "queued" || status === "running")
     return (
       <p className="text-sm text-muted-foreground" data-testid="overview-running">
@@ -99,6 +101,10 @@ function OverviewScreen() {
         auditId={audit.id}
         worst={worst}
       />
+      {briefing === null ? null : (
+        <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
+      )}
+      {recheck === null ? null : <RecheckResult {...recheck} />}
       <Caveats
         auditId={audit.id}
         runs={runs}

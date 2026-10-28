@@ -2,6 +2,7 @@ import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lucide-react"
+import { ChangeGlyph } from "@/components/change-badge"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { SeverityMark } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
@@ -22,6 +23,9 @@ import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { CHANGE_WORDS } from "@/lib/compare-text"
+import type { ChangeState } from "@/lib/compare"
+import { getFindingChips } from "@/server/compare"
 import { listFindings } from "@/server/findings"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
@@ -88,8 +92,32 @@ function useBelowLg() {
   return below
 }
 
+interface Chip {
+  state: ChangeState
+  low: boolean
+}
+
+/** How each finding changed since the baseline; fetched after the list is on screen. */
+function useChips(auditId: string) {
+  const [chips, setChips] = useState<ReadonlyMap<string, Chip>>(new Map())
+  useEffect(() => {
+    let current = true
+    getFindingChips({ data: { auditId } }).then(
+      (found) => {
+        if (current) setChips(new Map(found.map((c) => [c.ruleId, c])))
+      },
+      (error: unknown) => console.warn("The change chips could not be loaded", error),
+    )
+    return () => {
+      current = false
+    }
+  }, [auditId])
+  return chips
+}
+
 function FindingsScreen() {
   const { audit, runs } = auditRoute.useLoaderData()
+  const chips = useChips(audit.id)
   const { status, coverage, findings } = Route.useLoaderData()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
@@ -273,7 +301,11 @@ function FindingsScreen() {
                       <ul>
                         {rows.map((row) => (
                           <li key={row.ruleId}>
-                            <FindingItem row={row} selected={row.ruleId === selected?.ruleId} />
+                            <FindingItem
+                              row={row}
+                              selected={row.ruleId === selected?.ruleId}
+                              chip={chips.get(row.ruleId)}
+                            />
                           </li>
                         ))}
                       </ul>
@@ -302,7 +334,11 @@ function FindingsScreen() {
                     <ul>
                       {visibleUnchecked.map((row) => (
                         <li key={row.ruleId}>
-                          <FindingItem row={row} selected={row.ruleId === selected?.ruleId} />
+                          <FindingItem
+                            row={row}
+                            selected={row.ruleId === selected?.ruleId}
+                            chip={chips.get(row.ruleId)}
+                          />
                         </li>
                       ))}
                     </ul>
@@ -590,7 +626,15 @@ function EmptyList({
   )
 }
 
-function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) {
+function FindingItem({
+  row,
+  selected,
+  chip,
+}: {
+  row: FindingRow
+  selected: boolean
+  chip: Chip | undefined
+}) {
   const failing = row.kind === "fail"
   return (
     <Link
@@ -610,10 +654,19 @@ function FindingItem({ row, selected }: { row: FindingRow; selected: boolean }) 
       {failing ? null : <StatusGlyph meaning="could-not-check" className="mt-0.5" />}
       <span className="min-w-0 flex-1">
         <span className="block font-medium">{failing ? row.title : row.checkTitle}</span>
-        <span className="block text-xs text-muted-foreground">
-          {failing
-            ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}`
-            : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
+        <span className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+          <span className="truncate">
+            {failing
+              ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}`
+              : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
+          </span>
+          {chip === undefined ? null : (
+            <span className="flex shrink-0 items-center gap-1 text-foreground">
+              <ChangeGlyph state={chip.state} className="size-3" />
+              {CHANGE_WORDS[chip.state]}
+              {chip.low ? <span className="text-muted-foreground">(low confidence)</span> : null}
+            </span>
+          )}
         </span>
         {isLocalLimit(row) ? (
           <span className="block text-xs text-muted-foreground">

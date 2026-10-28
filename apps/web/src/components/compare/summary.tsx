@@ -1,12 +1,7 @@
 import { ChangeGlyph } from "@/components/change-badge"
 import type { ChangeState, Comparison } from "@/lib/compare"
-import { CHANGE_ORDER, CHANGE_WORDS } from "@/lib/compare-text"
+import { CHANGE_ORDER, CHANGE_WORDS, scoreSentence } from "@/lib/compare-text"
 import { cn } from "@/lib/utils"
-
-const deltaWord = (delta: number) => {
-  if (delta === 0) return "no change"
-  return delta > 0 ? `+${delta}` : `\u2212${Math.abs(delta)}`
-}
 
 /** The six counts as filter buttons, and the score line under them. */
 export function CompareSummary({
@@ -19,13 +14,7 @@ export function CompareSummary({
   onSelect: (state: ChangeState | undefined) => void
 }) {
   const { score, counts } = comparison
-  let scoreText = "Neither audit has a score."
-  if (score.before !== null && score.now !== null) {
-    scoreText =
-      score.delta === null
-        ? `Score ${score.before} before, ${score.now} now. No change is shown: ${score.deltaWhyNot?.replace(/\.$/, "").toLowerCase()}.`
-        : `Score ${score.before} to ${score.now} (${deltaWord(score.delta)}).`
-  }
+  const scoreText = scoreSentence(score)
   return (
     <div className="space-y-3">
       <ul

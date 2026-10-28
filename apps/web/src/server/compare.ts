@@ -41,3 +41,26 @@ export const getTagDiff = createServerFn({ method: "GET" })
       }),
     ),
   )
+
+/**
+ * The change chips of the Findings tab: for each finding that changed since the stored baseline, its
+ * state and whether it is a low-confidence one. Loaded after the list is on screen.
+ */
+export const getFindingChips = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ auditId: Schema.String })))
+  .handler(({ context, data }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const { comparison } = yield* comparisonOf(orgId, data.auditId, undefined)
+        return (comparison?.findings ?? [])
+          .filter((f) => f.state !== "unchanged" && f.state !== "fixed")
+          .map((f) => ({
+            ruleId: f.ruleId,
+            state: f.state,
+            low: f.confidence.level === "low",
+          }))
+      }),
+    ),
+  )

@@ -534,6 +534,7 @@ export const getSite = createServerFn({ method: "GET" })
               id: a.id,
               kind: a.kind,
               narrowRuleId: a.narrowRuleId,
+              hasBaseline: a.baselineAuditId !== null,
               status: a.status,
               error: a.error,
               createdAt: a.createdAt,

@@ -210,3 +210,76 @@ export const confirmationLine = (f: FindingChange) => {
   if (c.state === "not_repeated") return `Did not repeat when re-checked: ${of}.`
   return `Re-check incomplete: ${of} could be compared.`
 }
+
+const deltaWord = (delta: number) => {
+  if (delta === 0) return "no change"
+  return delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`
+}
+
+/** "Score 72 to 60 (−12)", or both scores and why no change is shown. */
+export const scoreSentence = (score: Comparison["score"]) => {
+  if (score.before === null || score.now === null) return "Neither audit has a score."
+  if (score.delta === null)
+    return `Score ${score.before} before, ${score.now} now. No change is shown: ${score.deltaWhyNot?.replace(/\.$/, "").toLowerCase()}.`
+  return `Score ${score.before} to ${score.now} (${deltaWord(score.delta)}).`
+}
+
+/** An uncertain change says so; one a re-check did not repeat says that instead. */
+const qualified = (f: FindingChange) => {
+  if (f.confirmation?.state === "not_repeated") return " (did not repeat on re-check)"
+  if (f.confirmation?.state === "incomplete") return " (re-check incomplete)"
+  if (f.confidence.level === "low" && f.confirmation?.state !== "repeated")
+    return " (may be a flaky result; not repeated on re-check)"
+  return ""
+}
+
+const titles = (findings: ReadonlyArray<FindingChange>, shown = 2) => {
+  const named = findings.slice(0, shown).map((f) => `${f.title}${qualified(f)}`)
+  const rest = findings.length - named.length
+  return `${named.join("; ")}${rest > 0 ? `; and ${rest} more` : ""}`
+}
+
+const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" } as const
+
+/**
+ * At most six deterministic lines for the top of a re-run's Overview: regressions, new critical and
+ * warning findings, fixes, tags that stopped firing, what could not be compared, then the counts and
+ * the score. Built only from the comparison and stored wording; `tagsGone` are labels such as
+ * "TikTok ZINKOTT0001" that no longer fire on any run checked in both audits.
+ */
+export const changesBriefing = (c: Comparison, tagsGone: ReadonlyArray<string>): string[] => {
+  const of = (state: ChangeState) => c.findings.filter((f) => f.state === state)
+  const lines: string[] = []
+  const regressed = of("regressed")
+  if (regressed.length > 0)
+    lines.push(
+      `${count(regressed.length, "finding")} came back after being absent: ${titles(regressed)}.`,
+    )
+  const fresh = of("new").filter((f) => f.severity !== "info")
+  if (fresh.length > 0) {
+    const split = (["critical", "warning"] as const)
+      .map((s) => [s, fresh.filter((f) => f.severity === s).length] as const)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `${n} ${SEVERITY_WORD[s]}`)
+      .join(", ")
+    lines.push(`New: ${split}. ${titles(fresh)}.`)
+  }
+  const changedVerdict = of("verdict_changed")
+  if (changedVerdict.length > 0)
+    lines.push(`Could not check or can be checked now: ${titles(changedVerdict)}.`)
+  const fixed = of("fixed")
+  if (fixed.length > 0) lines.push(`Fixed, verified by this re-run: ${titles(fixed)}.`)
+  if (tagsGone.length > 0)
+    lines.push(
+      `${tagsGone.slice(0, 3).join(", ")}${tagsGone.length > 3 ? ` and ${tagsGone.length - 3} more` : ""} no longer ${tagsGone.length === 1 ? "fires" : "fire"} on any page checked in both audits.`,
+    )
+  const notComparable = of("not_comparable")
+  if (notComparable.length > 0)
+    lines.push(
+      `Could not compare ${count(notComparable.length, "check")}: a check changed between rules versions, or not every run that failed was checked again.`,
+    )
+  lines.push(
+    `${count(c.counts.unchanged, "finding")} unchanged. ${scoreSentence(c.score)} Both scores use score version ${c.score.scoreVersion}.`,
+  )
+  return lines.slice(0, 6)
+}
