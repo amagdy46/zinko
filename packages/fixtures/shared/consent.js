@@ -3,6 +3,8 @@
 setTimeout(() => runBanner(), window.zinkoConfig.cmpDelay)
 
 function runBanner() {
+  // consent-not-persisted: the previous document's choice is forgotten before the library reads it
+  if (!window.zinkoConfig.consentPersist) document.cookie = "cc_cookie=; Max-Age=0; path=/"
   window.CookieConsent.run({
     // headless captures set navigator.webdriver; the banner must still show
     hideFromBots: false,
@@ -14,7 +16,13 @@ function runBanner() {
     guiOptions: {
       consentModal: { layout: "box", position: "bottom right" },
     },
-    onConsent: () => reportConsent(),
+    // onConsent also fires on every load while a stored choice is valid; onFirstConsent only once
+    onFirstConsent: () => {
+      if (window.zinkoConfig.consentRestore === "never") reportConsent()
+    },
+    onConsent: () => {
+      if (window.zinkoConfig.consentRestore === "update") reportConsent()
+    },
     onChange: () => reportConsent(),
     language: {
       default: "en",
@@ -47,6 +55,6 @@ function runBanner() {
 function reportConsent() {
   window.zinkoConsent(
     window.CookieConsent.acceptedCategory("analytics"),
-    window.CookieConsent.acceptedCategory("marketing"),
+    window.zinkoConfig.acceptGrants === "all" && window.CookieConsent.acceptedCategory("marketing"),
   )
 }

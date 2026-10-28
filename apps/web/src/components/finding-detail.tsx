@@ -1087,6 +1087,12 @@ function EvidenceView({
           ["url", evidence.document.url],
           ["title", evidence.document.title ?? "-"],
           ["started", `${evidence.document.startedAt} ms`],
+          ...(evidence.document.navigation === undefined
+            ? []
+            : [["reached by", evidence.document.navigation] as const]),
+          ...(evidence.document.banner === undefined
+            ? []
+            : [["banner", evidence.document.banner] as const]),
           ...evidence.document.redirects.map((hop, i) => [`redirect ${i + 1}`, hop] as const),
         ]}
       />

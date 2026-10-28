@@ -8,6 +8,7 @@ import { defaultAfterTag } from "./rules/consent/default-after-tag.js"
 import { googleWithoutDeniedState } from "./rules/consent/google-without-denied-state.js"
 import { modeClassified } from "./rules/consent/mode-classified.js"
 import { modeV2Incomplete } from "./rules/consent/mode-v2-incomplete.js"
+import { notPersistedAcrossNavigation } from "./rules/consent/not-persisted-across-navigation.js"
 import { pixelAfterReject } from "./rules/consent/pixel-after-reject.js"
 import { pixelWithoutConsent } from "./rules/consent/pixel-without-consent.js"
 import { invalidCurrency } from "./rules/coverage/invalid-currency.js"
@@ -45,7 +46,7 @@ export { scrubPersonalData } from "./personal-data.js"
  * Stored with every check result, so results from older rules can be told apart. Raise it when a
  * released rule set changes: a rule added or removed, or a verdict that can differ for the same run.
  */
-export const RULES_VERSION = "6"
+export const RULES_VERSION = "7"
 
 export const rules: readonly Rule[] = [
   cookiesWithoutConsent,
@@ -55,6 +56,7 @@ export const rules: readonly Rule[] = [
   defaultAfterTag,
   modeV2Incomplete,
   modeClassified,
+  notPersistedAcrossNavigation,
   cookieMissing,
   lostOnRedirect,
   lostAcrossNavigation,
