@@ -5,18 +5,11 @@ import { orgBranding } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { eq } from "drizzle-orm"
 import { Effect } from "effect"
-import { brandingOf } from "./branding-data"
+import { brandingOf, sha256Hex } from "./branding-data"
 import { requireSession } from "./require-session"
 import { Forbidden, Invalid, isManager, membership, respond } from "./server-fn"
 
 const LOGO_MAX_BYTES = 512 * 1024
-
-const sha256Hex = (bytes: Uint8Array<ArrayBuffer>) =>
-  Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)).pipe(
-    Effect.map((digest) =>
-      [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
-    ),
-  )
 
 const deleteQuietly = (key: string | null) =>
   key === null

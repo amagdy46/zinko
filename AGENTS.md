@@ -198,3 +198,6 @@ Zero errors and zero warnings are the bar.
 - `organization({ sendInvitationEmail })` in `auth.ts` calls `invitation-email.ts`, which emails the `/accept-invite/<id>` link through the `Mailer`. A failed send is logged and does not fail the invitation; the link is still shown to the inviter.
 
 <!-- efforge:agents -->
+
+- A published version is a frozen record, not a derived row: `report_snapshot` (surrogate id, `defaultNow()`), written only by `publishReportData` (`server/report-publish-data.ts`) under `select ... for update` on the audit row. Version numbers come from `audit.report_version_seq`, which is raised there and never lowered. `publish` refuses while `buildReport` reports `transientEvidenceFailures` and copies the logo from `built.logo` (digest verified), never from a fresh branding read. Deleting a version (`deleteSnapshot`: owners, admins and the publisher) deletes the row, then its logo copy.
+- Logo objects are not covered by foreign keys. Organization deletion goes through `organizationHooks` in `auth.ts`: `collectOrganizationFiles` (before) writes the keys to `report_file_cleanup`, `purgeOrganizationFiles` (after) deletes them and drains rows of organizations that no longer exist. Keep the drizzle adapter's `transaction: true` in `auth-database.ts`.

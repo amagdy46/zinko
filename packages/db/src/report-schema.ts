@@ -1,4 +1,15 @@
-import { boolean, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core"
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core"
 import { organization } from "./auth-schema.ts"
 import { audit } from "./audit-schema.ts"
 
@@ -67,4 +78,46 @@ export const reportFindingEdit = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   },
   (t) => [primaryKey({ columns: [t.auditId, t.ruleId] })],
+)
+
+/**
+ * A frozen report, written by publishing: a record of a human act, so a surrogate id and
+ * `defaultNow()` are fine. `version` comes from `audit.report_version_seq` and is never reused.
+ */
+export const reportSnapshot = pgTable(
+  "report_snapshot",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    orgId: text("org_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    auditId: uuid("audit_id")
+      .notNull()
+      .references(() => audit.id, { onDelete: "cascade" }),
+    version: integer().notNull(),
+    modelVersion: integer("model_version").notNull(),
+    /** The public `ReportModel`, validated on write and on read. */
+    model: jsonb().notNull(),
+    publicationHash: text("publication_hash").notNull(),
+    /** A copy of the logo under `reports/<orgId>/<snapshotId>/logo`; no other row points at it. */
+    logoKey: text("logo_key"),
+    logoType: text("logo_type"),
+    logoSha256: text("logo_sha256"),
+    publishedBy: text("published_by").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [unique().on(t.auditId, t.version), index().on(t.orgId, t.auditId)],
+)
+
+/**
+ * Logo objects of an organization about to be deleted. No foreign key on purpose: it must outlive
+ * the cascade, because Better Auth's after-hook runs when the organization's rows are gone.
+ */
+export const reportFileCleanup = pgTable(
+  "report_file_cleanup",
+  {
+    orgId: text("org_id").notNull(),
+    key: text().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.orgId, t.key] })],
 )

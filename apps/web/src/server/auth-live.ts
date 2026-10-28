@@ -1,10 +1,14 @@
+import { Storage } from "@repo/core"
 import { Auth, Unauthorized } from "@repo/core/Auth"
+import { Database } from "@repo/core/Database"
 import { getRequestHeaders } from "@tanstack/react-start/server"
 import { Config, Context, Effect, Layer, Option, Redacted } from "effect"
 import { WorkerConfig } from "effect-cf"
 import { type AuthInstance, makeAuth } from "./auth"
 import { AuthDatabase, AuthDatabaseLayer } from "./auth-database"
 import { WorkerEnvLive } from "./cloudflare"
+import { DatabaseLive } from "./database-live"
+import { StorageLive } from "./storage"
 
 /** The Better Auth instance; `/api/auth/*` is served from it (see auth-route.ts). */
 export class BetterAuth extends Context.Service<BetterAuth, AuthInstance>()("BetterAuth") {}
@@ -19,14 +23,32 @@ const BetterAuthLive = Layer.effect(
       baseURL: Config.option(Config.String("BETTER_AUTH_URL")).parse(provider),
       local: Config.option(Config.String("ALLOW_PRIVATE_SITES")).parse(provider),
     })
+    const services = yield* Effect.context<Database | Storage>()
+    const run = Effect.runPromiseWith(services)
     return makeAuth({
+      organizationFiles: {
+        // Imported when needed: report-publish-data reaches server-fn, which reaches this module's layer.
+        collect: async (organizationId) => {
+          const { collectOrganizationFiles } = await import("./report-publish-data")
+          await run(collectOrganizationFiles(organizationId))
+        },
+        purge: async () => {
+          const { purgeOrganizationFiles } = await import("./report-publish-data")
+          await run(purgeOrganizationFiles)
+        },
+      },
       database,
       secret: Redacted.value(secret),
       baseURL: Option.getOrUndefined(Option.filter(baseURL, (url) => url !== "")),
       local: Option.contains(local, "true"),
     })
   }),
-).pipe(Layer.provide(AuthDatabaseLayer), Layer.provide(WorkerEnvLive))
+).pipe(
+  Layer.provide(AuthDatabaseLayer),
+  Layer.provide(DatabaseLive),
+  Layer.provide(StorageLive),
+  Layer.provide(WorkerEnvLive),
+)
 
 const unauthorized = () => new Unauthorized({ message: "Not signed in" })
 

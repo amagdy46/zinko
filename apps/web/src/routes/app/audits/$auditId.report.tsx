@@ -7,6 +7,7 @@ import {
   EditSummary,
   FindingActions,
 } from "@/components/report/consultant-controls"
+import { Versions } from "@/components/report/versions"
 import { ReportView } from "@/components/report/report-view"
 import { Button } from "@/components/ui/button"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -35,13 +36,12 @@ function ReportScreen() {
     )
   return (
     <div className="space-y-4" data-report>
+      <Versions
+        auditId={auditId}
+        versions={draft.versions}
+        changes={draft.consultant.changesSincePublished}
+      />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm print:hidden">
-        <span
-          className="inline-flex h-8 items-center rounded-md border px-3"
-          data-testid="report-status"
-        >
-          Draft, not shared
-        </span>
         <ToggleGroup
           type="single"
           variant="outline"
@@ -67,7 +67,7 @@ function ReportScreen() {
         {draft.canManageBranding ? (
           <Link
             to="/app/settings/branding"
-            className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Branding
           </Link>

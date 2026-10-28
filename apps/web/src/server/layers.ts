@@ -1,8 +1,8 @@
-import { DatabaseLayer } from "@repo/db"
 import { Layer, Logger } from "effect"
 import { AuthLive } from "./auth-live"
 import { BrowserLive } from "./browser"
 import { WorkerEnvLive } from "./cloudflare"
+import { DatabaseLive } from "./database-live"
 import { JobsLive } from "./jobs"
 import { LlmLive } from "./llm"
 import { MailerLive } from "./mailer"
@@ -16,7 +16,7 @@ import { StorageLive } from "./storage"
  */
 export const AppLayer = Layer.mergeAll(
   Logger.layer([Logger.consolePretty()]),
-  DatabaseLayer.pipe(Layer.provide(WorkerEnvLive)),
+  DatabaseLive,
   AuthLive,
   LlmLive,
   JobsLive,

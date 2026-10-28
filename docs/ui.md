@@ -128,3 +128,7 @@ Overview top: one card with the large score and three tiles (Critical and Warnin
 ## Report on paper
 
 The Report tab's **Save as PDF** opens the browser's print dialog; the help line says to turn off headers and footers so the page address is not printed. In print only the report prints: the sidebar, header, tab bar, toolbar, edit controls, the Draft label and findings left out of the detail are hidden. The paper is always light, text is near-black, severity chips are an outline with their glyph (colour is never the only cue), and the cover, summary, scope, consent scenarios, findings, action plan and appendix each start a page.
+
+## Published versions
+
+The Report tab's status chip says "Draft, not shared", "Version n published" or "Unpublished changes since version n" (the draft's publication hash against the latest version's). Publish freezes the draft; with no change it answers with the latest version. Each version lists who published it and when, with **Delete this version** for owners, admins and the publisher; the dialog says every link stops working and the stored copy is removed. Task 11 replaces the temporary Publish button with the share dialog.

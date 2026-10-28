@@ -2,6 +2,7 @@ import { Storage } from "@repo/core"
 import { createServerFn } from "@tanstack/react-start"
 import { Effect, Option, Schema } from "effect"
 import { buildReport } from "./report-data"
+import { versionsOf } from "./report-publish-data"
 import { requireSession } from "./require-session"
 import { isManager, membership, read } from "./server-fn"
 
@@ -20,7 +21,7 @@ export const getReportDraft = createServerFn({ method: "GET" })
   .handler(({ context, data }) =>
     read(
       Effect.gen(function* () {
-        const { organizationId, role } = yield* membership(context.session)
+        const { organizationId, role, userId } = yield* membership(context.session)
         const storage = yield* Storage
         const attempt = Effect.gen(function* () {
           const built = yield* buildReport(organizationId, data.auditId)
@@ -36,12 +37,25 @@ export const getReportDraft = createServerFn({ method: "GET" })
         const first = yield* attempt
         const { built, logoUrl } = first.current ? first : yield* attempt
         if (!built.available) return { available: false as const, reason: built.reason }
+        const versions = yield* versionsOf(organizationId, data.auditId)
+        const latest = versions[0]
         return {
           available: true as const,
           model: built.model,
-          consultant: built.consultant,
+          consultant: {
+            ...built.consultant,
+            changesSincePublished:
+              latest !== undefined && latest.publicationHash !== built.publicationHash,
+          },
           logoUrl,
           canManageBranding: isManager(role),
+          versions: versions.map((v) => ({
+            id: v.id,
+            version: v.version,
+            publishedAt: v.publishedAt.toISOString(),
+            publishedByName: v.publishedByName,
+            canDelete: isManager(role) || v.publishedBy === userId,
+          })),
         }
       }),
     ),

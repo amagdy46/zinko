@@ -69,6 +69,8 @@ export const audit = pgTable(
     workflowId: text("workflow_id"),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
+    /** High-water mark of report versions: raised under the publication lock, never lowered. */
+    reportVersionSeq: integer("report_version_seq").notNull().default(0),
   },
   (t) => [index("audit_org_site_created_idx").on(t.orgId, t.siteId, t.createdAt.desc())],
 )

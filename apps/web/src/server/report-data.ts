@@ -241,6 +241,49 @@ const publicationHashOf = (model: ReportModel) =>
   })
 
 /**
+ * The inputs a consultant can change, read in a few small queries. `buildReport` takes it inside
+ * its snapshot; publication takes it again under the lock and starts over when the two differ.
+ */
+export const readStamp = (orgId: string, auditId: string) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const [head] = yield* db
+      .select({ finishedAt: audit.finishedAt })
+      .from(audit)
+      .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+      .limit(1)
+    const [branding] = yield* db
+      .select({ updatedAt: orgBranding.updatedAt, logoSha256: orgBranding.logoSha256 })
+      .from(orgBranding)
+      .where(eq(orgBranding.orgId, orgId))
+      .limit(1)
+    const [edit] = yield* db
+      .select({ updatedAt: reportEdit.updatedAt, detail: reportEdit.detail })
+      .from(reportEdit)
+      .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
+      .limit(1)
+    const [findingEdits] = yield* db
+      .select({ updatedAt: max(reportFindingEdit.updatedAt), rows: count() })
+      .from(reportFindingEdit)
+      .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
+    const [triage] = yield* db
+      .select({ updatedAt: max(findingTriage.updatedAt), rows: count() })
+      .from(findingTriage)
+      .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
+    return {
+      auditFinishedAt: head?.finishedAt?.toISOString() ?? null,
+      brandingUpdatedAt: branding?.updatedAt.toISOString() ?? null,
+      logoSha256: branding?.logoSha256 ?? null,
+      triageUpdatedAt: triage?.updatedAt?.toISOString() ?? null,
+      triageCount: triage?.rows ?? 0,
+      editUpdatedAt: edit?.updatedAt.toISOString() ?? null,
+      editDetail: edit?.detail === "detailed" ? "detailed" : "standard",
+      findingEditUpdatedAt: findingEdits?.updatedAt?.toISOString() ?? null,
+      findingEditCount: findingEdits?.rows ?? 0,
+    } satisfies ReportStamp
+  })
+
+/**
  * The report as one validated document, from one consistent read. Phase 1 reads only the database,
  * in a single `REPEATABLE READ` read-only transaction that commits before phase 2 starts; a database
  * error there is fatal. Phase 2 touches no database. Every string in the model comes through
@@ -382,15 +425,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           .from(reportFindingEdit)
           .where(and(eq(reportFindingEdit.auditId, auditId), eq(reportFindingEdit.orgId, orgId)))
         const branding = yield* brandingOf(orgId)
-        const [brandingRow] = yield* db
-          .select({ updatedAt: orgBranding.updatedAt })
-          .from(orgBranding)
-          .where(eq(orgBranding.orgId, orgId))
-          .limit(1)
-        const [triage] = yield* db
-          .select({ updatedAt: max(findingTriage.updatedAt), rows: count() })
-          .from(findingTriage)
-          .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
+        const stamp = yield* readStamp(orgId, auditId)
         return {
           head,
           config,
@@ -404,8 +439,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           edit,
           findingEdits,
           branding,
-          brandingRow,
-          triage,
+          stamp,
         }
       }),
     )
@@ -704,20 +738,6 @@ export const buildReport = (orgId: string, auditId: string) =>
         },
         changesSincePublished: false,
       },
-      stamp: {
-        auditFinishedAt: head.finishedAt?.toISOString() ?? null,
-        brandingUpdatedAt: read.brandingRow?.updatedAt.toISOString() ?? null,
-        logoSha256: branding.logoSha256,
-        triageUpdatedAt: read.triage?.updatedAt?.toISOString() ?? null,
-        triageCount: read.triage?.rows ?? 0,
-        editUpdatedAt: edit?.updatedAt.toISOString() ?? null,
-        editDetail: detail,
-        findingEditUpdatedAt:
-          findingEdits
-            .map((e) => e.updatedAt.toISOString())
-            .toSorted()
-            .at(-1) ?? null,
-        findingEditCount: findingEdits.length,
-      },
+      stamp: read.stamp,
     } as const
   })

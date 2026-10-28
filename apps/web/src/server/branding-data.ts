@@ -53,3 +53,11 @@ export const brandingOf = (orgId: string) =>
 /** Whether the text holds an email address or phone number, which a report prints as typed. */
 export const hasPersonalData = (text: string | null) =>
   text !== null && scrubPersonalData(text) !== text
+
+/** Hex SHA-256 of some bytes. */
+export const sha256Hex = (bytes: Uint8Array<ArrayBuffer>) =>
+  Effect.promise(() => crypto.subtle.digest("SHA-256", bytes)).pipe(
+    Effect.map((digest) =>
+      [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
+    ),
+  )

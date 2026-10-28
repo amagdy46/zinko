@@ -27,6 +27,12 @@ export const AuthDatabaseLayer = Layer.effect(
       Effect.sync(() => new Pool({ connectionString, max: 1 })),
       (opened) => Effect.promise(() => opened.end()),
     )
-    return { database: drizzleAdapter(drizzle({ client: pool }), { provider: "pg", schema }) }
+    return {
+      database: drizzleAdapter(drizzle({ client: pool }), {
+        provider: "pg",
+        schema,
+        transaction: true,
+      }),
+    }
   }),
 ).pipe(Layer.provide(AuthHyperdrive.layer({ binding: "HYPERDRIVE" })))
