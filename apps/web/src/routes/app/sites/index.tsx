@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
-import { useState, type FormEvent } from "react"
+import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
@@ -54,6 +54,7 @@ function Sites() {
   const router = useRouter()
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
+  const opener = useRef<HTMLElement | null>(null)
   const [pending, setPending] = useState(false)
   const [urlError, setUrlError] = useState<string>()
   const [clientId, setClientId] = useState(NO_CLIENT)
@@ -122,7 +123,14 @@ function Sites() {
                   <Button>Add site</Button>
                 </DialogTrigger>
               ) : null}
-              <DialogContent>
+              <DialogContent
+                onCloseAutoFocus={(event) => {
+                  if (opener.current === null) return
+                  event.preventDefault()
+                  opener.current.focus()
+                  opener.current = null
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle>Add site</DialogTitle>
                   <DialogDescription>
@@ -202,7 +210,7 @@ function Sites() {
           next={
             unaudited === undefined || audited ? undefined : (
               <Link
-                className="text-sm text-status-active underline-offset-4 hover:underline"
+                className="inline-flex h-8 items-center rounded-sm text-sm text-status-active underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                 to="/app/sites/$siteId/audits/new"
                 params={{ siteId: unaudited.id }}
               >
@@ -220,7 +228,16 @@ function Sites() {
             "Start an audit: Zinko loads the site, accepts or rejects the banner and records every tag.",
             "Read the findings with the evidence behind each one.",
           ]}
-          action={<Button onClick={() => setOpen(true)}>Add site</Button>}
+          action={
+            <Button
+              onClick={(event) => {
+                opener.current = event.currentTarget
+                setOpen(true)
+              }}
+            >
+              Add site
+            </Button>
+          }
           secondary={<SampleReportLink />}
         />
       )}
@@ -250,7 +267,7 @@ function Sites() {
               <TableRow key={s.id} className="relative">
                 <TableCell className="font-medium">
                   <Link
-                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
                     to="/app/sites/$siteId"
                     params={{ siteId: s.id }}
                   >

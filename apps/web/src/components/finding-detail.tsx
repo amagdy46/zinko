@@ -205,7 +205,7 @@ function TriageMenu({
               required
             />
             <p id="reason-hint" className="text-xs text-muted-foreground">
-              Add a reason; it is printed in client reports.
+              Add a reason; it is printed in shared reports.
             </p>
             {error === null ? null : (
               <p role="alert" className="text-sm text-destructive">
