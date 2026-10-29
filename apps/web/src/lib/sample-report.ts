@@ -1322,5 +1322,5 @@ export const sampleReport = {
     },
   ],
   generatedAt: "2026-10-29T07:18:52.014Z",
-  modelVersion: 7,
+  modelVersion: 8,
 } satisfies ReportModel & { modelVersion: typeof REPORT_MODEL_VERSION }

@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 7
+export const REPORT_MODEL_VERSION = 8
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -172,7 +172,7 @@ const Changes = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, 3, 4, 5, 6, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, 4, 5, 6, 7, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -183,7 +183,8 @@ export const ReportModel = Schema.Struct({
     logoDigest: Schema.NullOr(Schema.String),
   }),
   cover: Schema.Struct({
-    clientName: Schema.String,
+    /** Null for a site on the organization's default client; the cover then names the site alone. */
+    clientName: Schema.NullOr(Schema.String),
     siteName: Schema.String,
     host: Schema.String,
     auditedAt: Schema.String,
@@ -371,6 +372,8 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
       summary: { ...summary, checkGaps: { ...json.summary.checkGaps, otherChecks: null } },
     }
   },
+  /** Version 8 allows no client name on the cover; every version 7 value is still valid. */
+  7: (json) => json,
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{

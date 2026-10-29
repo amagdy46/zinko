@@ -40,7 +40,7 @@ export function renderReportPage(input: {
   const { model } = input
   return html(
     <Document
-      title={`${model.cover.clientName} · Tracking audit · ${model.branding.agencyName}`}
+      title={`${model.cover.clientName ?? model.cover.siteName} · Tracking audit · ${model.branding.agencyName}`}
       stylesheet={input.stylesheet}
     >
       <header className="mx-auto flex max-w-[210mm] flex-wrap items-center justify-between gap-3 p-4 pb-0 md:px-6 md:pt-6 print:hidden">

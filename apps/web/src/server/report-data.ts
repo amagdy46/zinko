@@ -69,6 +69,8 @@ const VIEWPORT_LABEL = { desktop: "Desktop", mobile: "Mobile" } as const
  */
 export interface ReportStamp {
   auditFinishedAt: string | null
+  /** The site's client id, the client's name and whether it is the default: a move changes the cover. */
+  client: string
   /** Fingerprints of the rows' values, not of their timestamps: an update stamped earlier can commit later. */
   branding: string
   edit: string
@@ -326,8 +328,13 @@ export const readStamp = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const [head] = yield* db
-      .select({ finishedAt: audit.finishedAt })
+      .select({
+        finishedAt: audit.finishedAt,
+        client: sql<string>`${site.clientId} || '|' || ${client.name} || '|' || ${client.isDefault}::text`,
+      })
       .from(audit)
+      .innerJoin(site, eq(site.id, audit.siteId))
+      .innerJoin(client, eq(client.id, site.clientId))
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     const [branding] = yield* db
@@ -348,6 +355,7 @@ export const readStamp = (orgId: string, auditId: string) =>
       .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
     return {
       auditFinishedAt: head?.finishedAt?.toISOString() ?? null,
+      client: head?.client ?? "",
       branding: branding?.fingerprint ?? "",
       edit: edit?.fingerprint ?? "",
       findingEdits: findingEdits?.fingerprint ?? "",
@@ -377,6 +385,7 @@ export const buildReport = (orgId: string, auditId: string) =>
             createdAt: audit.createdAt,
             finishedAt: audit.finishedAt,
             clientName: client.name,
+            clientIsDefault: client.isDefault,
             siteName: site.name,
             host: site.host,
           })
@@ -794,7 +803,7 @@ export const buildReport = (orgId: string, auditId: string) =>
         logoDigest: branding.logoSha256,
       },
       cover: {
-        clientName: head.clientName,
+        clientName: head.clientIsDefault ? null : head.clientName,
         siteName: head.siteName,
         host: head.host,
         auditedAt: (head.finishedAt ?? head.createdAt).toISOString(),

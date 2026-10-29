@@ -485,7 +485,7 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["branding.footerText", nullable(author(300))],
   ["branding.showPoweredBy", flag],
   ["branding.logoDigest", nullable(digest)],
-  ["cover.clientName", author(200)],
+  ["cover.clientName", nullable(author(200))],
   ["cover.siteName", author(200)],
   ["cover.host", host],
   ["cover.auditedAt", date],

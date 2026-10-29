@@ -3,7 +3,7 @@ import { reportDate, type ReportModel } from "@/lib/report-model"
 /**
  * The report's first page: the agency once (logo, or name when there is none), what the document is,
  * who it is for and when it was audited. The scope is in "Scope and method", not here. The client's
- * name is the page's h1 only on its own page; inside the app it is an h2.
+ * name (the site's, when it has none) is the page's h1 only on its own page; inside the app it is an h2.
  */
 export function Cover({
   model,
@@ -19,7 +19,7 @@ export function Cover({
   standalone: boolean
 }) {
   const { branding, cover } = model
-  const ClientName = standalone ? "h1" : "h2"
+  const Heading = standalone ? "h1" : "h2"
   return (
     <section
       id="cover"
@@ -48,10 +48,21 @@ export function Cover({
         <p className="text-sm font-medium uppercase tracking-wide text-report-accent">
           Tracking &amp; consent audit
         </p>
-        <ClientName className="text-4xl font-semibold leading-tight">{cover.clientName}</ClientName>
-        <p className="text-lg [overflow-wrap:anywhere]">
-          {cover.siteName} <span className="text-muted-foreground">· {cover.host}</span>
-        </p>
+        {cover.clientName === null ? (
+          <>
+            <Heading className="text-4xl font-semibold leading-tight [overflow-wrap:anywhere]">
+              {cover.siteName}
+            </Heading>
+            <p className="text-lg text-muted-foreground [overflow-wrap:anywhere]">{cover.host}</p>
+          </>
+        ) : (
+          <>
+            <Heading className="text-4xl font-semibold leading-tight">{cover.clientName}</Heading>
+            <p className="text-lg [overflow-wrap:anywhere]">
+              {cover.siteName} <span className="text-muted-foreground">· {cover.host}</span>
+            </p>
+          </>
+        )}
       </div>
       <div className="space-y-1 text-sm text-muted-foreground">
         <p>Audited on {reportDate(cover.auditedAt)}</p>

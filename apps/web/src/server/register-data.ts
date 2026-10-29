@@ -1,14 +1,6 @@
 import { AuditConfig } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import {
-  audit,
-  client,
-  finding as findingTable,
-  reportEdit,
-  reportFindingEdit,
-  run,
-  site,
-} from "@repo/db"
+import { audit, finding as findingTable, reportEdit, reportFindingEdit, run, site } from "@repo/db"
 import { and, asc, eq } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { AREAS, scenarioLabel } from "@/lib/audit-labels"
@@ -78,7 +70,6 @@ export const registerOf = (orgId: string, auditId: string) =>
       })
       .from(audit)
       .innerJoin(site, eq(site.id, audit.siteId))
-      .innerJoin(client, eq(client.id, site.clientId))
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     if (head === undefined || head.kind === "narrow")

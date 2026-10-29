@@ -1,6 +1,14 @@
 import { Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, orgBranding, organization, reportFileCleanup, reportSnapshot, user } from "@repo/db"
+import {
+  audit,
+  orgBranding,
+  organization,
+  reportFileCleanup,
+  reportSnapshot,
+  site,
+  user,
+} from "@repo/db"
 import { and, desc, eq, sql } from "drizzle-orm"
 import { Data, Effect, Option } from "effect"
 import { REPORT_MODEL_VERSION } from "@/lib/report-model"
@@ -25,7 +33,7 @@ const deleteQuietly = (key: string | null) =>
       )
 
 /**
- * Freezes the report as it reads now. Build outside any lock; then lock the audit row, compare the
+ * Freezes the report as it reads now. Build outside any lock; then lock the audit's site row (shared) and the audit row, compare the
  * input stamp (a note saved meanwhile sends us back to the read, at most three times), reuse the
  * latest snapshot when it is identical, otherwise take the next version from the audit's counter,
  * copy the logo (digest verified) and insert, all in one transaction.
@@ -42,6 +50,14 @@ export const publishReportData = (orgId: string, userId: string, auditId: string
     return yield* atomically(
       Effect.gen(function* () {
         const { db } = yield* Database
+        // Lock order is client, site, audit: the site row (shared) keeps its client_id stable
+        // until commit and conflicts with a move; createAudit takes site then audit too.
+        yield* db
+          .select({ id: site.id })
+          .from(site)
+          .innerJoin(audit, eq(audit.siteId, site.id))
+          .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
+          .for("share", { of: site })
         yield* db
           .select({ id: audit.id })
           .from(audit)
