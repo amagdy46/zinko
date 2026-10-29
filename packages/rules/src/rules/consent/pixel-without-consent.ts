@@ -13,7 +13,7 @@ export const pixelWithoutConsent: Rule = {
   owner: "tag-manager",
   title: "Ad pixel fired without consent",
   checkTitle: "Ad pixels wait for consent",
-  why: "Meta and TikTok pixels carry no consent signal of their own: once one fires, the visit has been shared with the ad platform. A pixel that fires before the visitor chooses, when they never choose, or despite a Global Privacy Control signal, shares personal data without a legal basis.",
+  why: "Meta and TikTok pixels carry no consent signal of their own: once one fires, the visit has been shared with the ad platform. A pixel that fires before the visitor chooses, when they never choose, or despite a Global Privacy Control signal, shares visitor data with the ad platform before consent. Whether that is allowed depends on the rules that apply to the business.",
   fix: [
     "Load the Meta and TikTok pixels only after the visitor accepts marketing cookies: from the consent banner's callback, or a tag manager trigger on the consent update, never on page load.",
     "If the pixel must load early, use its own consent API (fbq('consent', 'revoke') before init, ttq.holdConsent()) and grant it only on acceptance.",
