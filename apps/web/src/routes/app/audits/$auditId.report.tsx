@@ -73,8 +73,7 @@ function ReportScreen() {
         carriedNotes={draft.consultant.carriedNotes}
         detail={draft.model.detail}
         incomplete={draft.model.summary.runHealth.incomplete}
-      />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm print:hidden">
+      >
         <ToggleGroup
           type="single"
           variant="outline"
@@ -105,6 +104,7 @@ function ReportScreen() {
           variant="outline"
           size="sm"
           className="max-sm:hidden"
+          title="Opens the print dialog. Turn off headers and footers there so the page address is not printed."
           onClick={() => window.print()}
         >
           <Printer />
@@ -164,11 +164,8 @@ function ReportScreen() {
             )}
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
-      <p className="text-xs text-muted-foreground max-sm:hidden print:hidden">
-        Save as PDF opens the print dialog. Turn off headers and footers there so the page address
-        is not printed.
-      </p>
+      </Versions>
+
       <ReportView
         model={draft.model}
         logoSrc={draft.logoUrl}

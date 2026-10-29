@@ -1,5 +1,5 @@
 import { useRouter } from "@tanstack/react-router"
-import { Copy } from "lucide-react"
+import { Copy, Ellipsis, ExternalLink } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -11,6 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -97,7 +103,12 @@ function ShareBody({
   }, [auditId])
 
   useEffect(() => {
-    if (created !== null) linkField.current?.focus()
+    const field = linkField.current
+    if (created === null || field === null) return
+    field.focus()
+    // focus() puts the caret at the end and scrolls there; the start of the link is the part worth reading
+    field.setSelectionRange(0, 0)
+    field.scrollLeft = 0
   }, [created])
 
   const days = DAYS[expiry]
@@ -222,6 +233,16 @@ function ShareBody({
               >
                 <Copy />
               </Button>
+              <Button asChild variant="outline" size="icon">
+                <a
+                  href={created.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open link in a new tab"
+                >
+                  <ExternalLink />
+                </a>
+              </Button>
             </div>
             <p className="text-muted-foreground">Create another link to send it again.</p>
           </div>
@@ -241,19 +262,30 @@ function ShareBody({
                     </span>
                   </p>
                   {v.canDelete ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive hover:text-destructive"
-                      onClick={(event) => {
-                        deleteOpener.current = event.currentTarget
-                        setTarget(v)
-                      }}
-                      data-testid={`delete-version-${v.version}`}
-                    >
-                      Delete version {v.version}
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`More for version ${v.version}`}
+                          onClick={(event) => {
+                            deleteOpener.current = event.currentTarget
+                          }}
+                        >
+                          <Ellipsis />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="min-h-8 text-destructive focus:text-destructive"
+                          onSelect={() => setTarget(v)}
+                          data-testid={`delete-version-${v.version}`}
+                        >
+                          Delete version {v.version}
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   ) : null}
                 </div>
                 {v.links.length === 0 ? (

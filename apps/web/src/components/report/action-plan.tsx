@@ -5,6 +5,9 @@ import { OWNER_LABELS, type ReportModel } from "@/lib/report-model"
 const LINK =
   "rounded-sm text-report-accent underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
+/** A title in a list is a target of its own: 32px high on screen, a plain line in print. */
+const PLAN_LINK = `inline-flex min-h-8 items-center print:inline print:min-h-0 ${LINK}`
+
 /** What to fix, grouped by who usually fixes it; accepted risks and fixed findings are listed apart. */
 export function ActionPlan({ model }: { model: ReportModel }) {
   const set = model.findings.filter((f) => f.triage.status !== "open")
@@ -35,7 +38,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                   <li key={item.ruleId} className="space-y-0.5 pl-1">
                     <p className="flex flex-wrap items-center gap-2">
                       <SeverityBadge severity={item.severity} />
-                      <a href={`#finding-${item.ruleId}`} className={`font-medium ${LINK}`}>
+                      <a href={`#finding-${item.ruleId}`} className={`font-medium ${PLAN_LINK}`}>
                         {item.title}
                       </a>
                     </p>
@@ -67,7 +70,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                   className="mt-0.5"
                 />
                 <span className="[overflow-wrap:anywhere]">
-                  <a href={`#finding-${f.ruleId}`} className={LINK}>
+                  <a href={`#finding-${f.ruleId}`} className={PLAN_LINK}>
                     {f.title}
                   </a>
                   <span className="text-muted-foreground">

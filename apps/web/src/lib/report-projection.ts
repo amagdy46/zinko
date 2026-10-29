@@ -1,4 +1,4 @@
-import { COOKIE_FAMILY_LABELS } from "@repo/rules"
+import { COOKIE_FAMILY_LABELS, ruleById } from "@repo/rules"
 import {
   canonicalJson,
   type DigestEvidence,
@@ -7,7 +7,7 @@ import {
   VENDOR_LABELS,
 } from "@repo/llm"
 import { Data, Effect } from "effect"
-import { AREAS, ERROR_TEXT, FAILURE_TEXT, SCENARIOS } from "./audit-labels"
+import { AREAS, ERROR_TEXT, LOCAL_ANSWER_SENTENCE, SCENARIOS } from "./audit-labels"
 import { pageIndexOf } from "./page-match"
 import { ACCENTS } from "./report-accent"
 import { REPORT_MODEL_VERSION } from "./report-model"
@@ -152,6 +152,14 @@ export const tagEvent = (vendor: string, event: string): string => {
 
 const NO_REASON = "The run failed"
 const PARTIAL_REASON = "Some data is missing"
+const NOT_CAPTURED = "This page could not be captured in this run"
+
+/** Zinko's own failures (a busy or failed browser engine, a save that failed) read the same to a client: not their problem. */
+const OWN_FAILURE_TEXT: Record<string, string> = {
+  EngineBusy: NOT_CAPTURED,
+  EngineFailure: NOT_CAPTURED,
+  PersistFailure: NOT_CAPTURED,
+}
 
 /**
  * Plain words for why a run did not finish, from the two static maps only. Unlike `runReason` it
@@ -164,11 +172,20 @@ export function runReasonLabel(run: {
   errors: ReadonlyArray<{ code: string }>
 }): string | null {
   if (run.status !== "partial" && run.status !== "failed") return null
-  if (run.failure !== null) return FAILURE_TEXT[run.failure] ?? NO_REASON
+  if (run.failure !== null) return OWN_FAILURE_TEXT[run.failure] ?? NO_REASON
   const [first] = run.errors
   if (first === undefined) return run.status === "partial" ? PARTIAL_REASON : NO_REASON
-  return ERROR_TEXT[first.code] ?? NO_REASON
+  return OWN_FAILURE_TEXT[first.code] ?? ERROR_TEXT[first.code] ?? NO_REASON
 }
+
+const LOCAL_ANSWER_REASON = `${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests was therefore not checked.`
+
+/** Why a check was never run, in words a client can read; only the one check Zinko skips by design has a specific reason. */
+export const checkGapReason = (checkTitle: string): string | null =>
+  checkTitle === ruleById("hygiene.tag-errors")?.checkTitle ? LOCAL_ANSWER_REASON : null
+
+export const neverCheckedLine = (checkTitle: string): string =>
+  `${checkTitle}: not checked on any run. ${checkGapReason(checkTitle) ?? "This report says nothing about it either way."}`
 
 export class ProjectionViolation extends Data.TaggedError("ProjectionViolation")<{
   readonly path: string
@@ -223,7 +240,7 @@ const VIEWPORT_LABELS = ["Desktop", "Mobile"]
 const CONSENT_OUTCOMES = ["accepted", "rejected", "none", "not-found", "not-applied"]
 const REASONS = [
   ...Object.values(ERROR_TEXT),
-  ...Object.values(FAILURE_TEXT),
+  ...Object.values(OWN_FAILURE_TEXT),
   NO_REASON,
   PARTIAL_REASON,
 ]

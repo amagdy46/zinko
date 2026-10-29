@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router"
-import { useRef } from "react"
+import { type ReactNode, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { DisclosureLevel } from "@/lib/report-model"
@@ -27,7 +27,7 @@ const dotClass = (shared: boolean, changes: boolean) => {
   return changes ? "bg-sev-warning" : "bg-primary"
 }
 
-/** The report's status chip and the Share button; the dialog opens from `?share=1` too. */
+/** The report's status chip, the Share button and the toolbar beside them; the dialog opens from `?share=1` too. */
 export function Versions({
   auditId,
   versions,
@@ -35,6 +35,7 @@ export function Versions({
   carriedNotes,
   detail,
   incomplete,
+  children,
 }: {
   auditId: string
   versions: ReadonlyArray<ReportVersion>
@@ -42,6 +43,8 @@ export function Versions({
   carriedNotes: number
   detail: DisclosureLevel
   incomplete: boolean
+  /** The report's other controls, on the same row as the status. */
+  children?: ReactNode
 }) {
   const navigate = useNavigate()
   const open = useSearch({ from: "/app/audits/$auditId/report", select: (s) => s.share === 1 })
@@ -85,6 +88,7 @@ export function Versions({
         incomplete={incomplete}
         returnFocus={opener}
       />
+      {children}
     </div>
   )
 }

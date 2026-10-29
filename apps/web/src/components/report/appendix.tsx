@@ -4,6 +4,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { AREAS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import type { ReportModel } from "@/lib/report-model"
+import { checkGapReason } from "@/lib/report-projection"
 
 const RULE_HEADS = [
   ["Rule", "w-[30%]"],
@@ -48,6 +49,11 @@ export function Appendix({ model }: { model: ReportModel }) {
                   <span>
                     {item.checkTitle}
                     <span className="text-muted-foreground"> · {count(item.runs, "run")}</span>
+                    {checkGapReason(item.checkTitle) === null ? null : (
+                      <span className="block text-muted-foreground">
+                        {checkGapReason(item.checkTitle)}
+                      </span>
+                    )}
                   </span>
                 </li>
               ))}
