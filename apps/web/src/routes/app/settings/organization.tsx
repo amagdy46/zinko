@@ -58,7 +58,7 @@ function OrganizationSettings() {
               <p className="text-sm text-muted-foreground">
                 Off by default. Turn it on if you audit sites for clients: Clients appears in the
                 menu beside Sites, sites belong to a client and reports can name it. Sites you have
-                not given a client stay under Ungrouped sites.
+                not given a client stay listed under Sites.
               </p>
             </div>
           </div>

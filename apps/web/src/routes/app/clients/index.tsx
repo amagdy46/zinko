@@ -114,14 +114,19 @@ function Clients() {
           organizationId={session.activeOrganizationId ?? ""}
           steps={[
             { label: "Add a client", done: true },
-            { label: "Add a site", done: clients.some((c) => c.siteCount > 0) },
+            {
+              label: "Add a site",
+              done: ungroupedSites > 0 || clients.some((c) => c.siteCount > 0),
+            },
             {
               label: "Run an audit",
               done: clients.some((c) => c.running > 0 || c.latest !== null),
             },
           ]}
           next={
-            clients.some((c) => c.siteCount > 0) || clients[0] === undefined ? undefined : (
+            ungroupedSites > 0 ||
+            clients.some((c) => c.siteCount > 0) ||
+            clients[0] === undefined ? undefined : (
               <Link
                 className="text-sm text-status-active underline-offset-4 hover:underline"
                 to="/app/clients/$clientId"
