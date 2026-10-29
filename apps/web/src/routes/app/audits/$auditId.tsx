@@ -63,6 +63,7 @@ const severitySplit = (open: { critical: number; warning: number; info: number }
 
 const ACTIVE = new Set(["queued", "running"])
 const REFETCH_DELAY_MS = 250
+const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
   const { audit, site, client, runs, summary } = Route.useLoaderData()
@@ -100,6 +101,10 @@ function AuditPage() {
     return () => clearInterval(timer)
   }, [active])
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
+  const reportTab = useLocation({ select: (location) => location.pathname.endsWith("/report") })
+  const runsTab = useLocation({
+    select: (location) => location.pathname.replace(/\/$/, "") === `/app/audits/${audit.id}`,
+  })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
   const openFindings = summary.open.critical + summary.open.warning + summary.open.info
   let findingsText = `${openFindings} open`
@@ -150,6 +155,7 @@ function AuditPage() {
         message = `Audit finished with gaps: ${findings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
       toast(message, {
         id: `audit-finished-${audit.id}`,
+        duration: FINISHED_TOAST_MS,
         action: {
           label: "Overview",
           onClick: () => {
@@ -194,6 +200,32 @@ function AuditPage() {
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
     { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
+  const problemsPill =
+    problems.length > 0 && !active ? (
+      <Link
+        to="/app/audits/$auditId"
+        params={{ auditId: audit.id }}
+        search={{ view: "list" }}
+        className={cn(
+          "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          failed > 0
+            ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
+            : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
+        )}
+      >
+        <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
+        {problems.length} of {runs.length} runs could not finish
+        <span className="max-sm:hidden">· See why</span>
+      </Link>
+    ) : null
+  const seeResults =
+    runsTab && !active && summary.evaluatedRuns > 0 ? (
+      <Button asChild size="sm" className="h-8">
+        <Link to="/app/audits/$auditId/overview" params={{ auditId: audit.id }}>
+          See results
+        </Link>
+      </Button>
+    ) : null
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [rerunning, setRerunning] = useState(false)
   let rerunHint: string | undefined
@@ -222,7 +254,7 @@ function AuditPage() {
       </>
     ) : null
   const shareLink =
-    audit.kind === "full" && !active && summary.evaluatedRuns > 0 ? (
+    audit.kind === "full" && !active && summary.evaluatedRuns > 0 && !reportTab ? (
       <Link
         to="/app/audits/$auditId/report"
         params={{ auditId: audit.id }}
@@ -289,6 +321,7 @@ function AuditPage() {
                   </Tooltip>
                 </TooltipProvider>
               ) : null}
+              {problemsPill}
             </>
           }
           actions={
@@ -327,25 +360,10 @@ function AuditPage() {
             >
               {shortDateTime(start, timeZone)}
             </time>
-            {problems.length > 0 ? (
-              <Link
-                to="/app/audits/$auditId"
-                params={{ auditId: audit.id }}
-                search={{ view: "list" }}
-                className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                  failed > 0
-                    ? "border-sev-critical-border bg-sev-critical-bg text-sev-critical"
-                    : "border-sev-warning-border bg-sev-warning-bg text-sev-warning",
-                )}
-              >
-                <StatusGlyph meaning={failed > 0 ? "failed" : "partial"} />
-                {problems.length} of {runs.length} runs could not finish
-                <span className="max-sm:hidden">· See why</span>
-              </Link>
-            ) : null}
+            {problemsPill}
             {rerun}
             {shareLink}
+            {seeResults}
           </div>
         </header>
       )}

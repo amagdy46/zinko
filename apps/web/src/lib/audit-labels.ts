@@ -114,6 +114,10 @@ export const pageLabels = (pageUrls: ReadonlyArray<string>) => {
 export const runPage = (run: { pageUrl: string; journey: boolean }) =>
   run.journey ? `Journey from ${pagePath(run.pageUrl)}` : pagePath(run.pageUrl)
 
+/** Why tracking requests are answered by Zinko and never reach a vendor; one sentence, used wherever the caveat shows. */
+export const LOCAL_ANSWER_SENTENCE =
+  "Zinko answers tracking requests itself so your audit never sends test events to real ad accounts."
+
 export const ERROR_TEXT: Record<string, string> = {
   BotBlocked: "Blocked as a bot",
   Timeout: "The page timed out",

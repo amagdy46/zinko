@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { checkGapReason } from "@/lib/report-projection"
 import { cn } from "@/lib/utils"
 import {
   type HealthScore,
@@ -118,12 +119,12 @@ function OverviewScreen() {
         scope={scope}
         triage={triage}
         auditId={audit.id}
-        worst={worst}
         bandAllAccepted={bandAllAccepted}
       />
       {briefing === null ? null : (
         <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
       )}
+      <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       <Caveats
         auditId={audit.id}
         runs={runs}
@@ -133,7 +134,6 @@ function OverviewScreen() {
         couldNotCheck={couldNotCheck}
         bannerUncertain={bannerUncertain}
       />
-      <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       <AreaStrip auditId={audit.id} areas={areas} checkedAreas={checkedAreas} />
       <TagsSeen auditId={audit.id} tags={tags} />
       <p className="text-sm text-muted-foreground">
@@ -256,7 +256,10 @@ function Caveats({
               </p>
               <ul className="mt-1 list-disc space-y-0.5 pl-5 text-muted-foreground">
                 {unchecked.slice(0, CAVEAT_LIST).map((title) => (
-                  <li key={title}>{title}</li>
+                  <li key={title}>
+                    {title}
+                    <GapReason title={title} />
+                  </li>
                 ))}
               </ul>
               {unchecked.length > CAVEAT_LIST ? (
@@ -276,7 +279,10 @@ function Caveats({
                   <CollapsibleContent>
                     <ul className="list-disc space-y-0.5 pl-5 text-muted-foreground">
                       {unchecked.slice(CAVEAT_LIST).map((title) => (
-                        <li key={title}>{title}</li>
+                        <li key={title}>
+                          {title}
+                          <GapReason title={title} />
+                        </li>
                       ))}
                     </ul>
                   </CollapsibleContent>
@@ -325,7 +331,7 @@ function Caveats({
   if (items.length === 0) return null
   return (
     <Collapsible
-      defaultOpen={runHealth.incomplete}
+      defaultOpen={runHealth.incomplete || problems.length > 0}
       className="rounded-lg border border-dashed"
       data-testid="caveats"
     >
@@ -354,6 +360,12 @@ function Caveats({
       </CollapsibleContent>
     </Collapsible>
   )
+}
+
+/** Why a check was not run, when it is by design; nothing for the rest. */
+function GapReason({ title }: { title: string }) {
+  const reason = checkGapReason(title)
+  return reason === null ? null : <span className="block text-xs">{reason}</span>
 }
 
 const focusRing =
@@ -405,6 +417,9 @@ function WorstFinding({
       data-testid="worst-finding"
     >
       <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Start with
+        </span>
         <SeverityBadge severity={worst.severity} />
         <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
       </div>
@@ -502,7 +517,6 @@ function ScoreBlock({
   scope,
   triage,
   auditId,
-  worst,
   bandAllAccepted,
 }: {
   score: Scored
@@ -513,7 +527,6 @@ function ScoreBlock({
   scope: string
   triage: Overview["triage"]
   auditId: string
-  worst: Overview["worst"]
   bandAllAccepted: boolean
 }) {
   return (
@@ -563,25 +576,6 @@ function ScoreBlock({
         </ul>
       </div>
       <TriageNote triage={triage} score={score.score} withoutAccepted={withoutAccepted} />
-      {worst === null ? null : (
-        <div
-          className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t pt-4 text-sm"
-          data-testid="start-with"
-        >
-          <span className="text-muted-foreground">Start with</span>
-          <SeverityBadge severity={worst.severity} />
-          <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{worst.title}</span>
-          <Button asChild size="sm" variant="outline">
-            <Link
-              to="/app/audits/$auditId/findings"
-              params={{ auditId }}
-              search={{ finding: worst.ruleId }}
-            >
-              Open finding
-            </Link>
-          </Button>
-        </div>
-      )}
     </section>
   )
 }

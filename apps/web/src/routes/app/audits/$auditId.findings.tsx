@@ -20,12 +20,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
-import { AREAS } from "@/lib/audit-labels"
+import { AREAS, LOCAL_ANSWER_SENTENCE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { sharePending } from "@/lib/share-pending"
 import { cn } from "@/lib/utils"
 import { CHANGE_WORDS } from "@/lib/compare-text"
 import type { ChangeState } from "@/lib/compare"
-import { getFindingChips } from "@/server/compare"
+import { getFindingChips as fetchFindingChips } from "@/server/compare"
 import { listFindings } from "@/server/findings"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
@@ -56,6 +57,10 @@ const known = (value: unknown, allowed: ReadonlyArray<string>) => {
   return kept.length === 0 ? undefined : kept.join(",")
 }
 const listOf = (value: string | undefined) => (value === undefined ? [] : value.split(","))
+
+const LOCAL_ANSWER_NOTE = `${LOCAL_ANSWER_SENTENCE} Whether the vendors accepted the requests (delivery errors) is not checked, and it is not counted as passed.`
+
+const getFindingChips = sharePending(fetchFindingChips)
 
 type Search = { finding?: string; triage?: Triage; severity?: string; area?: string }
 
@@ -347,6 +352,18 @@ function FindingsScreen() {
               )}
             </TabsContent>
           </Tabs>
+          {audit.kind === "full" ? (
+            <p className="pt-4 text-sm text-muted-foreground">
+              Ready to send?{" "}
+              <Link
+                to="/app/audits/$auditId/report"
+                params={{ auditId: audit.id }}
+                className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                Open the report
+              </Link>
+            </p>
+          ) : null}
         </div>
         {below ? null : (
           <aside
@@ -451,9 +468,7 @@ function Coverage({
     return (
       <p className="text-sm text-muted-foreground" data-testid="coverage">
         All {count(coverage.totalRuns, "run")} evaluated. By run: {summary.join(" · ")}
-        {localLimit
-          ? ". Tracking requests are answered locally, so endpoint delivery (tag errors) is not checked; it is left out of these counts and never counted as passed."
-          : ""}
+        {localLimit ? `. ${LOCAL_ANSWER_NOTE}` : ""}
       </p>
     )
   const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
@@ -488,71 +503,88 @@ function Coverage({
         {coverage.unfinishedRuns > 0 ? `; ${coverage.unfinishedRuns} did not finish` : ""}
       </AlertTitle>
       <AlertDescription className="text-foreground">
-        {missing === 0 ? null : (
-          <p>
-            {count(missing, "run")}{" "}
-            {active ? "still to be checked" : `${missing === 1 ? "has" : "have"} no check results`},
-            so what follows may be incomplete.
-          </p>
-        )}
-        {missing === 0 && coverage.unfinishedRuns > 0 ? (
-          <p>
-            {count(coverage.unfinishedRuns, "run")} did not finish, so their checks may be missing
-            and what follows may be incomplete.
-          </p>
-        ) : null}
-        {mixed ? (
-          <p data-testid="mixed-versions">
-            The runs were evaluated with different versions of the rules (
-            {coverage.rulesVersions.join(", ")}). The checks and their wording can differ between
-            them.
-          </p>
-        ) : null}
-        <div className="flex h-2 w-full gap-px overflow-hidden rounded-full" aria-hidden="true">
-          {segments.flatMap((segment) =>
-            Array.from({ length: segment.n }, (_, i) => (
-              <span key={`${segment.key}-${i}`} className={cn("flex-1", segment.tone)} />
-            )),
-          )}
-        </div>
-        <TooltipProvider>
-          <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
-            {segments.map((segment) => (
-              <li key={segment.key} className="flex items-center gap-1.5">
-                <span aria-hidden="true" className={cn("size-2 rounded-full", segment.tone)} />
-                {segment.key === "passed" && coverage.passedNothingApplied > 0 ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0} className="underline decoration-dotted underline-offset-2">
-                        {segment.n} {segment.label}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {coverage.passedNothingApplied} passed with nothing applied
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <span>
-                    {segment.n} {segment.label}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </TooltipProvider>
-        {localLimit ? (
-          <p className="text-xs">
-            Tracking requests are answered locally, so endpoint delivery (tag errors) is not
-            checked. It is left out of the run counts above and never counted as passed.
-          </p>
-        ) : null}
-        {coverage.couldNotCheckOnFailingRuns > 0 ? (
-          <p className="text-xs">
-            {coverage.couldNotCheckOnFailingRuns} failing{" "}
-            {coverage.couldNotCheckOnFailingRuns === 1 ? "run" : "runs"} also had a check that could
-            not run.
-          </p>
-        ) : null}
+        <Collapsible className="w-full">
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="-ml-2 group/details">
+              <ChevronDown
+                aria-hidden="true"
+                className="group-data-[state=closed]/details:-rotate-90"
+              />
+              Details
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-2 pt-1">
+            {missing === 0 ? null : (
+              <p>
+                {count(missing, "run")}{" "}
+                {active
+                  ? "still to be checked"
+                  : `${missing === 1 ? "has" : "have"} no check results`}
+                , so what follows may be incomplete.
+              </p>
+            )}
+            {missing === 0 && coverage.unfinishedRuns > 0 ? (
+              <p>
+                {count(coverage.unfinishedRuns, "run")} did not finish, so their checks may be
+                missing and what follows may be incomplete.
+              </p>
+            ) : null}
+            {mixed ? (
+              <p data-testid="mixed-versions">
+                The runs were evaluated with different versions of the rules (
+                {coverage.rulesVersions.join(", ")}). The checks and their wording can differ
+                between them.
+              </p>
+            ) : null}
+            <div className="flex h-2 w-full gap-px overflow-hidden rounded-full" aria-hidden="true">
+              {segments.flatMap((segment) =>
+                Array.from({ length: segment.n }, (_, i) => (
+                  <span key={`${segment.key}-${i}`} className={cn("flex-1", segment.tone)} />
+                )),
+              )}
+            </div>
+            <TooltipProvider>
+              <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums">
+                {segments
+                  .filter((segment) => segment.n > 0)
+                  .map((segment) => (
+                    <li key={segment.key} className="flex items-center gap-1.5">
+                      <span
+                        aria-hidden="true"
+                        className={cn("size-2 rounded-full", segment.tone)}
+                      />
+                      {segment.key === "passed" && coverage.passedNothingApplied > 0 ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span
+                              tabIndex={0}
+                              className="rounded-sm underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                            >
+                              {segment.n} {segment.label}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {coverage.passedNothingApplied} passed with nothing applied
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span>
+                          {segment.n} {segment.label}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+              </ul>
+            </TooltipProvider>
+            {localLimit ? <p className="text-xs">{LOCAL_ANSWER_NOTE}</p> : null}
+            {coverage.couldNotCheckOnFailingRuns > 0 ? (
+              <p className="text-xs">
+                On {count(coverage.couldNotCheckOnFailingRuns, "failing run")}, one check could not
+                run.
+              </p>
+            ) : null}
+          </CollapsibleContent>
+        </Collapsible>
       </AlertDescription>
     </Alert>
   )

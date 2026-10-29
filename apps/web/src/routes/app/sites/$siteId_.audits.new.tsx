@@ -18,7 +18,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea"
 import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
-import { runBreakdown, SCENARIOS } from "@/lib/audit-labels"
+import { LOCAL_ANSWER_SENTENCE, runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { carryOverText } from "@/lib/carry-over"
 import { count, shortDate, useTimeZone } from "@/lib/format"
 import { isOnSite, onSiteScheme, originHost, withoutCredentials } from "@/lib/site-url"
@@ -270,7 +270,7 @@ function NewAuditForm() {
               id="key-pages"
               label="Key pages"
               error={errors.pages ?? keyPageError ?? pageLimitError}
-              help={`One URL per line. ${pageLines.length} of ${MAX_KEY_PAGES}.`}
+              help={`Pages where tracking matters: product, cart, checkout, thank-you. One URL per line, ${pageLines.length} of ${MAX_KEY_PAGES}.`}
             >
               {(aria) => (
                 <Textarea
@@ -281,7 +281,7 @@ function NewAuditForm() {
                     setErrors((current) => withoutError(current, "pages"))
                   }}
                   rows={5}
-                  placeholder={`${site.origin}/product\n${site.origin}/checkout`}
+                  placeholder={`For example:\n${site.origin}/product\n${site.origin}/checkout`}
                   className="font-mono text-sm"
                   {...aria}
                 />
@@ -300,7 +300,7 @@ function NewAuditForm() {
           <FormSection
             number={2}
             title="Scenarios and viewports"
-            help="Compare consent choices across screen sizes."
+            help="Which consent choices to try, on which screen sizes."
           >
             <fieldset
               className="space-y-2"
@@ -437,7 +437,7 @@ function NewAuditForm() {
                 <CollapsibleContent className="pt-3">
                   <Toggle
                     label="Answer tracking requests locally"
-                    help="Tracking requests get a made-up reply instead of reaching the vendor, so test visits stay out of the client's analytics. They are still recorded and checked."
+                    help={`${LOCAL_ANSWER_SENTENCE} The requests are still recorded and checked, except whether the vendor accepted them.`}
                     checked={blockVendorRequests}
                     onChange={setBlockVendorRequests}
                   />
@@ -474,6 +474,11 @@ function NewAuditForm() {
             <p className="hidden text-xs text-muted-foreground lg:block">
               A journey run takes as long as{" "}
               {1 + Math.min(keyPages.length, JOURNEY_STEPS) + (reload ? 1 : 0)} page runs.
+            </p>
+          )}
+          {blockVendorRequests && breakdown.runs > 0 && (
+            <p className="hidden text-xs text-muted-foreground lg:block" data-testid="local-answer">
+              {LOCAL_ANSWER_SENTENCE}
             </p>
           )}
           {breakdown.runs > 100 && (
