@@ -34,6 +34,8 @@ import {
 import {
   assertProjected,
   clientVoiceOf,
+  isLocalAnswerCheck,
+  whereOf,
   evidenceRows,
   NOT_LEGAL_ADVICE,
   notTestedOf,
@@ -104,7 +106,7 @@ const scopeLineOf = (
 ) => {
   let where = `in ${scenarios.join(", ")}`
   if (configured > 1 && scenarios.length === configured) where = `in all ${configured} scenarios`
-  return `failed on ${finding.failingRuns} of ${finding.knownRuns} runs where it could be checked, on ${plural(pages, "page")}, ${where}`
+  return `failed on ${finding.failingRuns} of ${plural(finding.knownRuns, "run")} where it could be checked, on ${plural(pages, "page")}, ${where}`
 }
 const VIEWPORT_WORDS = { desktop: "Desktop", mobile: "Mobile" } as const
 
@@ -751,20 +753,21 @@ export const buildReport = (orgId: string, auditId: string) =>
           : yield* decodeOwner(edited.owner).pipe(Effect.orDie)
       let ownerSource: ReportFinding["ownerSource"] = f.owner === null ? "none" : "rule"
       if (edited?.owner) ownerSource = "author"
+      const scenarios = scenarioLabels(f.runIds)
       const entry: ReportFinding = {
         ruleId: f.ruleId,
         severity: f.severity,
         area: f.area,
         title: f.title,
         why: stored.why,
-        clientVoice: clientVoiceOf(f),
+        clientVoice: clientVoiceOf(f, whereOf(pages, scenarios, config.scenarios.length)),
         fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
         owner,
         ownerSource,
         failingRuns: f.failingRuns,
         knownRuns: f.knownRuns,
         pages,
-        scenarios: scenarioLabels(f.runIds),
+        scenarios,
         bannerUncertainRuns: f.bannerUncertainRuns,
         triage: {
           status: f.triage.status,
@@ -869,6 +872,9 @@ export const buildReport = (orgId: string, auditId: string) =>
           banner: bannerLimitsOf(runs),
           checksNotRun: checkRunLimits.notRun,
           checksPartlyRun: checkRunLimits.partlyRun,
+          deliveryNotChecked: neverChecked.some(
+            (f) => isLocalAnswerCheck(f.checkTitle) && !leftOutIds.has(f.ruleId),
+          ),
         }),
       },
       leftOut: hiddenFindings

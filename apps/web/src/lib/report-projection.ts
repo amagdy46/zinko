@@ -181,12 +181,18 @@ export function runReasonLabel(run: {
 
 const LOCAL_ANSWER_REASON = `${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests was therefore not checked.`
 
+/** The one check Zinko skips by design; the report says so once, in "What was not tested". */
+export const isLocalAnswerCheck = (checkTitle: string): boolean =>
+  checkTitle === ruleById("hygiene.tag-errors")?.checkTitle
+
 /** Why a check was never run, in words a client can read; only the one check Zinko skips by design has a specific reason. */
 export const checkGapReason = (checkTitle: string): string | null =>
-  checkTitle === ruleById("hygiene.tag-errors")?.checkTitle ? LOCAL_ANSWER_REASON : null
+  isLocalAnswerCheck(checkTitle) ? LOCAL_ANSWER_REASON : null
+
+const DELIVERY_NOT_CHECKED = `Delivery errors were not checked. ${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests is therefore not known.`
 
 export const neverCheckedLine = (checkTitle: string): string =>
-  `${checkTitle}: not checked on any run. ${checkGapReason(checkTitle) ?? "This report says nothing about it either way."}`
+  `${checkTitle}: not checked on any run. This report says nothing about it either way.`
 
 const AREA_MEANING: Readonly<Record<string, string>> = {
   consent:
@@ -202,35 +208,68 @@ const AREA_MEANING: Readonly<Record<string, string>> = {
     "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
 }
 const GENERIC_MEANING = "The tracking on the site may not behave the way it should."
-const SEVERITY_MEANING: Readonly<Record<string, string>> = {
-  critical: "We rate this critical: it is the kind of problem to fix first.",
-  warning: "We rate this a warning: worth fixing soon.",
-  info: "We rate this for information: worth knowing, rarely urgent.",
-}
+const FIXED_MEANING =
+  "If the fix holds, this no longer applies. A new audit of the site confirms whether it does."
+const ACCEPTED_PREFIX = "This was accepted as a known risk and is not on the to-do list."
+const ACCEPTED_NOTE = "The risk itself is unchanged:"
 
 /** Every sentence "What it means for you" can be, so the validator accepts these and nothing else. */
-const MEANINGS: ReadonlyArray<string> = Object.keys(SEVERITY_MEANING).flatMap((severity) =>
-  [...Object.values(AREA_MEANING), GENERIC_MEANING].map(
-    (area) => `${area} ${SEVERITY_MEANING[severity]}`,
+const MEANINGS: ReadonlyArray<string> = [
+  ...Object.values(AREA_MEANING),
+  GENERIC_MEANING,
+  FIXED_MEANING,
+  ...[...Object.values(AREA_MEANING), GENERIC_MEANING].map(
+    (area) => `${ACCEPTED_PREFIX} ${ACCEPTED_NOTE} ${area}`,
   ),
-)
+]
+
+/** "on 1 page, in all 3 scenarios": the pages and scenarios where it failed; a journey run counts with its page. */
+export function whereOf(
+  pages: ReadonlyArray<string>,
+  scenarios: ReadonlyArray<string>,
+  configuredScenarios: number,
+): string {
+  const pageCount = new Set(pages.map((page) => page.replace(/^Journey from /, ""))).size
+  const where =
+    configuredScenarios > 1 && scenarios.length === configuredScenarios
+      ? `all ${configuredScenarios} scenarios`
+      : scenarios.join(", ")
+  return `on ${plural(pageCount, "page")}${where === "" ? "" : `, in ${where}`}`
+}
 
 /**
- * A finding in a client's words, from stored fields only: the title and the run counts say what
- * happened, and a fixed vocabulary keyed by the stored area and severity says what it means. The
- * rule's `why` is written for the person who fixes it, so it stays under "Why it matters".
+ * A finding in a client's words, from stored fields only: the run counts say what happened (the
+ * title already says what), and a fixed vocabulary keyed by the stored area says what it means. A
+ * finding the author marked fixed or accepted says so instead of calling for a fix: a mark is the
+ * author's word, not a re-check. The rule's `why` is written for the person who fixes it, so it
+ * stays under "Technical detail".
  */
-export const clientVoiceOf = (finding: {
-  title: string
-  area: string
-  severity: string
-  failingRuns: number
-  knownRuns: number
-}) => ({
-  happened: `${finding.title}. It showed up in ${finding.failingRuns} of the ${plural(finding.knownRuns, "test run")} where it could be checked.`,
-  means:
-    `${AREA_MEANING[finding.area] ?? GENERIC_MEANING} ${SEVERITY_MEANING[finding.severity] ?? ""}`.trim(),
-})
+export const clientVoiceOf = (
+  finding: {
+    area: string
+    failingRuns: number
+    knownRuns: number
+    triage: { status: "open" | "accepted_risk" | "fixed" }
+  },
+  where: string,
+) => {
+  const seen = `This showed up in ${finding.failingRuns} of the ${plural(finding.knownRuns, "test run")} where it could be checked, ${where}.`
+  const area = AREA_MEANING[finding.area] ?? GENERIC_MEANING
+  switch (finding.triage.status) {
+    case "fixed":
+      return {
+        happened: `${seen} It has been marked fixed, but no new audit has confirmed that yet.`,
+        means: FIXED_MEANING,
+      }
+    case "accepted_risk":
+      return {
+        happened: `${seen} The agency has accepted it as a known risk.`,
+        means: `${ACCEPTED_PREFIX} ${ACCEPTED_NOTE} ${area}`,
+      }
+    default:
+      return { happened: seen, means: area }
+  }
+}
 
 export const NOT_LEGAL_ADVICE =
   "This report describes the technical behaviour of the audited pages in the scenarios listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business."
@@ -251,6 +290,7 @@ export function notTestedOf(facts: {
   banner: { notOperated: number; notDetected: number; unknown: number }
   checksNotRun: number
   checksPartlyRun: number
+  deliveryNotChecked: boolean
 }): string[] {
   const lines: string[] = []
   const missingScenarios = SCENARIOS.filter((s) => !facts.scenarios.includes(s.value)).map(
@@ -283,8 +323,12 @@ export function notTestedOf(facts: {
     lines.push(
       `On ${plural(facts.banner.unknown, "run")} without a choice, the page's accept and reject runs did not finish, so whether it has a consent banner is not known.`,
     )
-  if (facts.checksNotRun > 0)
-    lines.push(`${plural(facts.checksNotRun, "check")} could not be run on any run.`)
+  if (facts.deliveryNotChecked) lines.push(DELIVERY_NOT_CHECKED)
+  const otherNotRun = facts.checksNotRun - Number(facts.deliveryNotChecked)
+  if (otherNotRun > 0)
+    lines.push(
+      `${plural(otherNotRun, "check")} could not be run on any run${facts.deliveryNotChecked ? " besides that one" : ""}.`,
+    )
   if (facts.checksPartlyRun > 0)
     lines.push(`${plural(facts.checksPartlyRun, "check")} could not be run on some runs.`)
   lines.push(

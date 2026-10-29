@@ -111,6 +111,10 @@ function ShareBody({
     field.scrollLeft = 0
   }, [created])
 
+  const activeLinks = versions.reduce(
+    (total, v) => total + v.links.filter((l) => l.status === "active").length,
+    0,
+  )
   const days = DAYS[expiry]
   const nextVersion = changes || latestVersion === null ? (latestVersion ?? 0) + 1 : latestVersion
   const publishNote =
@@ -250,6 +254,12 @@ function ShareBody({
         {versions.length === 0 ? null : (
           <div className="space-y-3" data-testid="share-versions">
             <h3 className="font-medium">Versions</h3>
+            {activeLinks === 0 || created !== null ? null : (
+              <p className="text-muted-foreground" data-testid="active-links">
+                {count(activeLinks, "active link")}. A link's address is shown once, when it is
+                created. Create a new one to copy it.
+              </p>
+            )}
             {versions.map((v) => (
               <div key={v.id} className="space-y-1.5 rounded-md border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">

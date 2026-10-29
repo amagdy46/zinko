@@ -5,7 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import type { ReportModel } from "@/lib/report-model"
-import { neverCheckedLine } from "@/lib/report-projection"
+import { isLocalAnswerCheck, neverCheckedLine } from "@/lib/report-projection"
 import type { ReactNode } from "react"
 
 const LINK =
@@ -39,7 +39,8 @@ function CheckGaps({ model }: { model: ReportModel }) {
         ? `${count(brokenPages.length, "page")} could not be loaded (${brokenPages.map((p) => p.page).join(", ")}); ${count(checkGaps.blockedRules, "check")} could not run there.`
         : `${count(checkGaps.blockedRules, "check")} could not run because the start page did not load.`,
     )
-  for (const title of checkGaps.neverChecked) lines.push(neverCheckedLine(title))
+  for (const title of checkGaps.neverChecked)
+    if (!isLocalAnswerCheck(title)) lines.push(neverCheckedLine(title))
   if (checkGaps.otherRules > 0)
     lines.push(
       `${count(checkGaps.otherRules, "check")} could not be run on ${

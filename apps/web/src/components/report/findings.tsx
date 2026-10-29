@@ -3,7 +3,9 @@ import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
 import { AREAS, BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { whereOf } from "@/lib/report-projection"
 import { cn } from "@/lib/utils"
+import { ChevronDown } from "lucide-react"
 import type { ReactNode } from "react"
 import {
   byFindingOrder,
@@ -75,6 +77,7 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
     seen.set(text, (seen.get(text) ?? 0) + 1)
     return { c, key: `${text}#${seen.get(text)}` }
   })
+  const hasUnknown = rows.some(({ c }) => c.consent.includes("unknown"))
   return (
     <div className="space-y-1">
       <p className="text-xs text-muted-foreground">{evidence.caption}</p>
@@ -107,6 +110,12 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
           </tbody>
         </table>
       </div>
+      {hasUnknown ? (
+        <p className="text-xs text-muted-foreground">
+          Unknown: the page sent no consent signal for that part, so Zinko cannot say what was
+          allowed.
+        </p>
+      ) : null}
       <ul className="space-y-2 text-xs leading-5 sm:hidden print:hidden">
         {rows.map(({ c, key }) => (
           <li key={key} className="rounded-md border p-2">
@@ -128,14 +137,14 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
   )
 }
 
-function Triage({ finding }: { finding: ReportFinding }) {
+function Triage({ finding, agency }: { finding: ReportFinding; agency: string }) {
   const { triage } = finding
   if (triage.status === "open") return null
   if (triage.status === "fixed")
     return (
       <p className="flex items-start gap-2">
         <StatusGlyph meaning="finished" className="mt-0.5" />
-        Fixed: marked fixed by the author, not re-verified.
+        Marked fixed by {agency}; not yet confirmed by a re-check.
       </p>
     )
   return (
@@ -149,14 +158,61 @@ function Triage({ finding }: { finding: ReportFinding }) {
   )
 }
 
-/** "on 1 page, in all 3 scenarios": the pages and scenarios where it failed; a journey run counts with its page. */
-function whereOf(finding: ReportFinding, configuredScenarios: number) {
-  const pages = new Set(finding.pages.map((page) => page.replace(/^Journey from /, ""))).size
-  const scenarios =
-    configuredScenarios > 1 && finding.scenarios.length === configuredScenarios
-      ? `all ${configuredScenarios} scenarios`
-      : finding.scenarios.join(", ")
-  return `on ${count(pages, "page")}${scenarios === "" ? "" : `, in ${scenarios}`}`
+function WhyAndFix({ finding, withSteps }: { finding: ReportFinding; withSteps: boolean }) {
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        <h4 className="font-semibold">Why it matters</h4>
+        <p className="max-w-[65ch]">{finding.why}</p>
+      </div>
+      {withSteps ? <Steps steps={finding.fix} start={1} title="How to fix it" /> : null}
+    </div>
+  )
+}
+
+function Steps({
+  steps,
+  start,
+  title,
+}: {
+  steps: ReadonlyArray<string>
+  start: number
+  title: string
+}) {
+  if (steps.length === 0) return null
+  return (
+    <div className="space-y-1">
+      <h4 className="font-semibold">{title}</h4>
+      <ol start={start} className="max-w-[65ch] list-decimal space-y-1 pl-5">
+        {steps.map((step) => (
+          <li key={step}>{step}</li>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/** Closed on screen; in print the same text is printed open, because a closed disclosure prints nothing. */
+function TechnicalDetail({ finding, withSteps }: { finding: ReportFinding; withSteps: boolean }) {
+  return (
+    <>
+      <details className="group rounded-md border print:hidden" data-testid="technical-detail">
+        <summary className="flex min-h-8 cursor-pointer items-center rounded-md px-3 font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset">
+          <ChevronDown
+            aria-hidden="true"
+            className="mr-2 size-4 -rotate-90 text-muted-foreground group-open:rotate-0"
+          />
+          Technical detail
+        </summary>
+        <div className="border-t px-3 py-2">
+          <WhyAndFix finding={finding} withSteps={withSteps} />
+        </div>
+      </details>
+      <div className="hidden print:block">
+        <WhyAndFix finding={finding} withSteps={withSteps} />
+      </div>
+    </>
+  )
 }
 
 function FindingCard({
@@ -172,7 +228,8 @@ function FindingCard({
   hidden: boolean
   actions: ReactNode
 }) {
-  const [first] = finding.fix
+  const [first, ...rest] = finding.fix
+  const open = finding.triage.status === "open"
   return (
     <article
       id={`finding-${finding.ruleId}`}
@@ -200,22 +257,14 @@ function FindingCard({
         >
           {finding.title}
         </h3>
-        <p className="text-muted-foreground">
-          Failed on {finding.failingRuns} of {finding.knownRuns} runs where it could be checked,{" "}
-          {whereOf(finding, scenarioCount)}.
-        </p>
+        {finding.clientVoice === null ? (
+          <p className="text-muted-foreground">
+            Failed on {finding.failingRuns} of {count(finding.knownRuns, "run")} where it could be
+            checked, {whereOf(finding.pages, finding.scenarios, scenarioCount)}.
+          </p>
+        ) : null}
       </div>
-      {first === undefined ? null : (
-        <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
-          <span className="font-semibold">Fix first</span>
-          <span className="text-muted-foreground">
-            {" "}
-            ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
-          </span>{" "}
-          {first}
-        </p>
-      )}
-      <Triage finding={finding} />
+      <Triage finding={finding} agency={agency} />
       {finding.clientVoice === null ? null : (
         <div className="space-y-2" data-testid="client-voice">
           <div className="space-y-1">
@@ -228,18 +277,18 @@ function FindingCard({
           </div>
         </div>
       )}
-      <div className="space-y-1">
-        <h4 className="font-semibold">Why it matters</h4>
-        <p className="max-w-[65ch]">{finding.why}</p>
-      </div>
-      <div className="space-y-1">
-        <h4 className="font-semibold">How to fix it</h4>
-        <ol className="max-w-[65ch] list-decimal space-y-1 pl-5">
-          {finding.fix.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </div>
+      {first === undefined || !open ? null : (
+        <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
+          <span className="font-semibold">Fix first</span>
+          <span className="text-muted-foreground">
+            {" "}
+            ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
+          </span>{" "}
+          {first}
+        </p>
+      )}
+      {open ? <Steps steps={rest} start={2} title="Next steps" /> : null}
+      <TechnicalDetail finding={finding} withSteps={!open} />
       {finding.evidence === null ? (
         <p className="text-muted-foreground">
           Evidence is not available for this finding in the stored captures.

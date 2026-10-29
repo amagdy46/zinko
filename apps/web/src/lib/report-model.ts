@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 5
+export const REPORT_MODEL_VERSION = 6
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -94,7 +94,7 @@ export const ReportFinding = Schema.Struct({
   area: Schema.String,
   title: Schema.String,
   why: Schema.String,
-  /** The finding in a client's words; null in a snapshot from before model version 5, which did not record it. */
+  /** The finding in a client's words; null in a snapshot from before model version 5, which did not record it, and on a fixed or accepted finding of version 5, whose wording ignored the mark. */
   clientVoice: Schema.NullOr(Schema.Struct({ happened: Schema.String, means: Schema.String })),
   fix: Schema.Array(Schema.String),
   owner: Schema.NullOr(OwnerId),
@@ -172,7 +172,7 @@ const Changes = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, 3, 4, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, 4, 5, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -348,6 +348,18 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
       findings: json.findings.map((f: unknown) => (isRecord(f) ? { ...f, clientVoice: null } : f)),
     }
   },
+  /** Version 5 wrote "fix first" wording on findings the author had marked fixed or accepted: not recorded in version 6, which reads the triage instead. */
+  5: (json) => {
+    if (!isRecord(json) || !Array.isArray(json.findings)) return json
+    return {
+      ...json,
+      findings: json.findings.map((f: unknown) =>
+        isRecord(f) && isRecord(f.triage) && f.triage.status !== "open"
+          ? { ...f, clientVoice: null }
+          : f,
+      ),
+    }
+  },
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{
@@ -502,7 +514,7 @@ export function headlinesOf(
     const shown = open.length > MAX_FINDING_HEADLINES ? MAX_FINDING_HEADLINES - 1 : open.length
     for (const f of open.slice(0, shown))
       lines.push(
-        `${SEVERITY_WORD[f.severity]}: ${f.title}, failed on ${f.failingRuns} of ${f.knownRuns} runs where it could be checked.`,
+        `${SEVERITY_WORD[f.severity]}: ${f.title}, failed on ${f.failingRuns} of ${count(f.knownRuns, "run")} where it could be checked.`,
       )
     if (open.length > shown) lines.push(`And ${open.length - shown} more open failing findings.`)
   }

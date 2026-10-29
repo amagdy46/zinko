@@ -42,7 +42,7 @@ export const sampleReport = {
       "The 6 pages listed under Pages are the entry pages of this audit. Other pages of the site were not checked, except any a check reached by following a link from them, such as in a journey or to another host of the site.",
       "No journey through the key pages in one browser session was run.",
       "No landing from an ad click was simulated.",
-      "1 check could not be run on any run.",
+      "Delivery errors were not checked. Zinko answers tracking requests itself so your audit never sends test events to real ad accounts. Whether vendors accepted the requests is therefore not known.",
       "Requests are decoded for GA4, Google Ads, Meta, TikTok. Requests to any other vendor are not examined.",
       "What vendors do with the data after they receive it is not tested.",
     ],
@@ -948,9 +948,9 @@ export const sampleReport = {
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       clientVoice: {
         means:
-          "Visits, purchases or revenue may be missing or inaccurate in your reports, so the numbers cannot be taken at face value. We rate this critical: it is the kind of problem to fix first.",
+          "Visits, purchases or revenue may be missing or inaccurate in your reports, so the numbers cannot be taken at face value.",
         happened:
-          "Purchase missing transaction ID, value or currency. It showed up in 4 of the 8 test runs where it could be checked.",
+          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 scenarios.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1013,9 +1013,9 @@ export const sampleReport = {
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       clientVoice: {
         means:
-          "Some visits or sales may be counted twice, so the numbers look better than reality. We rate this critical: it is the kind of problem to fix first.",
+          "Some visits or sales may be counted twice, so the numbers look better than reality.",
         happened:
-          "Likely overcounting: purchase sent more than once. It showed up in 4 of the 8 test runs where it could be checked.",
+          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 scenarios.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1027,7 +1027,7 @@ export const sampleReport = {
         "Fire the pixel only when the marketing category is granted, and do nothing on rejection.",
         "If the pixel was already loaded, revoke it on rejection (fbq('consent', 'revoke'), ttq.revokeConsent()).",
       ],
-      why: "A visitor who rejects marketing cookies has refused to be shared with ad platforms. A Meta or TikTok hit after the rejection ignores that choice outright, which is the clearest consent breach a regulator or a visitor can find.",
+      why: "A visitor who rejects marketing cookies has refused to be shared with ad platforms. A Meta or TikTok hit after the rejection ignores that choice outright, and it may not meet consent requirements. Whether it does depends on the rules that apply to the business.",
       area: "consent",
       note: null,
       owner: "tag-manager",
@@ -1063,9 +1063,9 @@ export const sampleReport = {
       scenarios: ["Reject all"],
       clientVoice: {
         means:
-          "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules. We rate this critical: it is the kind of problem to fix first.",
+          "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules.",
         happened:
-          "Ad pixel fired after the visitor rejected. It showed up in 1 of the 6 test runs where it could be checked.",
+          "This showed up in 1 of the 6 test runs where it could be checked, on 1 page, in Reject all.",
       },
       failingRuns: 1,
       ownerSource: "rule",
@@ -1077,7 +1077,7 @@ export const sampleReport = {
         "If the pixel must load early, use its own consent API (fbq('consent', 'revoke') before init, ttq.holdConsent()) and grant it only on acceptance.",
         "Treat a Global Privacy Control signal (navigator.globalPrivacyControl) as an opt-out of sale and sharing: do not load the pixels for that visitor.",
       ],
-      why: "Meta and TikTok pixels carry no consent signal of their own: once one fires, the visit has been shared with the ad platform. A pixel that fires before the visitor chooses, when they never choose, or despite a Global Privacy Control signal, shares personal data without a legal basis.",
+      why: "Meta and TikTok pixels carry no consent signal of their own: once one fires, the visit has been shared with the ad platform. A pixel that fires before the visitor chooses, when they never choose, or despite a Global Privacy Control signal, shares visitor data with the ad platform before consent. Whether that is allowed depends on the rules that apply to the business.",
       area: "consent",
       note: null,
       owner: "tag-manager",
@@ -1113,9 +1113,9 @@ export const sampleReport = {
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       clientVoice: {
         means:
-          "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules. We rate this critical: it is the kind of problem to fix first.",
+          "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules.",
         happened:
-          "Ad pixel fired without consent. It showed up in 4 of the 24 test runs where it could be checked.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1127,7 +1127,7 @@ export const sampleReport = {
         "Until then, remove it before the tags read the URL: strip those query parameters from page_location (a GA4 config override or a tag manager variable) and from the URL the pixels send.",
         "For Meta and TikTok advanced matching, send the email and phone only as the hashed user data fields their pixels define, never as custom parameters.",
       ],
-      why: "Google, Meta and TikTok forbid sending personal data such as email addresses and phone numbers in hits, and under the GDPR it is a transfer the visitor never agreed to. Google may delete the affected GA4 data, and the address ends up in the vendors' logs and reports. It usually comes from a URL that carries the address (a sign-up or newsletter form using GET, a link in an email) and is copied into page_location.",
+      why: "Google, Meta and TikTok forbid sending personal data such as email addresses and phone numbers in hits, and it shares data the visitor did not agree to share, which privacy rules may restrict. Google may delete the affected GA4 data, and the address ends up in the vendors' logs and reports. It usually comes from a URL that carries the address (a sign-up or newsletter form using GET, a link in an email) and is copied into page_location.",
       area: "hygiene",
       note: null,
       owner: "developer",
@@ -1178,9 +1178,9 @@ export const sampleReport = {
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       clientVoice: {
         means:
-          "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust. We rate this critical: it is the kind of problem to fix first.",
+          "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
         happened:
-          "Personal data sent to tracking vendors. It showed up in 4 of the 24 test runs where it could be checked.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1257,9 +1257,9 @@ export const sampleReport = {
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       clientVoice: {
         means:
-          "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust. We rate this a warning: worth fixing soon.",
+          "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
         happened:
-          "Tag Manager preview or GA4 debug mode left on. It showed up in 4 of the 24 test runs where it could be checked.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1321,5 +1321,5 @@ export const sampleReport = {
     },
   ],
   generatedAt: "2026-10-29T07:18:52.014Z",
-  modelVersion: 5,
+  modelVersion: 6,
 } satisfies ReportModel & { modelVersion: typeof REPORT_MODEL_VERSION }
