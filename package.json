@@ -9,7 +9,7 @@
     "typecheck": "turbo run typecheck && tsc -p infra",
     "lint": "vp lint",
     "format": "vp fmt",
-    "check": "node scripts/check-entry-points.mjs && turbo run build --filter=\"./packages/*\" && vp check",
+    "check": "node scripts/check-entry-points.mjs && turbo run build --filter=\"./packages/*\" && node scripts/check-sample-report.mjs && vp check",
     "prepare": "effect-tsgo patch --typescript --oxlint",
     "db:migrate": "pnpm --filter @repo/db db:migrate",
     "deploy": "alchemy deploy infra/alchemy.run.ts",

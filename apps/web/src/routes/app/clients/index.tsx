@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
 import { EmptyState } from "@/components/empty-state"
+import { SampleReportLink } from "@/components/sample-report-link"
 import { ScoreSparkline } from "@/components/score-figure"
 import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
@@ -117,6 +118,7 @@ function Clients() {
             "Read the findings with the evidence behind each one.",
           ]}
           action={<Button onClick={() => setOpen(true)}>New client</Button>}
+          secondary={<SampleReportLink />}
         />
       ) : null}
       {clients.length > 0 && filtered.length === 0 ? (

@@ -5,6 +5,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { CircleHelp } from "lucide-react"
 import { type FormEvent, type ReactNode, useRef, useState } from "react"
+import { SampleReportLink } from "@/components/sample-report-link"
 import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
@@ -214,6 +215,7 @@ function NewAuditForm() {
             <code>{originHost(site.origin)}</code>.
           </>
         }
+        actions={last === null ? <SampleReportLink /> : undefined}
       />
       {baseline !== null && (
         <p className="text-sm text-muted-foreground">

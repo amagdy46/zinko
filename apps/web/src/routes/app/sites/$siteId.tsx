@@ -12,6 +12,7 @@ import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeading } from "@/components/section-heading"
 import { EmptyState } from "@/components/empty-state"
+import { SampleReportLink } from "@/components/sample-report-link"
 import { FindingCounts } from "@/components/first-run"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -323,6 +324,7 @@ function SitePage() {
               </Button>
             )
           }
+          secondary={<SampleReportLink />}
         />
       ) : (
         <Table data-testid="audit-history">
