@@ -244,6 +244,63 @@ const consentSummaryOf = (
   }
 }
 
+const keyOf = (r: { pageUrl: string; viewport: string; journey: boolean }) =>
+  `${r.pageUrl}|${r.viewport}|${r.journey}`
+
+/**
+ * What the consent runs did not establish, from the target runs' own stored outcomes (never from
+ * findings): accept or reject runs whose choice was not observed, and runs without a choice on a
+ * page whose accept and reject runs show no banner, or did not finish. Counted per distinct run.
+ */
+const bannerLimitsOf = (
+  runs: ReadonlyArray<RunFacts & { pageUrl: string; viewport: string; journey: boolean }>,
+) => {
+  const observed = (r: RunFacts) => {
+    const consent = Option.getOrNull(decodeConsent(r.consent))
+    return (
+      consent !== null &&
+      (consent.outcome === "accepted" || consent.outcome === "rejected") &&
+      consent.actionAt !== null
+    )
+  }
+  const finished = (r: RunFacts) => r.status === "complete" || r.status === "partial"
+  const choice = runs.filter((r) => r.scenario === "accept" || r.scenario === "reject")
+  const siblings = new Map<string, typeof runs>()
+  for (const r of choice) siblings.set(keyOf(r), [...(siblings.get(keyOf(r)) ?? []), r])
+  let notDetected = 0
+  let unknown = 0
+  for (const r of runs.filter(
+    (x) => (x.scenario === "none" || x.scenario === "gpc") && finished(x),
+  )) {
+    const own = (siblings.get(keyOf(r)) ?? []).filter(finished)
+    if (own.some(observed)) continue
+    if (own.length > 0 && own.length === (siblings.get(keyOf(r)) ?? []).length) notDetected++
+    else unknown++
+  }
+  return {
+    notOperated: choice.filter((r) => finished(r) && !observed(r)).length,
+    notDetected,
+    unknown,
+  }
+}
+
+/** Rules (outside the left-out ones) that could not be checked on any run, and on some runs, from the target runs' check results. */
+const checkRunLimitsOf = (stats: ReadonlyArray<RuleStat>, leftOut: ReadonlySet<string>) => {
+  const byRule = new Map<string, { known: number; unchecked: number }>()
+  for (const s of stats) {
+    if (leftOut.has(s.ruleId)) continue
+    const entry = byRule.get(s.ruleId) ?? { known: 0, unchecked: 0 }
+    if (s.status === "inconclusive") entry.unchecked += s.n
+    else entry.known += s.n
+    byRule.set(s.ruleId, entry)
+  }
+  const partial = [...byRule.values()].filter((e) => e.unchecked > 0)
+  return {
+    notRun: partial.filter((e) => e.known === 0).length,
+    partlyRun: partial.filter((e) => e.known > 0).length,
+  }
+}
+
 const byVersion = (a: string, b: string) => Number(a) - Number(b) || byText(a, b)
 
 /** sha256 of the model without `generatedAt`, then a newline, then the logo's digest: what a reader would see. */
@@ -719,6 +776,7 @@ export const buildReport = (orgId: string, auditId: string) =>
       if (edited?.hidden === true) hiddenFindings.push(entry)
       else findings.push(entry)
     }
+    const checkRunLimits = checkRunLimitsOf(ruleStats, leftOutIds)
     const generatedAt = new Date()
     const model: ReportModel = {
       modelVersion: REPORT_MODEL_VERSION,
@@ -808,9 +866,9 @@ export const buildReport = (orgId: string, auditId: string) =>
             partial: runs.filter((r) => r.status === "partial").length,
             failed: runs.filter((r) => r.status === "failed").length,
           },
-          bannerUncertainRuns: coverage.bannerUncertainRuns,
-          checksNotRun: checkGaps.neverChecked.length,
-          checksPartlyRun: checkGaps.blockedRules + checkGaps.otherRules,
+          banner: bannerLimitsOf(runs),
+          checksNotRun: checkRunLimits.notRun,
+          checksPartlyRun: checkRunLimits.partlyRun,
         }),
       },
       leftOut: hiddenFindings

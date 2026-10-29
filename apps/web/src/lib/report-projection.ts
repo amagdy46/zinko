@@ -194,10 +194,10 @@ const AREA_MEANING: Readonly<Record<string, string>> = {
   clickids:
     "Visits that came from an ad may not be credited to the campaign that paid for them, so ad results look worse than they are and budgets follow the wrong numbers.",
   coverage:
-    "Some visits or purchases may not be measured at all, so reports show fewer than really happened.",
+    "Visits, purchases or revenue may be missing or inaccurate in your reports, so the numbers cannot be taken at face value.",
   duplicates: "Some visits or sales may be counted twice, so the numbers look better than reality.",
   dedup:
-    "Ad platforms may count the same sale twice or fail to match it, which skews ad reports and the bidding that relies on them.",
+    "Ad platforms may count the same sale twice, merge different events into one or drop some, which skews ad reports and the bidding that relies on them.",
   hygiene:
     "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
 }
@@ -248,7 +248,7 @@ export function notTestedOf(facts: {
   journey: boolean
   clickIds: boolean
   runs: { complete: number; partial: number; failed: number }
-  bannerUncertainRuns: number
+  banner: { notOperated: number; notDetected: number; unknown: number }
   checksNotRun: number
   checksPartlyRun: number
 }): string[] {
@@ -262,7 +262,7 @@ export function notTestedOf(facts: {
   if (missingViewports.length > 0)
     lines.push(`Screen sizes not tested: ${missingViewports.join(", ")}.`)
   lines.push(
-    `Only the ${plural(facts.pages, "page")} listed under Pages were audited. Every other page of the site was not checked.`,
+    `The ${plural(facts.pages, "page")} listed under Pages ${facts.pages === 1 ? "is" : "are"} the entry ${facts.pages === 1 ? "page" : "pages"} of this audit. Other pages of the site were not checked, except any a check reached by following a link from them, such as in a journey or to another host of the site.`,
   )
   if (!facts.journey) lines.push("No journey through the key pages in one browser session was run.")
   if (!facts.clickIds) lines.push("No landing from an ad click was simulated.")
@@ -271,9 +271,17 @@ export function notTestedOf(facts: {
     lines.push(
       `${unfinished} of ${plural(facts.runs.complete + unfinished, "run")} did not finish, so those pages and scenarios are only partly covered. The appendix lists them.`,
     )
-  if (facts.bannerUncertainRuns > 0)
+  if (facts.banner.notOperated > 0)
     lines.push(
-      `On ${plural(facts.bannerUncertainRuns, "run")} no consent banner was detected or could be operated, so what happens after an accept or a reject was not tested there.`,
+      `On ${plural(facts.banner.notOperated, "accept or reject run")} the consent choice was not observed (the banner was not found or could not be operated), so what happens after a choice was not tested there.`,
+    )
+  if (facts.banner.notDetected > 0)
+    lines.push(
+      `On ${plural(facts.banner.notDetected, "run")} without a choice, no consent banner was detected on that page, so whether the visitor should have been asked is not established.`,
+    )
+  if (facts.banner.unknown > 0)
+    lines.push(
+      `On ${plural(facts.banner.unknown, "run")} without a choice, the page's accept and reject runs did not finish, so whether it has a consent banner is not known.`,
     )
   if (facts.checksNotRun > 0)
     lines.push(`${plural(facts.checksNotRun, "check")} could not be run on any run.`)
