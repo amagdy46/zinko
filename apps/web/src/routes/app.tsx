@@ -176,7 +176,7 @@ function AppShell() {
           <Outlet />
         </main>
         <CommandPalette
-          key={session.activeOrganizationId}
+          key={`${session.activeOrganizationId}:${groupByClient}`}
           open={findOpen}
           onOpenChange={setFindOpen}
           organizations={organizations}

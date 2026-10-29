@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { Option, Schema } from "effect"
 import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
@@ -38,10 +39,13 @@ import { withScheme } from "@/lib/site-url"
 import { createSite, listClients, listSites } from "@/server/clients"
 
 const NO_CLIENT = "none"
+const decodeAdd = Schema.decodeUnknownOption(
+  Schema.Union([Schema.Literal(true), Schema.Literal("true")]),
+)
 
 export const Route = createFileRoute("/app/sites/")({
   validateSearch: (search: Record<string, unknown>): { add?: true } =>
-    search.add === true || search.add === "true" ? { add: true } : {},
+    Option.isSome(decodeAdd(search.add)) ? { add: true } : {},
   head: () => pageTitle("Sites"),
   loader: async ({ context }) => ({
     sites: await listSites(),
@@ -58,6 +62,7 @@ function Sites() {
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
+  const addButton = useRef<HTMLButtonElement>(null)
   const [pending, setPending] = useState(false)
   const [urlError, setUrlError] = useState<string>()
   const [clientId, setClientId] = useState(NO_CLIENT)
@@ -125,14 +130,13 @@ function Sites() {
             >
               {sites.length > 0 ? (
                 <DialogTrigger asChild>
-                  <Button>Add site</Button>
+                  <Button ref={addButton}>Add site</Button>
                 </DialogTrigger>
               ) : null}
               <DialogContent
                 onCloseAutoFocus={(event) => {
-                  if (opener.current === null) return
                   event.preventDefault()
-                  opener.current.focus()
+                  ;(opener.current ?? addButton.current)?.focus()
                   opener.current = null
                 }}
               >
@@ -235,6 +239,7 @@ function Sites() {
           ]}
           action={
             <Button
+              ref={addButton}
               onClick={(event) => {
                 opener.current = event.currentTarget
                 setOpen(true)
