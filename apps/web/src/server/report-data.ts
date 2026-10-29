@@ -33,7 +33,10 @@ import {
 } from "@/lib/report-model"
 import {
   assertProjected,
+  clientVoiceOf,
   evidenceRows,
+  NOT_LEGAL_ADVICE,
+  notTestedOf,
   pageLabel,
   runReasonLabel,
   vendorLabel,
@@ -697,6 +700,7 @@ export const buildReport = (orgId: string, auditId: string) =>
         area: f.area,
         title: f.title,
         why: stored.why,
+        clientVoice: clientVoiceOf(f),
         fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
         owner,
         ownerSource,
@@ -791,6 +795,24 @@ export const buildReport = (orgId: string, auditId: string) =>
       consent: consentSummaryOf(config.scenarios, runs, hitCells),
       findings,
       changes: edit?.includeChanges === false ? null : (changed?.changes ?? null),
+      limits: {
+        disclaimer: NOT_LEGAL_ADVICE,
+        notTested: notTestedOf({
+          scenarios: config.scenarios,
+          viewports: config.viewports,
+          pages: config.pages.length,
+          journey: config.journey === true,
+          clickIds: config.clickIds,
+          runs: {
+            complete: runs.filter((r) => r.status === "complete").length,
+            partial: runs.filter((r) => r.status === "partial").length,
+            failed: runs.filter((r) => r.status === "failed").length,
+          },
+          bannerUncertainRuns: coverage.bannerUncertainRuns,
+          checksNotRun: checkGaps.neverChecked.length,
+          checksPartlyRun: checkGaps.blockedRules + checkGaps.otherRules,
+        }),
+      },
       leftOut: hiddenFindings
         .map((f) => ({ ruleId: f.ruleId, title: f.title }))
         .toSorted((a, b) => byText(a.ruleId, b.ruleId)),

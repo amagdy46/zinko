@@ -216,6 +216,18 @@ function FindingCard({
         </p>
       )}
       <Triage finding={finding} />
+      {finding.clientVoice === null ? null : (
+        <div className="space-y-2" data-testid="client-voice">
+          <div className="space-y-1">
+            <h4 className="font-semibold">What happened</h4>
+            <p className="max-w-[65ch]">{finding.clientVoice.happened}</p>
+          </div>
+          <div className="space-y-1">
+            <h4 className="font-semibold">What it means for you</h4>
+            <p className="max-w-[65ch]">{finding.clientVoice.means}</p>
+          </div>
+        </div>
+      )}
       <div className="space-y-1">
         <h4 className="font-semibold">Why it matters</h4>
         <p className="max-w-[65ch]">{finding.why}</p>

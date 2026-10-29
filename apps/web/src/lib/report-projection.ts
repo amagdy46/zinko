@@ -11,6 +11,7 @@ import { AREAS, ERROR_TEXT, LOCAL_ANSWER_SENTENCE, SCENARIOS } from "./audit-lab
 import { pageIndexOf } from "./page-match"
 import { ACCENTS } from "./report-accent"
 import { REPORT_MODEL_VERSION } from "./report-model"
+import { count as plural } from "./format"
 import type { DisclosureLevel, EvidenceRow, ReportModel } from "./report-model"
 
 /*
@@ -187,6 +188,104 @@ export const checkGapReason = (checkTitle: string): string | null =>
 export const neverCheckedLine = (checkTitle: string): string =>
   `${checkTitle}: not checked on any run. ${checkGapReason(checkTitle) ?? "This report says nothing about it either way."}`
 
+const AREA_MEANING: Readonly<Record<string, string>> = {
+  consent:
+    "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules.",
+  clickids:
+    "Visits that came from an ad may not be credited to the campaign that paid for them, so ad results look worse than they are and budgets follow the wrong numbers.",
+  coverage:
+    "Some visits or purchases may not be measured at all, so reports show fewer than really happened.",
+  duplicates: "Some visits or sales may be counted twice, so the numbers look better than reality.",
+  dedup:
+    "Ad platforms may count the same sale twice or fail to match it, which skews ad reports and the bidding that relies on them.",
+  hygiene:
+    "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
+}
+const GENERIC_MEANING = "The tracking on the site may not behave the way it should."
+const SEVERITY_MEANING: Readonly<Record<string, string>> = {
+  critical: "We rate this critical: it is the kind of problem to fix first.",
+  warning: "We rate this a warning: worth fixing soon.",
+  info: "We rate this for information: worth knowing, rarely urgent.",
+}
+
+/** Every sentence "What it means for you" can be, so the validator accepts these and nothing else. */
+const MEANINGS: ReadonlyArray<string> = Object.keys(SEVERITY_MEANING).flatMap((severity) =>
+  [...Object.values(AREA_MEANING), GENERIC_MEANING].map(
+    (area) => `${area} ${SEVERITY_MEANING[severity]}`,
+  ),
+)
+
+/**
+ * A finding in a client's words, from stored fields only: the title and the run counts say what
+ * happened, and a fixed vocabulary keyed by the stored area and severity says what it means. The
+ * rule's `why` is written for the person who fixes it, so it stays under "Why it matters".
+ */
+export const clientVoiceOf = (finding: {
+  title: string
+  area: string
+  severity: string
+  failingRuns: number
+  knownRuns: number
+}) => ({
+  happened: `${finding.title}. It showed up in ${finding.failingRuns} of the ${plural(finding.knownRuns, "test run")} where it could be checked.`,
+  means:
+    `${AREA_MEANING[finding.area] ?? GENERIC_MEANING} ${SEVERITY_MEANING[finding.severity] ?? ""}`.trim(),
+})
+
+export const NOT_LEGAL_ADVICE =
+  "This report describes the technical behaviour of the audited pages in the scenarios listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business."
+
+const DECODED_VENDORS = Object.values(VENDOR_LABELS).join(", ")
+
+/**
+ * What the audit did not look at, from the audit's own configuration and counts. Every line is a
+ * fact about this audit; the two static ones name limits of every audit.
+ */
+export function notTestedOf(facts: {
+  scenarios: ReadonlyArray<string>
+  viewports: ReadonlyArray<string>
+  pages: number
+  journey: boolean
+  clickIds: boolean
+  runs: { complete: number; partial: number; failed: number }
+  bannerUncertainRuns: number
+  checksNotRun: number
+  checksPartlyRun: number
+}): string[] {
+  const lines: string[] = []
+  const missingScenarios = SCENARIOS.filter((s) => !facts.scenarios.includes(s.value)).map(
+    (s) => s.label,
+  )
+  if (missingScenarios.length > 0)
+    lines.push(`Consent scenarios not run: ${missingScenarios.join(", ")}.`)
+  const missingViewports = VIEWPORT_LABELS.filter((v) => !facts.viewports.includes(v.toLowerCase()))
+  if (missingViewports.length > 0)
+    lines.push(`Screen sizes not tested: ${missingViewports.join(", ")}.`)
+  lines.push(
+    `Only the ${plural(facts.pages, "page")} listed under Pages were audited. Every other page of the site was not checked.`,
+  )
+  if (!facts.journey) lines.push("No journey through the key pages in one browser session was run.")
+  if (!facts.clickIds) lines.push("No landing from an ad click was simulated.")
+  const unfinished = facts.runs.partial + facts.runs.failed
+  if (unfinished > 0)
+    lines.push(
+      `${unfinished} of ${plural(facts.runs.complete + unfinished, "run")} did not finish, so those pages and scenarios are only partly covered. The appendix lists them.`,
+    )
+  if (facts.bannerUncertainRuns > 0)
+    lines.push(
+      `On ${plural(facts.bannerUncertainRuns, "run")} no consent banner was detected or could be operated, so what happens after an accept or a reject was not tested there.`,
+    )
+  if (facts.checksNotRun > 0)
+    lines.push(`${plural(facts.checksNotRun, "check")} could not be run on any run.`)
+  if (facts.checksPartlyRun > 0)
+    lines.push(`${plural(facts.checksPartlyRun, "check")} could not be run on some runs.`)
+  lines.push(
+    `Requests are decoded for ${DECODED_VENDORS}. Requests to any other vendor are not examined.`,
+    "What vendors do with the data after they receive it is not tested.",
+  )
+  return lines
+}
+
 export class ProjectionViolation extends Data.TaggedError("ProjectionViolation")<{
   readonly path: string
   readonly rule: string
@@ -270,6 +369,9 @@ const finding = {
   area: oneOf("area", Object.keys(AREAS)),
   title: stored,
   why: stored,
+  clientVoice: absent,
+  "clientVoice.happened": generated,
+  "clientVoice.means": oneOf("means", MEANINGS),
   "fix[]": stored,
   owner: nullable(oneOf("owner", OWNERS)),
   ownerSource: oneOf("ownerSource", ["rule", "author", "none"]),
@@ -456,6 +558,9 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
     ]),
   ],
   ["changes.lines[]", generated],
+  ["limits", absent],
+  ["limits.disclaimer", oneOf("disclaimer", [NOT_LEGAL_ADVICE])],
+  ["limits.notTested[]", generated],
   ["leftOut[].ruleId", ruleId],
   ["leftOut[].title", stored],
   ["actionPlan[].owner", nullable(oneOf("owner", OWNERS))],

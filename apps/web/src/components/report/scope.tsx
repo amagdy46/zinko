@@ -74,11 +74,29 @@ export function Scope({ model }: { model: ReportModel }) {
           Every finding comes from a deterministic rule applied to what the browser recorded. No
           model decides whether a check passes or fails.
         </p>
-        <p>
-          This report describes technical behaviour on the audited pages and scenarios. It is not
-          legal advice and not a statement of legal compliance.
-        </p>
+        {model.limits === null ? (
+          <p>
+            This report describes technical behaviour on the audited pages and scenarios. It is not
+            legal advice and not a statement of legal compliance.
+          </p>
+        ) : null}
       </div>
+      {model.limits === null ? null : (
+        <div className="space-y-4" data-testid="limits">
+          <div className="space-y-1">
+            <h3 className="font-semibold">This is not legal advice</h3>
+            <p className="max-w-[65ch]">{model.limits.disclaimer}</p>
+          </div>
+          <div className="space-y-1">
+            <h3 className="font-semibold">What was not tested</h3>
+            <ul className="max-w-[65ch] list-disc space-y-0.5 pl-5">
+              {model.limits.notTested.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
     </section>
   )
 }

@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 4
+export const REPORT_MODEL_VERSION = 5
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -94,6 +94,8 @@ export const ReportFinding = Schema.Struct({
   area: Schema.String,
   title: Schema.String,
   why: Schema.String,
+  /** The finding in a client's words; null in a snapshot from before model version 5, which did not record it. */
+  clientVoice: Schema.NullOr(Schema.Struct({ happened: Schema.String, means: Schema.String })),
   fix: Schema.Array(Schema.String),
   owner: Schema.NullOr(OwnerId),
   ownerSource: Schema.Literals(["rule", "author", "none"]),
@@ -170,7 +172,7 @@ const Changes = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, 3, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, 4, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -255,6 +257,10 @@ export const ReportModel = Schema.Struct({
   }),
   findings: Schema.Array(ReportFinding),
   changes: Schema.NullOr(Changes),
+  /** The standing disclaimer and what the audit did not test; null in a snapshot from before model version 5. */
+  limits: Schema.NullOr(
+    Schema.Struct({ disclaimer: Schema.String, notTested: Schema.Array(Schema.String) }),
+  ),
   leftOut: Schema.Array(Schema.Struct({ ruleId: Schema.String, title: Schema.String })),
   actionPlan: Schema.Array(
     Schema.Struct({
@@ -334,6 +340,14 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
     }
   },
   3: (json) => (isRecord(json) ? { ...json, changes: null } : json),
+  4: (json) => {
+    if (!isRecord(json) || !Array.isArray(json.findings)) return json
+    return {
+      ...json,
+      limits: null,
+      findings: json.findings.map((f: unknown) => (isRecord(f) ? { ...f, clientVoice: null } : f)),
+    }
+  },
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{
