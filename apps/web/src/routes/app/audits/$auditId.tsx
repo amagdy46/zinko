@@ -292,7 +292,15 @@ function AuditPage() {
           title={title}
           breadcrumb={[
             { label: "Clients", to: "/app/clients" },
-            { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
+            ...(client === null
+              ? []
+              : [
+                  {
+                    label: client.name,
+                    to: "/app/clients/$clientId" as const,
+                    params: { clientId: client.id },
+                  },
+                ]),
             { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
             {
               label:

@@ -295,7 +295,7 @@ export const getAudit = createServerFn({ method: "GET" })
           .select({
             audit,
             site: { id: site.id, name: site.name, host: site.host, archivedAt: site.archivedAt },
-            client: { id: client.id, name: client.name },
+            client: { id: client.id, name: client.name, isDefault: client.isDefault },
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
@@ -432,7 +432,7 @@ export const getAudit = createServerFn({ method: "GET" })
             host: found.site.host,
             archived: found.site.archivedAt !== null,
           },
-          client: found.client,
+          client: found.client.isDefault ? null : { id: found.client.id, name: found.client.name },
           summary,
           findings: findings.filter((f) => f.kind === "fail"),
           runs,

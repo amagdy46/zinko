@@ -1,5 +1,5 @@
 import { Database } from "@repo/core/Database"
-import { audit, client, site } from "@repo/db"
+import { audit, client, orgSetting, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -16,6 +16,8 @@ import {
   siteSummaries,
   trendsOf,
 } from "./client-summary"
+import { defaultClientOf } from "./default-client"
+import { groupByClientOf } from "./org-setting-data"
 import { requireSession } from "./require-session"
 import {
   allowPrivateSites,
@@ -108,16 +110,20 @@ const parseMeasuredHosts = (values: ReadonlyArray<string>, siteHost: string) =>
 
 const IdInput = Schema.Struct({ id: Schema.String })
 
-/** `lock` takes a row lock; it only holds inside `atomically`. */
-const clientInOrg = (orgId: string, id: string, lock = false) =>
+/**
+ * A named client of the organization; the hidden default client is never addressable by id, so it
+ * is not found. `lock` takes a row lock (`"update"` or `"share"`) and only holds
+ * inside `atomically`.
+ */
+const clientInOrg = (orgId: string, id: string, lock: false | "update" | "share" = false) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     if (!isUuid(id)) return yield* new NotFound({ message: "Not found" })
     const query = db
       .select()
       .from(client)
-      .where(and(eq(client.id, id), eq(client.orgId, orgId)))
-    const [found] = yield* lock ? query.for("update") : query
+      .where(and(eq(client.id, id), eq(client.orgId, orgId), eq(client.isDefault, false)))
+    const [found] = yield* lock === false ? query : query.for(lock)
     if (found === undefined) return yield* new NotFound({ message: "Not found" })
     return found
   })
@@ -174,7 +180,9 @@ export const listClients = createServerFn({ method: "GET" })
         const clients = yield* db
           .select()
           .from(client)
-          .where(and(eq(client.orgId, orgId), isNull(client.archivedAt)))
+          .where(
+            and(eq(client.orgId, orgId), eq(client.isDefault, false), isNull(client.archivedAt)),
+          )
           .orderBy(client.name)
         const sites = yield* db
           .select({ id: site.id, clientId: site.clientId })
@@ -217,7 +225,7 @@ const SearchInput = Schema.Struct({ query: Schema.String.check(Schema.isMaxLengt
 /** Escapes `\`, `%` and `_` so the text matches literally inside `ilike`. */
 const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
 
-/** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. An empty query lists the first by name. `audits` are the newest few, of sites matching the query. */
+/** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. Clients are listed only when the organization groups sites by client, and a site carries its client's name only when that client is a named one. An empty query lists the first by name. `audits` are the newest few, of sites matching the query. */
 export const searchTargets = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(SearchInput))
@@ -228,21 +236,33 @@ export const searchTargets = createServerFn({ method: "GET" })
         const { db } = yield* Database
         const text = data.query.trim()
         const pattern = likePattern(text)
-        const clients = yield* db
-          .select({ id: client.id, name: client.name })
-          .from(client)
-          .where(
-            and(
-              eq(client.orgId, orgId),
-              isNull(client.archivedAt),
-              text === "" ? undefined : ilike(client.name, pattern),
-            ),
-          )
-          .orderBy(client.name)
-          .limit(SEARCH_LIMIT + 1)
+        const grouping = yield* groupByClientOf(orgId)
+        const clients = grouping
+          ? yield* db
+              .select({ id: client.id, name: client.name })
+              .from(client)
+              .where(
+                and(
+                  eq(client.orgId, orgId),
+                  eq(client.isDefault, false),
+                  isNull(client.archivedAt),
+                  text === "" ? undefined : ilike(client.name, pattern),
+                ),
+              )
+              .orderBy(client.name)
+              .limit(SEARCH_LIMIT + 1)
+          : []
         const sites = yield* db
-          .select({ id: site.id, name: site.name, host: site.host })
+          .select({
+            id: site.id,
+            name: site.name,
+            host: site.host,
+            clientName: sql<
+              string | null
+            >`case when ${client.isDefault} then null else ${client.name} end`,
+          })
           .from(site)
+          .innerJoin(client, eq(client.id, site.clientId))
           .where(
             and(
               eq(site.orgId, orgId),
@@ -306,8 +326,16 @@ export const createClient = createServerFn({ method: "POST" })
         const { organizationId: orgId } = yield* membership(context.session)
         const name = yield* parseName(data.name)
         const { db } = yield* Database
-        const [created] = yield* db.insert(client).values({ orgId, name }).returning()
-        return { id: created?.id ?? "" }
+        return yield* atomically(
+          Effect.gen(function* () {
+            const [created] = yield* db.insert(client).values({ orgId, name }).returning()
+            yield* db
+              .insert(orgSetting)
+              .values({ orgId, groupByClient: true })
+              .onConflictDoNothing()
+            return { id: created?.id ?? "" }
+          }),
+        )
       }),
     ),
   )
@@ -325,7 +353,7 @@ export const archiveClient = createServerFn({ method: "POST" })
         const archivedAt = new Date()
         yield* atomically(
           Effect.gen(function* () {
-            const found = yield* clientInOrg(orgId, data.id, true)
+            const found = yield* clientInOrg(orgId, data.id, "update")
             yield* db
               .update(site)
               .set({ archivedAt })
@@ -356,7 +384,7 @@ export const deleteClient = createServerFn({ method: "POST" })
           "client",
           atomically(
             Effect.gen(function* () {
-              const found = yield* clientInOrg(orgId, data.id, true)
+              const found = yield* clientInOrg(orgId, data.id, "update")
               const sites = yield* db
                 .select({ id: site.id })
                 .from(site)
@@ -415,30 +443,91 @@ export const getClient = createServerFn({ method: "GET" })
     ),
   )
 
+/** Locks a named client for update and returns its id; an archived one is not found. */
+const lockedOwner = (orgId: string, clientId: string) =>
+  Effect.gen(function* () {
+    const owner = yield* clientInOrg(orgId, clientId, "update")
+    if (owner.archivedAt !== null) return yield* new NotFound({ message: "Not found" })
+    return owner.id
+  })
+
 export const createSite = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(
     Schema.toStandardSchemaV1(
-      Schema.Struct({ clientId: Schema.String, name: Schema.String, url: Schema.String }),
+      Schema.Struct({
+        clientId: Schema.optionalKey(Schema.String),
+        name: Schema.String,
+        url: Schema.String,
+      }),
     ),
   )
   .handler(({ context, data }) =>
     mutation(
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
-        yield* clientInOrg(orgId, data.clientId)
+        const { clientId } = data
+        if (clientId !== undefined) yield* clientInOrg(orgId, clientId)
         const name = yield* parseName(data.name)
         const { origin, host } = yield* parseSiteUrl(data.url)
         const { db } = yield* Database
         return yield* atomically(
           Effect.gen(function* () {
-            const owner = yield* clientInOrg(orgId, data.clientId, true)
-            if (owner.archivedAt !== null) return yield* new NotFound({ message: "Not found" })
+            const ownerId =
+              clientId === undefined
+                ? (yield* defaultClientOf(orgId)).id
+                : yield* lockedOwner(orgId, clientId)
             const [created] = yield* db
               .insert(site)
-              .values({ orgId, clientId: owner.id, name, origin, host })
+              .values({ orgId, clientId: ownerId, name, origin, host })
               .returning()
             return { id: created?.id ?? "" }
+          }),
+        )
+      }),
+    ),
+  )
+
+/**
+ * Moves a site to a named client, or to the hidden default client with `clientId: null`. Lock
+ * order client, then site: the destination is locked `for share` (it only has to stay unarchived;
+ * `archiveClient` takes `for update` on the same row), then the site `for update`.
+ */
+export const updateSiteClient = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(
+    Schema.toStandardSchemaV1(
+      Schema.Struct({ siteId: Schema.String, clientId: Schema.NullOr(Schema.String) }),
+    ),
+  )
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        yield* siteInOrg(orgId, data.siteId)
+        if (data.clientId !== null) yield* clientInOrg(orgId, data.clientId)
+        yield* requireManager(role, "move a site to another client")
+        const { db } = yield* Database
+        return yield* atomically(
+          Effect.gen(function* () {
+            const destinationId =
+              data.clientId === null ? (yield* defaultClientOf(orgId)).id : data.clientId
+            const [destination] = yield* db
+              .select()
+              .from(client)
+              .where(and(eq(client.id, destinationId), eq(client.orgId, orgId)))
+              .for("share")
+            if (destination === undefined) return yield* new NotFound({ message: "Not found" })
+            if (destination.archivedAt !== null)
+              return yield* new Invalid({ message: "This client is archived." })
+            const found = yield* siteInOrg(orgId, data.siteId, true)
+            if (found.archivedAt !== null)
+              return yield* new Invalid({ message: "This site is archived." })
+            yield* db
+              .update(site)
+              .set({ clientId: destination.id })
+              .where(and(eq(site.orgId, orgId), eq(site.id, found.id)))
+            return { clientId: destination.isDefault ? null : destination.id }
           }),
         )
       }),
@@ -579,8 +668,17 @@ export const getSite = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const { organizationId: orgId, role } = yield* membership(context.session)
         const found = yield* siteInOrg(orgId, data.id)
-        const owner = yield* clientInOrg(orgId, found.clientId)
         const { db } = yield* Database
+        const [owner] = yield* db
+          .select({ id: client.id, name: client.name })
+          .from(client)
+          .where(
+            and(
+              eq(client.id, found.clientId),
+              eq(client.orgId, orgId),
+              eq(client.isDefault, false),
+            ),
+          )
         const page = Math.max(data.page ?? 0, 0)
         const rows = yield* db
           .select()
@@ -612,7 +710,7 @@ export const getSite = createServerFn({ method: "GET" })
             measuredHosts: found.measuredHosts,
             archived: found.archivedAt !== null,
           },
-          client: { id: owner.id, name: owner.name },
+          client: owner ?? null,
           canManage: isManager(role),
           audits: audits.map((a) => {
             const summary = summaries.find((row) => row.id === a.id)
@@ -658,6 +756,42 @@ export const getSite = createServerFn({ method: "GET" })
           baseline,
           carryOver,
         }
+      }),
+    ),
+  )
+
+export const listSites = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const { db } = yield* Database
+        const sites = yield* db
+          .select({
+            id: site.id,
+            name: site.name,
+            host: site.host,
+            clientId: client.id,
+            clientName: client.name,
+            isDefault: client.isDefault,
+          })
+          .from(site)
+          .innerJoin(client, eq(client.id, site.clientId))
+          .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
+          .orderBy(site.name, site.id)
+        const summaries = yield* siteSummaries(
+          orgId,
+          sites.map((s) => s.id),
+        )
+        return sites.map((s) => ({
+          id: s.id,
+          name: s.name,
+          host: s.host,
+          client: s.isDefault ? null : { id: s.clientId, name: s.clientName },
+          running: summaries.get(s.id)?.running ?? 0,
+          latest: summaries.get(s.id)?.latest ?? null,
+        }))
       }),
     ),
   )

@@ -126,7 +126,9 @@ function SitePage() {
       toast.error(result.message)
       return
     }
-    await router.navigate({ to: "/app/clients/$clientId", params: { clientId: client.id } })
+    await (client === null
+      ? router.navigate({ to: "/app/clients" })
+      : router.navigate({ to: "/app/clients/$clientId", params: { clientId: client.id } }))
   }
 
   return (
@@ -135,7 +137,15 @@ function SitePage() {
         title={site.name}
         breadcrumb={[
           { label: "Clients", to: "/app/clients" },
-          { label: client.name, to: "/app/clients/$clientId", params: { clientId: client.id } },
+          ...(client === null
+            ? []
+            : [
+                {
+                  label: client.name,
+                  to: "/app/clients/$clientId" as const,
+                  params: { clientId: client.id },
+                },
+              ]),
           { label: site.name },
         ]}
         description={
