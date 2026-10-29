@@ -104,6 +104,18 @@ const TURNS = 5
 const backoff = (turn: number, code: string) =>
   code === ENGINE_BUSY ? Math.min(5_000 * 2 ** turn, 30_000) : 15_000 * 2 ** turn
 
+// The busy backoff one audit may sleep in all, over every run and both passes. It is the sum of
+// the sleeps the workflow took, so a replay recomputes the same figure from the same steps. Once
+// it is spent, a busy run is not asked again after a backoff: it fails as EngineBusy (a held-back
+// run still gets one last ask without a backoff). 240 s covers a run's whole 65 s schedule and
+// an engine that is busy for a minute (the longest a capture normally holds it is 135 s) for the
+// first runs, and caps a permanently busy engine at about 4 minutes of backoff however many runs
+// the audit has.
+const BUSY_BUDGET = 240_000
+interface Budget {
+  spent: number
+}
+
 // The gate is a Durable Object call: retry briefly, and treat a gate that stays down like a busy
 // engine (the run records EngineBusy: Zinko was busy).
 const ADMIT_STEP = {
@@ -281,6 +293,27 @@ const journeyOf = (
 }
 
 /**
+ * A run that gives its turn back is waiting for a slot, not running: say so, and time its next
+ * attempt from its own start.
+ */
+const requeueRun = (auditId: string, runId: string, ordinal: number) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    yield* db
+      .update(run)
+      .set({ status: "pending", startedAt: null })
+      .where(and(eq(run.id, runId), eq(run.auditId, auditId)))
+    yield* publish(auditId, {
+      type: "run",
+      runId,
+      ordinal,
+      status: "pending",
+      hitCount: 0,
+      errors: [],
+    })
+  })
+
+/**
  * Captures one run on the engine `grant` holds and stores it in R2, at most once: a run that
  * already has its keys, or whose capture is already in R2 (written before a database failure), is
  * not captured again. The gate confirms the grant before the engine is called, so an attempt that
@@ -328,26 +361,8 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
       errors: [],
     })
     const browser = yield* Browser
-    // A run that gives its turn back is waiting for a slot, not running: say so, and time its
-    // next attempt from its own start.
     const requeue = <A>(attempt: A) =>
-      db
-        .update(run)
-        .set({ status: "pending", startedAt: null })
-        .where(eq(run.id, runId))
-        .pipe(
-          Effect.andThen(
-            publish(auditId, {
-              type: "run",
-              runId,
-              ordinal: current.ordinal,
-              status: "pending",
-              hitCount: 0,
-              errors: [],
-            }),
-          ),
-          Effect.as(attempt),
-        )
+      requeueRun(auditId, runId, current.ordinal).pipe(Effect.as(attempt))
     if (!(yield* gate.confirm(auditId, grant))) return yield* requeue(Attempt.Lost())
     const answer = yield* browser
       .capture(
@@ -400,7 +415,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
  * `admit-<n>` and `capture-<n>`, turn t's `admit-<n>.<t>` and `capture-<n>.<t>`, so a new turn
  * never replays an old grant. The second pass over busy runs uses `<n>r` in place of `<n>`.
  */
-const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1) =>
+const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1, budget: Budget) =>
   Effect.gen(function* () {
     const base = pass === 0 ? `${ordinal}` : `${ordinal}r`
     for (let turn = 0; ; turn++) {
@@ -425,7 +440,15 @@ const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1
                 message: `${ENGINE_BUSY}: the engine was handed on before the capture started`,
               },
         )
-      if (retry) yield* Workflow.sleep(`backoff-${name}`, backoff(turn, outcome.code))
+      if (retry) {
+        const delay = backoff(turn, outcome.code)
+        if (outcome.code === ENGINE_BUSY) {
+          if (budget.spent + delay > BUSY_BUDGET)
+            return Exhausted({ code: outcome.code, message: outcome.message })
+          budget.spent += delay
+        }
+        yield* Workflow.sleep(`backoff-${name}`, delay)
+      }
     }
   })
 
@@ -690,7 +713,7 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
         })
       const attempt = (id: string, ordinal: number, pass: 0 | 1) =>
         // effect-cf fails the step with WorkflowStepError once Cloudflare gives up retrying
-        captureRun(auditId, id, ordinal, pass).pipe(
+        captureRun(auditId, id, ordinal, pass, budget).pipe(
           Effect.catchTag("WorkflowStepError", (error) =>
             Effect.succeed(
               Exhausted({
@@ -700,12 +723,20 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
             ),
           ),
         )
+      const budget: Budget = { spent: 0 }
       const busy: Array<{ id: string; ordinal: number }> = []
       for (const { id, ordinal } of runs) {
         const outcome = yield* attempt(id, ordinal, 0)
         // a run that found the engine busy waits for the others, then asks again before it fails
-        if ($is("Exhausted")(outcome) && outcome.code === ENGINE_BUSY) busy.push({ id, ordinal })
-        else yield* settle(id, ordinal, outcome)
+        if ($is("Exhausted")(outcome) && outcome.code === ENGINE_BUSY) {
+          // an attempt that died on a gate or confirm error never requeued itself
+          yield* Workflow.step(
+            `requeue-${ordinal}`,
+            runtime.provide(requeueRun(auditId, id, ordinal)),
+            STEP,
+          )
+          busy.push({ id, ordinal })
+        } else yield* settle(id, ordinal, outcome)
       }
       for (const { id, ordinal } of busy) yield* settle(id, ordinal, yield* attempt(id, ordinal, 1))
       const status = yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP)
