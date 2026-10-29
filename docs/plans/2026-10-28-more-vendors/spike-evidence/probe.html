@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8"><title>probing</title></head><body>
+<script>
+var R = {};
+function done(k, v) { R[k] = v; document.title = JSON.stringify(R); }
+function f(k, url, init) { fetch(url, init).then(function (r) { done(k, "status " + r.status); }, function (e) { done(k, "error " + e.message); }); }
+// preflight: JSON content type and a custom header force OPTIONS
+f("li-preflight", "https://px.ads.linkedin.com/wa/?medium=fetch", { method: "POST", headers: { "content-type": "application/json", "x-zinko": "1" }, body: "{}" });
+f("rdt-preflight", "https://alb.reddit.com/rp", { method: "POST", headers: { "content-type": "application/json", "x-zinko": "1" }, body: "{}", credentials: "include" });
+f("snap-preflight", "https://tr.snapchat.com/p", { method: "POST", headers: { "content-type": "application/json", "x-zinko": "1" }, body: "{}" });
+f("pin-unlisted", "https://ct.pinterest.com/some/unlisted/path?x=1", { credentials: "include" });
+f("ms-unlisted", "https://bat.bing.net/unlisted/ping?x=1");
+f("rdt-pixelcfg", "https://pixel-config.reddit.com/pixels/a2_x/config");
+f("licdn-nonsdk", "https://snap.licdn.com/li.lms-analytics/other.js");
+f("pin-nonsdk-lib", "https://s.pinimg.com/ct/something-else.js");
+f("rdt-nonsdk", "https://www.redditstatic.com/ads/other.js");
+f("bing-nonsdk", "https://bat.bing.com/batx.js");
+f("sc-nonsdk", "https://sc-static.net/other.js");
+f("sc-nonsdk-script-ext-query", "https://sc-static.net/scevent.min.js.map");
+try { done("beacon", String(navigator.sendBeacon("https://ct.pinterest.com/stats/", "x"))); } catch (e) { done("beacon", "error"); }
+new Image().src = "https://bat.bing.com/action/0?ti=1&evt=img";
+new Image().src = "https://alb.reddit.com/rp.gif?id=a2_x";
+new Image().src = "http://localhost:4410/r?to=" + encodeURIComponent("https://px.ads.linkedin.com/collect?pid=1&redirected=1");
+new Image().src = "http://localhost:4410/r?to=" + encodeURIComponent("https://alb.reddit.com/rp.gif?redirected=1");
+f("redirect-fetch", "http://localhost:4410/r?to=" + encodeURIComponent("https://tr.snapchat.com/p?redirected=1"));
+</script></body></html>

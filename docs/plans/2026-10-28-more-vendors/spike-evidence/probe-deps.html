@@ -1,0 +1,16 @@
+<!doctype html><html><head><meta charset="utf-8"><title>dependency probe</title></head><body>
+<!-- Dependencies of the five vendors' own sites. None of these is a tracking request: they must NOT be answered locally. -->
+<iframe src="https://www.bing.com/maps" width="300" height="200"></iframe>
+<img src="https://i.pinimg.com/favicons/pinterest.png" alt="">
+<script>
+fetch("https://www.linkedin.com/", { mode: "no-cors" }).catch(function () {});
+fetch("https://www.reddit.com/", { mode: "no-cors" }).catch(function () {});
+fetch("https://www.pinterest.com/", { mode: "no-cors" }).catch(function () {});
+fetch("https://www.snapchat.com/", { mode: "no-cors" }).catch(function () {});
+// Tracking requests: these MUST still be answered locally.
+fetch("https://px.ads.linkedin.com/collect?v=2&fmt=js&pid=9000001", { mode: "no-cors" }).catch(function () {});
+fetch("https://bat.bing.com/action/0?ti=400000001&evt=pageLoad", { mode: "no-cors" }).catch(function () {});
+fetch("https://ct.pinterest.com/v3/?tid=2600000000001&event=init", { mode: "no-cors" }).catch(function () {});
+fetch("https://alb.reddit.com/rp?id=a2_zinkotest001&event=PageVisit", { method: "POST", mode: "no-cors" }).catch(function () {});
+fetch("https://tr.snapchat.com/p", { method: "POST", mode: "no-cors", body: "{}" }).catch(function () {});
+</script></body></html>

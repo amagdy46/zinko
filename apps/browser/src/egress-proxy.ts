@@ -39,6 +39,9 @@ const sdkHeaders = new Set(["user-agent", "accept", "accept-language", "referer"
 /** Response headers passed back with an SDK file; the rest (CSP, reporting) do not apply to it. */
 const sdkResponseHeaders = new Set([
   "content-type",
+  // Reddit's pixel.js comes back gzipped even for `accept-encoding: identity`; without this header
+  // the browser runs the compressed bytes and the script dies with "Script error".
+  "content-encoding",
   "cache-control",
   "set-cookie",
   "timing-allow-origin",

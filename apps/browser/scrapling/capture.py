@@ -8,6 +8,7 @@ not enforced here: every connection the browser opens goes through Node's egress
 
 import asyncio
 import base64
+import gzip
 import json
 import re
 import signal
@@ -337,7 +338,13 @@ class Capture:
                 key = name.lower()
                 if key != "connection":
                     received[key] = f"{received[key]}\n{value}" if key in received else value
-            return response.status, received, response.read()
+            body = response.read()
+            # Reddit's pixel.js is gzipped even for `accept-encoding: identity`; Chromium under
+            # patchright did not decode it from a fulfilled response, so hand it the plain bytes.
+            if received.get("content-encoding") == "gzip":
+                body = gzip.decompress(body)
+                del received["content-encoding"]
+            return response.status, received, body
 
     async def serve_sdk(self, route) -> None:
         req = route.request

@@ -203,7 +203,11 @@ export const CaptureRejected = Schema.Struct({
 export type CaptureRejected = typeof CaptureRejected.Type
 
 // Mirrors `apps/browser/src/inject/vendors.json`, which the engine reads (its image cannot
-// import this package). Keep the two in step.
+// import this package). Keep the two in step. The newer vendors are listed by tracking, config
+// and sync host, not by registrable domain, so their sites' documents and embeds still load.
+// The tag's script hosts (`s.pinimg.com`, `www.redditstatic.com`, `sc-static.net`, `snap.licdn.com`)
+// are whole hosts because an HTTPS tunnel shows no path; only the SDK files below get through.
+// `ct/lib/*.js` on `s.pinimg.com` is a directory wildcard: the tag loads a hashed chunk from it.
 const VENDOR_DOMAINS = [
   "google-analytics.com",
   "googletagmanager.com",
@@ -217,16 +221,16 @@ const VENDOR_DOMAINS = [
   "conversionsapigateway.com",
   "tiktok.com",
   "tiktokw.us",
-  "linkedin.com",
-  "licdn.com",
-  "bing.com",
-  "bing.net",
-  "bat.r.msn.com",
-  "pinterest.com",
-  "pinimg.com",
-  "reddit.com",
-  "redditstatic.com",
-  "snapchat.com",
+  "px.ads.linkedin.com",
+  "snap.licdn.com",
+  "bat.bing.com",
+  "bat.bing.net",
+  "ct.pinterest.com",
+  "s.pinimg.com",
+  "alb.reddit.com",
+  "pixel-config.reddit.com",
+  "www.redditstatic.com",
+  "tr.snapchat.com",
   "sc-static.net",
 ]
 const SDK_FILES = new RegExp(
