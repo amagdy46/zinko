@@ -40,10 +40,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { recheckVerdict } from "@/lib/compare-text"
 import { count, relativeTime, shortDate as dayOf } from "@/lib/format"
+import { Skeleton } from "@/components/ui/skeleton"
 import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
-import { getAiPolicy as fetchAiPolicy } from "@/server/ai-policy"
 import { explainFinding, getExplanation as fetchExplanation } from "@/server/explain"
 import {
   getEvidence as fetchEvidence,
@@ -55,7 +55,6 @@ import {
 const getFinding = sharePending(fetchFinding)
 const getEvidence = sharePending(fetchEvidence)
 const getExplanation = sharePending(fetchExplanation)
-const getAiPolicy = sharePending(fetchAiPolicy)
 
 export type FindingRow = Awaited<ReturnType<typeof listFindings>>["findings"][number]
 export type Triage = FindingRow["triage"]["status"]
@@ -357,7 +356,19 @@ export function FindingDetail({
       <div>
         {header}
         <div aria-live="polite" className="p-4 text-sm">
-          {detail.state === "loading" ? <p className="text-muted-foreground">Loading</p> : null}
+          {detail.state === "loading" ? (
+            <div className="space-y-5" data-testid="detail-skeleton">
+              <span className="sr-only">Loading finding</span>
+              {[0, 1].map((section) => (
+                <div key={section} className="space-y-2" aria-hidden>
+                  <Skeleton className="h-3 w-28" />
+                  <Skeleton className="h-4 w-full max-w-prose" />
+                  <Skeleton className="h-4 w-4/5 max-w-prose" />
+                </div>
+              ))}
+              <Skeleton className="h-24 w-full" aria-hidden />
+            </div>
+          ) : null}
           {detail.state === "failed" ? (
             <LoadFailure
               what="This finding"
@@ -553,7 +564,6 @@ function SettingsLink({ canManage }: { canManage: boolean }) {
  */
 function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }) {
   const [info, setInfo] = useState<Loaded<ExplainInfo>>({ state: "loading" })
-  const [canManage, setCanManage] = useState(false)
   const [writing, setWriting] = useState(false)
   const [problem, setProblem] = useState<ExplainProblem | null>(null)
   const [disclosure, setDisclosure] = useState(false)
@@ -572,9 +582,6 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
     getExplanation({ data: { auditId, ruleId } })
       .then((value) => current && setInfo({ state: "ready", value }))
       .catch((error: unknown) => current && setInfo({ state: "failed", ...loadFailure(error) }))
-    getAiPolicy(undefined)
-      .then((policy) => current && setCanManage(policy.canManage))
-      .catch(() => current && setCanManage(false))
     return () => {
       current = false
     }
@@ -618,7 +625,10 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
       <section className="space-y-1" data-testid="explain">
         {heading}
         {info.state === "loading" ? (
-          <p className="text-muted-foreground">Loading</p>
+          <>
+            <span className="sr-only">Loading explanation</span>
+            <Skeleton className="h-8 w-40" aria-hidden />
+          </>
         ) : (
           <LoadFailure
             what="The explanation"
@@ -638,7 +648,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
         {heading}
         <p className="text-muted-foreground">
           AI explanations are switched off for this organization. The steps above are the
-          rule&apos;s standard steps. <SettingsLink canManage={canManage} />
+          rule&apos;s standard steps. <SettingsLink canManage={state.canManage} />
         </p>
       </section>
     )
@@ -663,7 +673,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
           {cached === null
             ? "The steps above are the rule's standard steps. "
             : "The text below was written before it was removed and cannot be regenerated. "}
-          <SettingsLink canManage={canManage} />
+          <SettingsLink canManage={state.canManage} />
         </p>
       )}
       {cached === null || written === null ? null : (
@@ -1110,7 +1120,13 @@ function EvidenceView({
     void load()
   }, [load])
 
-  if (loaded.state === "loading") return <p className="text-muted-foreground">Loading</p>
+  if (loaded.state === "loading")
+    return (
+      <div role="status">
+        <span className="sr-only">Loading evidence</span>
+        <Skeleton className="h-16 w-full" aria-hidden />
+      </div>
+    )
   if (loaded.state === "failed")
     return (
       <LoadFailure

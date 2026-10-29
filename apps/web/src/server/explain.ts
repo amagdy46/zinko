@@ -315,6 +315,7 @@ export const getExplanation = createServerFn({ method: "GET" })
             configured: false as const,
             canGenerate: false as const,
             canRegenerate: false as const,
+            canManage: isManager(org.role),
           }
         const { digest, key } = yield* digestOf(
           org.orgId,
@@ -332,6 +333,7 @@ export const getExplanation = createServerFn({ method: "GET" })
           configured: current !== null,
           canGenerate: current !== null,
           canRegenerate: current !== null && isManager(org.role),
+          canManage: isManager(org.role),
           digest,
           policyId: digest.policyId,
           evidenceHash: key.evidenceHash,
