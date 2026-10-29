@@ -106,7 +106,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
 }
 
 function AppShell() {
-  const { session, organizations } = Route.useRouteContext()
+  const { session, organizations, groupByClient } = Route.useRouteContext()
   const [menuOpen, setMenuOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const router = useRouter()
@@ -181,6 +181,7 @@ function AppShell() {
           onOpenChange={setFindOpen}
           organizations={organizations}
           activeId={session.activeOrganizationId}
+          groupByClient={groupByClient}
         />
       </div>
     </div>

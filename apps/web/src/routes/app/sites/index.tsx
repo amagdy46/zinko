@@ -40,6 +40,8 @@ import { createSite, listClients, listSites } from "@/server/clients"
 const NO_CLIENT = "none"
 
 export const Route = createFileRoute("/app/sites/")({
+  validateSearch: (search: Record<string, unknown>): { add?: true } =>
+    search.add === true || search.add === "true" ? { add: true } : {},
   head: () => pageTitle("Sites"),
   loader: async ({ context }) => ({
     sites: await listSites(),
@@ -51,6 +53,7 @@ export const Route = createFileRoute("/app/sites/")({
 function Sites() {
   const { sites, clients } = Route.useLoaderData()
   const { session, groupByClient } = Route.useRouteContext()
+  const { add } = Route.useSearch()
   const router = useRouter()
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
@@ -112,9 +115,11 @@ function Sites() {
               />
             ) : null}
             <Dialog
-              open={open}
+              open={open || add === true}
               onOpenChange={(isOpen) => {
                 setOpen(isOpen)
+                if (!isOpen && add)
+                  void router.navigate({ to: "/app/sites", search: {}, replace: true })
                 if (!isOpen) setUrlError(undefined)
               }}
             >

@@ -31,17 +31,19 @@ interface Organization {
   readonly name: string
 }
 
-/** ⌘K / Ctrl+K palette: jump to a client, site, recent audit or settings page, start an audit, create a client, toggle the theme, switch organization. */
+/** ⌘K / Ctrl+K palette: jump to a site (and a client when the organization groups by client), recent audit or settings page, start an audit, create a client, toggle the theme, switch organization. */
 export function CommandPalette({
   open,
   onOpenChange,
   organizations,
   activeId,
+  groupByClient,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   organizations: ReadonlyArray<Organization>
   activeId: string | null
+  groupByClient: boolean
 }) {
   const router = useRouter()
   const timeZone = useTimeZone()
@@ -69,7 +71,7 @@ export function CommandPalette({
             setTargets(found)
           },
           () => {
-            if (current) toast.error("Could not load clients and sites.")
+            if (current) toast.error("Could not load search results.")
           },
         )
       },
@@ -162,27 +164,33 @@ export function CommandPalette({
   }
 
   const audits = targets?.audits ?? []
-  const clients = targets?.clients ?? []
+  const clients = groupByClient ? (targets?.clients ?? []) : []
   const sites = targets?.sites ?? []
   const text = search.trim()
   let createLabel = `Create client "${text}"`
   if (text === "") createLabel = "Type a name, then press Enter"
   else if (creating) createLabel = "Creating…"
 
+  let placeholder = groupByClient ? "Find a client, site or action…" : "Find a site or action…"
+  if (naming) placeholder = "Name the new client…"
+
   return (
     <CommandDialog
       open={open}
       onOpenChange={change}
       title="Find"
-      description="Go to a client, site, audit or settings page, start an audit, or switch organization."
+      description={`Go to a ${groupByClient ? "client, " : ""}site, audit or settings page, start an audit, or switch organization.`}
       onCloseAutoFocus={restoreFocus}
-      commandProps={{ shouldFilter: !naming, label: "Find clients, sites and actions" }}
+      commandProps={{
+        shouldFilter: !naming,
+        label: groupByClient ? "Find clients, sites and actions" : "Find sites and actions",
+      }}
     >
       <CommandInput
         ref={input}
         value={search}
         onValueChange={setSearch}
-        placeholder={naming ? "Name the new client…" : "Find a client, site or action…"}
+        placeholder={placeholder}
       />
       <CommandList>
         {naming ? (
@@ -201,24 +209,45 @@ export function CommandPalette({
             <CommandEmpty>{targets === null ? "Loading…" : "Nothing found."}</CommandEmpty>
             <CommandGroup heading="Actions">
               <CommandItem
-                value="New client"
+                value="New site"
                 keywords={["create", "add"]}
-                onSelect={() => {
-                  setSearch("")
-                  setNaming(true)
-                  input.current?.focus()
-                }}
+                onSelect={() =>
+                  go(() => router.navigate({ to: "/app/sites", search: { add: true } }))
+                }
               >
                 <Plus />
-                New client
+                New site
               </CommandItem>
+              {groupByClient ? (
+                <CommandItem
+                  value="New client"
+                  keywords={["create", "add"]}
+                  onSelect={() => {
+                    setSearch("")
+                    setNaming(true)
+                    input.current?.focus()
+                  }}
+                >
+                  <Plus />
+                  New client
+                </CommandItem>
+              ) : null}
               <CommandItem
-                value="All clients"
-                onSelect={() => go(() => router.navigate({ to: "/app/clients" }))}
+                value="All sites"
+                onSelect={() => go(() => router.navigate({ to: "/app/sites" }))}
               >
-                <Users />
-                All clients
+                <Globe />
+                All sites
               </CommandItem>
+              {groupByClient ? (
+                <CommandItem
+                  value="All clients"
+                  onSelect={() => go(() => router.navigate({ to: "/app/clients" }))}
+                >
+                  <Users />
+                  All clients
+                </CommandItem>
+              ) : null}
               <CommandItem
                 value="Settings"
                 keywords={["profile", "account"]}
@@ -290,6 +319,26 @@ export function CommandPalette({
                 ))}
               </CommandGroup>
             ) : null}
+            {sites.length > 0 ? (
+              <CommandGroup heading="Sites">
+                {sites.map((s) => (
+                  <CommandItem
+                    key={s.id}
+                    value={`site ${s.name} ${s.host} ${s.id}`}
+                    onSelect={() =>
+                      go(() =>
+                        router.navigate({ to: "/app/sites/$siteId", params: { siteId: s.id } }),
+                      )
+                    }
+                  >
+                    <Globe />
+                    <span className="truncate">{s.name}</span>
+                    <span className="ml-auto truncate text-xs text-muted-foreground">{s.host}</span>
+                  </CommandItem>
+                ))}
+                {targets?.sitesCapped ? <CapNote noun="sites" /> : null}
+              </CommandGroup>
+            ) : null}
             {clients.length > 0 ? (
               <CommandGroup heading="Clients">
                 {clients.map((c) => (
@@ -310,26 +359,6 @@ export function CommandPalette({
                   </CommandItem>
                 ))}
                 {targets?.clientsCapped ? <CapNote noun="clients" /> : null}
-              </CommandGroup>
-            ) : null}
-            {sites.length > 0 ? (
-              <CommandGroup heading="Sites">
-                {sites.map((s) => (
-                  <CommandItem
-                    key={s.id}
-                    value={`site ${s.name} ${s.host} ${s.id}`}
-                    onSelect={() =>
-                      go(() =>
-                        router.navigate({ to: "/app/sites/$siteId", params: { siteId: s.id } }),
-                      )
-                    }
-                  >
-                    <Globe />
-                    <span className="truncate">{s.name}</span>
-                    <span className="ml-auto truncate text-xs text-muted-foreground">{s.host}</span>
-                  </CommandItem>
-                ))}
-                {targets?.sitesCapped ? <CapNote noun="sites" /> : null}
               </CommandGroup>
             ) : null}
             {sites.length > 0 && text !== "" ? (
