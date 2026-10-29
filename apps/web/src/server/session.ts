@@ -39,7 +39,9 @@ export const getAppState = createServerFn({ method: "GET" }).handler(() =>
         )
       }
       const groupByClient =
-        activeOrganizationId === null ? false : yield* groupByClientOf(activeOrganizationId)
+        activeOrganizationId !== null && organizations.some(({ id }) => id === activeOrganizationId)
+          ? yield* groupByClientOf(activeOrganizationId)
+          : false
       return {
         session: { ...session, activeOrganizationId },
         organizations: organizations.map(({ id, name, slug }) => ({ id, name, slug })),
