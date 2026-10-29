@@ -119,6 +119,7 @@ Next UX items, from the competitor first-run research (`docs/research/2026-10-29
 ## Left over from UX round 6 (F1)
 
 - **Retry failed runs.** A run that fails as `EngineBusy` after the in-audit retries still needs a whole re-run. A re-check (`recheck.ts`) is planned from the cells a rule fails on, so it cannot name arbitrary failed cells. Needs a re-check plan built from failed runs (same `CellKey`s, `role = target`), then a button next to the "Zinko was busy" row.
+  Planned, not scheduled: see `docs/plans/2026-10-29-retry-failed-runs/plan.md` (a new audit that reuses the original's good captures, not a re-check); Re-run covers it meanwhile.
 
 ## After v0.1
 
