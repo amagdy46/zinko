@@ -15,6 +15,9 @@ review: review-r2.md
 
 Design sources: `AGENTS.md` (Database, Capture admission, Re-checks, Compare, Report), `docs/vision.md`, `docs/roadmap.md` ("Left over from UX round 6 (F1)"), `docs/decisions/0003-capture-admission.md`, `docs/ui.md`, `review-r1.md`, `review-r2.md`. Code read: `apps/web/src/server/{recheck,audit-create,audits,admission,storage,compare-data,report-data,register-data}.ts`, `apps/web/src/workflows/Audit.ts`, `apps/web/src/lib/{compare,findings-from,audit-labels,report-model}.ts`, `packages/db/src/audit-schema.ts`, `packages/core/src/storage.ts`, `packages/capture-contract/src/index.ts`.
 
+
+> Note (2026-10-29): report model 7 has since been used for the summary's named check gaps. Read "model 7" below as the next free `REPORT_MODEL_VERSION` at build time, with every earlier version kept in the accepted list.
+
 ## Changes after review r1
 
 The verdict was "rethink". In-place retry is dropped; its P1 problems (chronology, stamps, worse-than-before results, guards, stranded active audits, progress) do not exist for a new audit. This plan is the review's alternative: a new full audit seeded with reusable captures. Adopted: BotBlocked excluded in v1, all captures re-evaluated under the current rules with provenance disclosed, report and CSV disclose the capture range and reuse, any member may retry, single-run retry deferred, the one-in-progress-per-baseline rule is the cap.
