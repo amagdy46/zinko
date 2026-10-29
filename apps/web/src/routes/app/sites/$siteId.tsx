@@ -357,6 +357,7 @@ function SitePage() {
                     {a.kind === "narrow"
                       ? `Re-check of ${a.recheckTitle ?? "one check"}`
                       : count(a.pages, "page")}
+                    {a.kind !== "narrow" && a.startPath !== null ? ` · ${a.startPath}` : ""}
                   </span>
                 </TableCell>
                 <TableCell>

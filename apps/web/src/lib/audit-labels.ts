@@ -249,6 +249,13 @@ export const BANNER_NOTE = {
     "Our scanner did not detect a consent banner on these pages, or could not tell whether there is one, so whether these are breaches depends on whether a banner exists for the visitor (it may not exist, may not be shown from our location, may load too slowly or may be one we cannot operate).",
 } as const
 
+/** The path of an audit's start page when it is not the site's home page, so audits of different pages tell apart. */
+export function startPathOf(startPage: string | null | undefined): string | null {
+  if (startPage === null || startPage === undefined) return null
+  const { pathname } = new URL(startPage)
+  return pathname === "/" ? null : pathname
+}
+
 /**
  * What an audit is called wherever it is listed: a full audit by its site, day and size, a
  * re-check by the check it re-checked. `pages` counts the start page and the key pages.
@@ -259,13 +266,15 @@ export function auditTitle(
     siteName: string
     createdAt: Date | string
     pages: number
+    startPath: string | null
     recheckTitle: string | null
   },
   timeZone?: string,
 ): string {
   const day = shortDate(audit.createdAt, timeZone)
   if (audit.kind === "narrow") return `Re-check of ${audit.recheckTitle ?? "one check"} · ${day}`
-  return `Audit of ${audit.siteName} · ${day} · ${count(audit.pages, "page")}`
+  const where = audit.startPath === null ? "" : ` · ${audit.startPath}`
+  return `Audit of ${audit.siteName} · ${day} · ${count(audit.pages, "page")}${where}`
 }
 
 /** The same without the day, for the browser tab: a time zone is not known while the head renders. */

@@ -41,6 +41,7 @@ export const auditDetails = (orgId: string, auditIds: readonly string[]) =>
       .select({
         id: audit.id,
         pages: sql<number>`jsonb_array_length(${audit.config} -> 'pages')`.mapWith(Number),
+        startPage: sql<string>`${audit.config} -> 'pages' ->> 0`,
         recheckTitle: sql<
           string | null
         >`(select ${checkResult.title} from ${checkResult} join ${run} on ${run.id} = ${checkResult.runId} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId} and ${checkResult.ruleId} = ${audit.narrowRuleId} limit 1)`,

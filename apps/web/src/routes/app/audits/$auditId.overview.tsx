@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { usePreviewed } from "@/lib/report-previewed"
 import { checkGapReason } from "@/lib/report-projection"
 import { cn } from "@/lib/utils"
 import {
@@ -125,8 +126,8 @@ function OverviewScreen() {
       {briefing === null ? null : (
         <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
       )}
-      <NextSteps auditId={audit.id} worstRuleId={worst?.ruleId} steps={nextSteps} />
       <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
+      <NextSteps auditId={audit.id} worstRuleId={worst?.ruleId} steps={nextSteps} />
       <Caveats
         auditId={audit.id}
         runs={runs}
@@ -391,7 +392,8 @@ const stepLink =
 /**
  * From a finished audit to a shared report, derived from what is stored: triage rows and report
  * notes, a report edit or published version, a live share link. Reading the top finding leaves no
- * trace, so it counts as done once a later step is. Gone once a link exists.
+ * trace, so it counts as done once a later step is. Once a link exists it shrinks to one line, the
+ * only place the Overview mentions it (the address itself is shown once, at creation).
  */
 function NextSteps({
   auditId,
@@ -402,7 +404,21 @@ function NextSteps({
   worstRuleId: string | undefined
   steps: Overview["nextSteps"]
 }) {
-  if (steps.shared) return null
+  const previewed = usePreviewed(auditId)
+  if (steps.shared)
+    return (
+      <p className="text-sm text-muted-foreground" data-testid="active-share">
+        Active share link.{" "}
+        <Link
+          to="/app/audits/$auditId/report"
+          params={{ auditId }}
+          search={{ share: 1 }}
+          className={stepLink}
+        >
+          Manage in Share
+        </Link>
+      </p>
+    )
   const items = [
     ...(steps.hasFindings
       ? [
@@ -416,16 +432,16 @@ function NextSteps({
                 search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
                 className={stepLink}
               >
-                Read and triage the top finding
+                Read the top finding
               </Link>
             ),
-            hint: "Accept a risk with a reason, mark it fixed or add a note for the report.",
+            hint: "Read what it means for the client. Triage it only when you know its status.",
           },
         ]
       : []),
     {
       key: "preview",
-      done: steps.reportReviewed,
+      done: steps.reportReviewed || previewed,
       link: (
         <Link
           to="/app/audits/$auditId/report"
@@ -436,6 +452,7 @@ function NextSteps({
           Preview the client report
         </Link>
       ),
+      hint: "See what your client will read.",
     },
     {
       key: "share",
@@ -520,8 +537,8 @@ function WorstFinding({
         <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
       </div>
       <p className="max-w-prose text-sm text-muted-foreground">
-        Failed on {worst.failingRuns} of {worst.knownRuns} runs where it could be checked, across{" "}
-        {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
+        Failed on {worst.failingRuns} of {count(worst.knownRuns, "run")} where it could be checked,
+        across {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
         {worst.bannerUncertainRuns > 0
           ? ` ${count(worst.bannerUncertainRuns, "failing run")} ${rests(worst.bannerUncertainRuns)} on an undetected banner.`
           : ""}

@@ -22,6 +22,7 @@ import { pageTitle } from "@/lib/page-title"
 import {
   auditTabName,
   auditTitle,
+  startPathOf,
   remainingTime,
   runReason,
   scenarioLabel,
@@ -62,6 +63,7 @@ const severitySplit = (open: { critical: number; warning: number; info: number }
     .join(", ")
 
 const ACTIVE = new Set(["queued", "running"])
+const RERUN_WAIT = "Re-run is available when the audit has finished"
 const REFETCH_DELAY_MS = 250
 const FINISHED_TOAST_MS = 30_000
 
@@ -142,7 +144,7 @@ function AuditPage() {
   const announceStep = Math.max(1, Math.ceil(runs.length / 5))
   const announced = Math.floor(done / announceStep) * announceStep
   const progressNote = waiting
-    ? "Waiting for a capture slot"
+    ? "Waiting for a capture slot. It starts automatically when one frees up."
     : remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
@@ -178,7 +180,10 @@ function AuditPage() {
     pages: audit.config.pages.length,
     recheckTitle: audit.recheckTitle,
   }
-  const title = auditTitle({ ...named, createdAt: audit.createdAt }, timeZone)
+  const title = auditTitle(
+    { ...named, startPath: startPathOf(audit.config.pages[0]), createdAt: audit.createdAt },
+    timeZone,
+  )
   const tabName = auditTabName(named)
   const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
@@ -229,7 +234,7 @@ function AuditPage() {
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [rerunning, setRerunning] = useState(false)
   let rerunHint: string | undefined
-  if (active) rerunHint = "Available when the audit has finished"
+  if (active) rerunHint = RERUN_WAIT
   if (site.archived) rerunHint = "This site is archived"
   const rerun =
     audit.kind === "full" ? (
@@ -241,6 +246,7 @@ function AuditPage() {
           className="h-8"
           disabled={active || site.archived}
           title={rerunHint}
+          aria-describedby={active ? "rerun-reason" : undefined}
           onClick={() => setRerunning(true)}
         >
           Re-run
@@ -383,6 +389,11 @@ function AuditPage() {
             <span>{partial} partial</span>
             <span>{failed} failed</span>
           </div>
+          {audit.kind === "full" ? (
+            <p id="rerun-reason" className="text-xs text-muted-foreground">
+              {RERUN_WAIT}.
+            </p>
+          ) : null}
         </div>
       ) : null}
       {overview && !active ? (

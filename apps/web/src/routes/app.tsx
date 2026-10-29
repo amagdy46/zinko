@@ -38,7 +38,12 @@ export const Route = createFileRoute("/app")({
 })
 
 const nav = [
-  { to: "/app/clients", label: "Clients", icon: Users, sections: ["clients", "sites", "audits"] },
+  {
+    to: "/app/clients",
+    label: "Clients",
+    icon: Users,
+    sections: ["clients", "sites", "audits", "sample-report"],
+  },
   { to: "/app/settings", label: "Settings", icon: Settings, sections: ["settings"] },
 ] as const
 

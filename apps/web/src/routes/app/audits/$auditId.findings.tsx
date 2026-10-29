@@ -461,16 +461,34 @@ function Coverage({
 }) {
   const { runs } = coverage
   const summary = [
-    `${runs.failing} with a failing check`,
-    `${runs.couldNotCheck} could not check`,
-    `${runs.passed} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`,
-  ]
+    runs.failing > 0 ? `${count(runs.failing, "run")} with a failing check` : null,
+    runs.couldNotCheck > 0
+      ? `${count(runs.couldNotCheck, "run")} with a check that could not run`
+      : null,
+    runs.passed > 0
+      ? `${count(runs.passed, "run")} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`
+      : null,
+  ].filter((line) => line !== null)
   if (full && !mixed)
     return (
-      <p className="text-sm text-muted-foreground" data-testid="coverage">
-        All {count(coverage.totalRuns, "run")} evaluated. By run: {summary.join(" · ")}
-        {localLimit ? `. ${LOCAL_ANSWER_NOTE}` : ""}
-      </p>
+      <Collapsible className="text-sm text-muted-foreground" data-testid="coverage">
+        <p className="flex flex-wrap items-center gap-x-1">
+          All {count(coverage.totalRuns, "run")} evaluated.
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="group/details h-8">
+              <ChevronDown
+                aria-hidden="true"
+                className="group-data-[state=closed]/details:-rotate-90"
+              />
+              Details
+            </Button>
+          </CollapsibleTrigger>
+        </p>
+        <CollapsibleContent className="space-y-1 pb-1">
+          <p>Runs: {summary.join(" · ")}</p>
+          {localLimit ? <p>{LOCAL_ANSWER_NOTE}</p> : null}
+        </CollapsibleContent>
+      </Collapsible>
     )
   const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
     {
@@ -704,7 +722,9 @@ function FindingItem({
         {failing && row.firstFix !== null ? (
           <span className="flex items-baseline gap-1 text-xs" data-testid="fix-first">
             <span className="shrink-0 text-muted-foreground">Fix first:</span>
-            <span className="truncate">{row.firstFix}</span>
+            <span className="line-clamp-2 min-w-0" title={row.firstFix}>
+              {row.firstFix}
+            </span>
             {row.owner === null ? null : (
               <span className="hidden shrink-0 text-muted-foreground sm:inline">
                 · {OWNER_LABELS[row.owner]}

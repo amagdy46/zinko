@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { Download, Ellipsis, Palette, Printer, Tag } from "lucide-react"
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { EmptyState } from "@/components/empty-state"
 import {
   DisclosureDialog,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
+import { markPreviewed } from "@/lib/report-previewed"
 import { getReportDraft } from "@/server/report"
 
 export const Route = createFileRoute("/app/audits/$auditId/report")({
@@ -41,6 +42,9 @@ function ReportScreen() {
   const navigate = Route.useNavigate()
   const [labelsOpen, setLabelsOpen] = useState(false)
   const moreRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (view === "client" && draft.available) markPreviewed(auditId)
+  }, [view, draft.available, auditId])
   if (!draft.available && draft.reason === "narrow")
     return (
       <EmptyState

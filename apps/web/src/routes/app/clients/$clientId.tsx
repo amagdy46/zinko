@@ -3,6 +3,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
+import { SampleReportLink } from "@/components/sample-report-link"
 import { Button } from "@/components/ui/button"
 import { MoreHorizontal } from "lucide-react"
 import { PageContainer } from "@/components/page-container"
@@ -237,6 +238,7 @@ function ClientPage() {
           action={
             client.archived ? undefined : <Button onClick={() => setOpen(true)}>Add site</Button>
           }
+          secondary={client.archived ? undefined : <SampleReportLink />}
         />
       ) : (
         <section aria-labelledby="sites-heading" className="space-y-2">

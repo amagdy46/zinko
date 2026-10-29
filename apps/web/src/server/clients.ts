@@ -4,6 +4,7 @@ import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
+import { startPathOf } from "@/lib/audit-labels"
 import { canonicalHost } from "@/lib/site-url"
 import { carryOverOf, latestBaseline } from "./audit-create"
 import {
@@ -620,6 +621,7 @@ export const getSite = createServerFn({ method: "GET" })
               kind: a.kind,
               narrowRuleId: a.narrowRuleId,
               pages: summary?.pages ?? 0,
+              startPath: startPathOf(summary?.startPage),
               recheckTitle: summary?.recheckTitle ?? null,
               hasBaseline: a.baselineAuditId !== null,
               status: a.status,

@@ -225,7 +225,8 @@ export const getOverview = createServerFn({ method: "GET" })
         return {
           nextSteps: {
             hasFindings: failing.length > 0,
-            triaged: failing.some((f) => f.triage.status !== "open") || noted !== undefined,
+            triaged:
+              failing.some((f) => f.triage.status === "accepted_risk") || noted !== undefined,
             reportReviewed: edited !== undefined || published !== undefined,
             shared: shared !== undefined,
           },
