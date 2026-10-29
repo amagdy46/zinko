@@ -172,6 +172,7 @@ function FindingCard({
   hidden: boolean
   actions: ReactNode
 }) {
+  const [first] = finding.fix
   return (
     <article
       id={`finding-${finding.ruleId}`}
@@ -204,6 +205,16 @@ function FindingCard({
           {whereOf(finding, scenarioCount)}.
         </p>
       </div>
+      {first === undefined ? null : (
+        <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
+          <span className="font-semibold">Fix first</span>
+          <span className="text-muted-foreground">
+            {" "}
+            ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
+          </span>{" "}
+          {first}
+        </p>
+      )}
       <Triage finding={finding} />
       <div className="space-y-1">
         <h4 className="font-semibold">Why it matters</h4>
@@ -230,9 +241,6 @@ function FindingCard({
           {BANNER_NOTE.summary}
         </p>
       ) : null}
-      <p className="text-muted-foreground">
-        Owner: {finding.owner === null ? "Owner not assigned" : OWNER_LABELS[finding.owner]}
-      </p>
       {finding.note === null ? null : (
         <div className="space-y-0.5 border-l-2 border-report-accent pl-3">
           <p className="text-xs font-semibold">Note from {agency}</p>

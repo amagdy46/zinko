@@ -19,11 +19,10 @@ import { pageIndexOf, withoutTestClickIds } from "@/lib/page-match"
 import { auditInOrg } from "./audit-data"
 import { CHANGE_WORDS } from "@/lib/compare-text"
 import { comparisonOf } from "./compare-data"
-import { findingsOf } from "./findings-data"
+import { decodeFix, findingsOf } from "./findings-data"
 import { NotFound } from "./server-fn"
 
 const decodeConfig = Schema.decodeUnknownEffect(AuditConfig)
-const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 
 const MAX_PAGE_LABELS = 20
 

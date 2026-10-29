@@ -9,6 +9,7 @@ import { auditInOrg, hitWithRequest, readCapture, runInAudit } from "./audit-dat
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import {
   checkTitleOf,
+  decodeFix,
   decodeOwner,
   decodeKind,
   decodeSeverity,
@@ -40,7 +41,6 @@ const EvidenceRef = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("document"), documentId: Schema.String }),
 ])
 export const decodeEvidence = Schema.decodeUnknownEffect(Schema.Array(EvidenceRef))
-export const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 
 const MAX_REASON = 1000
 

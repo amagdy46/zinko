@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, LOCAL_ANSWER_SENTENCE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { OWNER_LABELS } from "@/lib/report-model"
 import { sharePending } from "@/lib/share-pending"
 import { cn } from "@/lib/utils"
 import { CHANGE_WORDS } from "@/lib/compare-text"
@@ -700,6 +701,17 @@ function FindingItem({
             </span>
           )}
         </span>
+        {failing && row.firstFix !== null ? (
+          <span className="flex items-baseline gap-1 text-xs" data-testid="fix-first">
+            <span className="shrink-0 text-muted-foreground">Fix first:</span>
+            <span className="truncate">{row.firstFix}</span>
+            {row.owner === null ? null : (
+              <span className="hidden shrink-0 text-muted-foreground sm:inline">
+                · {OWNER_LABELS[row.owner]}
+              </span>
+            )}
+          </span>
+        ) : null}
         {isLocalLimit(row) ? (
           <span className="block text-xs text-muted-foreground">
             Expected: requests are answered locally

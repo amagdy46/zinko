@@ -1,12 +1,20 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, run } from "@repo/db"
-import { and, asc, eq, sql } from "drizzle-orm"
+import {
+  audit,
+  checkResult,
+  reportEdit,
+  reportFindingEdit,
+  reportShare,
+  reportSnapshot,
+  run,
+} from "@repo/db"
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
 import { briefingOf } from "./compare-data"
-import { findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
+import { decodeFix, findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { ruleTitleOf, verdictOf } from "./recheck-data"
 import { requireSession } from "./require-session"
@@ -15,7 +23,6 @@ import { membership, read } from "./server-fn"
 
 const SEVERITY_RANK = ["critical", "warning", "info"] as const
 
-const decodeFix = Schema.decodeUnknownEffect(Schema.Array(Schema.String))
 const decodeStartPage = Schema.decodeUnknownEffect(
   Schema.Struct({ pages: Schema.NonEmptyArray(Schema.String) }),
 )
@@ -181,7 +188,47 @@ export const getOverview = createServerFn({ method: "GET" })
                 runs: coverage.totalRuns,
               }
             : null
+        const [edited] = yield* db
+          .select({ id: reportEdit.auditId })
+          .from(reportEdit)
+          .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
+          .limit(1)
+        const [published] = yield* db
+          .select({ id: reportSnapshot.id })
+          .from(reportSnapshot)
+          .where(and(eq(reportSnapshot.auditId, auditId), eq(reportSnapshot.orgId, orgId)))
+          .limit(1)
+        const [noted] = yield* db
+          .select({ ruleId: reportFindingEdit.ruleId })
+          .from(reportFindingEdit)
+          .where(
+            and(
+              eq(reportFindingEdit.auditId, auditId),
+              eq(reportFindingEdit.orgId, orgId),
+              isNotNull(reportFindingEdit.note),
+            ),
+          )
+          .limit(1)
+        const [shared] = yield* db
+          .select({ id: reportShare.id })
+          .from(reportShare)
+          .innerJoin(reportSnapshot, eq(reportSnapshot.id, reportShare.snapshotId))
+          .where(
+            and(
+              eq(reportSnapshot.auditId, auditId),
+              eq(reportSnapshot.orgId, orgId),
+              eq(reportShare.orgId, orgId),
+              isNull(reportShare.revokedAt),
+            ),
+          )
+          .limit(1)
         return {
+          nextSteps: {
+            hasFindings: failing.length > 0,
+            triaged: failing.some((f) => f.triage.status !== "open") || noted !== undefined,
+            reportReviewed: edited !== undefined || published !== undefined,
+            shared: shared !== undefined,
+          },
           briefing,
           recheck,
           runHealth: summary.runHealth,

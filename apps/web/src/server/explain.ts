@@ -28,8 +28,7 @@ import {
   reserve,
   settle,
 } from "./explain-ledger"
-import { decodeFix } from "./findings"
-import { decodeSeverity, findingRowOf } from "./findings-data"
+import { decodeFix, decodeSeverity, findingRowOf } from "./findings-data"
 import { requireSession } from "./require-session"
 import { Forbidden, Invalid, isManager, membership, read, mutation } from "./server-fn"
 

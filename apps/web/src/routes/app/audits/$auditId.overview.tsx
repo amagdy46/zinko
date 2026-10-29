@@ -61,6 +61,7 @@ function OverviewScreen() {
     runHealth,
     scoreCoverage,
     open,
+    nextSteps,
   } = Route.useLoaderData()
   const { briefing, recheck, bandAllAccepted } = Route.useLoaderData()
   if (status === "queued" || status === "running")
@@ -124,6 +125,7 @@ function OverviewScreen() {
       {briefing === null ? null : (
         <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
       )}
+      <NextSteps auditId={audit.id} worstRuleId={worst?.ruleId} steps={nextSteps} />
       <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       <Caveats
         auditId={audit.id}
@@ -380,6 +382,114 @@ function Lead({ text }: { text: string }) {
       {first}
       <span className="text-muted-foreground">{text.slice(first.length)}</span>
     </p>
+  )
+}
+
+const stepLink =
+  "inline-flex min-h-8 items-center rounded-md font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+
+/**
+ * From a finished audit to a shared report, derived from what is stored: triage rows and report
+ * notes, a report edit or published version, a live share link. Reading the top finding leaves no
+ * trace, so it counts as done once a later step is. Gone once a link exists.
+ */
+function NextSteps({
+  auditId,
+  worstRuleId,
+  steps,
+}: {
+  auditId: string
+  worstRuleId: string | undefined
+  steps: Overview["nextSteps"]
+}) {
+  if (steps.shared) return null
+  const items = [
+    ...(steps.hasFindings
+      ? [
+          {
+            key: "read",
+            done: steps.triaged || steps.reportReviewed,
+            link: (
+              <Link
+                to="/app/audits/$auditId/findings"
+                params={{ auditId }}
+                search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
+                className={stepLink}
+              >
+                Read the top finding
+              </Link>
+            ),
+          },
+          {
+            key: "triage",
+            done: steps.triaged,
+            link: (
+              <Link
+                to="/app/audits/$auditId/findings"
+                params={{ auditId }}
+                search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
+                className={stepLink}
+              >
+                Triage a finding
+              </Link>
+            ),
+            hint: "Accept a risk with a reason, mark it fixed or add a note for the report.",
+          },
+        ]
+      : []),
+    {
+      key: "preview",
+      done: steps.reportReviewed,
+      link: (
+        <Link
+          to="/app/audits/$auditId/report"
+          params={{ auditId }}
+          search={{ view: "client" }}
+          className={stepLink}
+        >
+          Preview the client report
+        </Link>
+      ),
+    },
+    {
+      key: "share",
+      done: false,
+      link: (
+        <Link
+          to="/app/audits/$auditId/report"
+          params={{ auditId }}
+          search={{ share: 1 }}
+          className={stepLink}
+        >
+          Create a share link
+        </Link>
+      ),
+      hint: "Send the client a link to the report.",
+    },
+  ]
+  return (
+    <section
+      aria-label="Next steps"
+      className="space-y-2 rounded-lg border bg-card p-4"
+      data-testid="next-steps"
+    >
+      <SectionHeading title="Next steps" />
+      <ol className="space-y-1 text-sm">
+        {items.map((item, i) => (
+          <li key={item.key} className="flex items-start gap-2">
+            <StatusGlyph meaning={item.done ? "pass" : "queued"} className="mt-2" />
+            <span className="min-w-0">
+              <span className="text-muted-foreground">{i + 1}. </span>
+              {item.link}
+              {item.done ? <span className="text-muted-foreground"> (done)</span> : null}
+              {"hint" in item && !item.done ? (
+                <span className="block text-xs text-muted-foreground">{item.hint}</span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 
