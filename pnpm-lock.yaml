@@ -164,9 +164,6 @@ settings:
 
 catalogs:
   default:
-    '@cloudflare/containers':
-      specifier: 0.3.7
-      version: 0.3.7
     '@cloudflare/vite-plugin':
       specifier: 1.64.0
       version: 1.64.0
@@ -375,9 +372,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@cloudflare/containers':
-        specifier: 'catalog:'
-        version: 0.3.7
       '@effect/ai-anthropic':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)
@@ -813,9 +807,6 @@ packages:
 
   '@chevrotain/utils@10.5.0':
     resolution: {integrity: sha512-hBzuU5+JjB2cqNZyszkDHZgOSrUUT8V3dhgRl8Q9Gp6dAj/H5+KILGjbhDpc3Iy9qmqlm/akuOI2ut9VUtzJxQ==}
-
-  '@cloudflare/containers@0.3.7':
-    resolution: {integrity: sha512-DM9dm3FnIBSyiSJ1FLavKwl/lk3oAmTaynCzZQ9pZR0ncRPquSxkxd8Nu2MFILxmDDsPkxKsSNEh9mHHMty4Fw==}
 
   '@cloudflare/kv-asset-handler@0.5.0':
     resolution: {integrity: sha512-jxQYkj8dSIzc0cD6cMMNdOc1UVjqSqu8BZdor5s8cGjW2I8BjODt/kWPVdY+u9zj3ms75Q5qaZgnxUad83+eAg==}
@@ -5321,8 +5312,6 @@ snapshots:
   '@chevrotain/types@10.5.0': {}
 
   '@chevrotain/utils@10.5.0': {}
-
-  '@cloudflare/containers@0.3.7': {}
 
   '@cloudflare/kv-asset-handler@0.5.0': {}
 

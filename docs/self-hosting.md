@@ -2,7 +2,7 @@
 
 > **Not yet run end to end.** This guide is written from the code (`infra/alchemy.run.ts`, `.github/workflows/deploy.yml`, `docs/decisions/0004-first-deploy.md`) and from the offline preparation of the first deploy. Nobody has followed it verbatim on a Cloudflare account yet: the capture container image has not been built or started, and no deploy has run. Treat every step as untested, and expect to fix this page the first time it runs. The local path in [CONTRIBUTING.md](../CONTRIBUTING.md#running-the-web-app-locally) is the one that is known to work.
 
-Zinko is a Cloudflare Worker (the web app, the audit workflow, two Durable Objects), an R2 bucket (captures, screenshots, report logos), a Postgres database reached through Hyperdrive, and a container image that runs the capture engine (Node, Python and Chromium). Alchemy declares all of it in `infra/alchemy.run.ts`; there is no `wrangler.jsonc`.
+Zinko is a Cloudflare Worker (the web app, the audit workflow, two Durable Objects), an R2 bucket (captures, screenshots, report logos), a Postgres database reached through Hyperdrive, and a container image that runs the capture engine (Node, Python and Chromium). The container uses Cloudflare's `durable_object` scheduling policy (some accounts, ours included, cannot create the `default` one): the `BrowserContainer` Durable Object starts the image itself with the `standard-1` instance size, waits for `/health`, proxies requests to port 8080 and stops the container after 2 idle minutes. There is no `maxInstances`; the AdmissionGate caps concurrency at `BROWSER_ENGINES` (3) through the instance names `engine-0` to `engine-2`. Alchemy declares all of it in `infra/alchemy.run.ts`; there is no `wrangler.jsonc`.
 
 ## What you need
 

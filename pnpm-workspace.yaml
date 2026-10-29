@@ -7,7 +7,6 @@ allowBuilds:
 overrides:
   vite: "catalog:"
 catalog:
-  "@cloudflare/containers": 0.3.7
   "@cloudflare/vite-plugin": 1.64.0
   "@cloudflare/workers-types": 5.20261016.1
   "@effect/ai-anthropic": 4.0.5

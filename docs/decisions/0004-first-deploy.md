@@ -42,3 +42,14 @@ One stack `zinko`, one stage per deploy. Resources: `Hyperdrive` (Postgres origi
 - That `ENVIRONMENT_READ_TOKEN` can read environment protection rules, and that the environments exist.
 
 To unblock the image measurements without Q13: add the user to the `docker` group, or run `image-build.yml` once from the Actions tab.
+
+## Amendment 2026-10-29: the account requires `durable_object` scheduling
+
+The first real `alchemy deploy --stage live` built and pushed the image, then Cloudflare refused to create the container application: `scheduling_policy: This account cannot create applications with the "default" scheduling policy. Use "durable_object" instead.` (`VALIDATE_INPUT`).
+
+What changed:
+
+- `infra/alchemy.run.ts`: the `Browser` container is declared with `schedulingPolicy: "durable_object"` and `context: "apps/browser"`. `instanceType` and `maxInstances` are gone (Alchemy rejects them with this policy, and Cloudflare no longer has them as application settings). It is bound to the Worker as `Cloudflare.DurableObject("BrowserContainer", { containers: [browser] })`; the image is then `ctx.container.images.Browser` (the Container's id).
+- `apps/web/src/browser/BrowserContainer.ts` is a plain Durable Object instead of a `@cloudflare/containers` subclass (that library's `start` cannot pass an image or an instance size, and `@cloudflare/containers` was removed from the dependencies). It starts the image with `instance: "standard-1"` (the default, `lite`, is too small) and `enableInternet: true` (the engine's own egress proxy enforces the URL policy), polls `/health` because `start()` returns before the engine listens, proxies the request to port 8080 and destroys the container from an alarm after 2 idle minutes (rescheduled while a request is in flight). A start failure answers 500 with the `Failed to start container` prefix that `server/browser.ts` already maps to 503.
+- Concurrency is no longer capped by `maxInstances`; the AdmissionGate already limits it to `BROWSER_ENGINES` (3) by handing out the names `engine-0` to `engine-2`.
+- The policy is immutable per application. Changing it later means a new application and Durable Object namespace.

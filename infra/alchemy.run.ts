@@ -80,14 +80,11 @@ export default Alchemy.Stack(
     const browser =
       browserUrl === ""
         ? Cloudflare.Container("Browser", {
-            className: "BrowserContainer",
+            // This account only creates `durable_object` applications: the image and instance size are
+            // chosen by `BrowserContainer` in `start()` (`standard-1`: a capture peaked at 951 MiB on
+            // a page making 2,100 requests, and `basic` has 1 GiB), and there is no `maxInstances`.
+            schedulingPolicy: "durable_object",
             context: "apps/browser",
-            // A capture (Node, Python and Chromium) peaked at 534–750 MiB on the `clean` fixture and at
-            // 951 MiB on a page making 2,100 requests. Real sites use more, and `basic` (1 GiB, 1/4 vCPU)
-            // leaves too little room. 4 GiB, 1/2 vCPU.
-            instanceType: "standard-1",
-            // instances `engine-0` to `engine-2` (`BROWSER_ENGINES`), each held by one audit at a time
-            maxInstances: browserEngines,
           })
         : undefined
     const storage = yield* Cloudflare.R2.Bucket("Storage", {
@@ -118,7 +115,10 @@ export default Alchemy.Stack(
         ADMISSION_GATE: admissionGate,
         ...(browser === undefined
           ? { BROWSER_URL: browserUrl }
-          : { BROWSER: browser, BROWSER_ENGINES: String(browserEngines) }),
+          : {
+              BROWSER: Cloudflare.DurableObject("BrowserContainer", { containers: [browser] }),
+              BROWSER_ENGINES: String(browserEngines),
+            }),
         // set on local dev stages only: lets a site be on localhost (server/clients.ts)
         ...(isDev ? { ALLOW_PRIVATE_SITES: "true" } : {}),
         STORAGE: storage,

@@ -12,7 +12,6 @@
     "deploy": "pnpm --workspace-root run deploy"
   },
   "dependencies": {
-    "@cloudflare/containers": "catalog:",
     "@effect/ai-anthropic": "catalog:",
     "@effect/ai-openai": "catalog:",
     "@effect/ai-openrouter": "catalog:",
