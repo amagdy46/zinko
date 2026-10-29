@@ -1,0 +1,5 @@
+{
+  "url": "https://alb.reddit.com/rp?id=a2_zinkotest001&event=Purchase&click_id=9aZxQ2LmN4pR7sT1uVw3",
+  "method": "POST",
+  "body": "ts=1793254549366&id=a2_zinkotest001&event=Purchase&m.itemCount=1&m.value=&m.valueDecimal=49.9&m.currency=EUR&m.transactionId=T-1001&m.orderId=&m.customEventName=&m.products=&m.conversionId=a5fcf5a9af48e9cc334000beb128fe44e7917570687550efc009ae8117252968&click_id=9aZxQ2LmN4pR7sT1uVw3&uuid=2ee07330-b1bf-4d32-987c-6cdfb4cb0542&aaid=&external_id=&idfa=&integration=reddit&partner=&partner_version=&opt_out=1&sh=1280&sw=720&v=rdt_d3960254&dpm=&dpcc=&dprc=&esurl=https%3A%2F%2Fshop.example%2Fvendors-spike%2F%3Frdt_cid%3D9aZxQ2LmN4pR7sT1uVw3&db=tsc-0.srv_cfg-0.src_pid-0.pms-2&mthd=POST"
+}

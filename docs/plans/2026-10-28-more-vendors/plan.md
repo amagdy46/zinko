@@ -1,6 +1,6 @@
 ---
 type: plan
-status: proposed
+status: proposed (Tasks 0 and 1 done)
 design: ../../vision.md
 ---
 
@@ -10,31 +10,64 @@ design: ../../vision.md
 
 **Approach:** Make capture safe for the new hosts first (Task 0), then a time-boxed spike, because most wire shapes below come from secondary sources. Then fixtures and README rows, then one integration slice (decoders, endpoint copies, every exhaustive consumer), then rule changes, then UI and report labels. No new dependency, table or capture capability. Hits are plain `text` in the `hit` table, so no migration. No backfill: finished audits keep their stored decoder and rules versions, frozen shares do not change, and new coverage needs a fresh full audit.
 
-**Effort (re-estimate after Task 1):** about 8 to 12 working days if all five vendors survive the spike. Task 0 about 1 day, Task 1 one session (time-boxed), fixtures and README 2 days, integration slice 2 days, rules and baselines 2 days, UI, report and docs 2 days. Each vendor dropped at the spike saves about a day.
+**Effort (re-estimated after Task 1, 2026-10-29):** about 9 to 11 working days. All five vendors survived the spike (Pinterest partly), so no task or fixture is deleted. Fixtures and README 2 days, integration slice 2.5 days (Pinterest needs its two-endpoint handling), rules and baselines 2 days, Task 6a 1 day, UI, report and docs 2 days. Tasks 0 and 1 are done.
 
 Design sources: `docs/roadmap.md` ("Rules from research", item 9), `docs/research/2026-10-28-competitors.md` (row 13), `AGENTS.md` (Rules, Report), `docs/plans/2026-10-28-capture-capabilities/plan.md` (format). Code read: `packages/decoders/src/{types,collection,index}.ts` and `providers/{meta,tiktok}.ts`, `packages/rules/src/{consent-state,landing,documents,changes,index}.ts` and the rules named below, `packages/llm/src/vocab.ts`, `apps/web/src/lib/{report-projection,tag-matrix}.ts`, `apps/web/src/server/digest-data.ts`, `packages/fixtures/{sites.mjs,README.md,shared/tags.js}`.
 
 ## What the hits look like
 
-Source grades: **P** = vendor documentation read for this plan. **S** = secondary source (integration vendors, blogs, search snippets). **M** = from memory of past captures, unchecked. Anything not P is a hypothesis for Task 1 to confirm or kill. Do not code a decoder from an S or M row before Task 1 has a captured sample.
+Source grades: **P** = vendor documentation read for this plan. **C** = captured in the Task 1 spike (2026-10-29): the vendor's published snippet with a test ID, in Chromium, every non-SDK vendor request answered locally; samples in `packages/decoders/samples/`. **S** = secondary source. **M** = from memory, unchecked. A C cell is what the tag did with no account behind the test ID and with the vendors' remote configs answered empty, so account-driven behaviour (auto events, enhanced matching) is not covered. Anything not P or C is a hypothesis.
 
 | | LinkedIn Insight Tag | Microsoft UET | Pinterest Tag | Reddit Pixel | Snap Pixel |
 |---|---|---|---|---|---|
-| Endpoint | `px.ads.linkedin.com/collect` (S); hashed-email matching may go to `/wa/` (S, conflicting) | `bat.bing.com/action/0` (P, help article 60123 via search snippet; one guide says `bat.bing.net` (S)) | `ct.pinterest.com/v3/` (M); S sources talk only of the Conversions API v5 | `alb.reddit.com/rp.gif` (M); no source confirmed it | `tr.snapchat.com/p` (M); the P docs only show the server API `tr.snapchat.com/v3/{PIXEL_ID}/events` |
-| Method | GET image beacon, `fmt=gif` (S) | GET, 204 answer (P) | GET (M) | GET (M) | GET or POST (M) |
-| Destination ID | `pid` partner ID (S) | `ti` UET tag ID (P) | `tid` (M) | pixel ID, `a2_…` (M) | pixel ID (M) |
-| Event name | none for page views; a conversion adds a conversion ID (S: `conversion_id` in `lintrk('track', …)`; wire name unverified) | `evt=pageLoad` or `evt=custom`; custom labels `ea`, `ec`, `el`, `ev` (P) | `event=` (M) | `event=` (M) | `ev=` (M) |
-| Click ID | `li_fat_id`, appended to the landing URL when Enhanced conversion tracking is on; first-party cookie `li_fat_id`, 30 days (P, Microsoft Learn, 2026-09) | `msclkid` URL param, sent on UET calls; suggested cookie `_uetmsclkid`, 90 days (P for param and retention, S for the cookie name) | `epik`, URL param and first-party cookie (S) | `rdt_cid` (S, one source) | `ScCid`, appended to the destination URL (P) |
-| Dedup ID | Server side `eventId` (P). Browser side field unknown. | `event_id` in `uetq.push('event', …)`, must equal the CAPI `eventId`, same `eventName` and same tag ID (P). Wire name unknown. | `event_id`, with the same event name, 48 h window (S) | `conversionId`, with the same event name; without it, session-based dedup (S) | Pixel `client_dedup_id` = CAPI `event_id`, 48 h window. Unset: the SDK makes one prefixed `@-` that cannot match a server event (P) |
-| Personal-data IDs | `li_fat_id`; page URL; hashed email in `/wa/` (S) | `vid` visitor ID, `mid` machine ID, `uid` user ID, `msclkid`, page URL `p` (P for the first four names); hashed `em`/`ph` on CAPI only (P) | `epik`; page URL; hashed email `pd[em]` (M) | `rdt_cid`, `uuid`, page URL (M) | `ScCid`, `_scid`, page URL, hashed email (M) |
-| Consent signal on the hit | none known | `asc` = `G` or `D` (S, one CMP vendor, "diagnostic hint, not a contract"). CAPI has `adStorageConsent` `G`/`D` (P). | none known (M) | none known (M) | none known (M) |
+| SDK file | `snap.licdn.com/li.lms-analytics/insight.min.js` (C) | `bat.bing.com/bat.js` (C) | `s.pinimg.com/ct/core.js`, then `ct/lib/main.<hash>.js` (C) | `www.redditstatic.com/ads/pixel.js` (C) | `sc-static.net/scevent.min.js` (C) |
+| Endpoint | `px.ads.linkedin.com/collect` (C). `POST /wa/?medium=fetch&fmt=g` is a website-signal beacon (gzip, base64, JSON; page URL, `liFatId`, no event): not a hit (C) | `bat.bing.com/action/0` (C); `bat.bing.net/action/0` when consent is denied (C). Consent signal `POST /actionp/0` with `evt=consent` (C). Remote config `bat.bing.com/p/action/<ti>.js` is not an SDK file | `ct.pinterest.com/v3/` (C) for `event=init`. A conversion goes first to `ct.pinterest.com/user/?event=` (the config fetch, which also carries the event) and, once that answers with a config, to `/v3/?event=` as well (C, the second only with a stub config `{}`). `/stats/` is diagnostics | `alb.reddit.com/rp` (C). Not `rp.gif`. Config `pixel-config.reddit.com/pixels/<id>/config` | `tr.snapchat.com/p` (C). Also `GET /cm/i` (id sync) and `GET /config/<host>/<pixel>.js` |
+| Method | GET image, `fmt=js` (C) | GET image; consent ping is POST (C) | GET xhr / fetch (C) | POST fetch, form body `application/x-www-form-urlencoded` (C) | POST, JSON body `{ctx, req:[{t:{...}}]}` (C) |
+| Destination ID | `pid` (C) | `ti` (C) | `tid` (C) | `id` query and body (C), `a2_…` | `req[].t.pid` (C), a UUID |
+| Event name | none for a page view; a conversion adds `conversionId` (C) | `evt=pageLoad`, `evt=custom` with `ea` (action), `ec`, `el`, `gv`, `gc`; `evt=consent` for the consent ping (C) | `event=` (C): `init` on load, `checkout` for the conversion. A `page` call was not seen to send its own event (C, with stub config; open) | `event=` (C): `PageVisit`, `Purchase` | `t.ev` (C): `PAGE_VIEW`, `PURCHASE` |
+| Click ID | URL `li_fat_id` is sent as `li_fat_id` on `/collect` and `liFatId` on `/wa/` (C). The tag writes cookie `li_fat_id`, 30 days, host-only, Lax, with no extra setup (C). `li_adsId` in localStorage | URL `msclkid` is sent as `msclkid=<id>-<n>` (C). The tag writes `_uetmsclkid` (value `_uet<id>`), 90 days; `_uetsid` 1 day; `_uetvid` 390 days (C) | URL `epik` is sent in `pd={"epik":…}` (C). The tag writes `_epik`, 365 days (C) | URL `rdt_cid` is sent as `click_id` in the query and body (C). The tag writes `_rdt_cid`, 90 days, SameSite Strict, and `_rdt_uuid`, 90 days (C) | URL `ScCid` is sent as `ctx.sr` and `s_r_id` on `/cm/i` (C). No cookie holds it: `_scid`, `_scid_r`, `_scsrid` (395 days) are Snap's own IDs (C) |
+| Dedup ID | `eventId` on `/collect` next to `conversionId` (C; P: LinkedIn deduplication page names `eventId` / `event_id`). Absent when not passed (C) | `event_id` on the `evt=custom` hit (C). Absent when not passed (C) | `event_id` inside the JSON `ed` parameter (C). Absent when not passed (C) | `m.conversionId`, the SHA-256 hex of the ID the page passed (C: sha256 of the test ID matches). Empty when not passed (C) | `t.cdid` (C). Set from `client_dedup_id`; when it is not passed the SDK sends `@-<uuid>` (C, matches P) |
+| Personal-data IDs | `li_fat_id`, `li_adsId`, `pageLoadId`, page URL with its query (`url`) (C); `hem` null (C) | `vid`, `sid`, `mid`, `msclkid`, page URL `p` with its query on `pageLoad`, without it on `custom` (C) | `epik`, page URL in `ad.loc` with its query (C) | `uuid`, `click_id`, `esurl` = the page origin and path with only `rdt_cid` kept (C): the page query does not reach Reddit (C, tested with an email in the URL) | `u_c1`, `u_sclid`, `u_scsid`, `ctx.sr`, `ctx.url` with its query (C) |
+| Consent signal on the hit | none (C) | `asc=G` or `D` on every `action/0` hit and on the consent ping (C) | none on the hit. `pintrk('setconsent', false)` makes the tag send nothing and set no cookie (C) | `opt_out=0` or `1` on every hit (C). With `optOut: true` the hits and the cookies still happen (C) | none (C) |
 
 Facts that shape the rules:
 
-- Snap's auto-made `@-…` dedup ID is not an explicit cross-channel event ID. A rule that only checks "present" would pass a hit that has no explicit ID to pair with a server event. Snap's docs also describe an order-ID fallback for purchases, so the wording says "no explicit event ID", never "cannot be deduplicated".
-- Microsoft may be the only one of the five with a per-hit consent flag. Only if Task 1 passes the consent-semantics gate (Decision 8: the flag exists on the wire and a denied hit sets no identifier cookie and carries no visitor ID) is a UET hit with `asc=D` treated like a denied Google ping; otherwise Microsoft is judged like Meta.
+- Snap's auto-made `@-…` dedup ID (`t.cdid`, seen on the wire) is not an explicit cross-channel event ID. A rule that only checks "present" would pass a hit that has no explicit ID to pair with a server event. Snap's docs also describe an order-ID fallback for purchases, so the wording says "no explicit event ID", never "cannot be deduplicated".
+- Microsoft is the only one of the five whose hit says what consent state it was sent in (`asc`), and Task 1 passed its consent-semantics gate (Decision 8): with `asc=D` the tag sent no `vid`, `sid` or `msclkid` and set no `_uet*` cookie (the `mid` machine ID and the page URL still went, to `bat.bing.net`). A UET hit with `asc=D` is treated like a denied Google ping; the claim is bounded to what was observed, not to "all tracking honours denial". Reddit has a flag (`opt_out`) that changes nothing the tag does, so it is not an exemption.
 - LinkedIn and Pinterest set their click-ID cookies themselves; whether a vendor tag stores the ID with no extra setup is exactly what `clickid.cookie-missing` asks, so each vendor's cookie name must be verified before it joins `CLICK_IDS`.
 - Zinko sees the browser side only; the server-side half of every dedup pair is invisible. The wording stays as `dedup.tiktok-eventid-missing` has it.
+
+## Task 1 results (spike, 2026-10-29)
+
+Method: a scratch page outside the repo (`/tmp`) with each vendor's published snippet (test IDs: LinkedIn partner `9000001`, UET `400000001`, Pinterest `2600000000001`, Reddit `a2_zinkotest001`, Snap `11111111-2222-4333-8444-555555555555`), the five click IDs on the URL in each vendor's format, a page view and one purchase-like event (with and without a dedup ID), and three consent variants (granted, denied, denied then granted). It ran in headless Chromium through a router that let only the five SDK files reach the network and answered every other non-local request locally; the log of each run lists every request with its disposition. Samples: 14 files in `packages/decoders/samples/` (`linkedin-*`, `microsoft-*`, `pinterest-*`, `reddit-*`, `snap-*`), test IDs only, page URL rewritten to `https://shop.example/vendors-spike/`.
+
+### Exit list (Decision 8: a collection observed, b event and dedup mapping, c click-ID storage and forwarding, d consent semantics)
+
+| Vendor | a | b | c | d | Verdict |
+|---|---|---|---|---|---|
+| LinkedIn | yes | yes: `conversionId`, dedup `eventId`; a page view has no event name | yes: cookie `li_fat_id` (tag-written), forwarded on every `/collect` | no flag; judged like Meta | **Supported.** `dedup.linkedin-eventid-missing` is built. |
+| Microsoft Ads | yes | yes: `evt`, `ea`, dedup `event_id` | yes: `_uetmsclkid`, forwarded as `msclkid` | **yes**: `asc=G/D`, gate passed (bounded as above) | **Supported**, including the `asc` exemption and `uet-consent-denied`. |
+| Pinterest | yes | partly: `init` and `checkout` seen, dedup in `ed.event_id`; the config was a stub, a `page` event was not seen, the event goes to two endpoints | yes: `_epik`, forwarded in `pd` | no flag on the hit; `setconsent(false)` = silence | **Partly.** Built for the observed events; the page-view event name stays unverified and is listed as such in the README and `vision.md`. |
+| Reddit | yes | yes: `event`, dedup `m.conversionId` (hashed) | yes: `_rdt_cid`, forwarded as `click_id` | `opt_out` flag exists but changes nothing; judged like Meta | **Supported.** No page URL query reaches Reddit, so `hygiene.pii-in-hits` and the query part of `location-mismatch` cannot fire on it; `esurl` carries origin and path. |
+| Snap | yes | yes: `ev`, dedup `t.cdid`, `@-` prefix when unset | forwarding yes (`ctx.sr`, `s_r_id`); no ScCid cookie, so not in `CLICK_IDS` | no flag; judged like Meta | **Supported**; `clickid.cookie-missing` skips Snap. |
+
+No vendor is deferred: no task or fixture is deleted. Pinterest is the only one with a stated gap.
+
+### Questions closed
+
+- Dedup wire names: LinkedIn `eventId` (`/collect`), Microsoft `event_id`, Pinterest `event_id` inside the JSON `ed`, Reddit `m.conversionId` (SHA-256 hex of the page's ID, empty when absent), Snap `t.cdid`.
+- Snap posts to `tr.snapchat.com/p`, JSON, a batch in `req[]`. Reddit does not use `rp.gif` any more: `POST alb.reddit.com/rp`.
+- Click-ID cookies: `li_fat_id` (30 days), `_uetmsclkid` (90), `_epik` (365), `_rdt_cid` (90), all written by the tag's JavaScript on the page host. Snap has none. Observed without an account; a real account with Enhanced conversion tracking (LinkedIn) may change what is stored. Cookies set by the vendors' own responses cannot be observed offline.
+- Consent flags on the wire: Microsoft `asc` (D/G) and Reddit `opt_out` (0/1). Pinterest honours `setconsent` by sending nothing. LinkedIn and Snap have no consent API in the tag we installed.
+- Microsoft `asc` is pinned to the wire, not to a vendor document: the Microsoft help article 60119 was not retrievable; the observation is on `bat.bing.com/bat.js`.
+- LinkedIn browser dedup exists (`eventId`), so Open question 3 is closed in favour of building the rule.
+
+### What this changes below
+
+- Task 4: Snap's dedup field is `t.cdid` (not `client_dedup_id`); the `@-` rule stays. Pinterest: the event hit is `/user/?event=…` (always present when vendor requests are answered with 204, as the engine does) and `/v3/?event=init` is the load hit; a `/v3/?event=<x>` that follows a `/user/?event=<x>` is the same event delivered twice and must not be a second hit. Reddit and Snap bodies need the POST path of `decode` (form body, JSON body). LinkedIn `/wa/` is `decoded: false`. Microsoft `evt=consent` is a consent signal, not an event hit (`decoded: false`, or a hit with `event: "consent"` that no rule counts).
+- Task 5: `hygiene.location-mismatch` uses `url` (LinkedIn), `p` (Microsoft), `ad.loc` (Pinterest) and `ctx.url` (Snap); Reddit sends origin and path in `esurl`. `cookies-without-consent` family names: `li_fat_id`, `_uetmsclkid` (and `_uetvid`, `_uetsid`), `_epik`, `_rdt_cid` and `_rdt_uuid`, `_scid`, `_scid_r`, `_scsrid`. `CLICK_IDS`: LinkedIn, Microsoft, Pinterest, Reddit; not Snap.
+- Task 3: the UET snippet is installed with an `https://` source (the published one is protocol-relative and would load `http://bat.bing.com` on the fixtures' `http://localhost`, which the SDK exception does not match).
+- Task 0 follow-up: remote configs (`bat.bing.com/p/action/*.js`, `tr.snapchat.com/config/*`, `pixel-config.reddit.com`, Pinterest `/user/`) are answered locally and empty, so audits see the tags in their account-less default state. This is the same position the plan already takes for `--block-vendors`.
 
 ## Decisions (proposed; the owner may overrule)
 
@@ -66,6 +99,8 @@ Task 0 makes capture safe: both engines answer the candidate hosts locally. Task
 
 ### Task 0: Egress and interception for the new hosts (before the spike)
 
+**Done 2026-10-29.** Baseline: `baseline/` (110 files, `README.md` there). Hosts and SDK exceptions: commit `9a35d6a`. Both engines verified (SDK loads, collection blocked with a local answer, preflight, redirect hops, unlisted paths and beacons local, egress log shows no vendor host contacted beyond the SDK files).
+
 First capture the old baseline: every fixture in the README, `--scenario all --rules --block-vendors`, exact statuses saved under `docs/plans/2026-10-28-more-vendors/baseline/` (status lines only, no hit values). Task 2 and Task 6 diff against this baseline, taken before any production change.
 
 
@@ -79,6 +114,8 @@ The collection copy lists request shapes, not every request to a vendor host. Th
 Verify, for each engine: an SDK script loads; a collection request is recorded `blocked: true` with a local response; preflight (OPTIONS), redirects and an ancillary beacon to the same host are answered locally; no non-SDK request to a vendor host leaves the machine (show the network log).
 
 ### Task 1: Spike, capture the real requests (gate, time-boxed)
+
+**Done 2026-10-29.** Results, exit list and samples are in "Task 1 results" above.
 
 Goal: replace every S and M cell above with a captured sample or mark it unverifiable.
 
@@ -138,7 +175,7 @@ This is one checkable slice: it ends with the full check green. Widening `Vendor
 
 Decoders:
 
-`packages/decoders`: one file per vendor under `src/providers/`, shaped like `tiktok.ts` and `meta.ts`; add the ids to `Vendor`, the endpoints to `COLLECTION_ENDPOINTS` (decoded: true, with the non-event beacons, like TikTok's `pixel/act`, listed decoded: false), export in `index.ts`. Per hit: `destinationId`, `event` (LinkedIn: `PageView` or `conversion`), `ids` with `eventId` for the dedup ID in every vendor (so the rule is one code path), `ids.clickId`-style keys named per vendor (`lifatid`, `msclkid`, `epik`, `rdtcid`, `sccid`), `ids` for visitor IDs only where the report and digest ignore them, `params.page_location` from the page URL parameter (so `hygiene.pii-in-hits` and `hygiene.location-mismatch` work unchanged), Microsoft `consent.adStorage` from `asc`. Snap: set `ids.eventId` only when `client_dedup_id` does not start with `@-`, and set `ids.autoDedupId = "true"` otherwise so a rule can say why.
+`packages/decoders`: one file per vendor under `src/providers/`, shaped like `tiktok.ts` and `meta.ts`; add the ids to `Vendor`, the endpoints to `COLLECTION_ENDPOINTS` (decoded: true, with the non-event beacons, like TikTok's `pixel/act`, listed decoded: false), export in `index.ts`. Per hit: `destinationId`, `event` (LinkedIn: `PageView` or `conversion`), `ids` with `eventId` for the dedup ID in every vendor (so the rule is one code path), `ids.clickId`-style keys named per vendor (`lifatid`, `msclkid`, `epik`, `rdtcid`, `sccid`), `ids` for visitor IDs only where the report and digest ignore them, `params.page_location` from the page URL parameter (so `hygiene.pii-in-hits` and `hygiene.location-mismatch` work unchanged), Microsoft `consent.adStorage` from `asc`. Snap: set `ids.eventId` only when `t.cdid` (the wire name of `client_dedup_id`) does not start with `@-`, and set `ids.autoDedupId = "true"` otherwise so a rule can say why.
 Raise `DECODER_VERSION` to the next free number ("5" now). The package build runs `tsc` and then fails on a stale endpoint copy, so emit with the compiler only, then write the copy, then format and run the full checks: `pnpm --filter @ovriq/zinko-decoders exec tsc -p tsconfig.build.json && node packages/decoders/scripts/engine-endpoints.mjs --write && pnpm format` (from the repository root; adjust the script path if it resolves relative to the package). Tasks 4, 5 and 6 are one versioned boundary: nothing between them is merged or released under the old `RULES_VERSION`. Remove any provisional coverage for a vendor deferred at the spike.
 
 Verify: `node apps/cli/dist/index.js decode '<hit-url>'` on each GET sample, paste the decoded hit. For a POST sample use the CLI's request-file/HAR input if it has one, else a one-off read-only call of `decode({ url, method, body })`. Then `capture <vendors-clean URL> --scenario accept --block-vendors` shows the five vendors' hits in the output.
@@ -214,20 +251,21 @@ Update `docs/vision.md` (decoders, the vendor table, the "LinkedIn decoder: plan
 
 ## Open questions
 
-1. **Wire shapes (Tasks 1, 2).** Pinterest, Reddit and Snap endpoints, all dedup parameter names except Snap's `client_dedup_id` and Microsoft's `event_id`/`eventId`, and the click-ID cookie names are not confirmed by a vendor document I could open. Search found no primary text for `alb.reddit.com`, `rp.gif`, `ct.pinterest.com/v3` or `tr.snapchat.com/p`; Reddit's help page and API docs returned 404 or were blocked. Task 1 decides.
-2. **`asc`.** Only one CMP vendor's guide names it. If the real tag sends something else (or nothing, and consent is expressed only by whether the tag loads), Microsoft is judged like Meta and the `uet-consent-denied` fixture is dropped.
-3. **LinkedIn browser-side dedup.** LinkedIn's CAPI schema has `eventId` "used for deduplication" and points to a deduplication page I did not read. The browser field may be in `lintrk('track', {conversion_id, event_id})` or may not exist for the Insight Tag at all. If it does not exist, `dedup.linkedin-eventid-missing` is not built.
+1. **Wire shapes (closed by Task 1).** Superseded by the table and the results section; the original text follows. Pinterest, Reddit and Snap endpoints, all dedup parameter names except Snap's `client_dedup_id` and Microsoft's `event_id`/`eventId`, and the click-ID cookie names are not confirmed by a vendor document I could open. Search found no primary text for `alb.reddit.com`, `rp.gif`, `ct.pinterest.com/v3` or `tr.snapchat.com/p`; Reddit's help page and API docs returned 404 or were blocked. Task 1 decides.
+2. **`asc` (closed: the flag exists and the gate passes).** Original text: Only one CMP vendor's guide names it. If the real tag sends something else (or nothing, and consent is expressed only by whether the tag loads), Microsoft is judged like Meta and the `uet-consent-denied` fixture is dropped.
+3. **LinkedIn browser-side dedup (closed: `eventId` exists).** Original text: LinkedIn's CAPI schema has `eventId` "used for deduplication" and points to a deduplication page I did not read. The browser field may be in `lintrk('track', {conversion_id, event_id})` or may not exist for the Insight Tag at all. If it does not exist, `dedup.linkedin-eventid-missing` is not built.
 4. **Label for GA4.** The matrix says "Google Analytics 4"; everything else says "GA4". Unify on "GA4", or keep the long name in the matrix only? Also: can `@repo/rules` import `VENDOR_LABELS` from `@repo/llm`, or should the label map move into `@ovriq/zinko-decoders` (it owns the `Vendor` type, and both already depend on it)? Prefer the decoders package; needs the owner's call because it is a public package name.
 5. **Old audits.** Settled: Decision 6, no backfill.
 6. **One dedup rule or five.** Settled: Decision 3, per vendor.
 7. **Capture reality.** Settled: a tag that stays silent without a real account defers its vendor (Decision 8). Replay may reproduce a sample captured for real; it never substitutes discovery.
-8. **Ad-blocker lists.** `--block-vendors` answers collection requests locally; the five vendors' script hosts (`snap.licdn.com`, `bat.bing.com`, `s.pinimg.com`, `www.redditstatic.com`, `sc-static.net`) must load for the fixtures to work, which the egress allow-list for the real engine may refuse. Task 0 settles this.
+8. **Ad-blocker lists (closed by Task 0).** Original text: `--block-vendors` answers collection requests locally; the five vendors' script hosts (`snap.licdn.com`, `bat.bing.com`, `s.pinimg.com`, `www.redditstatic.com`, `sc-static.net`) must load for the fixtures to work, which the egress allow-list for the real engine may refuse. Task 0 settles this.
 9. **Sites with real accounts.** Real-site checks only on the sites the owner authorises (M3's Happy Socks and Allbirds); their vendors are unknown to me.
 
 ## Sources
 
 Primary (read): [Enabling Click IDs, LinkedIn on Microsoft Learn](https://learn.microsoft.com/en-us/linkedin/marketing/conversions/enabling-first-party-cookies); [LinkedIn Conversions API schema](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/conversions-api-schema); [Microsoft Advertising Conversions API](https://learn.microsoft.com/en-us/advertising/guides/uet-conversion-api-integration); [Snap Conversions API deduplication](https://developers.snap.com/marketing-api/Conversions-API/Deduplication).
 Seen only as search snippets: Microsoft UET parameter help article (60123); [Snap Conversions API](https://developers.snap.com/marketing-api/Conversions-API/UsingTheAPI).
+Read in Task 1 (search results, snippets): [LinkedIn Conversions API deduplication](https://learn.microsoft.com/en-us/linkedin/marketing/integrations/conversions/deduplication) and its [Insight Tag variant](https://learn.microsoft.com/en-us/linkedin/marketing/conversions/deduplication?view=li-lms-2024-05) (browser `event_id`, image-pixel `eventId`); [Pinterest, install the base code](https://help.pinterest.com/en/business/article/install-the-base-code) (`core.js`, `load`, `page`, `fp_cookie`, `setconsent`); [Pinterest developer docs, Pinterest tag](https://developers.pinterest.com/docs/api-features/pinterest-tag/); [Snap Conversions API deduplication](https://developers.snap.com/api/marketing-api/Conversions-API/Deduplication) (`client_dedup_id`, `@-` prefix); [Microsoft, Setting up UET for consent mode](https://help.ads.microsoft.com/apex/index/3/en/60119) (snippet only, the page itself did not load); [Reddit pixel guide (Stackmatix)](https://www.stackmatix.com/blog/reddit-pixel-setup) and [c15t on the Reddit pixel](https://c15t.com/docs/integrations/reddit-pixel.md) (base code, `conversionId`, `optOut`); [Snap pixel base code (Intercom/checkout help)](https://intercom.help/checkouthelpcenter/en/articles/3429737-snapchat-integration-with-extension-code). The install snippets in the spike are the published shapes written from these pages and from memory of the vendors' generated code, not copied from an account. The wire shapes are observed (C), not read from a vendor document.
 Secondary: [Clickio on UET consent](https://docs.clickio.com/books/clickio-consent-cmp/page/microsoft-uet-consent-mode-with-clickio-cmp), [Taggrs on Pinterest dedup](https://taggrs.io/docs/server-side-tracking/pinterest/event-deduplication), [Datahash on Reddit dedup](https://www.datahash.com/docs/signals/destinations/web-conversions/reddit-conversions-api/), [Nuxt Scripts on the LinkedIn Insight Tag](https://scripts.nuxt.com/scripts/linkedin-insight).
 
 ## Changes after review r1
@@ -251,3 +289,11 @@ Secondary: [Clickio on UET consent](https://docs.clickio.com/books/clickio-conse
 3. Version boundary: baseline captured first in Task 0; Task 0 changes only host interception, SDK exceptions and the inspector; endpoints and `Vendor` move to the Task 4–6 boundary; deferred vendors leave no coverage.
 4. Decoder build: compiler-only emit, then the writer, then format.
 5. Editorial: the Microsoft consent sentence is conditional on the gate; the obsolete combined rule name is gone.
+
+## Changes after Task 1 (2026-10-29)
+
+1. Table graded in place (C = captured); Task 1 results and the exit list added; all five vendors proceed, Pinterest partly.
+2. Effort re-estimated to 9 to 11 days; no task deleted.
+3. Task 4 decoder notes: Snap `t.cdid`, Pinterest `/user/` plus `/v3/` de-duplication, POST bodies for Reddit and Snap, Microsoft consent ping.
+4. Reddit does not send the page query: `hygiene.pii-in-hits` and `location-mismatch` skip it; Snap is not a click-ID cookie vendor.
+5. Microsoft `asc` gate passed (bounded claim). Task 0 done: the five vendors' hosts and SDK exceptions are in `vendors.json` and its contract mirror, both engines verified.

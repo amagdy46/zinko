@@ -248,13 +248,31 @@ Plan: [`docs/plans/2026-10-28-m6-compare/plan.md`](plans/2026-10-28-m6-compare/p
 
 On the BASELINE audit (same data without the flips): `getOverview` 161 / 171 ms, `listFindings` 59 / 65 ms, `getReportDraft` 389 / 438 ms, `publishReport` 386 / 426 ms (reuse) and 388 / 427 ms (new version). Two things to carry into Tasks 10, 11 and 12: the unchanged report draft is **already 162.9 KB** against the 165 KB budget for the draft with `changes`, so `changes` must fit in about 2 KB or the budget moves (decide in Task 11, measured); and publishing costs about the same as building the draft (the model build dominates), so `publishReport` with `changes` should be read against the 1800 ms / 2800 ms targets with that in mind.
 
+### More vendors (LinkedIn, Microsoft Ads, Pinterest, Reddit, Snap)
+
+Plan: `docs/plans/2026-10-28-more-vendors/plan.md`. Status after Tasks 0 and 1 (2026-10-29): capture is safe for the five vendors, their wire shapes are captured, nothing is decoded or judged yet.
+
+What exists: `apps/browser/src/inject/vendors.json` and its mirror in `packages/capture-contract` list the five vendors' hosts and let only their SDK files (`insight.min.js`, `bat.js`, `core.js` and `ct/lib/main.<hash>.js`, `pixel.js`, `scevent.min.js`) load; every other request to those hosts is answered locally on both engines (checked separately: preflights, redirect hops, unlisted paths, beacons). `packages/fixtures/inspect.mjs` prints and answers the new vendors. `COLLECTION_ENDPOINTS` and the `Vendor` union are unchanged on purpose (they feed rule inputs and belong to the versioned boundary of Tasks 4 to 6). Fourteen real samples are in `packages/decoders/samples/`, and `baseline/` in the plan folder holds the pre-change statuses of every fixture.
+
+What the spike found (all observed with test IDs, no account; vendor configs answered empty):
+
+| Vendor | Hit | Event / dedup | Click ID | Consent signal | Verdict |
+|---|---|---|---|---|---|
+| LinkedIn | `GET px.ads.linkedin.com/collect` (`pid`) | `conversionId` / `eventId` | cookie `li_fat_id`, 30 d | none | supported |
+| Microsoft Ads | `GET bat.bing.com/action/0` (`ti`) | `evt`, `ea` / `event_id` | `_uetmsclkid`, 90 d | `asc=G/D`; denied sends no `vid`, `sid`, `msclkid`, sets no `_uet*` cookie | supported, with the `asc` exemption |
+| Pinterest | `GET ct.pinterest.com/user/?event=` and `/v3/` (`tid`) | `event` / `ed.event_id` | `_epik`, 365 d | `setconsent(false)` sends nothing | partly: page-view event name unverified, config was a stub, two endpoints per event |
+| Reddit | `POST alb.reddit.com/rp` (form; not `rp.gif`) | `event` / `m.conversionId` (SHA-256) | `_rdt_cid`, 90 d | `opt_out` flag, no effect | supported; no page query reaches Reddit |
+| Snap | `POST tr.snapchat.com/p` (JSON batch) | `t.ev` / `t.cdid` (`@-` when unset) | forwarded as `sr`; no cookie | none | supported, not a click-ID cookie vendor |
+
+How it will be built (unchanged by the spike): one decoder file per vendor, endpoints and `Vendor` widened once (Task 4) with every exhaustive consumer, `DECODER_VERSION` 5 and the next `RULES_VERSION` with `RULE_CHANGES`, one dedup rule per supported vendor, no backfill of finished audits, purchase rules stay at four vendors, the new click IDs only through manually entered URLs. Open: Pinterest's `page` event; whether real accounts change the cookies (LinkedIn Enhanced conversion tracking); the label map's home (Open question 4 in the plan).
+
 ### v0.2: configured vs fired, funnels
 
 | Feature | How we build it | Status |
 |---|---|---|
 | GTM, GA4 Admin, Meta connectors | Read-only API access; GA4 MCP and gtm-mcp-server run as sidecars | planned |
 | GTM container diff | Show which container version is live and what changed since the last audit (Trackingplan, RundataAI) | planned |
-| LinkedIn decoder | `packages/decoders` | planned |
+| LinkedIn decoder | `packages/decoders`; part of the more-vendors plan (below) | spiked, not built |
 | Funnel discovery | Stagehand-style agent finds add-to-cart and checkout once, outputs a replayable spec with real selectors; plain Playwright replays it with no LLM; a failed replay step is flagged as drift | planned |
 | **Region simulation** | Run from or emulate an EEA vs US visitor so consent defaults per region are checked (Tag Assistant makes you do this by hand) | proposed |
 
