@@ -93,7 +93,7 @@ function ReportScreen() {
           aria-label="View"
         >
           <ToggleGroupItem value="consultant">Consultant view</ToggleGroupItem>
-          <ToggleGroupItem value="client">Client view</ToggleGroupItem>
+          <ToggleGroupItem value="client">Shared view</ToggleGroupItem>
         </ToggleGroup>
         <DisclosureDialog
           auditId={auditId}

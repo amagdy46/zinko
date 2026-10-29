@@ -40,9 +40,9 @@ export function ReportIntro({
       <div className="min-w-0 flex-1 space-y-0.5">
         {showHelp ? (
           <p>
-            <span className="font-medium">Send this to your client:</span> check what they will
-            read, add your own summary and notes, then share a link you can turn off or save a PDF.
-            Clients see only the report. In the print dialog, turn off headers and footers so the
+            <span className="font-medium">Before you share it:</span> check what readers will see,
+            add your own summary and notes, then share a link you can turn off or save a PDF.
+            Readers see only the report. In the print dialog, turn off headers and footers so the
             page address is not printed.
           </p>
         ) : null}

@@ -312,8 +312,8 @@ function FindingCard({
       )}
       {hidden ? (
         <p className="text-muted-foreground">
-          Hidden from the detail: the client does not see this card, its plan entry or its name in
-          the summary. The score and counts still include it.
+          Hidden from the detail: the shared report does not show this card, its plan entry or its
+          name in the summary. The score and counts still include it.
         </p>
       ) : null}
       {actions}
@@ -335,8 +335,8 @@ export function Findings({ model, controls }: { model: ReportModel; controls?: R
       <h2 className="text-xl font-semibold">Findings</h2>
       {controls === undefined ? null : (
         <p className="text-xs text-muted-foreground print:hidden">
-          Hide detail, keep in score: the client does not see the card, its plan entry or its name
-          in the summary. It still counts in the score.
+          Hide detail, keep in score: the shared report does not show the card, its plan entry or
+          its name in the summary. It still counts in the score.
         </p>
       )}
       {shown.length === 0 ? (
