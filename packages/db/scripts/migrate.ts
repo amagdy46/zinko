@@ -4,6 +4,7 @@ import { migrate } from "drizzle-orm/effect-postgres/migrator"
 import { Config, Effect, Redacted } from "effect"
 import { existsSync } from "node:fs"
 import { join } from "node:path"
+import { backfillDefaultClients } from "./backfill-default-clients.ts"
 
 // `pnpm db:migrate`: applies packages/db/drizzle/* to DATABASE_URL (default: the docker-compose database).
 // Reads the repository's `.env` like the app does; a variable already in the process environment wins.
@@ -21,6 +22,7 @@ const program = Effect.gen(function* () {
   yield* migrate(db, { migrationsFolder: new URL("../drizzle", import.meta.url).pathname }).pipe(
     Effect.orDie,
   )
+  yield* backfillDefaultClients(db).pipe(Effect.orDie)
   yield* Effect.log("migrations applied")
 }).pipe(Effect.provide(PgClient.layerConfig({ url })))
 

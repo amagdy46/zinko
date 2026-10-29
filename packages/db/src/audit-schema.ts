@@ -9,8 +9,10 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core"
+import { sql } from "drizzle-orm"
 
 /*
  * Every table carries org_id and is reached through its owning audit, checked against the
@@ -33,8 +35,15 @@ export const client = pgTable(
     createdAt: createdAt(),
     name: text().notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
+    /** The hidden client every site without a named one belongs to; one per organization. */
+    isDefault: boolean("is_default").notNull().default(false),
   },
-  (t) => [index("client_org_archived_idx").on(t.orgId, t.archivedAt)],
+  (t) => [
+    index("client_org_archived_idx").on(t.orgId, t.archivedAt),
+    uniqueIndex("client_one_default_idx")
+      .on(t.orgId)
+      .where(sql`${t.isDefault}`),
+  ],
 )
 
 export const site = pgTable(

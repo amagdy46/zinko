@@ -35,6 +35,8 @@ Never set `ALLOW_PRIVATE_NETWORKS` or `BROWSER_URL` for a deployed stage: the en
    pnpm install && pnpm build && pnpm db:migrate
    ```
 
+   `pnpm db:migrate` applies the migrations and then the idempotent backfill of default clients and the "Group sites by client" setting (organizations that already have any client, archived ones included, keep today's Clients UX); a re-run is harmless and never overrides a manager's choice. Run it in a quiet window and deploy straight after. On a stage with active users, drain writes first (no client or site creation between migrate and deploy): a client the old app creates in between leaves grouping off until a manager turns it on, and the old app can list the hidden default clients during that window.
+
 2. Export the other settings from the table, then deploy:
 
    ```sh
