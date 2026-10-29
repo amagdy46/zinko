@@ -95,7 +95,8 @@ function AppShell() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const router = useRouter()
-  // A navigation replaces the page without a reload, so move focus to the new page's heading.
+  // A navigation replaces the page without a reload, so move focus to the new page's heading. It is
+  // a target for screen readers and the next Tab, not a control, so it takes no ring.
   useEffect(
     () =>
       router.subscribe("onResolved", ({ pathChanged }) => {
@@ -155,7 +156,7 @@ function AppShell() {
         <main
           id="main"
           tabIndex={-1}
-          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:rounded-sm [&_h1:focus-visible]:ring-2 [&_h1:focus-visible]:ring-ring [&_h1:focus-visible]:ring-offset-2 [&_h1:focus-visible]:ring-offset-background [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6 print:p-0"
+          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6 print:p-0"
         >
           <Outlet />
         </main>

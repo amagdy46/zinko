@@ -5,6 +5,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { SettingsSection } from "@/components/settings-section"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -75,9 +76,16 @@ function Members() {
 
   if (isPending)
     return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Loading members…
-      </p>
+      <div role="status" className="space-y-3">
+        <span className="sr-only">Loading members</span>
+        {[0, 1, 2].map((row) => (
+          <div key={row} className="flex items-center gap-3" aria-hidden="true">
+            <Skeleton className="size-8 rounded-full" />
+            <Skeleton className="h-4 w-48 max-w-full" />
+            <Skeleton className="ml-auto h-8 w-24" />
+          </div>
+        ))}
+      </div>
     )
   if (loadError)
     return (

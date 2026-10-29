@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
 import { tabLink } from "@/lib/row-style"
+import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/app/settings")({ component: SettingsLayout })
 
@@ -23,7 +24,12 @@ function SettingsLayout() {
         className="scroll-edges -mx-1.5 flex gap-2.5 overflow-x-auto overflow-y-hidden border-b"
       >
         {tabs.map(({ to, label }) => (
-          <Link key={to} to={to} activeOptions={{ exact: true }} className={tabLink}>
+          <Link
+            key={to}
+            to={to}
+            activeOptions={{ exact: true }}
+            className={cn(tabLink, "min-w-8 justify-center")}
+          >
             {label}
           </Link>
         ))}

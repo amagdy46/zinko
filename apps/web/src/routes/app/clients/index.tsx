@@ -146,7 +146,7 @@ function Clients() {
               <TableRow key={c.id} className="relative">
                 <TableCell className="font-medium">
                   <Link
-                    className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
                     to="/app/clients/$clientId"
                     params={{ clientId: c.id }}
                   >

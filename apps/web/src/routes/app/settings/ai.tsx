@@ -185,6 +185,7 @@ function AiSettings() {
   const router = useRouter()
   const [pending, setPending] = useState<"save" | "test" | "remove" | null>(null)
   const [feedback, setFeedback] = useState<{ ok: boolean; message: string } | null>(null)
+  const [typedKey, setTypedKey] = useState("")
   const [provider, setProvider] = useState<ProviderId>(
     settings?.provider !== null &&
       settings?.provider !== undefined &&
@@ -219,6 +220,7 @@ function AiSettings() {
       return
     }
     form.reset()
+    setTypedKey("")
     toast.success("AI provider saved")
     await router.invalidate()
   }
@@ -299,7 +301,7 @@ function AiSettings() {
                   }}
                 >
                   <SelectTrigger id="ai-provider" className="w-full">
-                    <SelectValue />
+                    <SelectValue>{providers.find((p) => p.id === provider)?.label}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {providers.map(({ id, label }) => (
@@ -328,6 +330,8 @@ function AiSettings() {
                   name="apiKey"
                   type="password"
                   autoComplete="new-password"
+                  value={typedKey}
+                  onChange={(event) => setTypedKey(event.target.value)}
                   placeholder={configured ? "Leave empty to keep the current key" : "sk-..."}
                 />
               </div>
@@ -348,7 +352,10 @@ function AiSettings() {
                 </div>
               ) : null}
               <div className="flex flex-wrap gap-2">
-                <Button type="submit" disabled={pending !== null}>
+                <Button
+                  type="submit"
+                  disabled={pending !== null || (!configured && typedKey.trim() === "")}
+                >
                   {pending === "save" ? "Saving…" : "Save provider"}
                 </Button>
                 {configured ? (
@@ -372,6 +379,9 @@ function AiSettings() {
                   </>
                 ) : null}
               </div>
+              {!configured && typedKey.trim() === "" ? (
+                <p className="text-xs text-muted-foreground">Enter an API key to save.</p>
+              ) : null}
             </form>
           ) : (
             <p className="text-sm text-muted-foreground">

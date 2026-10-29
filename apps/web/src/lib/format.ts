@@ -28,8 +28,13 @@ export function shortDate(date: Date | string | number, timeZone?: string): stri
   return dayFormat(timeZone, false).format(new Date(date))
 }
 
-/** "28 Oct 2026, 02:21": the one date-and-time format. */
+/**
+ * "28 Oct 2026, 02:21": the one date-and-time format. Empty while the zone is still the server's
+ * "UTC" (see `useTimeZone`): a time of day in the wrong zone that then jumps is worse than a
+ * moment of nothing.
+ */
 export function shortDateTime(date: Date | string | number, timeZone?: string): string {
+  if (timeZone === "UTC") return ""
   return dayFormat(timeZone, true).format(new Date(date))
 }
 

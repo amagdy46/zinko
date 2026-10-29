@@ -166,7 +166,8 @@ function ClientPage() {
                       {urlError === undefined ? (
                         <p className="text-xs text-muted-foreground">
                           https:// is added when you leave it out (http:// for localhost and private
-                          addresses).
+                          addresses). Only the address up to the host is kept: you choose the
+                          landing page when you start an audit.
                         </p>
                       ) : (
                         <p id="site-url-error" role="alert" className="text-sm text-destructive">
@@ -259,7 +260,7 @@ function ClientPage() {
                     <Link
                       to="/app/sites/$siteId"
                       params={{ siteId: s.id }}
-                      className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                      className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
                     >
                       {s.name}
                     </Link>

@@ -345,7 +345,7 @@ function SitePage() {
                   <Link
                     to="/app/audits/$auditId"
                     params={{ auditId: a.id }}
-                    className="after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
                   >
                     <time title={relativeTime(a.createdAt).text}>
                       {shortDateTime(a.createdAt, timeZone)}

@@ -212,12 +212,28 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
     await router.invalidate()
   }
 
+  const preview = (
+    <div className="space-y-2">
+      <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
+        Cover preview
+      </h3>
+      <CoverPreview
+        agencyName={agencyName}
+        logoUrl={branding.logoUrl}
+        accent={accent}
+        footerText={footerText}
+        showPoweredBy={showPoweredBy}
+      />
+    </div>
+  )
+
   return (
     <>
       {logo}
       <SettingsSection
         title="Report branding"
         description="Clients see this on the cover and in the footer of every report you share."
+        action={<div className="hidden pt-4 lg:sticky lg:top-6 lg:block">{preview}</div>}
       >
         <form onSubmit={save} className="max-w-xl space-y-5">
           <div className="space-y-2">
@@ -325,20 +341,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
             </Button>
           ) : null}
         </form>
-      </SettingsSection>
-      <SettingsSection
-        title="Cover preview"
-        description="How the cover of a report will look with the choices above."
-      >
-        <div className="max-w-xs">
-          <CoverPreview
-            agencyName={agencyName}
-            logoUrl={branding.logoUrl}
-            accent={accent}
-            footerText={footerText}
-            showPoweredBy={showPoweredBy}
-          />
-        </div>
+        <div className="max-w-xs lg:hidden">{preview}</div>
       </SettingsSection>
     </>
   )

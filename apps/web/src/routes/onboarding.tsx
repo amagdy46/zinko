@@ -53,7 +53,7 @@ function Onboarding() {
   return (
     <AuthCard
       title="Create your organization"
-      description="Your organization is your consultancy or team. You add your clients next."
+      description="Your organization is your consultancy or team. Your clients see its name on their reports, and you can add a logo later. You add your clients next."
       account={
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="break-all">Signed in as {session.email}</span>
