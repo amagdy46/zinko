@@ -10,6 +10,7 @@
  * `maxResponseBytes`.
  */
 import { request as httpsRequest } from "node:https"
+import { brotliDecompress, gunzip, inflate, inflateRaw } from "node:zlib"
 import { connect, createServer, isIPv6, type LookupFunction, type Socket } from "node:net"
 import { isCollectionRequest, isSdkFile, isServiceHost, isVendorHost } from "./browser-config.ts"
 import { checkUrl, resolveHost } from "./url-policy.ts"
@@ -39,9 +40,6 @@ const sdkHeaders = new Set(["user-agent", "accept", "accept-language", "referer"
 /** Response headers passed back with an SDK file; the rest (CSP, reporting) do not apply to it. */
 const sdkResponseHeaders = new Set([
   "content-type",
-  // Reddit's pixel.js comes back gzipped even for `accept-encoding: identity`; without this header
-  // the browser runs the compressed bytes and the script dies with "Script error".
-  "content-encoding",
   "cache-control",
   "set-cookie",
   "timing-allow-origin",
@@ -49,6 +47,32 @@ const sdkResponseHeaders = new Set([
   "access-control-allow-origin",
   "access-control-allow-credentials",
 ])
+
+const MAX_SDK_BYTES = 8 * 1024 * 1024
+
+/** An SDK body as identity bytes: gzip, brotli and deflate (zlib or raw) are decoded; anything else is refused. */
+const decodeSdk = (body: Buffer, encoding: string | undefined): Promise<Buffer> =>
+  new Promise((resolve, reject) => {
+    const done = (error: Error | null, result: Buffer) =>
+      error === null ? resolve(result) : reject(error)
+    const options = { maxOutputLength: MAX_SDK_BYTES }
+    switch ((encoding ?? "identity").trim().toLowerCase()) {
+      case "identity":
+        return body.length <= MAX_SDK_BYTES ? resolve(body) : reject(new Error("too large"))
+      case "gzip":
+      case "x-gzip":
+        return gunzip(body, options, done)
+      case "br":
+        return brotliDecompress(body, options, done)
+      case "deflate":
+        // The standard says zlib-wrapped; some servers send a raw stream.
+        return inflate(body, options, (error, result) =>
+          error === null ? resolve(result) : inflateRaw(body, options, done),
+        )
+      default:
+        return reject(new Error("unsupported content-encoding"))
+    }
+  })
 
 const headerName = (line: string) => line.slice(0, line.indexOf(":")).trim().toLowerCase()
 const headerValue = (line: string) => line.slice(line.indexOf(":") + 1).trim()
@@ -175,19 +199,43 @@ export const startEgressProxy = (options: {
     contacted.add(url.host)
     const upstream = httpsRequest(url, { headers, lookup, timeout: CONNECT_TIMEOUT_MS })
     upstream.on("response", (response) => {
-      const lines: string[] = []
-      for (let index = 0; index + 1 < response.rawHeaders.length; index += 2) {
-        const [name = "", value = ""] = response.rawHeaders.slice(index, index + 2)
-        if (sdkResponseHeaders.has(name.toLowerCase()))
-          lines.push(`${name.toLowerCase()}: ${value}`)
-      }
-      client.write(
-        [`HTTP/1.1 ${response.statusCode ?? 502} SDK`, ...lines, "connection: close", "", ""].join(
-          "\r\n",
-        ),
-      )
-      response.on("data", countResponse)
-      response.pipe(client)
+      const chunks: Buffer[] = []
+      response.on("data", (chunk: Buffer) => {
+        countResponse(chunk)
+        chunks.push(chunk)
+      })
+      response.on("error", () => client.end(status(502, "Bad Gateway")))
+      response.on("end", () => {
+        // Some vendors compress an SDK file whatever `accept-encoding` says (Reddit's pixel.js is
+        // gzipped). The body is decoded here once, so both engines serve identity bytes; a body
+        // that cannot be decoded is a clean 502, which the page sees as a failed script load.
+        decodeSdk(Buffer.concat(chunks), response.headers["content-encoding"]).then(
+          (body) => {
+            const lines: string[] = []
+            for (let index = 0; index + 1 < response.rawHeaders.length; index += 2) {
+              const [name = "", value = ""] = response.rawHeaders.slice(index, index + 2)
+              if (sdkResponseHeaders.has(name.toLowerCase()))
+                lines.push(`${name.toLowerCase()}: ${value}`)
+            }
+            client.end(
+              Buffer.concat([
+                Buffer.from(
+                  [
+                    `HTTP/1.1 ${response.statusCode ?? 502} SDK`,
+                    ...lines,
+                    `content-length: ${body.length}`,
+                    "connection: close",
+                    "",
+                    "",
+                  ].join("\r\n"),
+                ),
+                body,
+              ]),
+            )
+          },
+          () => client.end(status(502, "Bad Gateway")),
+        )
+      })
     })
     upstream.on("timeout", () => upstream.destroy())
     upstream.on("error", () => client.end(status(502, "Bad Gateway")))

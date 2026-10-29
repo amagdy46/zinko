@@ -260,7 +260,7 @@ What the spike found (all observed with test IDs, no account; vendor configs ans
 |---|---|---|---|---|---|
 | LinkedIn | `GET px.ads.linkedin.com/collect` (`pid`) | `conversionId` / `eventId` | cookie `li_fat_id`, 30 d | none | supported |
 | Microsoft Ads | `GET bat.bing.com/action/0` (`ti`) | `evt`, `ea` / `event_id` | `_uetmsclkid`, 90 d | `asc=G/D`; denied omits top-level `vid`, `sid`, `msclkid` and sets no `_uet*` cookie, but `p` still carries the landing URL with its query | supported; `asc=D` exemption for the two consent rules only, PII and URL checks stay on |
-| Pinterest | `GET ct.pinterest.com/user/?event=` (the event) and `/v3/?event=init` (load) (`tid`) | `event` / `ed.event_id` | `_epik`, 365 d | `setconsent(false)` sends nothing | partly: page-view event unverified; the decoder reads `/user/` for events and `/v3/` for `init` only |
+| Pinterest | `GET ct.pinterest.com/user/?event=` (the event), `/v3/?event=init` (load) and `/v3/?event=` (repeat; stub config only) (`tid`) | `event` / `ed.event_id` | `_epik`, 365 d | `setconsent(false)` sends nothing | partly: page-view event unverified; real-config behaviour unverified; `/user/` is the event hit, `/v3/` events are decoded but flagged as repeat deliveries |
 | Reddit | `POST alb.reddit.com/rp` (form; not `rp.gif`) | `event` / `m.conversionId` (SHA-256) | `_rdt_cid`, 90 d | `opt_out` flag, no effect | supported; `esurl` is the page location, query stripped in the captures made |
 | Snap | `POST tr.snapchat.com/p` (JSON batch) | `t.ev` / `t.cdid` (`@-` when unset) | forwarded as `sr`; no cookie | none | supported, not a click-ID cookie vendor |
 

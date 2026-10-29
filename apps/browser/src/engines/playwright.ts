@@ -1166,11 +1166,12 @@ const serveSdk = async (route: Route) => {
     if (name !== "set-cookie" && name !== "connection") received[name] = value
   const setCookies = response.headers.getSetCookie()
   if (setCookies.length > 0) received["set-cookie"] = setCookies.join("\n")
-  return route.fulfill({
-    status: response.status,
-    headers: received,
-    body: Buffer.from(await response.arrayBuffer()),
-  })
+  const body = await response.arrayBuffer().then(
+    (buffer) => Buffer.from(buffer),
+    () => undefined,
+  )
+  if (body === undefined) return route.abort("failed")
+  return route.fulfill({ status: response.status, headers: received, body })
 }
 
 const run = async () => {

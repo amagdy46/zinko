@@ -16,10 +16,7 @@ and every rule status (the committed files hold nothing else). 440 scenario runs
 | `baseline-playwright/pre-task0/` | Playwright, code at `b896b87` (no Task 0), run from a temporary detached worktree (removed clean afterwards; `apps/browser/node_modules` symlinked) | 110 | 0 differences from the Scrapling baseline apart from the `engine:` line. |
 | `baseline-playwright/post-fix/` | Playwright, final code | 110 | 0 differences from `pre-task0/`, after two replaced files (below). |
 
-Playwright, final code, first pass: `consent-cmp-404/home` and `meta-no-eventid/home` had consent outcome `none` in the `accept`
-scenario (the banner click did not complete) and every rule `inconclusive`. Six reruns (three per site, in parallel with each other)
-were identical to `pre-task0/`; the committed `post-fix/` files for those two sites are the first rerun. A capture that cannot
-complete the CMP click degrades to `inconclusive`, which is what the engine is for; with six engines on a busy machine it happened twice in 440 runs.
+Playwright, final code, first pass: two initial differences; targeted reruns matched. `consent-cmp-404/home` and `meta-no-eventid/home` had consent outcome `none` in the `accept` scenario (the banner click did not complete) and every rule `inconclusive`. Six targeted reruns (three per site) were identical to `pre-task0/`. Both sets of files are kept: `post-fix-initial/` holds the two original outputs and `post-fix/` holds the rerun in their place. A capture that cannot complete the CMP click degrades to `inconclusive`, which is what the engine is for.
 
 ## What the regression found (and fixed)
 
@@ -52,3 +49,29 @@ Under the earlier whole-domain list (`linkedin.com`, `licdn.com`, `bing.com`, `r
 egress line of both engines is `contacted localhost:4437 localhost:4410; refused ... https://px.ads.linkedin.com https://alb.reddit.com`.
 The normal page run contacts only the SDK hosts (`bat.bing.com snap.licdn.com www.redditstatic.com sc-static.net s.pinimg.com`) and the proxy lists `https://tr.snapchat.com` as refused.
 `dc.ads.linkedin.com` and `bat.r.msn.com`, never observed, were removed from the list and from the probe.
+
+## Round 2: one decode in the SDK proxy
+
+`apps/browser/src/egress-proxy.ts` now decodes an SDK body once (`decodeSdk`: gzip, brotli, deflate as zlib or raw, at most 8 MB decoded) and serves identity
+bytes with `content-length` and no `content-encoding` to both engines; both engines fetch SDK files only through this `/sdk` endpoint, so `capture.py` has no gunzip any more.
+A body that cannot be decoded, or an encoding the proxy does not know, is a `502` from the proxy: the page sees a failed script load (`onerror`) and the capture records the request with status 502.
+The Python handler catches any exception and the Playwright handler aborts when reading the body fails, so a route is never left pending.
+
+Probe (`spike-evidence/encoding-server.mjs`: a local https server on `127.0.0.1:4450` serving a one-line script under each encoding, a temporary SDK exception and `NODE_EXTRA_CA_CERTS` for its self-signed
+certificate, both reverted; a page loads all eight scripts and reports `onload`/`onerror`). Same result on Scrapling and on Playwright:
+
+| Served as | Proxy answer | Page |
+|---|---|---|
+| identity | 200 | script ran |
+| `content-encoding: gzip` | 200 | ran |
+| `br` | 200 | ran |
+| `deflate` (zlib) | 200 | ran |
+| `deflate` (raw stream) | 200 | ran |
+| gzip, last 12 bytes cut | 502 | load failed (`onerror`) |
+| `br` with garbage bytes | 502 | load failed |
+| `compress` (unsupported) | 502 | load failed |
+
+Short regression after the change (Meta, TikTok and GA4 SDK fixtures: `clean`, `meta-before-consent`, `tiktok-after-reject`, `duplicate-purchase`, `pii-in-url`, `lost-gclid`, `delayed-pixel`, `ga4-batch`; both pages, four scenarios, both engines, four captures in parallel):
+the second full pass had 0 status differences on either engine (64 scenario runs each; Scrapling against the committed baseline, Playwright against `baseline-playwright/pre-task0/`).
+The first pass had three files with differences (Scrapling `meta-before-consent/home`; Playwright `clean/home` and `lost-gclid/thank-you`, `tiktok-after-reject/thank-you` for `gpc`/`reject`) in which no Google hit was captured, so the Google-based rules read not applicable or inconclusive; twelve targeted reruns of those
+files, three each, were identical to the references. Like the earlier Playwright pair, those are missed captures under four parallel browsers, not a code effect.
