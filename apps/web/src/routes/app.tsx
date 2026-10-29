@@ -6,7 +6,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router"
-import { Menu, Search, Settings, Users } from "lucide-react"
+import { Globe, Menu, Search, Settings, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 import { CommandPalette } from "@/components/command-palette"
 import { LogoMark } from "@/components/logo"
@@ -37,18 +37,28 @@ export const Route = createFileRoute("/app")({
   notFoundComponent: () => <NotFound />,
 })
 
-const nav = [
-  {
-    to: "/app/clients",
-    label: "Clients",
-    icon: Users,
-    sections: ["clients", "sites", "audits", "sample-report"],
-  },
-  { to: "/app/settings", label: "Settings", icon: Settings, sections: ["settings"] },
-] as const
+const sitesNav = {
+  to: "/app/sites",
+  label: "Sites",
+  icon: Globe,
+  sections: ["sites", "audits", "sample-report"],
+} as const
+const clientsNav = {
+  to: "/app/clients",
+  label: "Clients",
+  icon: Users,
+  sections: ["clients"],
+} as const
+const settingsNav = {
+  to: "/app/settings",
+  label: "Settings",
+  icon: Settings,
+  sections: ["settings"],
+} as const
 
 function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFind: () => void }) {
-  const { session, organizations } = Route.useRouteContext()
+  const { session, organizations, groupByClient } = Route.useRouteContext()
+  const nav = groupByClient ? [clientsNav, sitesNav, settingsNav] : [sitesNav, settingsNav]
   const section = useRouterState({ select: (state) => state.location.pathname.split("/")[2] })
   return (
     <>

@@ -201,8 +201,8 @@ function Members() {
                   </div>
                   <div className="space-y-1 text-xs text-muted-foreground">
                     <p>
-                      <span className="font-medium text-foreground">Member:</span> Works with
-                      clients, sites and audits.
+                      <span className="font-medium text-foreground">Member:</span> Works with sites
+                      and audits.
                     </p>
                     <p>
                       <span className="font-medium text-foreground">Admin:</span> Also manages
@@ -385,7 +385,7 @@ function Members() {
         description={
           confirming?.kind === "cancel"
             ? "The invitation link stops working."
-            : "They lose access to this organization's clients and audits."
+            : "They lose access to this organization's sites and audits."
         }
         returnFocus={opener}
         onConfirm={async () => {

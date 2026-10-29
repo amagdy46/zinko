@@ -1,4 +1,5 @@
 import { NotFound } from "@/components/not-found"
+import { siteReturn, siteTrail } from "@/lib/site-trail"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState, type FormEvent } from "react"
 import { MoreHorizontal } from "lucide-react"
@@ -24,6 +25,13 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   DropdownMenu,
@@ -48,9 +56,13 @@ import {
   archiveSite,
   deleteSite,
   getSite,
+  listClients,
   updateMeasuredHosts,
+  updateSiteClient,
   updateSiteAddress,
 } from "@/server/clients"
+
+const NO_CLIENT = "none"
 
 const Page = Schema.Int.check(Schema.isGreaterThan(0))
 
@@ -58,14 +70,19 @@ export const Route = createFileRoute("/app/sites/$siteId")({
   validateSearch: (search: Record<string, unknown>): { page?: number } =>
     Schema.is(Page)(search.page) ? { page: search.page } : {},
   loaderDeps: ({ search }) => ({ page: search.page ?? 0 }),
-  loader: ({ params, deps }) => getSite({ data: { id: params.siteId, page: deps.page } }),
-  head: ({ loaderData }) => pageTitle(loaderData?.site.name ?? "Site", "Clients"),
+  loader: async ({ params, deps, context }) => {
+    const found = await getSite({ data: { id: params.siteId, page: deps.page } })
+    const clients = context.groupByClient && found.canManage ? (await listClients()).clients : []
+    return { ...found, clients }
+  },
+  head: ({ loaderData }) => pageTitle(loaderData?.site.name ?? "Site", "Sites"),
   notFoundComponent: () => <NotFound what="Site" />,
   component: SitePage,
 })
 
 function SitePage() {
-  const { site, client, canManage, audits, page, hasMore } = Route.useLoaderData()
+  const { site, client, clients, canManage, audits, page, hasMore } = Route.useLoaderData()
+  const { groupByClient } = Route.useRouteContext()
   const router = useRouter()
   const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
@@ -76,6 +93,8 @@ function SitePage() {
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [urlError, setUrlError] = useState<string>()
   const [declaring, setDeclaring] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const [destination, setDestination] = useState(NO_CLIENT)
   const [hostsError, setHostsError] = useState<string>()
   const timeZone = useTimeZone()
 
@@ -120,39 +139,49 @@ function SitePage() {
     }
   }
 
+  async function saveClient(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPending(true)
+    try {
+      const result = await updateSiteClient({
+        data: { siteId: site.id, clientId: destination === NO_CLIENT ? null : destination },
+      })
+      if (!result.ok) {
+        toast.error(result.message)
+        return
+      }
+      setMoving(false)
+      toast.success("Client saved")
+      await router.invalidate()
+    } finally {
+      setPending(false)
+    }
+  }
+
   async function leave(action: typeof archiveSite) {
     const result = await action({ data: { id: site.id } })
     if (!result.ok) {
       toast.error(result.message)
       return
     }
-    await (client === null
-      ? router.navigate({ to: "/app/clients" })
-      : router.navigate({ to: "/app/clients/$clientId", params: { clientId: client.id } }))
+    await router.navigate(siteReturn(groupByClient, client))
   }
 
   return (
     <PageContainer>
       <PageHeader
         title={site.name}
-        breadcrumb={[
-          { label: "Clients", to: "/app/clients" },
-          ...(client === null
-            ? []
-            : [
-                {
-                  label: client.name,
-                  to: "/app/clients/$clientId" as const,
-                  params: { clientId: client.id },
-                },
-              ]),
-          { label: site.name },
-        ]}
+        breadcrumb={[...siteTrail(groupByClient, client), { label: site.name }]}
         description={
           <>
             <span className="font-mono break-all" data-testid="site-origin">
               {site.origin}
             </span>
+            {groupByClient ? (
+              <span className="mt-1 block text-sm" data-testid="site-client">
+                {client === null ? "No client" : `Client: ${client.name}`}
+              </span>
+            ) : null}
             {site.measuredHosts.length === 0 ? null : (
               <span className="mt-1 block text-sm" data-testid="site-measured-hosts">
                 Also measured on <span className="font-mono">{site.measuredHosts.join(", ")}</span>
@@ -186,6 +215,16 @@ function SitePage() {
                       <DropdownMenuItem onSelect={() => setDeclaring(true)}>
                         Other hosts
                       </DropdownMenuItem>
+                      {groupByClient ? (
+                        <DropdownMenuItem
+                          onSelect={() => {
+                            setDestination(client?.id ?? NO_CLIENT)
+                            setMoving(true)
+                          }}
+                        >
+                          Change client
+                        </DropdownMenuItem>
+                      ) : null}
                       <DropdownMenuItem onSelect={() => setConfirming("archive")}>
                         Archive
                       </DropdownMenuItem>
@@ -296,6 +335,42 @@ function SitePage() {
             </div>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Save hosts"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={moving} onOpenChange={setMoving}>
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            menuButton.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Change client</DialogTitle>
+            <DialogDescription>
+              The next report names the new client. Published reports keep the client they had.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveClient} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="site-client">Client</Label>
+              <Select value={destination} onValueChange={setDestination}>
+                <SelectTrigger id="site-client" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={NO_CLIENT}>No client</SelectItem>
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>
+                      {c.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button type="submit" disabled={pending || destination === (client?.id ?? NO_CLIENT)}>
+              {pending ? "Saving…" : "Save client"}
             </Button>
           </form>
         </DialogContent>

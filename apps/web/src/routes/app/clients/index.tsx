@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router"
 import { useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
@@ -26,18 +26,22 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { count } from "@/lib/format"
 import { pageTitle } from "@/lib/page-title"
 import { formField } from "@/lib/form"
 import { createClient, listClients } from "@/server/clients"
 
 export const Route = createFileRoute("/app/clients/")({
+  beforeLoad: ({ context }) => {
+    if (!context.groupByClient) throw redirect({ to: "/app/sites" })
+  },
   head: () => pageTitle("Clients"),
   loader: () => listClients(),
   component: Clients,
 })
 
 function Clients() {
-  const clients = Route.useLoaderData()
+  const { clients, ungroupedSites } = Route.useLoaderData()
   const { session } = Route.useRouteContext()
   const router = useRouter()
   const [query, setQuery] = useState("")
@@ -106,7 +110,28 @@ function Clients() {
         }
       />
       {clients.length > 0 ? (
-        <FirstRun organizationId={session.activeOrganizationId ?? ""} clients={clients} />
+        <FirstRun
+          organizationId={session.activeOrganizationId ?? ""}
+          steps={[
+            { label: "Add a client", done: true },
+            { label: "Add a site", done: clients.some((c) => c.siteCount > 0) },
+            {
+              label: "Run an audit",
+              done: clients.some((c) => c.running > 0 || c.latest !== null),
+            },
+          ]}
+          next={
+            clients.some((c) => c.siteCount > 0) || clients[0] === undefined ? undefined : (
+              <Link
+                className="text-sm text-status-active underline-offset-4 hover:underline"
+                to="/app/clients/$clientId"
+                params={{ clientId: clients[0].id }}
+              >
+                Add your first site
+              </Link>
+            )
+          }
+        />
       ) : null}
       {clients.length === 0 ? (
         <EmptyState
@@ -169,6 +194,17 @@ function Clients() {
             ))}
           </TableBody>
         </Table>
+      ) : null}
+      {ungroupedSites > 0 ? (
+        <p className="text-sm text-muted-foreground">
+          <Link
+            to="/app/sites"
+            className="inline-flex min-h-8 items-center rounded-sm underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+          >
+            Ungrouped sites
+          </Link>{" "}
+          · {count(ungroupedSites, "site")} without a client
+        </p>
       ) : null}
     </PageContainer>
   )

@@ -63,7 +63,7 @@ function CoverPreview({
         )}
         <div>
           <p className="text-xs text-muted-foreground">Tracking &amp; consent audit</p>
-          <p className="text-lg font-semibold">Client name</p>
+          <p className="text-lg font-semibold">Site name</p>
           <p className="text-sm text-muted-foreground">shop.example</p>
         </div>
         <div className="space-y-1 border-t pt-3 text-xs text-muted-foreground">
@@ -232,7 +232,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
       {logo}
       <SettingsSection
         title="Report branding"
-        description="Clients see this on the cover and in the footer of every report you share."
+        description="Readers see this on the cover and in the footer of every report you share."
         action={<div className="hidden pt-4 lg:sticky lg:top-6 lg:block">{preview}</div>}
       >
         <form onSubmit={save} className="max-w-xl space-y-5">

@@ -42,7 +42,7 @@ export function OrgSwitcher({
       return
     }
     await router.invalidate()
-    await router.navigate({ to: "/app/clients" })
+    await router.navigate({ to: "/app" })
     setSwitching(false)
     onNavigate?.()
   }

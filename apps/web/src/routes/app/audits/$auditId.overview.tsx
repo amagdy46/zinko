@@ -435,7 +435,7 @@ function NextSteps({
                 Read the top finding
               </Link>
             ),
-            hint: "Read what it means for the client. Triage it only when you know its status.",
+            hint: "Read what it means for the site. Triage it only when you know its status.",
           },
         ]
       : []),
@@ -449,10 +449,10 @@ function NextSteps({
           search={{ view: "client" }}
           className={stepLink}
         >
-          Preview the client report
+          Preview the shared report
         </Link>
       ),
-      hint: "See what your client will read.",
+      hint: "See what a reader of the report will see.",
     },
     {
       key: "share",
@@ -467,7 +467,7 @@ function NextSteps({
           Create a share link
         </Link>
       ),
-      hint: "Send the client a link to the report.",
+      hint: "Send a link to the report.",
     },
   ]
   return (

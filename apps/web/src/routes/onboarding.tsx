@@ -47,13 +47,13 @@ function Onboarding() {
       setPending(false)
       return
     }
-    window.location.assign("/app/clients")
+    window.location.assign("/app")
   }
 
   return (
     <AuthCard
       title="Create your organization"
-      description="Your organization is your consultancy or team. Your clients see its name on their reports, and you can add a logo later. You add your clients next."
+      description="Your organization is your company or team. Its name appears on the reports you share, and you can add a logo later. You add your first site next."
       account={
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="break-all">Signed in as {session.email}</span>
@@ -81,13 +81,7 @@ function Onboarding() {
       <form method="post" onSubmit={onSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="name">Organization name</Label>
-          <Input
-            id="name"
-            name="name"
-            placeholder="Acme Consulting"
-            autoComplete="organization"
-            required
-          />
+          <Input id="name" name="name" placeholder="Acme" autoComplete="organization" required />
         </div>
         {error === null ? null : (
           <p role="alert" className="text-sm text-destructive">

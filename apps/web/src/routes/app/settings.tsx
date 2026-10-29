@@ -10,6 +10,7 @@ export const Route = createFileRoute("/app/settings")({ component: SettingsLayou
 /** Tabs of the settings area; `efforge add` extras link their own pages here. */
 const tabs = [
   { to: "/app/settings", label: "Profile" },
+  { to: "/app/settings/organization", label: "Organization" },
   { to: "/app/settings/members", label: "Members" },
   { to: "/app/settings/ai", label: "AI" },
   { to: "/app/settings/branding", label: "Branding" },

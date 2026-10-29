@@ -7,6 +7,7 @@ import {
   useRouter,
 } from "@tanstack/react-router"
 import { NotFound } from "@/components/not-found"
+import { siteTrail } from "@/lib/site-trail"
 import { useEffect, useRef, useState } from "react"
 import { ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
@@ -69,6 +70,7 @@ const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
   const { audit, site, client, runs, summary } = Route.useLoaderData()
+  const { groupByClient } = Route.useRouteContext()
   const router = useRouter()
   const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
@@ -291,16 +293,7 @@ function AuditPage() {
         <PageHeader
           title={title}
           breadcrumb={[
-            { label: "Clients", to: "/app/clients" },
-            ...(client === null
-              ? []
-              : [
-                  {
-                    label: client.name,
-                    to: "/app/clients/$clientId" as const,
-                    params: { clientId: client.id },
-                  },
-                ]),
+            ...siteTrail(groupByClient, client),
             { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
             {
               label:

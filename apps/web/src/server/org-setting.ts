@@ -3,7 +3,20 @@ import { orgSetting } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { Effect, Schema } from "effect"
 import { requireSession } from "./require-session"
-import { Forbidden, isManager, membership, mutation } from "./server-fn"
+import { groupByClientOf } from "./org-setting-data"
+import { Forbidden, isManager, membership, mutation, read } from "./server-fn"
+
+/** The organization's setting and whether the caller may change it. Any member may read it. */
+export const getOrgSetting = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        return { groupByClient: yield* groupByClientOf(orgId), canManage: isManager(role) }
+      }),
+    ),
+  )
 
 export const saveOrgSetting = createServerFn({ method: "POST" })
   .middleware([requireSession])

@@ -1,5 +1,4 @@
-import { useSyncExternalStore } from "react"
-import { Link } from "@tanstack/react-router"
+import { useSyncExternalStore, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
 import { ScoreFigure } from "@/components/score-figure"
@@ -140,10 +139,13 @@ const subscribeDismissed = (onChange: () => void) => {
 
 export function FirstRun({
   organizationId,
-  clients,
+  steps,
+  next,
 }: {
   organizationId: string
-  clients: readonly { id: string; siteCount: number; running: number; latest: Result | null }[]
+  steps: readonly { label: string; done: boolean }[]
+  /** The link that does the first pending step. */
+  next?: ReactNode
 }) {
   const key = `zinko:first-run:v1:${organizationId}`
   const dismissed = useSyncExternalStore(
@@ -151,13 +153,7 @@ export function FirstRun({
     () => localStorage.getItem(key) === "dismissed",
     () => true,
   )
-  const complete = [
-    clients.length > 0,
-    clients.some((c) => c.siteCount > 0),
-    clients.some((c) => c.running > 0 || c.latest !== null),
-  ]
-  if (complete.every(Boolean) || dismissed) return null
-  const first = clients[0]
+  if (steps.every((step) => step.done) || dismissed) return null
   return (
     <section className="space-y-3 rounded-lg border p-4" aria-label="Getting started">
       <div className="flex items-center justify-between gap-2">
@@ -174,24 +170,16 @@ export function FirstRun({
         </Button>
       </div>
       <ol className="grid gap-3 sm:grid-cols-3">
-        {["Add a client", "Add a site", "Run an audit"].map((label, i) => (
+        {steps.map(({ label, done }, i) => (
           <li key={label} className="flex items-center gap-2 text-sm">
-            <StatusGlyph meaning={complete[i] ? "pass" : "queued"} />
+            <StatusGlyph meaning={done ? "pass" : "queued"} />
             <span className="text-muted-foreground">{i + 1}.</span>
             {label}
-            <span className="sr-only">{complete[i] ? "Complete" : "Pending"}</span>
+            <span className="sr-only">{done ? "Complete" : "Pending"}</span>
           </li>
         ))}
       </ol>
-      {first !== undefined && !complete[1] ? (
-        <Link
-          className="text-sm text-status-active underline-offset-4 hover:underline"
-          to="/app/clients/$clientId"
-          params={{ clientId: first.id }}
-        >
-          Add your first site
-        </Link>
-      ) : null}
+      {next}
     </section>
   )
 }

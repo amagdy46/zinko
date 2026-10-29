@@ -13,7 +13,7 @@ export function NotFound({ what = "Page" }: { what?: string }) {
         description="It may have moved, or it belongs to another organization."
         action={
           <Button asChild>
-            <Link to="/app/clients">Go to clients</Link>
+            <Link to="/app">Go to the app</Link>
           </Button>
         }
       />

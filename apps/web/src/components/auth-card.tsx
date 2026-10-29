@@ -27,7 +27,7 @@ export function AuthCard({
           <div className="space-y-3">
             <LogoMark className="size-10" />
             <p className="text-lg font-semibold tracking-tight">
-              See what your client&rsquo;s tags really do before consent.
+              See what your site&rsquo;s tags really do before consent.
             </p>
           </div>
           <div className="space-y-6 rounded-xl border bg-card p-6 shadow-xs ring-1 ring-foreground/5">

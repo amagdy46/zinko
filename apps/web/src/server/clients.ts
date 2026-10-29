@@ -185,8 +185,9 @@ export const listClients = createServerFn({ method: "GET" })
           )
           .orderBy(client.name)
         const sites = yield* db
-          .select({ id: site.id, clientId: site.clientId })
+          .select({ id: site.id, clientId: site.clientId, onDefault: client.isDefault })
           .from(site)
+          .innerJoin(client, eq(client.id, site.clientId))
           .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
         const summaries = yield* siteSummaries(
           orgId,
@@ -196,7 +197,7 @@ export const listClients = createServerFn({ method: "GET" })
           orgId,
           clients.map((c) => c.id),
         )
-        return clients.map((c) => {
+        const rows = clients.map((c) => {
           const owned = sites.filter((s) => s.clientId === c.id)
           const summary = clientSummary(
             owned.flatMap((s) => {
@@ -213,6 +214,9 @@ export const listClients = createServerFn({ method: "GET" })
             trend: trends.get(c.id) ?? [],
           }
         })
+        // sites on the hidden default client, so the list can point at them
+        const ungroupedSites = sites.filter((s) => s.onDefault).length
+        return { clients: rows, ungroupedSites }
       }),
     ),
   )

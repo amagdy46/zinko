@@ -57,6 +57,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "report-share.createShareLink": "mutation",
   "report-share.listShares": "read",
   "report-share.revokeShare": "mutation",
+  "org-setting.getOrgSetting": "read",
   "org-setting.saveOrgSetting": "mutation",
   "session.getSession": "read",
   "session.getAppState": "read",

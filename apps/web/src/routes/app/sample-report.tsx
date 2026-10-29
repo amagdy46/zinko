@@ -13,6 +13,7 @@ import { sampleReport } from "@/lib/sample-report"
 const backLabel = (path: string): string | null => {
   const { pathname } = new URL(path, "http://app.invalid")
   if (pathname === "/app/clients") return "Clients"
+  if (pathname === "/app/sites") return "Sites"
   if (/^\/app\/sites\/[^/]+\/audits\/new$/.test(pathname)) return "New audit"
   if (/^\/app\/sites\/[^/]+$/.test(pathname)) return "the site"
   if (/^\/app\/clients\/[^/]+$/.test(pathname)) return "the client"
@@ -31,23 +32,30 @@ export const Route = createFileRoute("/app/sample-report")({
 function SampleReport() {
   const { from } = Route.useSearch()
   const router = useRouter()
+  const { groupByClient } = Route.useRouteContext()
   const label = from === undefined ? null : backLabel(from)
+  const start = groupByClient ? "Start with a client" : "Start with a site"
   return (
     <PageContainer className="max-w-none">
       <PageHeader
         title="Sample report"
-        breadcrumb={[{ label: "Clients", to: "/app/clients" }, { label: "Sample report" }]}
-        description="This is what your client receives after an audit: the score, what to fix first, who fixes it and the evidence behind each finding."
+        breadcrumb={[
+          groupByClient
+            ? { label: "Clients", to: "/app/clients" }
+            : { label: "Sites", to: "/app/sites" },
+          { label: "Sample report" },
+        ]}
+        description={`This is what ${groupByClient ? "your client receives" : "a reader receives"} after an audit: the score, what to fix first, who fixes it and the evidence behind each finding.`}
         actions={
           <Button
             variant="outline"
             onClick={() =>
               void (from === undefined
-                ? router.navigate({ to: "/app/clients" })
+                ? router.navigate({ to: "/app" })
                 : router.navigate({ href: from }))
             }
           >
-            {label === null ? "Start with a client" : `Back to ${label}`}
+            {label === null ? start : `Back to ${label}`}
           </Button>
         }
       />
@@ -55,8 +63,11 @@ function SampleReport() {
         <FlaskConical aria-hidden="true" />
         <AlertTitle>Sample report — fictional data</AlertTitle>
         <AlertDescription>
-          The agency, client and site are made up. Your reports use your own branding and what Zinko
-          finds on your client's site.
+          {groupByClient
+            ? "The agency, client and site are made up."
+            : "The organization and site are made up."}{" "}
+          Your reports use your own branding and what Zinko finds on{" "}
+          {groupByClient ? "your client's" : "your"} site.
         </AlertDescription>
       </Alert>
       <ReportView model={sampleReport} logoSrc={null} mode="client" draft={false} />

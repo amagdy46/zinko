@@ -65,7 +65,7 @@ function SignUp() {
   return (
     <AuthCard
       title="Create an account"
-      description="Zinko checks what a website's tags and consent banner really do, so you can show clients what to fix."
+      description="Zinko checks what a website's tags and consent banner really do, so you can see what to fix."
       footer={
         <>
           Already have an account?{" "}

@@ -155,7 +155,7 @@ export function CommandPalette({
         return
       }
       await router.invalidate()
-      await router.navigate({ to: "/app/clients" })
+      await router.navigate({ to: "/app" })
     } finally {
       setSwitching(false)
     }
