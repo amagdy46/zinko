@@ -228,7 +228,12 @@ const PRIOR_UNITS = 3
 export const remainingTime = (remainingUnits: number, elapsed: number, totalUnits: number) => {
   if (remainingUnits === 0) return null
   const done = totalUnits - remainingUnits
-  const pace = (elapsed / 1000 + PRIOR_UNITS * SECONDS_PER_RUN) / (done + PRIOR_UNITS)
+  // Until a unit finishes the time spent says nothing about the pace (the audit may only have
+  // waited for an engine), so the estimate stays at the prior instead of growing with the wait.
+  const pace =
+    done === 0
+      ? SECONDS_PER_RUN
+      : (elapsed / 1000 + PRIOR_UNITS * SECONDS_PER_RUN) / (done + PRIOR_UNITS)
   const seconds = remainingUnits * pace
   if (seconds < 50) return "less than a minute left"
   const minutes = Math.round(seconds / 60)

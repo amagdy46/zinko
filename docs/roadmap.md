@@ -114,6 +114,10 @@ Round 5 (2026-10-28): `docs/qa/2026-10-28-ux-sweep-r5.md`, compare, re-check and
 
 Next UX items, from the competitor first-run research (`docs/research/2026-10-29-competitor-first-run.md`): (1) the first fix step and its owner on every Findings row and report finding (S, no schema change); (2) a guided next step on the Overview after the first audit, ending at the share dialog (S); (3) a client-voice "what happened, what it means" line per finding and a standard "not legal advice, what was not tested" block in the report (S, report model change); (4) a static sample report on the start page from a fixture audit, through the pure `ReportView` (M); (5) alerts on a failed scheduled re-run (L, with v0.3 scheduling). No competitor found combines paste-a-URL with a verdict per consent scenario, and white-label reports are rare: both are Zinko's position.
 
+## Left over from UX round 6 (F1)
+
+- **Retry failed runs.** A run that fails as `EngineBusy` after the in-audit retries still needs a whole re-run. A re-check (`recheck.ts`) is planned from the cells a rule fails on, so it cannot name arbitrary failed cells. Needs a re-check plan built from failed runs (same `CellKey`s, `role = target`), then a button next to the "Zinko was busy" row.
+
 ## After v0.1
 
 | Version | Scope |

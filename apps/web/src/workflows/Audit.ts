@@ -68,7 +68,7 @@ type CaptureOutcome = Data.TaggedEnum<{
   Rejected: RunError
   Exhausted: RunError
 }>
-const { Captured, Rejected, Exhausted, $match } = Data.taggedEnum<CaptureOutcome>()
+const { Captured, Rejected, Exhausted, $match, $is } = Data.taggedEnum<CaptureOutcome>()
 
 /** Why a run has no persisted capture: the engine refused it, or a step ran out of retries. */
 interface RunFailure {
@@ -98,7 +98,11 @@ const CAPTURE_STEP = {
 // Turns a run gets on an engine (each `Lost` or `Retry` uses one); after a `Retry` it waits
 // 15 s, 30 s, 1 min, 2 min before asking again, off the engine.
 const TURNS = 5
-const backoff = (turn: number) => 15_000 * 2 ** turn
+// A busy engine frees within a capture (at most 135 s), so a busy run asks again soon and gives up
+// after 5 s, 10 s, 20 s and 30 s (65 s) instead of idling for minutes. A run that is still busy
+// then is asked once more after every other run has had its turn (`captureRun` with `pass` 1).
+const backoff = (turn: number, code: string) =>
+  code === ENGINE_BUSY ? Math.min(5_000 * 2 ** turn, 30_000) : 15_000 * 2 ** turn
 
 // The gate is a Durable Object call: retry briefly, and treat a gate that stays down like a busy
 // engine (the run records EngineBusy: Zinko was busy).
@@ -324,7 +328,27 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
       errors: [],
     })
     const browser = yield* Browser
-    if (!(yield* gate.confirm(auditId, grant))) return Attempt.Lost()
+    // A run that gives its turn back is waiting for a slot, not running: say so, and time its
+    // next attempt from its own start.
+    const requeue = <A>(attempt: A) =>
+      db
+        .update(run)
+        .set({ status: "pending", startedAt: null })
+        .where(eq(run.id, runId))
+        .pipe(
+          Effect.andThen(
+            publish(auditId, {
+              type: "run",
+              runId,
+              ordinal: current.ordinal,
+              status: "pending",
+              hitCount: 0,
+              errors: [],
+            }),
+          ),
+          Effect.as(attempt),
+        )
+    if (!(yield* gate.confirm(auditId, grant))) return yield* requeue(Attempt.Lost())
     const answer = yield* browser
       .capture(
         {
@@ -338,7 +362,7 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
         { instance: grant.engine },
       )
       .pipe(Effect.catchTag("BrowserError", classify))
-    if ("retry" in answer) return Attempt.Retry(answer.retry)
+    if ("retry" in answer) return yield* requeue(Attempt.Retry(answer.retry))
     if ("error" in answer)
       return Attempt.Refused({ code: answer.error, message: truncate(answer.message) })
 
@@ -374,12 +398,13 @@ const capture = (auditId: string, runId: string, grant: Grant) =>
  * One run's turns on an engine: wait for a grant, capture on it. A turn that lost its grant asks
  * again at once; one whose engine failed waits a backoff off the engine first. Turn 0's steps are
  * `admit-<n>` and `capture-<n>`, turn t's `admit-<n>.<t>` and `capture-<n>.<t>`, so a new turn
- * never replays an old grant.
+ * never replays an old grant. The second pass over busy runs uses `<n>r` in place of `<n>`.
  */
-const captureRun = (auditId: string, runId: string, ordinal: number) =>
+const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1) =>
   Effect.gen(function* () {
+    const base = pass === 0 ? `${ordinal}` : `${ordinal}r`
     for (let turn = 0; ; turn++) {
-      const name = turn === 0 ? `${ordinal}` : `${ordinal}.${turn}`
+      const name = turn === 0 ? base : `${base}.${turn}`
       const grant = yield* grantFor(auditId, name)
       const outcome = yield* Workflow.step(
         `capture-${name}`,
@@ -400,7 +425,7 @@ const captureRun = (auditId: string, runId: string, ordinal: number) =>
                 message: `${ENGINE_BUSY}: the engine was handed on before the capture started`,
               },
         )
-      if (retry) yield* Workflow.sleep(`backoff-${name}`, backoff(turn))
+      if (retry) yield* Workflow.sleep(`backoff-${name}`, backoff(turn, outcome.code))
     }
   })
 
@@ -637,9 +662,35 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
   run: ({ auditId }) =>
     Effect.gen(function* () {
       const runs = yield* Workflow.step("start", runtime.provide(start(auditId)), STEP)
-      for (const { id, ordinal } of runs) {
+      const settle = (id: string, ordinal: number, outcome: CaptureOutcome) =>
+        Effect.gen(function* () {
+          const reason = yield* $match(outcome, {
+            Captured: () =>
+              Workflow.step(`persist-${ordinal}`, runtime.provide(persist(auditId, id)), STEP).pipe(
+                Effect.as(null),
+                Effect.catchTag("WorkflowStepError", (error) =>
+                  Effect.succeed<RunFailure>({
+                    code: "PersistFailure",
+                    message: truncate(error.message),
+                    failure: "PersistFailure",
+                  }),
+                ),
+              ),
+            Rejected: ({ code, message }) =>
+              Effect.succeed<RunFailure>({ code, message, failure: null }),
+            Exhausted: ({ code, message }) =>
+              Effect.succeed<RunFailure>({ code, message, failure: code }),
+          })
+          if (reason !== null)
+            yield* Workflow.step(
+              `fail-${ordinal}`,
+              runtime.provide(fail(auditId, id, reason)),
+              STEP,
+            )
+        })
+      const attempt = (id: string, ordinal: number, pass: 0 | 1) =>
         // effect-cf fails the step with WorkflowStepError once Cloudflare gives up retrying
-        const outcome = yield* captureRun(auditId, id, ordinal).pipe(
+        captureRun(auditId, id, ordinal, pass).pipe(
           Effect.catchTag("WorkflowStepError", (error) =>
             Effect.succeed(
               Exhausted({
@@ -649,26 +700,14 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
             ),
           ),
         )
-        const reason = yield* $match(outcome, {
-          Captured: () =>
-            Workflow.step(`persist-${ordinal}`, runtime.provide(persist(auditId, id)), STEP).pipe(
-              Effect.as(null),
-              Effect.catchTag("WorkflowStepError", (error) =>
-                Effect.succeed<RunFailure>({
-                  code: "PersistFailure",
-                  message: truncate(error.message),
-                  failure: "PersistFailure",
-                }),
-              ),
-            ),
-          Rejected: ({ code, message }) =>
-            Effect.succeed<RunFailure>({ code, message, failure: null }),
-          Exhausted: ({ code, message }) =>
-            Effect.succeed<RunFailure>({ code, message, failure: code }),
-        })
-        if (reason !== null)
-          yield* Workflow.step(`fail-${ordinal}`, runtime.provide(fail(auditId, id, reason)), STEP)
+      const busy: Array<{ id: string; ordinal: number }> = []
+      for (const { id, ordinal } of runs) {
+        const outcome = yield* attempt(id, ordinal, 0)
+        // a run that found the engine busy waits for the others, then asks again before it fails
+        if ($is("Exhausted")(outcome) && outcome.code === ENGINE_BUSY) busy.push({ id, ordinal })
+        else yield* settle(id, ordinal, outcome)
       }
+      for (const { id, ordinal } of busy) yield* settle(id, ordinal, yield* attempt(id, ordinal, 1))
       const status = yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP)
       return { status }
     }),
