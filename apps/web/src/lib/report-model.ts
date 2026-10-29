@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 6
+export const REPORT_MODEL_VERSION = 7
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -172,7 +172,7 @@ const Changes = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, 3, 4, 5, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, 4, 5, 6, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -224,6 +224,8 @@ export const ReportModel = Schema.Struct({
       blockedRules: Count,
       neverChecked: Schema.Array(Schema.String),
       otherRules: Count,
+      /** Their stored check titles, sorted; null in a snapshot from before model version 7, which named none. */
+      otherChecks: Schema.NullOr(Schema.Array(Schema.String)),
       /** Null when a snapshot from model version 1 did not record the runs. */
       otherRuns: Schema.NullOr(Count),
     }),
@@ -358,6 +360,15 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
           ? { ...f, clientVoice: null }
           : f,
       ),
+    }
+  },
+  /** Version 6 did not name the checks that could not be run on some runs: not recorded in version 7. */
+  6: (json) => {
+    if (!isRecord(json) || !isRecord(json.summary) || !isRecord(json.summary.checkGaps)) return json
+    const { summary } = json
+    return {
+      ...json,
+      summary: { ...summary, checkGaps: { ...json.summary.checkGaps, otherChecks: null } },
     }
   },
 }

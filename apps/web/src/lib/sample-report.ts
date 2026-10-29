@@ -540,6 +540,7 @@ export const sampleReport = {
     checkGaps: {
       otherRuns: 0,
       otherRules: 0,
+      otherChecks: [],
       blockedRules: 0,
       neverChecked: ["Tracking requests succeed"],
     },
@@ -1321,5 +1322,5 @@ export const sampleReport = {
     },
   ],
   generatedAt: "2026-10-29T07:18:52.014Z",
-  modelVersion: 6,
+  modelVersion: 7,
 } satisfies ReportModel & { modelVersion: typeof REPORT_MODEL_VERSION }

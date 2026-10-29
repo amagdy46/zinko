@@ -658,6 +658,7 @@ export const buildReport = (orgId: string, auditId: string) =>
       blockedRules: unchecked.filter(isBlocked).length,
       neverChecked: neverChecked.map((f) => f.checkTitle).toSorted(byText),
       otherRules: otherChecks.length,
+      otherChecks: otherChecks.map((f) => f.checkTitle).toSorted(byText),
       otherRuns: new Set(otherChecks.flatMap((f) => f.runIds)).size,
     }
     const scoreCoverage = {

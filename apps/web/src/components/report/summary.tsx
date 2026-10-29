@@ -5,7 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { BANNER_NOTE } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import type { ReportModel } from "@/lib/report-model"
-import { isLocalAnswerCheck, neverCheckedLine } from "@/lib/report-projection"
+import { isLocalAnswerCheck, namedChecks, neverCheckedLine } from "@/lib/report-projection"
 import type { ReactNode } from "react"
 
 const LINK =
@@ -47,7 +47,7 @@ function CheckGaps({ model }: { model: ReportModel }) {
         checkGaps.otherRuns === null
           ? "an unrecorded number of runs (this version of the report did not record it)"
           : count(checkGaps.otherRuns, "run")
-      }. They are left out of the score, never counted as passes.`,
+      }${checkGaps.otherChecks === null ? "" : `: ${namedChecks(checkGaps.otherChecks)}`}. They are left out of the score, never counted as passes.`,
     )
   if (lines.length === 0) return null
   return (

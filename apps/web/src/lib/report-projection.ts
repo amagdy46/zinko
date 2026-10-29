@@ -191,6 +191,12 @@ export const checkGapReason = (checkTitle: string): string | null =>
 
 export const DELIVERY_NOT_CHECKED = `Delivery errors were not checked. ${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests is therefore not known.`
 
+/** The first few checks by title, then how many more; the appendix keeps the full list. */
+export const namedChecks = (titles: readonly string[], shown = 3): string =>
+  titles.length <= shown
+    ? titles.join("; ")
+    : `${titles.slice(0, shown).join("; ")}; and ${titles.length - shown} more`
+
 export const neverCheckedLine = (checkTitle: string): string =>
   `${checkTitle}: not checked on any run. This report says nothing about it either way.`
 
@@ -531,6 +537,8 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["summary.checkGaps.blockedRules", count],
   ["summary.checkGaps.neverChecked[]", stored],
   ["summary.checkGaps.otherRules", count],
+  ["summary.checkGaps.otherChecks", absent],
+  ["summary.checkGaps.otherChecks[]", stored],
   ["summary.checkGaps.otherRuns", nullable(count)],
   ["summary.headlines[]", generated],
   ["summary.coverage.evaluatedRuns", count],
