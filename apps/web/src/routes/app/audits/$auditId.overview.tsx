@@ -407,20 +407,6 @@ function NextSteps({
     ...(steps.hasFindings
       ? [
           {
-            key: "read",
-            done: steps.triaged || steps.reportReviewed,
-            link: (
-              <Link
-                to="/app/audits/$auditId/findings"
-                params={{ auditId }}
-                search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
-                className={stepLink}
-              >
-                Read the top finding
-              </Link>
-            ),
-          },
-          {
             key: "triage",
             done: steps.triaged,
             link: (
@@ -430,7 +416,7 @@ function NextSteps({
                 search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
                 className={stepLink}
               >
-                Triage a finding
+                Read and triage the top finding
               </Link>
             ),
             hint: "Accept a risk with a reason, mark it fixed or add a note for the report.",
