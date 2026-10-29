@@ -4,7 +4,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { AREAS } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import type { ReportModel } from "@/lib/report-model"
-import { isLocalAnswerCheck } from "@/lib/report-projection"
+import { checkGapReason, DELIVERY_NOT_CHECKED, isLocalAnswerCheck } from "@/lib/report-projection"
 
 const RULE_HEADS = [
   ["Rule", "w-[30%]"],
@@ -21,6 +21,8 @@ const RULE_HEADS = [
 export function Appendix({ model }: { model: ReportModel }) {
   const { appendix, summary, cover, leftOut, branding } = model
   const agency = branding.agencyName
+  // Snapshots before version 6 have no "What was not tested" sentence on delivery errors: say it here instead, so every version says it once.
+  const saysDelivery = model.limits?.notTested.includes(DELIVERY_NOT_CHECKED) === true
   const scope = [
     count(cover.scope.pages.length, "page"),
     count(cover.scope.scenarios.length, "scenario"),
@@ -50,7 +52,9 @@ export function Appendix({ model }: { model: ReportModel }) {
                     {item.checkTitle}
                     <span className="text-muted-foreground"> · {count(item.runs, "run")}</span>
                     {isLocalAnswerCheck(item.checkTitle) ? (
-                      <span className="block text-muted-foreground">Not run by design.</span>
+                      <span className="block text-muted-foreground">
+                        {saysDelivery ? "Not run by design." : checkGapReason(item.checkTitle)}
+                      </span>
                     ) : null}
                   </span>
                 </li>

@@ -189,7 +189,7 @@ export const isLocalAnswerCheck = (checkTitle: string): boolean =>
 export const checkGapReason = (checkTitle: string): string | null =>
   isLocalAnswerCheck(checkTitle) ? LOCAL_ANSWER_REASON : null
 
-const DELIVERY_NOT_CHECKED = `Delivery errors were not checked. ${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests is therefore not known.`
+export const DELIVERY_NOT_CHECKED = `Delivery errors were not checked. ${LOCAL_ANSWER_SENTENCE} Whether vendors accepted the requests is therefore not known.`
 
 export const neverCheckedLine = (checkTitle: string): string =>
   `${checkTitle}: not checked on any run. This report says nothing about it either way.`

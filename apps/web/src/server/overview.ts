@@ -9,7 +9,7 @@ import {
   reportSnapshot,
   run,
 } from "@repo/db"
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm"
+import { and, asc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
@@ -219,6 +219,7 @@ export const getOverview = createServerFn({ method: "GET" })
               eq(reportSnapshot.orgId, orgId),
               eq(reportShare.orgId, orgId),
               isNull(reportShare.revokedAt),
+              or(isNull(reportShare.expiresAt), gt(reportShare.expiresAt, sql`now()`)),
             ),
           )
           .limit(1)

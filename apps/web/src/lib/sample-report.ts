@@ -1127,7 +1127,7 @@ export const sampleReport = {
         "Until then, remove it before the tags read the URL: strip those query parameters from page_location (a GA4 config override or a tag manager variable) and from the URL the pixels send.",
         "For Meta and TikTok advanced matching, send the email and phone only as the hashed user data fields their pixels define, never as custom parameters.",
       ],
-      why: "Google, Meta and TikTok forbid sending personal data such as email addresses and phone numbers in hits, and it shares data the visitor did not agree to share, which privacy rules may restrict. Google may delete the affected GA4 data, and the address ends up in the vendors' logs and reports. It usually comes from a URL that carries the address (a sign-up or newsletter form using GET, a link in an email) and is copied into page_location.",
+      why: "Personal data such as an email address or phone number appears in a tracking request or page address, where it can reach analytics and ad vendors and be stored by them. Google, Meta and TikTok forbid sending it in hits. Google may delete the affected GA4 data, and the data can end up in the vendors' logs and reports. It usually comes from a URL that carries the address (a sign-up or newsletter form using GET, a link in an email) and is copied into page_location.",
       area: "hygiene",
       note: null,
       owner: "developer",
