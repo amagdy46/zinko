@@ -1,6 +1,6 @@
 ---
 type: plan
-status: approved
+status: implemented
 design: ../../product.md
 ---
 
@@ -100,7 +100,7 @@ One live stage exists and has no real users today, so deploy in a quiet window: 
 - [ ] Verify hashes: the first publish after the bump makes a new version, an unchanged republish reuses it, existing snapshots and `publication_hash` rows are untouched
 - [ ] Verify a concurrent publish and a new audit or re-run on the same site/baseline (two requests, repeated): both finish, no deadlock error; a concurrent move and publish: the published version names the client consistent with the site at that time, never a mixture
 - [ ] Verify a move after publishing: to a differently named client, or to or from the default, the next publish makes a new version; to a same-named client the stamp changes and forces a rebuild but the model hash does not, so publication reuses the version
-- [ ] Site-owner org report and public page show the site and branding only; agency report keeps the client; `rg "report_|org_branding" apps/web/src/workflows` stays empty; CSV has no client column
+- [x] Site-owner org report and public page show the site and branding only; agency report keeps the client; `rg "report_|org_branding" apps/web/src/workflows` stays empty; CSV has no client column
 
 ### Task 6: Docs and end to end
 
@@ -108,8 +108,8 @@ One live stage exists and has no real users today, so deploy in a quiet window: 
 **Files:** modify `docs/product.md` (site owners and agencies, clients optional), `docs/ui.md` (nav, Sites page, vocabulary); `AGENTS.md` already updated in Task 1, `docs/vision.md` in Task 5
 **Blocked by:** 1 to 5
 
-- [ ] Fresh site-owner org end to end: sign up, site, audit, findings, report, publish, no client wording; a real audit on a default-client site, then compare, re-check, CSV and report; then move the site to a named client (grouping on): triage and report edits survive and the next report names the client
-- [ ] Existing agency org unchanged; a second org cannot read the first org's sites, clients or setting (404); `pnpm check && pnpm typecheck && pnpm build`
+- [x] Fresh site-owner org end to end: sign up, site, audit, findings, report, publish, no client wording; a real audit on a default-client site, then compare, re-check, CSV and report; then move the site to a named client (grouping on): triage and report edits survive and the next report names the client
+- [x] Existing agency org unchanged; a second org cannot read the first org's sites, clients or setting (404); `pnpm check && pnpm typecheck && pnpm build`
 
 ## Execution order
 

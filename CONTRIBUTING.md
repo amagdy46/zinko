@@ -46,7 +46,7 @@ pnpm dev                                          # app on http://localhost:1337
 With everything above running (Postgres, the engine with `ALLOW_PRIVATE_NETWORKS=true`, the fixtures, `pnpm dev`; the engine, the fixtures and the dev server each need their own terminal), open http://localhost:1337:
 
 1. Sign up, then create an organization.
-2. Clients: create a client, then a site with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only).
+2. Sites > Add site, with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only). No client is needed; turn on Settings > Organization > Group sites by client if you want to try Clients.
 3. On the site, choose New audit. Start URL `http://localhost:4400/clean/`, key pages `http://localhost:4400/meta-before-consent/` and `http://localhost:4400/ga4-batch/`, scenarios none, accept and reject, desktop. Leave "Answer tracking requests locally" on, so fixture traffic never reaches Google, Meta or TikTok.
 4. Start the audit and watch the run grid fill in. Nine runs take about 1.5 to 2 minutes.
    To see a comparison, switch the `drift` fixture site to another release (`pnpm --filter @repo/fixtures release drift 1`), audit `http://localhost:4400/drift/` first at release 0, then press Re-run: the Compare tab shows what was fixed, what is new and the tags that disappeared (`packages/fixtures/README.md` lists the expected result per release).

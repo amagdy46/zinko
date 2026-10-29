@@ -13,7 +13,7 @@
   <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a client and a site, audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has not been deployed to Cloudflare yet: the container image build and a real deploy are the open item, so the [self-hosting guide](https://github.com/ovriq/zinko/blob/main/docs/self-hosting.md) is written but **not yet run end to end**. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a site (and a client, if you audit for clients), audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has not been deployed to Cloudflare yet: the container image build and a real deploy are the open item, so the [self-hosting guide](https://github.com/ovriq/zinko/blob/main/docs/self-hosting.md) is written but **not yet run end to end**. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
@@ -24,7 +24,7 @@ Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you
 - **Audit** a site's start page and up to 19 key pages under no interaction, accept all, reject all and Global Privacy Control, on desktop and mobile, with or without test click IDs and a journey through the key pages. Live progress, a tag matrix of what fires where, and a hit explorer with every decoded request.
 - **Read findings** with evidence, why it matters, the fix steps, an owner hint and a triage status (open, accepted risk, fixed). Optional AI explanations use a key your organization brings itself; the checks never need one.
 - **Re-run and compare.** A re-run is compared with the audit it came from, cell by cell (page, scenario, viewport): findings are new, regressed, fixed (only when the re-run passes every run that failed), unchanged, changed from or to "could not check", or not comparable (and the tab says why). Tags that disappeared, appeared or changed destination are listed. Accepted risks and notes carry over. A change that may be a flaky result says so, and "Re-check these pages" confirms it on exactly those pages.
-- **Report.** A white-label report with the agency's logo and accent, a "What changed since" section, a share link that can be revoked, a PDF through the browser's print dialog, and a CSV register.
+- **Report.** A white-label report with the organization's logo and accent, a "What changed since" section, a share link that can be revoked, a PDF through the browser's print dialog, and a CSV register.
 
 ## Run it
 
@@ -43,7 +43,7 @@ pnpm dev                                                            # the app on
 
 `.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). The app listens on port 1337 (Alchemy's default); if that is taken it moves to the next free port, so read the URL `pnpm dev` prints when it starts. Sign-in works on any port because `BETTER_AUTH_URL` stays empty locally.
 
-Then open the app and sign up. Create an organization, then a client (Clients > New client), then a site with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only), and choose New audit on the site. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
+Then open the app and sign up. Create an organization, then add a site with the address `http://localhost:4400/` (Sites > Add site; private addresses are accepted on local dev stages only), and choose New audit on the site. If you audit sites for clients, switch on Settings > Organization > Group sites by client first: Clients then appears beside Sites and each site belongs to one. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ## Known limits
 
@@ -155,7 +155,7 @@ Zinko is being built to do that audit in one run, in the open. The design:
 - **Evidence, not opinions.** Zinko loads your pages in a real browser and records every tracking request, `dataLayer` push, cookie and consent signal. Each finding links to the decoded hit, the raw request and a screenshot.
 - **Deterministic checks.** Rules are plain functions over the captured data, each checked against a fixture page. An LLM can explain a finding and write fix steps, but it never decides pass or fail, and every check works without one.
 - **Every consent path.** Each page runs with no banner interaction, after "accept all" and after "reject all", with and without click IDs such as `gclid` and `fbclid` in the landing URL.
-- **Made for consultants and agencies.** Client workspaces, a tag matrix of what fires where, re-runs that mark findings new, regressed or fixed, and a white-label report.
+- **Made for site owners, consultants and agencies.** Sites first, with client grouping when you want it, a tag matrix of what fires where, re-runs that mark findings new, regressed or fixed, and a white-label report.
 
 Use something else if you need ongoing monitoring of production traffic today, or vendors beyond GA4, Google Ads, Meta and TikTok.
 
@@ -176,7 +176,7 @@ These 28 checks are built and run on every audit. Each is a plain function over 
 
 ```
 apps/cli            zinko CLI (decode and capture, with --rules; audit is planned)
-apps/web            TanStack Start web app on Cloudflare Workers: clients, sites, audits, live progress, Hits explorer, Findings, Compare, reports
+apps/web            TanStack Start web app on Cloudflare Workers: sites, optional clients, audits, live progress, Hits explorer, Findings, Compare, reports
 apps/browser        capture engine: Node server, egress proxy, Scrapling (Python) in a container image
 packages/decoders   GA4, Google Ads, Meta Pixel and TikTok decoders -> a normalized Hit
 packages/rules      the 28 checks: one run's capture and hits -> pass, fail, inconclusive or not applicable, with evidence
