@@ -9,3 +9,13 @@ Reviewed `72063f4..a9ea480` (Tasks 0 and 1). Verdict: **proceed after fixes**.
 5. Medium: Reddit: `esurl` keeps the origin, so `location-mismatch` applies. Project `esurl` to `page_location`, include Reddit in host-match expectations, keep general PII evaluation.
 
 Satisfactory: host lists and SDK patterns identical in both files (Pinterest `ct/lib/*.js` is a directory wildcard: document it); endpoint-copy guard passes (it does not check the vendor mirror); 14 samples parse, no real-person data; preserve exact snippets, SDK versions or hashes and commands as evidence. `TEST_CLICK_IDS`, per-vendor dedup ids, Task 6a and the versioned boundary are consistent with r1 and r2.
+
+## Round 2 (Sol, 2026-10-29)
+
+Verdict: **proceed after fixes**; Task 2 waits for 1 and 2.
+
+1. Medium: `apps/browser/scrapling/capture.py` ~344–356 decodes only gzip; brotli or deflate SDK responses reach Chromium compressed (probe: `route.fulfill` does not decode them), and truncated gzip raises `EOFError`/`zlib.error`, not caught by `except OSError`, leaving the request unresolved. Normalise SDK encodings once (preferably in the Node SDK proxy), abort cleanly on decode failure, probe identity, gzip, brotli, deflate and truncated gzip on both engines.
+2. Medium: Pinterest: ignoring `/v3/` loses inspection data (`ad.loc`, `pd.epik`) that PII, location and click-ID checks read. Separate event counting from request inspection (inspect `/v3/` without counting it twice), or limit the supported coverage and Task 2 expectations; real-config behaviour stays unverified.
+3. Low: keep the two original flaky Playwright outputs beside the reruns and describe the result as "two initial differences; targeted reruns matched".
+
+Satisfactory: mirrors identical, no observed tracking host missing, whole-host SDK hosts justified; gzip decoded once per path, framing headers stripped, first-party resources bypass the SDK path; Microsoft and Reddit corrections. The regression supports unchanged rule statuses, not byte-identical captures.
