@@ -5,6 +5,8 @@ import type { Rule } from "../../types.js"
 
 const id = "hygiene.tag-errors"
 
+const METHODS: ReadonlySet<string> = new Set(["GET", "POST", "HEAD", "PUT", "PATCH", "DELETE"])
+
 export const tagErrors: Rule = {
   id,
   area: "hygiene",
@@ -49,8 +51,8 @@ export const tagErrors: Rule = {
       )
     const where = distinct(
       failed.map((request) => {
-        const host = URL.canParse(request.url) ? new URL(request.url).host : "an unreadable URL"
-        return `${request.method} ${host} → ${request.status}`
+        const method = request.method.toUpperCase()
+        return `${METHODS.has(method) ? method : "other method"} → ${request.status}`
       }),
     ).join(", ")
     return fail(

@@ -1,5 +1,5 @@
 import { count, distinct, documentRef, groupBy, hitRef } from "../../documents.js"
-import { destinationLabel } from "../../event-names.js"
+import { destinationLabeler } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { EvidenceRef, Rule } from "../../types.js"
 
@@ -40,7 +40,7 @@ export const multipleGa4Ids: Rule = {
     const ids = distinct(multiple.flatMap((hits) => hits.map((hit) => hit.destinationId)))
     return fail(
       id,
-      `${count(multiple.length, "document")} sent GA4 hits to ${ids.length} measurement IDs (${ids.map(destinationLabel).join(", ")})`,
+      `${count(multiple.length, "document")} sent GA4 hits to ${ids.length} measurement IDs (${ids.map(destinationLabeler(ids)).join(", ")})`,
       evidence,
     )
   },

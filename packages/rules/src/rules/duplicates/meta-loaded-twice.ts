@@ -1,5 +1,5 @@
 import { distinct, groupBy, hitRef, requestRef } from "../../documents.js"
-import { destinationLabel } from "../../event-names.js"
+import { destinationLabeler } from "../../event-names.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import { withoutRetransmissions } from "../../retransmissions.js"
 import type { EvidenceRef, Rule } from "../../types.js"
@@ -56,14 +56,18 @@ export const metaLoadedTwice: Rule = {
       ...[...new Set(inARow.flatMap(({ first, second }) => [first, second]))].map(hitRef),
     ])
     if (evidence === null) return pass(id, "each Meta pixel was started once per document")
+    const label = destinationLabeler([
+      ...twiceConfigured.map((group) => group[0].pixel),
+      ...inARow.map(({ first }) => first.destinationId),
+    ])
     const parts = [
       ...twiceConfigured.map(
         (group) =>
-          `its config was fetched ${group.length} times for pixel ${destinationLabel(group[0].pixel)}`,
+          `its config was fetched ${group.length} times for pixel ${label(group[0].pixel)}`,
       ),
       ...(inARow.length > 0
         ? [
-            `two PageViews in a row for pixel ${distinct(inARow.map(({ first }) => destinationLabel(first.destinationId))).join(", ")} on the same page`,
+            `two PageViews in a row for pixel ${distinct(inARow.map(({ first }) => label(first.destinationId))).join(", ")} on the same page`,
           ]
         : []),
     ]

@@ -45,10 +45,7 @@ export const locationMismatch: Rule = {
         `${count(compared.length, "hit")} reported the host of the page it was sent from`,
       )
     const what = distinct(
-      mismatched.map(
-        ({ hit, reported, actual }) =>
-          `${vendorName(hit.vendor)} reported ${reported} on ${actual}`,
-      ),
+      mismatched.map(({ hit }) => `${vendorName(hit.vendor)} reported a different host`),
     ).join("; ")
     return fail(
       id,

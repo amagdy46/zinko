@@ -1,6 +1,6 @@
 import { consentTimeline } from "../../consent-state.js"
 import { documentRef, hitRef } from "../../documents.js"
-import { destinationLabel } from "../../event-names.js"
+import { destinationLabeler } from "../../event-names.js"
 import {
   combineArrivals,
   fail,
@@ -72,14 +72,15 @@ export const crossdomainLinkerMissing: Rule = {
       )
     if (timeline.outcome !== "accepted")
       return notApplicable(id, "only checked after the visitor accepted")
-    const judge = (arrival: CapturedDocument): CheckResult => {
+    const judge = (arrival: CapturedDocument, position: number): CheckResult => {
       const host = hostOf(arrival.url)
+      const where = `later host ${position + 1}`
       if (!input.measuredHosts.includes(host))
         return inconclusive(
           id,
           input.measuredHosts.length === 0
-            ? `arrived at ${host}, and no other host is declared for the site`
-            : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
+            ? `arrived at ${where}, and no other host is declared for the site`
+            : `arrived at ${where}, which is not a declared host`,
           [documentRef(arrival.id)],
         )
 
@@ -99,8 +100,9 @@ export const crossdomainLinkerMissing: Rule = {
       const unresolved: string[] = []
       const evidence: EvidenceRef[] = []
       const passed: string[] = []
+      const labelOf = destinationLabeler(destinations)
       for (const destination of destinations) {
-        const label = destinationLabel(destination)
+        const label = labelOf(destination)
         const of = (documentId: string) =>
           ga4.filter((hit) => hit.documentId === documentId && hit.destinationId === destination)
         const before = eligible(of(first.id))
@@ -108,9 +110,9 @@ export const crossdomainLinkerMissing: Rule = {
         if (before.sent.length === 0) {
           unresolved.push(`${label}: analytics storage was not granted on the first host`)
         } else if (of(arrival.id).length === 0) {
-          unresolved.push(`${label}: no hit on ${host}`)
+          unresolved.push(`${label}: no hit on ${where}`)
         } else if (after.sent.length === 0) {
-          unresolved.push(`${label}: analytics storage was not granted on ${host}`)
+          unresolved.push(`${label}: analytics storage was not granted on ${where}`)
         } else if (before.ids.size !== 1 || after.ids.size !== 1) {
           unresolved.push(`${label}: no single client id on one of the hosts`)
         } else if ([...before.ids][0] === [...after.ids][0]) {
@@ -122,8 +124,8 @@ export const crossdomainLinkerMissing: Rule = {
           if (arrived !== undefined) evidence.push(hitRef(arrived))
           failures.push(
             linked
-              ? `${label}: the link carried a linker parameter but ${host} did not adopt it`
-              : `${label}: the visitor was counted as a new user on ${host}, with no linker parameter on the link`,
+              ? `${label}: the link carried a linker parameter but ${where} did not adopt it`
+              : `${label}: the visitor was counted as a new user on ${where}, with no linker parameter on the link`,
           )
         }
       }
@@ -132,9 +134,12 @@ export const crossdomainLinkerMissing: Rule = {
       if (cited !== null && failures.length > 0) return fail(id, failures.join("; "), cited)
       if (unresolved.length > 0)
         return inconclusive(id, `could not compare ${unresolved.join("; ")}`, refs)
-      return pass(id, `the client id carried over to ${host} for ${passed.join(", ")}`, refs)
+      return pass(id, `the client id carried over to ${where} for ${passed.join(", ")}`, refs)
     }
     // every followed link is judged: a failure on any of them fails the run
-    return combineArrivals(id, arrivals.map(judge))
+    return combineArrivals(
+      id,
+      arrivals.map((arrival, position) => judge(arrival, position)),
+    )
   },
 }

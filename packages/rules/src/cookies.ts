@@ -24,11 +24,6 @@ export function cookieFamily(name: string): string | null {
   return FAMILIES.find(([pattern]) => pattern.test(name))?.[1] ?? null
 }
 
-/** Google Analytics, Google Ads, Meta and TikTok cookies; consent banners' own cookies are not. */
-export function isAdOrAnalyticsCookie(name: string): boolean {
-  return cookieFamily(name) !== null
-}
-
 /** RFC 6265 §5.1.4: the cookie's path is the request path or a `/`-bounded prefix of it. */
 function pathMatches(cookiePath: string, requestPath: string): boolean {
   if (requestPath === cookiePath) return true

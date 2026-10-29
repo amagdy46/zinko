@@ -40,7 +40,7 @@ export type {
   RunInput,
 } from "./types.js"
 export { googleConsentFromCcm, isCcmRequest, isNonGoogle, withoutConsent } from "./consent-state.js"
-export { COOKIE_FAMILY_LABELS, cookieFamily, isAdOrAnalyticsCookie } from "./cookies.js"
+export { COOKIE_FAMILY_LABELS, cookieFamily } from "./cookies.js"
 export { decodeHits } from "./decode.js"
 export { pushesByDocument } from "./documents.js"
 export { scrubPersonalData } from "./personal-data.js"
@@ -110,7 +110,7 @@ function unusableBecause(capture: CaptureResult): string | null {
   const first = errors.find((error) => !CONSENT_ERRORS.has(error.code))
   return first === undefined
     ? "the run did not complete"
-    : `the run did not complete (${first.code}: ${first.message})`
+    : `the run did not complete (${first.code})`
 }
 
 /** One result per rule, in `rules` order. Pure: the same input always gives the same results. */

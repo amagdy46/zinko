@@ -79,14 +79,15 @@ export const lostAcrossSubdomain: Rule = {
     if (timeline.outcome !== "accepted")
       return notApplicable(id, "only checked after the visitor accepted")
 
-    const judge = (arrival: CapturedDocument): CheckResult => {
+    const judge = (arrival: CapturedDocument, position: number): CheckResult => {
       const host = hostOf(arrival.url)
+      const where = `later host ${position + 1}`
       if (!input.measuredHosts.includes(host))
         return inconclusive(
           id,
           input.measuredHosts.length === 0
-            ? `arrived at ${host}, and no other host is declared for the site`
-            : `arrived at ${host}, not at a declared host (${input.measuredHosts.join(", ")})`,
+            ? `arrived at ${where}, and no other host is declared for the site`
+            : `arrived at ${where}, which is not a declared host`,
           [documentRef(arrival.id)],
         )
 
@@ -103,9 +104,9 @@ export const lostAcrossSubdomain: Rule = {
       const both = [documentRef(first.id), documentRef(arrival.id)]
       const evidence: EvidenceRef[] = [...both]
       const unresolved: string[] = []
-      if (arrival.banner === "shown") failures.push(`the banner was shown again on ${host}`)
+      if (arrival.banner === "shown") failures.push(`the banner was shown again on ${where}`)
       else if (arrival.banner !== "hidden")
-        unresolved.push(`whether the banner was shown on ${host}`)
+        unresolved.push(`whether the banner was shown on ${where}`)
       const reverted: Signal[] = []
       const unknown: Signal[] = []
       for (const signal of required) {
@@ -117,8 +118,8 @@ export const lostAcrossSubdomain: Rule = {
         } else if (settledState(events) !== "granted") unknown.push(signal)
       }
       if (reverted.length > 0)
-        failures.push(`${reverted.join(", ")} went back to denied on ${host}`)
-      if (unknown.length > 0) unresolved.push(`${unknown.join(", ")} on ${host}`)
+        failures.push(`${reverted.join(", ")} went back to denied on ${where}`)
+      if (unknown.length > 0) unresolved.push(`${unknown.join(", ")} on ${where}`)
 
       const cited = nonEmpty([
         ...new Map(evidence.map((ref) => [JSON.stringify(ref), ref])).values(),
@@ -132,10 +133,13 @@ export const lostAcrossSubdomain: Rule = {
       if (unresolved.length > 0)
         return inconclusive(id, `could not tell ${unresolved.join("; ")}`, both)
       const signals = required.length === 0 ? "" : ` and ${required.join(", ")} stayed granted`
-      return pass(id, `the banner stayed hidden on ${host}${signals}`, both)
+      return pass(id, `the banner stayed hidden on ${where}${signals}`, both)
     }
     // every followed link is judged: a failure on any of them fails the run
-    return combineArrivals(id, arrivals.map(judge))
+    return combineArrivals(
+      id,
+      arrivals.map((arrival, position) => judge(arrival, position)),
+    )
   },
 }
 

@@ -94,9 +94,12 @@ export function eventLabel(hit: Pick<DecodedHit, "vendor" | "event">): string {
   return KNOWN[hit.vendor].has(hit.event) ? `${vendor} ${hit.event}` : `${vendor} custom event`
 }
 
-const DESTINATION_ID = /^(?:(?:G|GT|AW|DC|GTM)-[A-Z0-9]{4,16}|\d{6,20}|[A-Z0-9]{10,24})$/
-
-/** A measurement, pixel or conversion ID for a message when it has the shape of one; else a fixed phrase. */
-export function destinationLabel(id: string): string {
-  return DESTINATION_ID.test(id) ? id : "an unrecognised ID"
+/**
+ * Labels for the destinations (measurement, pixel or conversion IDs) of one message. An ID comes
+ * from the request and no syntax proves it is not personal data, so a message numbers them in
+ * order of first appearance instead of printing them.
+ */
+export function destinationLabeler(ids: readonly string[]): (id: string) => string {
+  const order = [...new Set(ids)]
+  return (id) => `destination ${order.indexOf(id) + 1}`
 }

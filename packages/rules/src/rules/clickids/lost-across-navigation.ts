@@ -92,7 +92,7 @@ export const lostAcrossNavigation: Rule = {
 
     let checked = 0
     const lost: { message: string; evidence: EvidenceRef[] }[] = []
-    let unseen = 0
+    const unseen = new Set<string>()
     later.forEach((document, index) => {
       const last = index === later.length - 1
       for (const vendor of vendors) {
@@ -104,7 +104,7 @@ export const lostAcrossNavigation: Rule = {
         if (without.length === 0) continue
         const snapshot = snapshotLeaving(input, document, last)
         if (snapshot === undefined) {
-          unseen += 1
+          unseen.add(document.id)
           continue
         }
         const carried = snapshot.cookies.some(
@@ -120,8 +120,8 @@ export const lostAcrossNavigation: Rule = {
 
     const evidence = nonEmpty(lost.flatMap((l) => l.evidence))
     if (evidence !== null) return fail(id, lost.map((l) => l.message).join("; "), evidence)
-    if (unseen > 0)
-      return inconclusive(id, `no cookie snapshot when leaving ${count(unseen, "later page")}`)
+    if (unseen.size > 0)
+      return inconclusive(id, `no cookie snapshot when leaving ${count(unseen.size, "later page")}`)
     const params = vendors.map((vendor) => vendor.param).join(" and ")
     if (checked === 0)
       return notApplicable(id, `no later page sent a hit that should carry ${params}`)
