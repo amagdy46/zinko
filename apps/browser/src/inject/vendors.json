@@ -11,7 +11,18 @@
     "instagram.com",
     "conversionsapigateway.com",
     "tiktok.com",
-    "tiktokw.us"
+    "tiktokw.us",
+    "linkedin.com",
+    "licdn.com",
+    "bing.com",
+    "bing.net",
+    "bat.r.msn.com",
+    "pinterest.com",
+    "pinimg.com",
+    "reddit.com",
+    "redditstatic.com",
+    "snapchat.com",
+    "sc-static.net"
   ],
-  "sdkFiles": "^https://(www\\.googletagmanager\\.com/(gtag/js|gtm\\.js)(?=[?#]|$)|connect\\.facebook\\.net/([\\w-]+/fbevents\\.js(?=[?#]|$)|signals/config/\\d+(?=[?#]|$))|analytics\\.tiktok\\.com/i18n/pixel/(events\\.js|static/[\\w.-]+\\.js)(?=[?#]|$))"
+  "sdkFiles": "^https://(www\\.googletagmanager\\.com/(gtag/js|gtm\\.js)(?=[?#]|$)|connect\\.facebook\\.net/([\\w-]+/fbevents\\.js(?=[?#]|$)|signals/config/\\d+(?=[?#]|$))|analytics\\.tiktok\\.com/i18n/pixel/(events\\.js|static/[\\w.-]+\\.js)(?=[?#]|$)|snap\\.licdn\\.com/li\\.lms-analytics/insight\\.min\\.js(?=[?#]|$)|bat\\.bing\\.(com|net)/bat\\.js(?=[?#]|$)|s\\.pinimg\\.com/ct/(core\\.js|lib/[\\w.-]+\\.js)(?=[?#]|$)|www\\.redditstatic\\.com/ads/pixel\\.js(?=[?#]|$)|sc-static\\.net/scevent\\.min\\.js(?=[?#]|$))"
 }

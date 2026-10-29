@@ -217,9 +217,20 @@ const VENDOR_DOMAINS = [
   "conversionsapigateway.com",
   "tiktok.com",
   "tiktokw.us",
+  "linkedin.com",
+  "licdn.com",
+  "bing.com",
+  "bing.net",
+  "bat.r.msn.com",
+  "pinterest.com",
+  "pinimg.com",
+  "reddit.com",
+  "redditstatic.com",
+  "snapchat.com",
+  "sc-static.net",
 ]
 const SDK_FILES = new RegExp(
-  String.raw`^https://(www\.googletagmanager\.com/(gtag/js|gtm\.js)(?=[?#]|$)|connect\.facebook\.net/([\w-]+/fbevents\.js(?=[?#]|$)|signals/config/\d+(?=[?#]|$))|analytics\.tiktok\.com/i18n/pixel/(events\.js|static/[\w.-]+\.js)(?=[?#]|$))`,
+  String.raw`^https://(www\.googletagmanager\.com/(gtag/js|gtm\.js)(?=[?#]|$)|connect\.facebook\.net/([\w-]+/fbevents\.js(?=[?#]|$)|signals/config/\d+(?=[?#]|$))|analytics\.tiktok\.com/i18n/pixel/(events\.js|static/[\w.-]+\.js)(?=[?#]|$)|snap\.licdn\.com/li\.lms-analytics/insight\.min\.js(?=[?#]|$)|bat\.bing\.(com|net)/bat\.js(?=[?#]|$)|s\.pinimg\.com/ct/(core\.js|lib/[\w.-]+\.js)(?=[?#]|$)|www\.redditstatic\.com/ads/pixel\.js(?=[?#]|$)|sc-static\.net/scevent\.min\.js(?=[?#]|$))`,
 )
 
 /** The URL's host is a vendor domain or any subdomain of one. */
@@ -229,7 +240,7 @@ export function isVendorHost(url: string): boolean {
   return VENDOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`))
 }
 
-/** A vendor SDK file (gtag, GTM, the Meta and TikTok pixel scripts): loaded, not a hit. */
+/** A vendor SDK file (gtag, GTM, the Meta, TikTok, LinkedIn, Microsoft, Pinterest, Reddit and Snap pixel scripts): loaded, not a hit. */
 export function isSdkFile(url: string): boolean {
   return SDK_FILES.test(url)
 }

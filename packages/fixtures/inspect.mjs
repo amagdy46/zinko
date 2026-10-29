@@ -18,6 +18,13 @@ const collectionEndpoints = [
   },
   { vendor: "meta", test: /^https:\/\/www\.facebook\.com\/tr/ },
   { vendor: "tiktok", test: /^https:\/\/analytics\.tiktok\.com\/api\/v2\/pixel/ },
+  // Candidate endpoints for the plan's five new vendors (spike): the inspector answers them
+  // locally and prints them; they are not the decoders' list.
+  { vendor: "linkedin", test: /^https:\/\/(px|dc)\.ads\.linkedin\.com\// },
+  { vendor: "microsoft", test: /^https:\/\/bat\.bing\.(com|net)\/action\// },
+  { vendor: "pinterest", test: /^https:\/\/ct\.pinterest\.com\// },
+  { vendor: "reddit", test: /^https:\/\/alb\.reddit\.com\// },
+  { vendor: "snap", test: /^https:\/\/tr\.snapchat\.com\// },
 ]
 
 const [target, action = "none"] = process.argv.slice(2)
@@ -72,6 +79,10 @@ function describe(vendor, request) {
   if (vendor === "tiktok") {
     const parsed = body.startsWith("{") ? JSON.parse(body) : {}
     return `${parsed.context?.pixel?.code ?? "?"} event=${parsed.event ?? "?"} ${url.pathname.replace("/api/v2/pixel", "")}`
+  }
+  if (["linkedin", "microsoft", "pinterest", "reddit", "snap"].includes(vendor)) {
+    const raw = body.startsWith("{") ? ` body=${body.slice(0, 160)}` : ""
+    return `${url.host}${url.pathname} ${[...url.searchParams.keys()].join(",")}${raw}`
   }
   const detail = fields(url.searchParams, [
     ["label", "label"],
