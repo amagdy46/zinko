@@ -56,13 +56,15 @@ const LEGEND = [
   ["info", "Info failing"],
 ] as const
 
-function MatrixLegend() {
+function MatrixLegend({ runs }: { runs: AuditRun[] }) {
+  const present = new Set<string>(runs.map((run) => runMeaning(run.status)))
+  for (const run of runs) if (run.failing) present.add(run.failing.severity)
   return (
     <ul
       aria-label="Legend"
       className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
     >
-      {LEGEND.map(([meaning, word]) => (
+      {LEGEND.filter(([meaning]) => present.has(meaning)).map(([meaning, word]) => (
         <li key={meaning} className="flex items-center gap-1.5">
           <StatusGlyph meaning={meaning} />
           {word}
@@ -199,12 +201,6 @@ export function RunMatrix({
   )
   return (
     <div className="space-y-2">
-      <p className="text-xs text-muted-foreground">
-        <StatusGlyph meaning="captured" className="mr-1 inline align-text-bottom" />
-        Captured means the page was loaded and recorded. Open Findings for pass or fail. A cell
-        shows the worst failing severity with its number of failing checks, then the hits.
-      </p>
-      <MatrixLegend />
       <Table>
         <TableHeader>
           <TableRow>
@@ -269,6 +265,12 @@ export function RunMatrix({
           })}
         </TableBody>
       </Table>
+      <p className="text-xs text-muted-foreground">
+        <StatusGlyph meaning="captured" className="mr-1 inline align-text-bottom" />
+        Captured means the page was loaded and recorded. Open Findings for pass or fail. A cell
+        shows the worst failing severity with its number of failing checks, then the hits.
+      </p>
+      <MatrixLegend runs={runs} />
     </div>
   )
 }
@@ -329,7 +331,7 @@ function MatrixCell({
           aria-label={`${page}, ${scenarioLabel(scenario)}, ${viewport}: ${statusWord}, ${hits}${run.failing ? `, ${failingText(run)}` : ""}`}
           aria-current={selected ? "true" : undefined}
           className={cn(
-            "inline-flex h-8 min-w-28 items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
+            "inline-flex h-8 min-w-28 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
             selected && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
           )}
         >

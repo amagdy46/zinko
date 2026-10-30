@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lucide-react"
 import { ChangeGlyph } from "@/components/change-badge"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
-import { SeverityMark } from "@/components/severity"
+import { DataRow, rowLink } from "@/components/data-row"
 import { FindingsSkeleton } from "@/components/page-skeleton"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -203,23 +203,32 @@ function FindingsScreen() {
       />
       <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
         <div
-          tabIndex={0}
           role="region"
           aria-label="Findings list"
-          className="min-w-0 space-y-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:min-h-0 lg:overflow-y-auto lg:pr-2"
+          className="min-w-0 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-2"
         >
           <Tabs
             value={triage}
             onValueChange={(next) => go({ triage: Option.getOrUndefined(decodeTriage(next)) })}
           >
-            <TabsList aria-label="Triage status">
-              {TRIAGES.map((t) => (
-                <TabsTrigger key={t} value={t}>
-                  {TRIAGE_TABS[t]}
-                  <span className="text-xs tabular-nums text-muted-foreground">{tabCount(t)}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <TabsList aria-label="Triage status">
+                {TRIAGES.map((t) => (
+                  <TabsTrigger key={t} value={t}>
+                    {TRIAGE_TABS[t]}
+                    <span className="text-xs tabular-nums text-muted-foreground">
+                      {tabCount(t)}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              <Button asChild variant="outline" size="sm">
+                <a href={`/api/audits/${audit.id}/register.csv`} download>
+                  <Download aria-hidden="true" />
+                  Export CSV
+                </a>
+              </Button>
+            </div>
             <TabsContent value={triage} className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <ToggleGroup
@@ -268,12 +277,6 @@ function FindingsScreen() {
                     ))}
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button asChild variant="outline" size="sm">
-                  <a href={`/api/audits/${audit.id}/register.csv`} download>
-                    <Download aria-hidden="true" />
-                    Export CSV
-                  </a>
-                </Button>
                 {filtered ? (
                   <Button
                     variant="ghost"
@@ -309,15 +312,14 @@ function FindingsScreen() {
                         </span>
                         <span className="sr-only">, {count(rows.length, "finding")}</span>
                       </h2>
-                      <ul>
+                      <ul className="overflow-hidden rounded-lg border bg-card">
                         {rows.map((row) => (
-                          <li key={row.ruleId}>
-                            <FindingItem
-                              row={row}
-                              selected={row.ruleId === selected?.ruleId}
-                              chip={chips.get(row.ruleId)}
-                            />
-                          </li>
+                          <FindingItem
+                            key={row.ruleId}
+                            row={row}
+                            selected={row.ruleId === selected?.ruleId}
+                            chip={chips.get(row.ruleId)}
+                          />
                         ))}
                       </ul>
                     </section>
@@ -342,15 +344,14 @@ function FindingsScreen() {
                     <p className="pb-1 text-xs text-muted-foreground">
                       These checks did not run. They are not passes.
                     </p>
-                    <ul>
+                    <ul className="overflow-hidden rounded-lg border bg-card">
                       {visibleUnchecked.map((row) => (
-                        <li key={row.ruleId}>
-                          <FindingItem
-                            row={row}
-                            selected={row.ruleId === selected?.ruleId}
-                            chip={chips.get(row.ruleId)}
-                          />
-                        </li>
+                        <FindingItem
+                          key={row.ruleId}
+                          row={row}
+                          selected={row.ruleId === selected?.ruleId}
+                          chip={chips.get(row.ruleId)}
+                        />
                       ))}
                     </ul>
                   </CollapsibleContent>
@@ -692,30 +693,37 @@ function FindingItem({
   chip: Chip | undefined
 }) {
   const failing = row.kind === "fail"
+  const where = `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`
+  let meta = row.reason ?? where
+  if (failing) {
+    meta = `${where} · ${count(row.scenarios, "scenario")}`
+  }
   return (
-    <Link
-      to="/app/audits/$auditId/findings"
-      from="/app/audits/$auditId/findings"
-      search={(prev) => ({ ...prev, finding: row.ruleId })}
-      replace
-      data-testid="finding"
-      data-selected={selected}
-      aria-current={selected ? "true" : undefined}
-      className={cn(
-        "flex items-start gap-2 rounded-md px-3 py-2 text-sm outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        failing ? SeverityMark[row.severity] : "border-l-2 border-l-transparent",
-        selected && "bg-accent shadow-[inset_-2px_0_0_var(--primary)] hover:bg-accent",
-      )}
-    >
-      {failing ? null : <StatusGlyph meaning="could-not-check" className="mt-0.5" />}
-      <span className="min-w-0 flex-1">
-        <span className="block font-medium">{failing ? row.title : row.checkTitle}</span>
-        <span className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-          <span className="truncate">
-            {failing
-              ? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")} · ${count(row.scenarios, "scenario")}`
-              : (row.reason ?? `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`)}
-          </span>
+    <DataRow selected={selected} data-testid="finding" className="items-start">
+      <StatusGlyph meaning={failing ? row.severity : "could-not-check"} className="mt-1" />
+      <div className="min-w-0 flex-1">
+        <Link
+          to="/app/audits/$auditId/findings"
+          from="/app/audits/$auditId/findings"
+          search={(prev) => ({ ...prev, finding: row.ruleId })}
+          replace
+          aria-current={selected ? "true" : undefined}
+          className={cn(rowLink, "min-h-0 w-full text-sm font-medium")}
+        >
+          {failing ? <span className="sr-only">{SEVERITY_LABEL[row.severity]}: </span> : null}
+          {failing ? row.title : row.checkTitle}
+        </Link>
+        <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          <span>{meta}</span>
+          {failing && row.owner !== null ? (
+            <span
+              className="inline-flex h-5 shrink-0 items-center rounded-sm border bg-muted/60 px-1.5 text-2xs font-medium text-foreground"
+              title="Usually fixed by"
+            >
+              <span className="sr-only">Usually fixed by </span>
+              {OWNER_LABELS[row.owner]}
+            </span>
+          ) : null}
           {chip === undefined ? null : (
             <span className="flex shrink-0 items-center gap-1 text-foreground">
               <ChangeGlyph state={chip.state} className="size-3" />
@@ -723,39 +731,16 @@ function FindingItem({
               {chip.low ? <span className="text-muted-foreground">(low confidence)</span> : null}
             </span>
           )}
-        </span>
-        {failing && row.owner !== null ? (
-          <span className="block text-xs text-muted-foreground" data-testid="finding-owner">
-            Usually fixed by: <span className="text-foreground">{OWNER_LABELS[row.owner]}</span>
-          </span>
-        ) : null}
-        {failing && row.firstFix !== null ? (
-          <span className="mt-0.5 block text-xs" data-testid="fix-first">
-            <span className="text-muted-foreground">Fix first:</span> {row.firstFix}
-          </span>
-        ) : null}
+        </p>
         {isLocalLimit(row) ? (
-          <span className="block text-xs text-muted-foreground">
-            Expected: requests are answered locally
-          </span>
+          <p className="text-xs text-muted-foreground">Expected: requests are answered locally</p>
         ) : null}
-      </span>
+      </div>
       {failing && row.knownRuns > 0 ? (
-        <span className="flex shrink-0 flex-col items-end gap-1 pt-0.5 text-xs text-muted-foreground">
-          <span className="tabular-nums">
-            {row.failingRuns} of {count(row.knownRuns, "run")}
-          </span>
-          <svg aria-hidden="true" viewBox="0 0 100 4" className="h-1 w-16">
-            <rect width="100" height="4" rx="2" className="fill-muted" />
-            <rect
-              width={Math.min(100, (row.failingRuns / row.knownRuns) * 100)}
-              height="4"
-              rx="2"
-              className="fill-foreground/50"
-            />
-          </svg>
+        <span className="mt-0.5 shrink-0 text-xs tabular-nums text-muted-foreground">
+          {row.failingRuns} of {count(row.knownRuns, "run")}
         </span>
       ) : null}
-    </Link>
+    </DataRow>
   )
 }

@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
-import { CircleHelp } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
-import { Button } from "@/components/ui/button"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { HelpPopover } from "@/components/help-popover"
 import { SectionHeading } from "@/components/section-heading"
 import { MatrixControls, TagMatrixTable, TagPager } from "@/components/tag-matrix"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
@@ -40,27 +38,19 @@ export const Route = createFileRoute("/app/audits/$auditId/matrix")({
 
 function Legend({ mode }: { mode: MatrixView["mode"] }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="shrink-0">
-          <CircleHelp aria-hidden="true" />
-          How to read it
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-96 max-w-[calc(100vw-2rem)] text-sm">
-        {mode === "events" ? (
-          "n/m is the runs that had the event out of the column's runs; ×n is the hits in a single run. None seen is only said of complete runs."
-        ) : (
-          <>
-            Ads is <span className="font-mono text-xs">ad_storage</span> and Analytics is{" "}
-            <span className="font-mono text-xs">analytics_storage</span>, as the hits carried them
-            (Google's gcs and gcd signal), not the order of the consent commands. Mixed means the
-            tag's hits carried more than one state. Meta and TikTok hits carry no consent signal. A
-            run whose choice was not seen has no state after the choice.
-          </>
-        )}
-      </PopoverContent>
-    </Popover>
+    <HelpPopover label="How to read the tag table">
+      {mode === "events" ? (
+        "n/m is the runs that had the event out of the column's runs; ×n is the hits in a single run. None seen is only said of complete runs."
+      ) : (
+        <>
+          Ads is <span className="font-mono text-xs">ad_storage</span> and Analytics is{" "}
+          <span className="font-mono text-xs">analytics_storage</span>, as the hits carried them
+          (Google's gcs and gcd signal), not the order of the consent commands. Mixed means the
+          tag's hits carried more than one state. Meta and TikTok hits carry no consent signal. A
+          run whose choice was not seen has no state after the choice.
+        </>
+      )}
+    </HelpPopover>
   )
 }
 

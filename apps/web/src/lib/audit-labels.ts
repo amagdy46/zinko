@@ -274,7 +274,8 @@ export function auditFacts(
   audit: { kind: string; createdAt: Date | string; pages: number; startPath: string | null },
   timeZone?: string,
 ): string {
-  const day = shortDate(audit.createdAt, timeZone)
+  // the time tells same-day audits apart; before hydration the zone is UTC and only the day shows
+  const day = shortDateTime(audit.createdAt, timeZone) || shortDate(audit.createdAt, timeZone)
   if (audit.kind === "narrow") return day
   return [day, count(audit.pages, "page"), audit.startPath]
     .filter((part) => part !== null)

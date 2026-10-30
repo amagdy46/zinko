@@ -24,6 +24,35 @@ const BAND_BAR: Record<Band, string> = {
   "no-failures": "fill-status-pass-solid",
 }
 
+/** The score on a 0 to 100 track in the band's colour; an empty track when there is nothing honest to show. */
+export function BandBar({
+  score,
+  band,
+  className,
+}: {
+  score: number | null
+  band: Band | null
+  className?: string
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 100 3"
+      preserveAspectRatio="none"
+      className={cn("w-full", className)}
+    >
+      <rect width="100" height="3" className="fill-muted" />
+      {score === null ? null : (
+        <rect
+          width={score}
+          height="3"
+          className={band === null ? "fill-muted-foreground" : BAND_BAR[band]}
+        />
+      )}
+    </svg>
+  )
+}
+
 /** The glyph for a band, downgraded when the number does not cover everything (see `scoreCoverage`). */
 function bandGlyph(band: Band | undefined, state: "full" | "checks" | "runs"): StatusMeaning {
   if (state === "runs" || band === undefined) return "partial"
@@ -82,6 +111,7 @@ export function ScoreFigure({
         >
           —
         </p>
+        <BandBar score={null} band={null} className="h-1.5 max-w-72" />
         <p className="flex items-center gap-2 text-sm font-medium" data-testid="band">
           <StatusGlyph meaning="partial" />
           {NOT_ENOUGH}
@@ -130,6 +160,7 @@ export function ScoreFigure({
         <span className={cn("text-5xl font-semibold tracking-tight", number)}>{score}</span>
         <span className="text-sm text-muted-foreground">/ 100</span>
       </p>
+      <BandBar score={score} band={band ?? null} className="h-1.5 max-w-72" />
       {band === undefined ? null : (
         <p
           className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm font-medium"
@@ -180,14 +211,7 @@ export function ScoreChip({
         <p className="text-base leading-6 font-semibold text-muted-foreground">
           —<span className="sr-only">{score === null ? "Not scored" : NOT_ENOUGH}</span>
         </p>
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 100 3"
-          preserveAspectRatio="none"
-          className="h-[3px] w-full"
-        >
-          <rect width="100" height="3" className="fill-muted" />
-        </svg>
+        <BandBar score={null} band={null} className="h-[3px]" />
       </div>
     )
   let bandWord: string | null = null
@@ -207,19 +231,7 @@ export function ScoreChip({
         <span className="text-2xs font-normal text-muted-foreground">/100</span>
         {bandWord === null ? null : <span className="sr-only">{bandWord}</span>}
       </p>
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 100 3"
-        preserveAspectRatio="none"
-        className="h-[3px] w-full"
-      >
-        <rect width="100" height="3" className="fill-muted" />
-        <rect
-          width={score}
-          height="3"
-          className={band === null ? "fill-muted-foreground" : BAND_BAR[band]}
-        />
-      </svg>
+      <BandBar score={score} band={band} className="h-[3px]" />
       {state === "full" ? null : (
         <p className="text-2xs leading-4 text-muted-foreground">
           {bandWord === null ? null : (

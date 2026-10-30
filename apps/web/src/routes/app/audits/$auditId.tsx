@@ -9,7 +9,7 @@ import {
 import { NotFound } from "@/components/not-found"
 import { siteTrail } from "@/lib/site-trail"
 import { useEffect, useRef, useState } from "react"
-import { ChevronDown, ChevronLeft } from "lucide-react"
+import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
@@ -31,7 +31,7 @@ import {
   runReason,
   scenarioLabel,
 } from "@/lib/audit-labels"
-import { count, duration, shortDate, shortDateTime, useTimeZone } from "@/lib/format"
+import { count, duration, useTimeZone } from "@/lib/format"
 import { tabLink } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
@@ -67,7 +67,6 @@ const severitySplit = (open: { critical: number; warning: number; info: number }
     .join(", ")
 
 const ACTIVE = new Set(["queued", "running"])
-const RERUN_WAIT = "Re-run is available when the audit has finished"
 const REFETCH_DELAY_MS = 250
 const FINISHED_TOAST_MS = 30_000
 
@@ -110,9 +109,6 @@ function AuditPage() {
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const onFindings = useLocation({ select: (location) => location.pathname.endsWith("/findings") })
   const reportTab = useLocation({ select: (location) => location.pathname.endsWith("/report") })
-  const runsTab = useLocation({
-    select: (location) => location.pathname.replace(/\/$/, "") === `/app/audits/${audit.id}`,
-  })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
   const openFindings = summary.open.critical + summary.open.warning + summary.open.info
   let findingsText = `${openFindings} open`
@@ -181,7 +177,6 @@ function AuditPage() {
     previous.current = { id: audit.id, active }
   }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
-  const full = overview || active
   const params = { auditId: audit.id }
   const named = {
     kind: audit.kind,
@@ -194,7 +189,6 @@ function AuditPage() {
     { ...named, startPath: startPathOf(audit.config.pages[0]), createdAt: audit.createdAt },
     timeZone,
   )
-  const tabName = auditTabName(named)
   const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
     {
@@ -233,30 +227,18 @@ function AuditPage() {
         <span className="max-sm:hidden">· See why</span>
       </Link>
     ) : null
-  const seeResults =
-    runsTab && !active && summary.evaluatedRuns > 0 ? (
-      <Button asChild size="sm" className="h-8">
-        <Link to="/app/audits/$auditId/overview" params={{ auditId: audit.id }}>
-          See results
-        </Link>
-      </Button>
-    ) : null
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [rerunning, setRerunning] = useState(false)
-  let rerunHint: string | undefined
-  if (active) rerunHint = RERUN_WAIT
-  if (site.archived) rerunHint = "This site is archived"
   const rerun =
-    audit.kind === "full" ? (
+    audit.kind === "full" && !active ? (
       <>
         <Button
           ref={rerunButton}
           variant="outline"
           size="sm"
           className="h-8"
-          disabled={active || site.archived}
-          title={rerunHint}
-          aria-describedby={active ? "rerun-reason" : undefined}
+          disabled={site.archived}
+          title={site.archived ? "This site is archived" : undefined}
           onClick={() => setRerunning(true)}
         >
           Re-run
@@ -291,93 +273,63 @@ function AuditPage() {
     </Link>
   )
   return (
-    <PageShell className={cn("print:[&>:not([data-report])]:hidden", !full && "space-y-2")}>
-      {full ? (
-        <PageHeader
-          title={title}
-          breadcrumb={[
-            ...siteTrail(groupByClient, client),
-            { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-            {
-              label:
-                audit.kind === "narrow"
-                  ? "Re-check"
-                  : `Audit · ${shortDate(audit.createdAt, timeZone)}`,
-            },
-          ]}
-          meta={
-            <>
-              <StatusBadge status={toBadgeStatus(audit.status)} />
-              <span>{facts}</span>
-              {active ? (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
-                        <span
-                          className={
-                            connected
-                              ? "size-2 rounded-full bg-primary"
-                              : "size-2 rounded-full border border-muted-foreground"
-                          }
-                        />
-                        {connected ? "Live" : "Live updates paused"}
-                      </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {connected
-                        ? "Connected to live audit progress"
-                        : "Live updates are paused and the audit continues. This page reconnects by itself."}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : null}
-              {problemsPill}
-            </>
-          }
-          actions={
-            <>
-              {rerun}
-              {shareLink}
-            </>
-          }
-        />
-      ) : (
-        <header className="flex flex-col gap-x-3 gap-y-0.5 text-sm sm:flex-row sm:flex-wrap sm:items-center sm:gap-y-1">
-          <div className="flex min-w-0 items-center gap-x-3">
-            <Link
-              to="/app/sites/$siteId"
-              params={{ siteId: site.id }}
-              aria-label={`Back to ${site.name}`}
-              className="inline-flex h-8 items-center gap-0.5 rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-sm:min-w-8 max-sm:justify-center"
-            >
-              <ChevronLeft className="size-4" aria-hidden="true" />
-              <span className="max-sm:sr-only">{site.name}</span>
-            </Link>
-            <h1 className="min-w-0 truncate text-base font-semibold tracking-tight">{tabName}</h1>
+    <PageShell className="print:[&>:not([data-report])]:hidden">
+      <PageHeader
+        title={title}
+        breadcrumb={[
+          ...siteTrail(groupByClient, client),
+          { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
+          { label: audit.kind === "narrow" ? "Re-check" : "Audit" },
+        ]}
+        meta={
+          <>
             <StatusBadge status={toBadgeStatus(audit.status)} />
-          </div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 max-sm:pl-1">
-            <span className="tabular-nums text-muted-foreground max-sm:hidden">
-              {count(runs.length, "run")}
-            </span>
-            {findingsLink}
-            <span className="tabular-nums text-muted-foreground max-sm:hidden">
-              {duration(elapsed)}
-            </span>
-            <time
-              dateTime={start.toISOString()}
-              className="tabular-nums text-muted-foreground max-sm:hidden"
-            >
-              {shortDateTime(start, timeZone)}
-            </time>
+            <span>{facts}</span>
+            {active ? null : (
+              <>
+                <span className="tabular-nums">
+                  {count(runs.length, "run")}
+                  <span className="max-sm:sr-only">
+                    : {complete} captured, {partial} partial, {failed} failed
+                  </span>
+                </span>
+                {findingsLink}
+                <span className="tabular-nums">{duration(elapsed)}</span>
+              </>
+            )}
+            {active ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0} className="inline-flex h-8 items-center gap-1.5">
+                      <span
+                        className={
+                          connected
+                            ? "size-2 rounded-full bg-primary"
+                            : "size-2 rounded-full border border-muted-foreground"
+                        }
+                      />
+                      {connected ? "Live" : "Live updates paused"}
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {connected
+                      ? "Connected to live audit progress"
+                      : "Live updates are paused and the audit continues. This page reconnects by itself."}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
             {problemsPill}
+          </>
+        }
+        actions={
+          <>
             {rerun}
             {shareLink}
-            {seeResults}
-          </div>
-        </header>
-      )}
+          </>
+        }
+      />
       {site.archived && audit.kind === "full" ? (
         <p
           role="status"
@@ -409,22 +361,7 @@ function AuditPage() {
             <span>{partial} partial</span>
             <span>{failed} failed</span>
           </div>
-          {audit.kind === "full" ? (
-            <p id="rerun-reason" className="text-xs text-muted-foreground">
-              {RERUN_WAIT}.
-            </p>
-          ) : null}
         </div>
-      ) : null}
-      {overview && !active ? (
-        <p className="flex flex-wrap items-center gap-x-4 text-sm tabular-nums text-muted-foreground">
-          <span>
-            {count(runs.length, "run")}: {complete} captured, {partial} partial, {failed} failed
-          </span>
-          {findingsLink}
-          <span>{duration(elapsed)}</span>
-          <time dateTime={start.toISOString()}>{shortDateTime(start, timeZone)}</time>
-        </p>
       ) : null}
       {audit.error ? (
         <p

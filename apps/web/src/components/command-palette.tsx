@@ -300,19 +300,14 @@ export function CommandPalette({
                     }
                   >
                     <ClipboardList />
-                    <span className="flex min-w-0 items-baseline gap-1">
-                      <span className="truncate">
-                        Audit of {a.siteName}
-                        {a.startPath === null ? "" : ` ${a.startPath}`}
-                      </span>
-                      <span className="shrink-0 text-muted-foreground">
-                        · {count(a.pages, "page")}
+                    <span className="min-w-0">
+                      <span className="block truncate">Audit of {a.siteName}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {a.startPath ?? "/"} · {count(a.pages, "page")} ·{" "}
+                        {shortDateTime(a.createdAt, timeZone)}
                       </span>
                     </span>
                     <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                      <span className="hidden tabular-nums sm:inline">
-                        {shortDateTime(a.createdAt, timeZone)}
-                      </span>
                       <StatusBadge status={toBadgeStatus(a.status)} />
                       {a.score === null || a.coverage === null ? null : (
                         <ScoreFigure score={a.score} coverage={a.coverage} size="inline" />

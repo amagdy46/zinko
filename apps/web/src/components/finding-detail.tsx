@@ -41,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { recheckVerdict } from "@/lib/compare-text"
 import { count, relativeTime, shortDate as dayOf } from "@/lib/format"
+import { OWNER_LABELS } from "@/lib/report-model"
 import { Skeleton } from "@/components/ui/skeleton"
 import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
@@ -307,7 +308,7 @@ export function FindingDetail({
   const triage = detail.state === "ready" ? detail.value.triage : row.triage
   const previous = triage.status
   const header = (
-    <header className="sticky top-0 z-10 space-y-1 border-b bg-card px-4 py-3">
+    <header className="sticky top-0 z-10 space-y-2 border-b bg-card px-4 py-3">
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         {couldNotCheck ? (
           <>
@@ -321,40 +322,54 @@ export function FindingDetail({
           </>
         )}
         <span>{AREAS[row.area] ?? row.area}</span>
-        <code className="ml-auto flex items-center gap-0.5">
+      </div>
+      <h2 className="type-section">{couldNotCheck ? row.checkTitle : row.title}</h2>
+      {couldNotCheck ? null : (
+        <div className="space-y-0.5 text-xs">
+          {row.firstFix === null ? null : (
+            <p data-testid="fix-first">
+              <span className="text-muted-foreground">Fix first:</span> {row.firstFix}
+            </p>
+          )}
+          {row.owner === null ? null : (
+            <p className="text-muted-foreground" data-testid="finding-owner">
+              Usually fixed by: <span className="text-foreground">{OWNER_LABELS[row.owner]}</span>
+            </p>
+          )}
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {couldNotCheck ? null : (
+          <TriageMenu status={triage.status} pending={pending} onChange={changeTriage} />
+        )}
+        {couldNotCheck || !canVerify ? null : (
+          <>
+            <Button
+              ref={verifyButton}
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setVerifying(true)}
+            >
+              Re-check this finding
+            </Button>
+            <RecheckDialog
+              auditId={auditId}
+              ruleId={row.ruleId}
+              title={row.title}
+              verify
+              open={verifying}
+              onOpenChange={setVerifying}
+              returnFocus={verifyButton}
+            />
+          </>
+        )}
+        <code className="ml-auto flex items-center gap-0.5 text-2xs text-muted-foreground">
           {row.ruleId}
           <CopyButton value={row.ruleId} label="Copy rule id" className="-my-1.5" />
         </code>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <h2 className="text-base font-semibold">{couldNotCheck ? row.checkTitle : row.title}</h2>
-        {couldNotCheck ? null : (
-          <TriageMenu status={triage.status} pending={pending} onChange={changeTriage} />
-        )}
-      </div>
-      {couldNotCheck || !canVerify ? null : (
-        <>
-          <Button
-            ref={verifyButton}
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8"
-            onClick={() => setVerifying(true)}
-          >
-            Re-check this finding
-          </Button>
-          <RecheckDialog
-            auditId={auditId}
-            ruleId={row.ruleId}
-            title={row.title}
-            verify
-            open={verifying}
-            onOpenChange={setVerifying}
-            returnFocus={verifyButton}
-          />
-        </>
-      )}
       {actionError === null ? null : (
         <p role="alert" className="text-sm text-destructive">
           {actionError}

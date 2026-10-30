@@ -64,99 +64,101 @@ function ReportScreen() {
     )
   return (
     <div className="space-y-4" data-report>
-      <ReportIntro
-        unbranded={draft.unbranded}
-        canManageBranding={draft.canManageBranding}
-        shared={draft.versions.length > 0}
-      />
-      <Versions
-        auditId={auditId}
-        versions={draft.versions}
-        changes={draft.consultant.changesSincePublished}
-        carriedNotes={draft.consultant.carriedNotes}
-        detail={draft.model.detail}
-        incomplete={draft.model.summary.runHealth.incomplete}
-      >
-        <ToggleGroup
-          type="single"
-          variant="outline"
-          size="sm"
-          value={view}
-          onValueChange={(next) => {
-            if (next === "consultant" || next === "client")
-              void navigate({
-                search: (prev) => ({ ...prev, view: next === "client" ? "client" : undefined }),
-                replace: true,
-              })
-          }}
-          aria-label="View"
-        >
-          <ToggleGroupItem value="consultant">Your view</ToggleGroupItem>
-          <ToggleGroupItem value="client">Reader view</ToggleGroupItem>
-        </ToggleGroup>
-        <DisclosureDialog
-          auditId={auditId}
-          detail={draft.model.detail}
-          disclosure={draft.consultant.disclosure}
-          open={labelsOpen}
-          onOpenChange={setLabelsOpen}
-          menuOpener={moreRef}
+      <div className="mx-auto w-full max-w-[210mm] space-y-4 print:hidden">
+        <ReportIntro
+          unbranded={draft.unbranded}
+          canManageBranding={draft.canManageBranding}
+          shared={draft.versions.length > 0}
         />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button ref={moreRef} type="button" variant="outline" size="sm">
-              <Ellipsis />
-              More
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              className="min-h-8 justify-between gap-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              data-testid="disclosure"
-              onSelect={() => setLabelsOpen(true)}
-            >
-              <span className="flex items-center gap-2">
-                <Tag />
-                Page addresses
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {draft.model.detail === "standard" ? "Hidden" : "Shown"}
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              onSelect={() => window.print()}
-            >
-              <Printer />
-              Save as PDF
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
-              asChild
-            >
-              <a href={`/api/audits/${auditId}/register.csv`} download>
-                <Download />
-                Export CSV
-              </a>
-            </DropdownMenuItem>
-            {draft.canManageBranding ? (
+        <Versions
+          auditId={auditId}
+          versions={draft.versions}
+          changes={draft.consultant.changesSincePublished}
+          carriedNotes={draft.consultant.carriedNotes}
+          detail={draft.model.detail}
+          incomplete={draft.model.summary.runHealth.incomplete}
+        >
+          <ToggleGroup
+            type="single"
+            variant="outline"
+            size="sm"
+            value={view}
+            onValueChange={(next) => {
+              if (next === "consultant" || next === "client")
+                void navigate({
+                  search: (prev) => ({ ...prev, view: next === "client" ? "client" : undefined }),
+                  replace: true,
+                })
+            }}
+            aria-label="View"
+          >
+            <ToggleGroupItem value="consultant">Your view</ToggleGroupItem>
+            <ToggleGroupItem value="client">Reader view</ToggleGroupItem>
+          </ToggleGroup>
+          <DisclosureDialog
+            auditId={auditId}
+            detail={draft.model.detail}
+            disclosure={draft.consultant.disclosure}
+            open={labelsOpen}
+            onOpenChange={setLabelsOpen}
+            menuOpener={moreRef}
+          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button ref={moreRef} type="button" variant="outline" size="sm">
+                <Ellipsis />
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="min-h-8 justify-between gap-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                data-testid="disclosure"
+                onSelect={() => setLabelsOpen(true)}
+              >
+                <span className="flex items-center gap-2">
+                  <Tag />
+                  Page addresses
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {draft.model.detail === "standard" ? "Hidden" : "Shown"}
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                onSelect={() => window.print()}
+              >
+                <Printer />
+                Save as PDF
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
                 asChild
               >
-                <Link to="/app/settings/branding">
-                  <Palette />
-                  Branding
-                </Link>
+                <a href={`/api/audits/${auditId}/register.csv`} download>
+                  <Download />
+                  Export CSV
+                </a>
               </DropdownMenuItem>
-            ) : (
-              <DropdownMenuLabel className="max-w-56 font-normal text-muted-foreground">
-                Ask an owner or admin to change the report's branding.
-              </DropdownMenuLabel>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </Versions>
+              {draft.canManageBranding ? (
+                <DropdownMenuItem
+                  className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                  asChild
+                >
+                  <Link to="/app/settings/branding">
+                    <Palette />
+                    Branding
+                  </Link>
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuLabel className="max-w-56 font-normal text-muted-foreground">
+                  Ask an owner or admin to change the report's branding.
+                </DropdownMenuLabel>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Versions>
+      </div>
 
       <ReportView
         model={draft.model}

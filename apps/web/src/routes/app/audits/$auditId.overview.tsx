@@ -1,4 +1,5 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
+import { useEffect, useRef } from "react"
 import { ChevronDown, Info } from "lucide-react"
 import { AuditRunning } from "@/components/audit-running"
 import { CopyButton, RunPath } from "@/components/evidence"
@@ -16,6 +17,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
+import { setLocalFlag, useLocalFlag } from "@/lib/local-flag"
 import { usePreviewed } from "@/lib/report-previewed"
 import { checkGapReason } from "@/lib/report-projection"
 import { cn } from "@/lib/utils"
@@ -374,17 +376,20 @@ function GapReason({ title }: { title: string }) {
 const focusRing =
   "outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
 
-/** A paragraph whose first sentence is the point (foreground) and the rest is support (muted). */
+/** The first sentence is the point (foreground); the rest is support, in a paragraph of its own so a tone never changes mid-sentence. */
 function Lead({ text }: { text: string }) {
   const end = text.search(/[.!?](\s|$)/) + 1
   const first = end > 0 ? text.slice(0, end) : text
+  const rest = text.slice(first.length).trim()
   return (
-    <p className="max-w-prose text-sm">
-      {first}
-      <span className="text-muted-foreground">{text.slice(first.length)}</span>
-    </p>
+    <>
+      <p className="text-sm">{first}</p>
+      {rest === "" ? null : <p className="text-sm text-muted-foreground">{rest}</p>}
+    </>
   )
 }
+
+const NEXT_STEPS_HIDDEN = "zinko:next-steps-hidden"
 
 const stepLink =
   "inline-flex min-h-8 items-center rounded-md font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -405,6 +410,20 @@ function NextSteps({
   steps: Overview["nextSteps"]
 }) {
   const previewed = usePreviewed(auditId)
+  const hidden = useLocalFlag(NEXT_STEPS_HIDDEN)
+  const hideButton = useRef<HTMLButtonElement>(null)
+  const showButton = useRef<HTMLButtonElement>(null)
+  const toggled = useRef(false)
+  // the control that was pressed unmounts, so focus follows to its counterpart
+  useEffect(() => {
+    const moveFocus = toggled.current
+    toggled.current = false
+    if (moveFocus) (hidden ? showButton : hideButton).current?.focus()
+  }, [hidden])
+  const toggle = (hide: boolean) => {
+    toggled.current = true
+    setLocalFlag(NEXT_STEPS_HIDDEN, hide)
+  }
   if (steps.shared)
     return (
       <p className="text-sm text-muted-foreground" data-testid="active-share">
@@ -470,19 +489,56 @@ function NextSteps({
       hint: "Send a link to the report.",
     },
   ]
+  if (hidden)
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        Next steps are hidden.{" "}
+        <Button
+          ref={showButton}
+          variant="ghost"
+          size="sm"
+          className="px-1.5 underline underline-offset-4"
+          onClick={() => toggle(false)}
+        >
+          Show them
+        </Button>
+      </p>
+    )
   return (
     <section
       aria-label="Next steps"
-      className="space-y-2 rounded-lg border bg-card p-4"
+      className="space-y-3 rounded-lg border bg-card p-4 shadow-xs"
       data-testid="next-steps"
     >
-      <SectionHeading title="Next steps" />
-      <ol className="space-y-1 text-sm">
+      <SectionHeading
+        title="Next steps"
+        className="items-center"
+        actions={
+          <Button
+            ref={hideButton}
+            variant="ghost"
+            size="sm"
+            className="-mr-2 text-muted-foreground"
+            onClick={() => toggle(true)}
+          >
+            Hide
+          </Button>
+        }
+      />
+      <ol className="grid gap-4 text-sm md:grid-cols-3 md:gap-6">
         {items.map((item, i) => (
-          <li key={item.key} className="flex items-start gap-2">
-            <StatusGlyph meaning={item.done ? "pass" : "queued"} className="mt-2" />
+          <li key={item.key} className="flex items-start gap-2.5">
+            {item.done ? (
+              <StatusGlyph meaning="pass" className="mt-1" />
+            ) : (
+              <span
+                aria-hidden="true"
+                className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-medium text-muted-foreground tabular-nums"
+              >
+                {i + 1}
+              </span>
+            )}
             <span className="min-w-0">
-              <span className="text-muted-foreground">{i + 1}. </span>
               {item.link}
               {item.done ? <span className="text-muted-foreground"> (done)</span> : null}
               {"hint" in item && !item.done ? (
@@ -530,9 +586,7 @@ function WorstFinding({
       data-testid="worst-finding"
     >
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Start with
-        </span>
+        <span className="type-label">Start with</span>
         <SeverityBadge severity={worst.severity} />
         <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
       </div>
@@ -543,28 +597,26 @@ function WorstFinding({
           ? ` ${count(worst.bannerUncertainRuns, "failing run")} ${rests(worst.bannerUncertainRuns)} on an undetected banner.`
           : ""}
       </p>
-      <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
-        <div className="space-y-1">
-          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Why it matters
-          </h3>
+      <div className="grid items-start gap-6 md:grid-cols-2 md:gap-10">
+        <div className="max-w-prose space-y-2">
+          <div className="flex items-center md:h-8">
+            <h3 className="type-label">Why it matters</h3>
+          </div>
           <Lead text={worst.why} />
-          <p className="max-w-prose text-sm">
-            <span className="text-muted-foreground">First failing run: </span>
+          <p className="pt-1 text-sm">
+            <span className="type-label block">First failing run</span>
             {worst.message}
           </p>
         </div>
-        <div className="space-y-1">
-          <div className="flex items-center gap-1">
-            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              How to fix it
-            </h3>
+        <div className="max-w-prose space-y-2">
+          <div className="flex h-8 items-center justify-between gap-2">
+            <h3 className="type-label">How to fix it</h3>
             <CopyButton
               value={worst.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
               label="Copy fix steps"
             />
           </div>
-          <ol className="max-w-prose list-decimal space-y-1 pl-5 text-sm">
+          <ol className="list-decimal space-y-1 pl-5 text-sm">
             {worst.fix.map((step) => (
               <li key={step}>{step}</li>
             ))}
@@ -648,8 +700,8 @@ function ScoreBlock({
 }) {
   return (
     <section aria-label="Score" className="space-y-4 rounded-lg border bg-card p-5">
-      <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0 space-y-3">
+      <div className="grid gap-6 md:grid-cols-[minmax(0,22rem)_minmax(0,1fr)] md:items-center md:gap-10">
+        <div className="min-w-0 space-y-2">
           <ScoreFigure
             size="hero"
             score={score.score}
@@ -659,7 +711,7 @@ function ScoreBlock({
           />
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="ghost" size="sm" className="-ml-3 text-muted-foreground">
                 <Info aria-hidden="true" />
                 How this is scored
               </Button>
@@ -674,7 +726,7 @@ function ScoreBlock({
           </Popover>
         </div>
         <ul
-          className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:w-[36rem] [&>li:last-child]:max-sm:col-span-2"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3 [&>li:last-child]:max-sm:col-span-2"
           aria-label="Open findings"
         >
           {(["critical", "warning"] as const).map((severity) => (

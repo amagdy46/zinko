@@ -14,7 +14,6 @@ import { EmptyState } from "@/components/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -25,6 +24,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { HelpPopover } from "@/components/help-popover"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { scenarioLabel } from "@/lib/audit-labels"
@@ -158,6 +158,7 @@ const preview = (item: Item) => {
 }
 
 type Row =
+  | { type: "run"; key: string; runId: string; ordinal: number }
   | { type: "divider"; key: string; run: RunMeta }
   | { type: "hit"; key: string; item: HitItem }
   | { type: "push"; key: string; items: PushItem[]; json: string }
@@ -184,6 +185,13 @@ const buildRows = (
   let current: string | undefined
   for (const item of items) {
     if (current !== undefined && current !== item.runId) place(current)
+    if (current !== item.runId)
+      rows.push({
+        type: "run",
+        key: `r:${item.runId}:${rows.length}`,
+        runId: item.runId,
+        ordinal: item.ordinal,
+      })
     current = item.runId
     const action = runs.get(item.runId)?.consentActionAt
     if (typeof action === "number" && item.at >= action) place(item.runId)
@@ -597,9 +605,16 @@ function HitsExplorer() {
             </Button>
           ) : null}
         </div>
-        <p className="text-xs text-muted-foreground tabular-nums" data-testid="timeline-counts">
-          {eventCounts(counts, search.source)}
-        </p>
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground tabular-nums" data-testid="timeline-counts">
+            {eventCounts(counts, search.source)}
+          </p>
+          <HelpPopover>
+            Time: ms since the capture started. Status: the HTTP status, or Answered locally.
+            Consent: Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in
+            full.
+          </HelpPopover>
+        </div>
         <Timeline
           key={JSON.stringify({ search, run, hit })}
           auditId={audit.id}
@@ -680,6 +695,16 @@ function Timeline({
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set())
   const runs = useMemo(() => new Map(first.runs.map((r) => [r.id, r])), [first.runs])
   const rows = useMemo(() => buildRows(items, runs, cursor === null), [items, runs, cursor])
+  // one tbody per run, so its header row is a real row group
+  const groups = useMemo(() => {
+    const out: Row[][] = []
+    for (const row of rows) {
+      const last = out.at(-1)
+      if (row.type === "run" || last === undefined) out.push([row])
+      else last.push(row)
+    }
+    return out
+  }, [rows])
   // hits and dataLayer pushes, the two kinds the list interleaves, as the filters leave them
   const matched =
     (filterData.source === "dataLayer" ? 0 : first.counts.hits.matched) +
@@ -753,23 +778,7 @@ function Timeline({
     >
       <div className="min-w-0 space-y-2">
         <h2 className="sr-only">Hits</h2>
-        <Collapsible>
-          <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
-            How to read this
-            <ChevronDown
-              aria-hidden="true"
-              className="size-4 transition-transform group-data-[state=open]:rotate-180"
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <p className="text-xs text-muted-foreground">
-              Time: ms since the capture started. Status: the HTTP status, or Answered locally.
-              Consent: Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in
-              full.
-            </p>
-          </CollapsibleContent>
-        </Collapsible>
-        <div className="scroll-edges max-h-[70svh] overflow-auto rounded-lg border">
+        <div className="scroll-edges max-h-[70svh] scroll-pt-14 overflow-auto rounded-lg border">
           <table
             className="group/timeline w-full text-left text-xs"
             data-testid="timeline"
@@ -778,7 +787,6 @@ function Timeline({
             <caption className="sr-only">Decoded hits and dataLayer pushes, in time order</caption>
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
-                {singleRun ? null : <th className="px-2 font-medium max-md:hidden">Run</th>}
                 <th className="hidden px-2 font-medium md:table-cell">Time</th>
                 <th className="px-2 font-medium">Vendor</th>
                 <th className="px-2 font-medium">Event</th>
@@ -797,77 +805,105 @@ function Timeline({
                 </th>
               </tr>
             </thead>
-            <tbody>
-              {rows.map((row) => {
-                if (row.type === "divider")
-                  return (
-                    <tr
-                      key={row.key}
-                      data-testid="consent-divider"
-                      className="h-7 border-t bg-muted/40"
-                    >
-                      <td colSpan={8} className="px-2 text-muted-foreground">
-                        <span className="font-medium">
-                          {singleRun ? "" : `Run #${row.run.ordinal + 1} · `}
-                          {consentActionLabel(row.run)}
-                        </span>
-                        {row.run.consentActionAt === null
-                          ? null
-                          : ` at ${thousands(row.run.consentActionAt)} ms`}
-                      </td>
-                    </tr>
-                  )
-                if (row.type === "hit")
-                  return (
-                    <HitRow
-                      key={row.key}
-                      item={row.item}
-                      run={runLabels.get(row.item.runId)}
-                      singleRun={singleRun}
-                      isSelected={row.key === shown}
-                      onSelect={() => setSelected(row.key)}
-                    />
-                  )
-                const [firstPush] = row.items
-                const lastPush = row.items.at(-1)
-                if (firstPush === undefined || lastPush === undefined) return null
-                const grouped = row.items.length > 1
-                const open = expanded.has(row.key)
-                const out = [
-                  <PushRow
-                    key={row.key}
-                    item={firstPush}
-                    run={runLabels.get(firstPush.runId)}
-                    singleRun={singleRun}
-                    group={grouped ? { count: row.items.length, to: lastPush.at, open } : undefined}
-                    isSelected={!grouped && row.key === shown}
-                    onSelect={() => {
-                      if (!grouped) return setSelected(row.key)
-                      setExpanded((prev) => {
-                        const next = new Set(prev)
-                        if (open) next.delete(row.key)
-                        else next.add(row.key)
-                        return next
-                      })
-                    }}
-                  />,
-                ]
-                if (grouped && open)
-                  for (const push of row.items)
-                    out.push(
-                      <PushRow
-                        key={`n:${itemKey(push)}`}
-                        item={push}
-                        run={runLabels.get(push.runId)}
-                        singleRun={singleRun}
-                        nested
-                        isSelected={itemKey(push) === shown}
-                        onSelect={() => setSelected(itemKey(push))}
-                      />,
+            {groups.map((group) => (
+              <tbody key={group[0]?.key}>
+                {group.map((row) => {
+                  if (row.type === "run") {
+                    if (singleRun) return null
+                    const info = runLabels.get(row.runId)
+                    return (
+                      <tr
+                        key={row.key}
+                        data-testid="run-header"
+                        className="sticky top-7 z-[5] h-7 border-t bg-muted"
+                      >
+                        <th
+                          scope="rowgroup"
+                          colSpan={7}
+                          title={info === undefined ? undefined : runTitle(info)}
+                          className="px-2 text-left text-xs font-normal"
+                        >
+                          <span className="font-medium">Run #{row.ordinal + 1}</span>
+                          {info === undefined ? null : (
+                            <>
+                              <span className="text-muted-foreground" aria-hidden="true">
+                                {" · "}
+                                {runPageLabel(info)} · {scenarioLabel(info.scenario)} ·{" "}
+                                {info.viewport}
+                              </span>
+                              <span className="sr-only">
+                                {": "}
+                                {runTitle(info)}
+                              </span>
+                            </>
+                          )}
+                        </th>
+                      </tr>
                     )
-                return out
-              })}
-            </tbody>
+                  }
+                  if (row.type === "divider")
+                    return (
+                      <tr
+                        key={row.key}
+                        data-testid="consent-divider"
+                        className="h-7 border-t bg-muted/40"
+                      >
+                        <td colSpan={7} className="px-2 text-muted-foreground">
+                          <span className="font-medium">{consentActionLabel(row.run)}</span>
+                          {row.run.consentActionAt === null
+                            ? null
+                            : ` at ${thousands(row.run.consentActionAt)} ms`}
+                        </td>
+                      </tr>
+                    )
+                  if (row.type === "hit")
+                    return (
+                      <HitRow
+                        key={row.key}
+                        item={row.item}
+                        isSelected={row.key === shown}
+                        onSelect={() => setSelected(row.key)}
+                      />
+                    )
+                  const [firstPush] = row.items
+                  const lastPush = row.items.at(-1)
+                  if (firstPush === undefined || lastPush === undefined) return null
+                  const grouped = row.items.length > 1
+                  const open = expanded.has(row.key)
+                  const out = [
+                    <PushRow
+                      key={row.key}
+                      item={firstPush}
+                      group={
+                        grouped ? { count: row.items.length, to: lastPush.at, open } : undefined
+                      }
+                      isSelected={!grouped && row.key === shown}
+                      onSelect={() => {
+                        if (!grouped) return setSelected(row.key)
+                        setExpanded((prev) => {
+                          const next = new Set(prev)
+                          if (open) next.delete(row.key)
+                          else next.add(row.key)
+                          return next
+                        })
+                      }}
+                    />,
+                  ]
+                  if (grouped && open)
+                    for (const push of row.items)
+                      out.push(
+                        <PushRow
+                          key={`n:${itemKey(push)}`}
+                          item={push}
+                          nested
+                          isSelected={itemKey(push) === shown}
+                          onSelect={() => setSelected(itemKey(push))}
+                        />,
+                      )
+                  return out
+                })}
+              </tbody>
+            ))}
           </table>
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -964,64 +1000,15 @@ const eventCounts = (
 
 const paneHidden = "group-data-[pane=open]/timeline:hidden!"
 
-function RunCell({
-  ordinal,
-  run,
-  singleRun,
-}: {
-  ordinal: number
-  run: RunInfo | undefined
-  singleRun: boolean
-}) {
-  if (singleRun) return null
-  return (
-    <td className={cn(cellBase, "text-muted-foreground max-md:hidden")}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <span className="block max-w-36 truncate md:max-w-56">
-            #{ordinal + 1}
-            {run === undefined ? "" : ` ${runPageLabel(run)} · ${scenarioLabel(run.scenario)}`}
-          </span>
-        </TooltipTrigger>
-        {run === undefined ? null : (
-          <TooltipContent className="max-w-80 break-words">{runTitle(run)}</TooltipContent>
-        )}
-      </Tooltip>
-    </td>
-  )
-}
-
-/** At narrow widths the Run column is hidden and the run is named under the event instead. */
-function RunSubtitle({
-  ordinal,
-  run,
-  singleRun,
-}: {
-  ordinal: number
-  run: RunInfo | undefined
-  singleRun: boolean
-}) {
-  if (singleRun || run === undefined) return null
-  return (
-    <span className="block max-w-56 truncate font-sans text-[11px] leading-4 font-normal text-muted-foreground md:hidden">
-      #{ordinal + 1} {runPageLabel(run)} · {scenarioLabel(run.scenario)}
-    </span>
-  )
-}
-
 const runTitle = (run: RunInfo) =>
   `${run.pageUrl} · ${scenarioLabel(run.scenario)} · ${run.viewport}`
 
 function HitRow({
   item,
-  run,
-  singleRun,
   isSelected,
   onSelect,
 }: {
   item: HitItem
-  run: RunInfo | undefined
-  singleRun: boolean
   isSelected: boolean
   onSelect: () => void
 }) {
@@ -1034,11 +1021,14 @@ function HitRow({
       onClick={onSelect}
       className={cn("h-8 border-t max-md:h-auto", selectableRow)}
     >
-      <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "hidden font-mono tabular-nums md:table-cell")}>
         {thousands(item.at)} ms
       </td>
-      <td className={cellBase}>{vendorName(item.vendor)}</td>
+      <td className={cellBase}>
+        <span className="inline-flex h-5 items-center rounded-sm border bg-muted/60 px-1.5 text-2xs font-medium">
+          {vendorName(item.vendor)}
+        </span>
+      </td>
       <td className="p-0 whitespace-nowrap">
         <button
           type="button"
@@ -1047,7 +1037,6 @@ function HitRow({
           onClick={onSelect}
         >
           {item.event}
-          <RunSubtitle ordinal={item.ordinal} run={run} singleRun={singleRun} />
         </button>
       </td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
@@ -1076,6 +1065,17 @@ function HitRow({
   )
 }
 
+function Dash() {
+  return (
+    <>
+      <span aria-hidden="true" className="text-muted-foreground/40">
+        –
+      </span>
+      <span className="sr-only">Not applicable</span>
+    </>
+  )
+}
+
 function ConsentText({ consent }: { consent: HitItem["consent"] }) {
   if (consent.adStorage === "unknown" && consent.analyticsStorage === "unknown")
     return <span className="text-muted-foreground">No signal</span>
@@ -1084,16 +1084,12 @@ function ConsentText({ consent }: { consent: HitItem["consent"] }) {
 
 function PushRow({
   item,
-  run,
-  singleRun,
   group,
   nested = false,
   isSelected,
   onSelect,
 }: {
   item: PushItem
-  run: RunInfo | undefined
-  singleRun: boolean
   group?: { count: number; to: number; open: boolean }
   nested?: boolean
   isSelected: boolean
@@ -1112,7 +1108,6 @@ function PushRow({
         isSelected && "text-foreground",
       )}
     >
-      <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "hidden font-mono tabular-nums md:table-cell")}>
         {group ? `${thousands(item.at)}–${thousands(group.to)} ms` : `${thousands(item.at)} ms`}
       </td>
@@ -1136,16 +1131,19 @@ function PushRow({
               className={cn("size-3.5", !group.open && "-rotate-90")}
             />
           ) : null}
-          <span className="min-w-0">
-            {pushName(item.value)}
-            <RunSubtitle ordinal={item.ordinal} run={run} singleRun={singleRun} />
-          </span>
+          <span className="min-w-0">{pushName(item.value)}</span>
           {group ? <Badge variant="secondary">{group.count} pushes</Badge> : null}
         </button>
       </td>
-      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
-      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
-      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>-</td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
+        <Dash />
+      </td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
+        <Dash />
+      </td>
+      <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
+        <Dash />
+      </td>
       <td
         title={preview(item)}
         className={cn("hidden max-w-0 truncate px-2 py-0 font-mono 2xl:table-cell", paneHidden)}

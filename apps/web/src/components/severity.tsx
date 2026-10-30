@@ -27,10 +27,3 @@ export function SeverityBadge({ severity, className }: { severity: Severity; cla
     </Badge>
   )
 }
-
-/** Classes for a finding row's 2px severity rule, without a background tint. */
-export const SeverityMark = {
-  critical: "border-l-2 border-l-sev-critical-solid",
-  warning: "border-l-2 border-l-sev-warning-solid",
-  info: "border-l-2 border-l-sev-info-solid",
-} as const
