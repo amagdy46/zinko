@@ -1,6 +1,6 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
-import { AuthCard, authLinkClass } from "@/components/auth-card"
+import { AuthCard, authLinkClass, SampleReportAside } from "@/components/auth-card"
 import { AuthField, FormError } from "@/components/auth-field"
 import { Button } from "@/components/ui/button"
 import { pageTitle } from "@/lib/page-title"
@@ -54,6 +54,7 @@ function SignIn() {
 
   return (
     <AuthCard
+      aside={<SampleReportAside />}
       title="Sign in"
       description="Sign in to continue. Zinko checks what a website's tags and consent banner really do."
       footer={

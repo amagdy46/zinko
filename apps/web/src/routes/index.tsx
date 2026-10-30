@@ -26,9 +26,14 @@ function Landing() {
           Open-source tracking auditor: see what fires under each consent choice, with the request
           that proves it.
         </p>
-        <Button asChild size="lg">
-          <Link to="/app">Open app</Link>
-        </Button>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button asChild size="lg">
+            <Link to="/app">Open app</Link>
+          </Button>
+          <Button asChild size="lg" variant="outline">
+            <Link to="/sample-report">See a sample report</Link>
+          </Button>
+        </div>
       </main>
     </div>
   )

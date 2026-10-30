@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Brand, LogoMark } from "@/components/logo"
@@ -11,12 +12,15 @@ export function AuthCard({
   children,
   footer,
   account,
+  aside,
 }: {
   title: string
   description: string
   children: ReactNode
   footer?: ReactNode
   account?: ReactNode
+  /** A line under the card, signed out only. */
+  aside?: ReactNode
 }) {
   const signedIn = account !== undefined
   return (
@@ -63,12 +67,29 @@ export function AuthCard({
               )}
             </div>
             {signedIn ? null : (
-              <p className="text-center text-xs text-muted-foreground lg:hidden">{LICENCE_LINE}</p>
+              <>
+                {aside}
+                <p className="text-center text-xs text-muted-foreground lg:hidden">
+                  {LICENCE_LINE}
+                </p>
+              </>
             )}
           </div>
         </div>
       </main>
     </div>
+  )
+}
+
+/** The line under the sign-in and sign-up cards that shows a visitor what they would get. */
+export function SampleReportAside() {
+  return (
+    <p className="text-center text-sm text-muted-foreground">
+      <Link to="/sample-report" className={authLinkClass}>
+        See a sample report
+      </Link>{" "}
+      before you sign up.
+    </p>
   )
 }
 
