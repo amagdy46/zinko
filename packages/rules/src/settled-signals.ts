@@ -1,5 +1,5 @@
-import { gcdFinalState } from "@ovriq/zinko-decoders"
-import type { ConsentState } from "@ovriq/zinko-decoders"
+import { gcdFinalState } from "@zinko/decoders"
+import type { ConsentState } from "@zinko/decoders"
 import { isGoogle } from "./consent-state.js"
 import { hitRef, isGtagCommand, pushesByDocument, pushRef } from "./documents.js"
 import type { DecodedHit, EvidenceRef, RunInput } from "./types.js"

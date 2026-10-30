@@ -1,4 +1,4 @@
-import type { Hit } from "@ovriq/zinko-decoders"
+import type { Hit } from "@zinko/decoders"
 import type {
   CaptureRequest,
   CaptureResult,

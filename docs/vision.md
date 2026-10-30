@@ -91,7 +91,7 @@ Each row below says which of these, or which other run, showed it working. Not r
 
 ### What blocking does not guarantee
 
-`blockVendorRequests` refuses any request whose method, path and query match a shape in `isCollectionRequest` (`@ovriq/zinko-decoders`, mirrored to `apps/browser/src/inject/collection.json` by `packages/decoders/scripts/engine-endpoints.mjs`, which `pnpm build` checks), on any host, first-party collectors included, before it leaves the browser. Known vendor host suffixes stay blocked as a second layer. A blocked request is recorded with `blocked: true` and answered locally. It is a best effort, not a privacy guarantee:
+`blockVendorRequests` refuses any request whose method, path and query match a shape in `isCollectionRequest` (`@zinko/decoders`, mirrored to `apps/browser/src/inject/collection.json` by `packages/decoders/scripts/engine-endpoints.mjs`, which `pnpm build` checks), on any host, first-party collectors included, before it leaves the browser. Known vendor host suffixes stay blocked as a second layer. A blocked request is recorded with `blocked: true` and answered locally. It is a best effort, not a privacy guarantee:
 
 - A vendor Zinko has no decoder for: its custom endpoints are neither recognised nor, unless the host is listed, blocked.
 - A recognised vendor sending a shape we do not list (a new GA4 or Meta path, a changed query) through a first-party path, such as a server-side GTM container on `/metrics/x`, or a CNAME collector on a path other than the listed ones.

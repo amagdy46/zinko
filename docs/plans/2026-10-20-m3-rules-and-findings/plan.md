@@ -80,7 +80,7 @@ Severity: `critical` (money or compliance at risk), `warning` (data quality), `i
 ### Task 1: The rules package and the consent rules
 
 **Model:** Opus
-**Files:** create `packages/rules/` (`@repo/rules`, built to `dist` like `packages/decoders`; depends on `@repo/capture-contract` and `@ovriq/zinko-decoders`), `packages/rules/src/{index,types,consent-state,cookies,documents}.ts`, `packages/rules/src/rules/consent/*.ts`; modify `apps/cli/src/index.ts` (`--rules`)
+**Files:** create `packages/rules/` (`@repo/rules`, built to `dist` like `packages/decoders`; depends on `@repo/capture-contract` and `@zinko/decoders`), `packages/rules/src/{index,types,consent-state,cookies,documents}.ts`, `packages/rules/src/rules/consent/*.ts`; modify `apps/cli/src/index.ts` (`--rules`)
 **Interfaces:** produces, in `@repo/rules`:
 - `RunInput = { scenario: Scenario, viewport, pageUrl: string, siteHost: string, journey: boolean, capture: CaptureResult, hits: DecodedHit[] }`, `DecodedHit = Hit & { requestId: string, batchIndex: number, documentId: string, startedAt: number }`
 - `EvidenceRef = { kind: "hit", requestId, batchIndex } | { kind: "request", requestId } | { kind: "cookie", label: CookieSnapshot["label"], documentId, name, domain, path } | { kind: "push", seq } | { kind: "document", documentId }`

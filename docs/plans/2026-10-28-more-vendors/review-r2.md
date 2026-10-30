@@ -58,7 +58,7 @@ Task 0 adds candidate endpoints to production `COLLECTION_ENDPOINTS`, but those 
 
 The package build runs `tsc` and then checks the endpoint copy. Once endpoints change, “build, then --write” emits fresh dist but exits nonzero at the guard; a normal success-dependent sequence never reaches `--write`.
 
-**Fix:** Specify compiler-only emission (`pnpm --filter @ovriq/zinko-decoders exec tsc -p tsconfig.build.json`), then the writer, formatting and normal full checks. Include the exact working directory or root-relative script path.
+**Fix:** Specify compiler-only emission (`pnpm --filter @zinko/decoders exec tsc -p tsconfig.build.json`), then the writer, formatting and normal full checks. Include the exact working directory or root-relative script path.
 
 ### 5. Minor — Two stale statements contradict the accepted decisions
 

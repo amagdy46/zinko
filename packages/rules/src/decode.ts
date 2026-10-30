@@ -1,4 +1,4 @@
-import { decode } from "@ovriq/zinko-decoders"
+import { decode } from "@zinko/decoders"
 import type { CaptureResult } from "@repo/capture-contract"
 import type { DecodedHit } from "./types.js"
 

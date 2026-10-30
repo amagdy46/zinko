@@ -1,4 +1,4 @@
-import { isCollectionRequest } from "@ovriq/zinko-decoders"
+import { isCollectionRequest } from "@zinko/decoders"
 import { count, distinct, requestRef } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"

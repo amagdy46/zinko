@@ -1,4 +1,4 @@
-import type { Vendor } from "@ovriq/zinko-decoders"
+import type { Vendor } from "@zinko/decoders"
 
 export const VENDOR_LABELS: Record<Vendor, string> = {
   ga4: "GA4",

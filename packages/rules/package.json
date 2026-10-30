@@ -13,8 +13,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ovriq/zinko-decoders": "workspace:*",
-    "@repo/capture-contract": "workspace:*"
+    "@repo/capture-contract": "workspace:*",
+    "@zinko/decoders": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:"

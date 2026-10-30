@@ -1,4 +1,4 @@
-import type { ConsentState, Vendor } from "@ovriq/zinko-decoders"
+import type { ConsentState, Vendor } from "@zinko/decoders"
 import type {
   CaptureRequest,
   CapturedRequest,

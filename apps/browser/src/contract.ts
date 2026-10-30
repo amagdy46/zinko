@@ -197,7 +197,7 @@ export const Vendors = Schema.Struct({
 })
 
 /**
- * `src/inject/collection.json`, written from `@ovriq/zinko-decoders` when it builds: the request
+ * `src/inject/collection.json`, written from `@zinko/decoders` when it builds: the request
  * shapes tags send events in, which `blockVendorRequests` answers on any host. Patterns are
  * regular expression sources both engines read; all hosts share the same paths.
  */

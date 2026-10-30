@@ -3,7 +3,7 @@
  * SDK files (the Python engine reads the same file); it is mirrored by
  * `isVendorHost` and `isSdkFile` in `@repo/capture-contract`, since this image cannot import
  * workspace packages. `inject/collection.json` is the decoders' list of collection request
- * shapes, checked by `@ovriq/zinko-decoders` when it builds, for the same reason. `chromium-args.json` holds the
+ * shapes, checked by `@zinko/decoders` when it builds, for the same reason. `chromium-args.json` holds the
  * Chromium switches that keep every byte on the egress proxy: no direct DNS, no QUIC, WebRTC
  * limited to proxied UDP, and no background or component-update traffic. Chromium keeps only
  * the last `--disable-features` it is given, so that list merges Playwright's defaults,
@@ -52,7 +52,7 @@ export const isSdkFile = (url: string): boolean => sdkFiles.test(url)
 /**
  * A request in one of the shapes tags send events in, on any host: blocked with
  * `blockVendorRequests` even on the site's own host (a server-side GTM collector forwards what
- * it receives). `isCollectionRequest` in `@ovriq/zinko-decoders` and `capture.py` read the same list.
+ * it receives). `isCollectionRequest` in `@zinko/decoders` and `capture.py` read the same list.
  */
 export const isCollectionRequest = (method: string, url: string): boolean => {
   if (!URL.canParse(url)) return false

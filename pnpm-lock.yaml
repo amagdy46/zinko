@@ -347,9 +347,6 @@ importers:
 
   apps/cli:
     dependencies:
-      '@ovriq/zinko-decoders':
-        specifier: workspace:*
-        version: link:../../packages/decoders
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../../packages/capture-contract
@@ -359,6 +356,9 @@ importers:
       '@repo/rules':
         specifier: workspace:*
         version: link:../../packages/rules
+      '@zinko/decoders':
+        specifier: workspace:*
+        version: link:../../packages/decoders
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -381,9 +381,6 @@ importers:
       '@effect/ai-openrouter':
         specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)
-      '@ovriq/zinko-decoders':
-        specifier: workspace:*
-        version: link:../../packages/decoders
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../../packages/capture-contract
@@ -405,6 +402,9 @@ importers:
       '@tanstack/react-start':
         specifier: 'catalog:'
         version: 1.169.3(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.14)(supports-color@10.2.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1))
+      '@zinko/decoders':
+        specifier: workspace:*
+        version: link:../../packages/decoders
       better-auth:
         specifier: 'catalog:'
         version: 1.7.10(@tanstack/react-start@1.169.3(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rolldown@1.2.14)(supports-color@10.2.2)(vite@8.3.4(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)))(drizzle-kit@1.0.0-rc.5-5935859)(drizzle-orm@1.0.0-rc.5-5935859(@cloudflare/workers-types@5.20261016.1)(@effect/sql-d1@4.0.5(effect@4.0.5))(@effect/sql-pg@4.0.5(effect@4.0.5))(@effect/sql-sqlite-do@4.0.5(effect@4.0.5))(@electric-sql/pglite@0.3.15)(@libsql/client@0.17.4)(@types/pg@8.23.1)(effect@4.0.5)(pg@8.23.1)(valibot@1.2.0(typescript@7.0.2))(zod@4.6.7))(pg@8.23.1)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(vitest@5.0.5)
@@ -575,15 +575,15 @@ importers:
 
   packages/llm:
     dependencies:
-      '@ovriq/zinko-decoders':
-        specifier: workspace:*
-        version: link:../decoders
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../capture-contract
       '@repo/rules':
         specifier: workspace:*
         version: link:../rules
+      '@zinko/decoders':
+        specifier: workspace:*
+        version: link:../decoders
       effect:
         specifier: 'catalog:'
         version: 4.0.5
@@ -594,12 +594,12 @@ importers:
 
   packages/rules:
     dependencies:
-      '@ovriq/zinko-decoders':
-        specifier: workspace:*
-        version: link:../decoders
       '@repo/capture-contract':
         specifier: workspace:*
         version: link:../capture-contract
+      '@zinko/decoders':
+        specifier: workspace:*
+        version: link:../decoders
     devDependencies:
       typescript:
         specifier: 'catalog:'

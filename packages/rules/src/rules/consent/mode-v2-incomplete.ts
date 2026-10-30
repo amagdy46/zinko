@@ -1,5 +1,5 @@
-import { gcdFinalState, parseGcd } from "@ovriq/zinko-decoders"
-import type { Gcd } from "@ovriq/zinko-decoders"
+import { gcdFinalState, parseGcd } from "@zinko/decoders"
+import type { Gcd } from "@zinko/decoders"
 import { isCcmRequest, isGoogle } from "../../consent-state.js"
 import { count, hitRef, requestRef } from "../../documents.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"

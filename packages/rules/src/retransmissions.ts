@@ -1,4 +1,4 @@
-import { metaRequestParams } from "@ovriq/zinko-decoders"
+import { metaRequestParams } from "@zinko/decoders"
 import type { DecodedHit, RunInput } from "./types.js"
 
 /*

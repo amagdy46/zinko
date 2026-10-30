@@ -13,9 +13,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@ovriq/zinko-decoders": "workspace:*",
     "@repo/capture-contract": "workspace:*",
     "@repo/rules": "workspace:*",
+    "@zinko/decoders": "workspace:*",
     "effect": "catalog:"
   },
   "devDependencies": {

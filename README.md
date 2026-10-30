@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/logo.svg" width="96" height="96" alt="Zinko logo: a gecko's foot whose five toe pads are recorded hits, with one ringed in violet as the hit being inspected">
+  <img src="https://raw.githubusercontent.com/amagdy46/zinko/main/.github/assets/logo.svg" width="96" height="96" alt="Zinko logo: a gecko's foot whose five toe pads are recorded hits, with one ringed in violet as the hit being inspected">
 </p>
 
 <h1 align="center">Zinko</h1>
@@ -10,14 +10,14 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ovriq/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ovriq/zinko" alt="AGPL-3.0 license"></a>
+  <a href="https://github.com/amagdy46/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amagdy46/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a site (and a client, if you audit for clients), audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has not been deployed to Cloudflare yet: the container image build and a real deploy are the open item, so the [self-hosting guide](https://github.com/ovriq/zinko/blob/main/docs/self-hosting.md) is written but **not yet run end to end**. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a site (and a client, if you audit for clients), audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has been deployed to Cloudflare once, on a workers.dev stage, where a one-page audit ran end to end; the [self-hosting guide](https://github.com/amagdy46/zinko/blob/main/docs/self-hosting.md) describes that deploy. The container's idle shutdown, several audits at once and heavy pages are not measured yet. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
-![The Compare tab of a re-run: one finding regressed, one fixed, two unchanged, the score 72 to 60, what limits the comparison, and each change with its evidence line. Fictional fixture data.](https://raw.githubusercontent.com/ovriq/zinko/main/.github/assets/compare-tab.png)
+![The Compare tab of a re-run: one finding regressed, one fixed, two unchanged, the score 72 to 60, what limits the comparison, and each change with its evidence line. Fictional fixture data.](https://raw.githubusercontent.com/amagdy46/zinko/main/.github/assets/compare-tab.png)
 
 ## What you can do with it
 
@@ -28,10 +28,10 @@ Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you
 
 ## Run it
 
-Needs Node 24.11+ or 26+ (not 25), pnpm, Docker for Postgres, and Python 3.12+ with [uv](https://docs.astral.sh/uv/) for the capture engine. The first audit from a clean clone, with the capture engine and the fixture sites (small fake shops, each with one known tracking bug), is a few commands; the click-through is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally):
+Needs Node 24.11+ or 26+ (not 25), pnpm, Docker for Postgres, and Python 3.12+ with [uv](https://docs.astral.sh/uv/) for the capture engine. The first audit from a clean clone, with the capture engine and the fixture sites (small fake shops, each with one known tracking bug), is a few commands; the click-through is in [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally):
 
 ```sh
-git clone https://github.com/ovriq/zinko.git && cd zinko
+git clone https://github.com/amagdy46/zinko.git && cd zinko
 pnpm install && pnpm build
 cp .env.example .env                       # fill the three secrets with: openssl rand -base64 32
 docker compose up -d && pnpm db:migrate    # reads DATABASE_URL from .env; a variable already in your shell wins
@@ -43,7 +43,7 @@ pnpm dev                                                            # the app on
 
 `.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). The app listens on port 1337 (Alchemy's default); if that is taken it moves to the next free port, so read the URL `pnpm dev` prints when it starts. Sign-in works on any port because `BETTER_AUTH_URL` stays empty locally.
 
-Then open the app and sign up. Create an organization, then add a site with the address `http://localhost:4400/` (Sites > Add site; private addresses are accepted on local dev stages only), and choose New audit on the site. If you audit sites for clients, switch on Settings > Organization > Group sites by client first: Clients then appears beside Sites and each site belongs to one. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
+Then open the app and sign up. Create an organization, then add a site with the address `http://localhost:4400/` (Sites > Add site; private addresses are accepted on local dev stages only), and choose New audit on the site. If you audit sites for clients, switch on Settings > Organization > Group sites by client first: Clients then appears beside Sites and each site belongs to one. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ## Known limits
 
@@ -60,7 +60,7 @@ Then open the app and sign up. Create an organization, then add a site with the 
 Needs Node 24.11+ or 26+ (not 25) and pnpm.
 
 ```sh
-git clone https://github.com/ovriq/zinko.git && cd zinko
+git clone https://github.com/amagdy46/zinko.git && cd zinko
 pnpm install && pnpm build
 node apps/cli/dist/index.js decode 'https://region1.google-analytics.com/g/collect?v=2&tid=G-ABC123&en=purchase&gcs=G100&epn.value=49.9'
 ```
@@ -92,7 +92,7 @@ Meta Pixel (`facebook.com/tr`), Google Ads and TikTok requests decode the same w
 
 ### Run an audit locally
 
-The web app runs audits against a capture engine you start by hand, on the fixture sites or any site you may audit. Setup (database, secrets, engine, `pnpm dev`) and the click-through are in [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
+The web app runs audits against a capture engine you start by hand, on the fixture sites or any site you may audit. Setup (database, secrets, engine, `pnpm dev`) and the click-through are in [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ### Capture a page
 
@@ -109,7 +109,7 @@ ALLOW_PRIVATE_NETWORKS=true pnpm --filter browser start     # engine on http://l
 pnpm --filter @repo/fixtures serve                          # fixtures on http://localhost:4400
 ```
 
-To run the web app against that engine, see the quickstart above ([CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md#running-the-web-app-locally)).
+To run the web app against that engine, see the quickstart above ([CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#running-the-web-app-locally)).
 
 Then capture a fixture. `meta-before-consent` fires a Meta `PageView` before the visitor chooses, so it fires even when they reject:
 
@@ -170,7 +170,7 @@ Use something else if you need ongoing monitoring of production traffic today, o
 | Dedup      | Meta browser `eventID` missing or reused, so Conversions API events can't be deduplicated; TikTok events without an event ID                                                                                                                                                                                                                                                                                                                         |
 | Hygiene    | Email addresses or phone numbers in URLs and parameters; tags failing with 4xx or 5xx; hits sent from staging hosts; the page's own location not matching the audited host; debug or preview parameters left in live hits                                                                                                                                                                                                                            |
 
-These 28 checks are built and run on every audit. Each is a plain function over one run's capture, proven on a fixture site with a known bug. A run that did not load, or a consent check on a page whose banner was not found, is reported as `inconclusive` with the reason, never as clean. The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/ovriq/zinko/blob/main/docs/product.md).
+These 28 checks are built and run on every audit. Each is a plain function over one run's capture, proven on a fixture site with a known bug. A run that did not load, or a consent check on a page whose banner was not found, is reported as `inconclusive` with the reason, never as clean. The full v0.1 scope, and what comes after it (GTM and GA4 configuration checks, scheduled audits, tracking plans in git), is in [docs/product.md](https://github.com/amagdy46/zinko/blob/main/docs/product.md).
 
 ## Repository layout
 
@@ -191,8 +191,8 @@ The stack is Effect 4 and TanStack Start on Cloudflare Workers, Postgres through
 
 ## Contributing
 
-Issues and pull requests are welcome. Setup, checks and where things live: [CONTRIBUTING.md](https://github.com/ovriq/zinko/blob/main/CONTRIBUTING.md).
+Issues and pull requests are welcome. Setup, checks and where things live: [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md).
 
 ## License
 
-[AGPL-3.0](https://github.com/ovriq/zinko/blob/main/LICENSE). Built by [Ovriq](https://github.com/ovriq).
+[AGPL-3.0](https://github.com/amagdy46/zinko/blob/main/LICENSE). Built by [Abdulrahman Magdy](https://github.com/amagdy46).

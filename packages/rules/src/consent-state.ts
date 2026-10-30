@@ -1,4 +1,4 @@
-import type { ConsentState, Hit, Vendor } from "@ovriq/zinko-decoders"
+import type { ConsentState, Hit, Vendor } from "@zinko/decoders"
 import type { CapturedRequest } from "@repo/capture-contract"
 import type { RunInput } from "./types.js"
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util"
-import { decode } from "@ovriq/zinko-decoders"
+import { decode } from "@zinko/decoders"
 import {
   CaptureRejected,
   CaptureRequest,
@@ -513,7 +513,7 @@ async function main(argv: string[]): Promise<number> {
       }
     case "audit":
       console.error(
-        "`audit` is not implemented yet. Track progress at https://github.com/ovriq/zinko",
+        "`audit` is not implemented yet. Track progress at https://github.com/amagdy46/zinko",
       )
       return 2
   }

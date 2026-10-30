@@ -1,4 +1,4 @@
-import type { Vendor } from "@ovriq/zinko-decoders"
+import type { Vendor } from "@zinko/decoders"
 import type { CapturedDocument } from "@repo/capture-contract"
 import type { RunInput } from "./types.js"
 

@@ -1,4 +1,4 @@
-import { DECODER_VERSION } from "@ovriq/zinko-decoders"
+import { DECODER_VERSION } from "@zinko/decoders"
 import { type CaptureRejected, CaptureResult, Scenario } from "@repo/capture-contract"
 import {
   AuditConfig,

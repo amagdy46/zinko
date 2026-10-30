@@ -8,7 +8,7 @@ Compiled 2026-10-18 from agent-assisted research. Most pricing figures come from
 - **Not building (yet):** a RedTrack-style ad tracker or PostHog-style product analytics. Each is its own funded market, and they sell to different buyers.
 - **License:** AGPL-3.0 for the core. SDKs, the snippet and the plan format may later be MIT. Use a CLA so a commercial license can be offered later, and keep the license fixed after that.
 - **Business model:** productized audits ($1–5k) delivered with the tool from day one. Then a hosted cloud at about $49 / $199 / $499 per month with metered LLM usage. Then agency plans with multiple client workspaces and white-label reports.
-- **Name:** Zinko (renamed from Spoorline on 2026-10-19). Published under the Ovriq org. "OpenTrack" was dropped because the name is taken by `opentrack/opentrack`.
+- **Name:** Zinko (renamed from Spoorline on 2026-10-19). Published at github.com/amagdy46/zinko (moved from the Ovriq org). "OpenTrack" was dropped because the name is taken by `opentrack/opentrack`.
 
 ## 2. Demand evidence
 
