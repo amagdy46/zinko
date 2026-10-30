@@ -5,6 +5,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lu
 import { ChangeGlyph } from "@/components/change-badge"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { SeverityMark } from "@/components/severity"
+import { FindingsSkeleton } from "@/components/page-skeleton"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -75,6 +76,7 @@ export const Route = createFileRoute("/app/audits/$auditId/findings")({
   }),
   loader: ({ params }) => listFindings({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
+  pendingComponent: FindingsSkeleton,
   component: FindingsScreen,
 })
 

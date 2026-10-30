@@ -3,10 +3,12 @@ import { ChevronDown, Info } from "lucide-react"
 import { AuditRunning } from "@/components/audit-running"
 import { CopyButton, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
+import { OverviewSkeleton } from "@/components/page-skeleton"
 import { ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
 import { ScoreFigure } from "@/components/score-figure"
 import { SeverityBadge } from "@/components/severity"
 import { SectionHeading } from "@/components/section-heading"
+import { Stat } from "@/components/stat"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -32,6 +34,7 @@ export const Route = createFileRoute("/app/audits/$auditId/overview")({
   head: ({ matches }: TitleContext) => auditTabTitle("Overview", matches),
   loader: ({ params }) => getOverview({ data: { auditId: params.auditId } }),
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
+  pendingComponent: OverviewSkeleton,
   component: OverviewScreen,
 })
 
@@ -670,7 +673,10 @@ function ScoreBlock({
             </PopoverContent>
           </Popover>
         </div>
-        <ul className="grid grid-cols-3 gap-2 md:w-[26rem]" aria-label="Open findings">
+        <ul
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:w-[36rem] [&>li:last-child]:max-sm:col-span-2"
+          aria-label="Open findings"
+        >
           {(["critical", "warning"] as const).map((severity) => (
             <StatTile
               key={severity}
@@ -707,33 +713,19 @@ function StatTile({
   note: string
   to?: { auditId: string; search: { severity: (typeof SEVERITIES)[number] } }
 }) {
-  const body = (
-    <>
-      <span className="flex items-center gap-1.5 text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-        <StatusGlyph meaning={glyph} />
-        {label}
-        <span className="sr-only">: </span>
-      </span>
-      <span className="mt-1 block text-2xl font-semibold leading-none tabular-nums">
-        {n}
-        <span className="sr-only"> </span>
-        <span className="ml-1.5 text-xs font-normal text-muted-foreground">{note}</span>
-      </span>
-    </>
-  )
-  const tile = "block min-h-16 min-w-0 rounded-md border bg-background px-3 py-2.5"
+  const stat = <Stat glyph={glyph} label={label} value={n} unit={note} />
   return (
     <li className="min-w-0">
       {to === undefined || n === 0 ? (
-        <div className={tile}>{body}</div>
+        stat
       ) : (
         <Link
           to="/app/audits/$auditId/findings"
           params={{ auditId: to.auditId }}
           search={to.search}
-          className={cn(tile, "hover:bg-accent", focusRing)}
+          className={cn("group/stat block rounded-lg", focusRing)}
         >
-          {body}
+          {stat}
         </Link>
       )}
     </li>

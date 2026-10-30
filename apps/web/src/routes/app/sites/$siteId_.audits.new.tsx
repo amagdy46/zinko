@@ -7,7 +7,7 @@ import { CircleHelp, GitCompareArrows } from "lucide-react"
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react"
 import { AuditLink } from "@/components/audit-link"
 import { SampleReportLink } from "@/components/sample-report-link"
-import { PageContainer } from "@/components/page-container"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -296,7 +296,7 @@ function NewAuditForm() {
   }
 
   return (
-    <PageContainer className="max-w-5xl">
+    <PageShell width="readable">
       <PageHeader
         title="New audit"
         breadcrumb={[
@@ -633,7 +633,7 @@ function NewAuditForm() {
           </aside>
         </fieldset>
       </form>
-    </PageContainer>
+    </PageShell>
   )
 }
 

@@ -1,11 +1,14 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
+import { Archive, Globe, SearchX } from "lucide-react"
 import { Option, Schema } from "effect"
 import { useRef, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 import { ArchivedSites } from "@/components/archived-sites"
 import { EmptyState } from "@/components/empty-state"
-import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
-import { PageContainer } from "@/components/page-container"
+import { SitesSkeleton } from "@/components/page-skeleton"
+import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
+import { FirstRun, LastAudit, LatestScore, OpenFindings } from "@/components/first-run"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { Button } from "@/components/ui/button"
@@ -34,6 +37,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { cn } from "@/lib/utils"
 import { count } from "@/lib/format"
 import { formField } from "@/lib/form"
 import { pageTitle } from "@/lib/page-title"
@@ -57,6 +61,7 @@ export const Route = createFileRoute("/app/sites/")({
     archived: await listArchived(),
     clients: context.groupByClient ? (await listClients()).clients : [],
   }),
+  pendingComponent: SitesSkeleton,
   component: Sites,
 })
 
@@ -133,6 +138,7 @@ function Sites() {
   const noSites =
     archived.sites.length > 0 ? (
       <EmptyState
+        icon={Archive}
         title="All your sites are archived"
         description={`You have ${count(archived.sites.length, "archived site")}. Restore one to audit it again, or add a new site.`}
         action={addFirstSite}
@@ -146,6 +152,7 @@ function Sites() {
       />
     ) : (
       <EmptyState
+        icon={Globe}
         title="Add your first site"
         description="Add the address of a site, then run your first audit."
         steps={[
@@ -161,7 +168,7 @@ function Sites() {
   const audited = sites.some((s) => s.running > 0 || s.latest !== null)
   const unaudited = sites.find((s) => s.running === 0 && s.latest === null)
   return (
-    <PageContainer>
+    <PageShell>
       <PageHeader
         title={showArchived === true ? "Archived" : "Sites"}
         breadcrumb={
@@ -317,6 +324,7 @@ function Sites() {
           )}
           {sites.length > 0 && filtered.length === 0 ? (
             <EmptyState
+              icon={SearchX}
               title="No matching sites"
               description="Try another name or clear your search."
               action={
@@ -327,52 +335,99 @@ function Sites() {
             />
           ) : null}
           {filtered.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Site</TableHead>
-                  {groupByClient ? <TableHead>Client</TableHead> : null}
-                  <TableHead>Last audit</TableHead>
-                  <TableHead>Open findings</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+            <>
+              <ul className="overflow-hidden rounded-lg border border-border-subtle bg-card shadow-xs md:hidden">
                 {filtered.map((s) => (
-                  <TableRow key={s.id} className="relative">
-                    <TableCell className="font-medium">
-                      <Link
-                        className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-                        to="/app/sites/$siteId"
-                        params={{ siteId: s.id }}
-                      >
-                        {s.name}
-                      </Link>
-                      <span className="block font-mono text-xs font-normal text-muted-foreground">
-                        {s.host}
-                      </span>
-                    </TableCell>
-                    {groupByClient ? (
-                      <TableCell>
-                        {s.client === null ? (
-                          <span className="text-muted-foreground">No client</span>
-                        ) : (
-                          s.client.name
-                        )}
-                      </TableCell>
-                    ) : null}
-                    <TableCell>
-                      <LastAudit latest={s.latest} running={s.running} />
-                    </TableCell>
-                    <TableCell>
-                      <OpenFindings latest={s.latest} />
-                    </TableCell>
-                  </TableRow>
+                  <DataRow key={s.id} className="items-start">
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <div>
+                        <Link
+                          className={cn(rowLink, "font-medium")}
+                          to="/app/sites/$siteId"
+                          params={{ siteId: s.id }}
+                        >
+                          {s.name}
+                        </Link>
+                        <span className="block font-mono text-xs text-muted-foreground">
+                          {s.host}
+                        </span>
+                        {groupByClient ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {s.client === null ? "No client" : s.client.name}
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex items-start gap-4">
+                        <LatestScore latest={s.latest} />
+                        <div className="space-y-2">
+                          <LastAudit latest={s.latest} running={s.running} />
+                          <OpenFindings latest={s.latest} />
+                        </div>
+                      </div>
+                    </div>
+                    <RowChevron className="mt-2" />
+                  </DataRow>
                 ))}
-              </TableBody>
-            </Table>
+              </ul>
+              <div className="hidden md:block">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Site</TableHead>
+                      {groupByClient ? <TableHead>Client</TableHead> : null}
+                      <TableHead>Score</TableHead>
+                      <TableHead>Last audit</TableHead>
+                      <TableHead>Open findings</TableHead>
+                      <TableHead className="w-8">
+                        <span className="sr-only">Open</span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtered.map((s) => (
+                      <LinkRow key={s.id}>
+                        <TableCell>
+                          <Link
+                            className={cn(rowLink, "-my-1.5 font-medium")}
+                            to="/app/sites/$siteId"
+                            params={{ siteId: s.id }}
+                          >
+                            {s.name}
+                          </Link>
+                          <span className="block font-mono text-xs font-normal text-muted-foreground">
+                            {s.host}
+                          </span>
+                        </TableCell>
+                        {groupByClient ? (
+                          <TableCell>
+                            {s.client === null ? (
+                              <span className="text-muted-foreground">No client</span>
+                            ) : (
+                              s.client.name
+                            )}
+                          </TableCell>
+                        ) : null}
+                        <TableCell>
+                          <LatestScore latest={s.latest} />
+                        </TableCell>
+                        <TableCell>
+                          <LastAudit latest={s.latest} running={s.running} />
+                        </TableCell>
+                        <TableCell>
+                          <OpenFindings latest={s.latest} />
+                        </TableCell>
+                        <TableCell className="pl-0">
+                          <RowChevron />
+                        </TableCell>
+                      </LinkRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : null}
         </>
       )}
-    </PageContainer>
+    </PageShell>
   )
 }

@@ -183,7 +183,7 @@ function ControlGroup({ label, children }: { label: string; children: ReactNode 
   const id = useId()
   return (
     <div role="group" aria-labelledby={id} className="space-y-1.5">
-      <p id={id} className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
+      <p id={id} className="type-label">
         {label}
       </p>
       <div className="flex flex-wrap items-center gap-2">{children}</div>

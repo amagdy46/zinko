@@ -1,4 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router"
+import { Archive } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { EmptyState } from "@/components/empty-state"
@@ -11,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { relativeTime } from "@/lib/format"
+import { RelativeTime } from "@/components/relative-time"
 import { unarchiveClient, unarchiveSite } from "@/server/clients"
 
 type Archived = {
@@ -61,6 +62,7 @@ export function ArchivedSites({
   if (archived.sites.length === 0 && archived.clients.length === 0)
     return (
       <EmptyState
+        icon={Archive}
         title="Nothing is archived"
         description="A site or client you archive waits here until you restore it."
         action={
@@ -110,11 +112,7 @@ export function ArchivedSites({
                     </TableCell>
                   ) : null}
                   <TableCell className="text-sm text-muted-foreground">
-                    {s.archivedAt === null ? null : (
-                      <time title={relativeTime(s.archivedAt).title}>
-                        {relativeTime(s.archivedAt).text}
-                      </time>
-                    )}
+                    {s.archivedAt === null ? null : <RelativeTime date={s.archivedAt} />}
                   </TableCell>
                   <TableCell className="text-right">
                     <RestoreSite
@@ -150,11 +148,7 @@ export function ArchivedSites({
                 <TableRow key={c.id}>
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {c.archivedAt === null ? null : (
-                      <time title={relativeTime(c.archivedAt).title}>
-                        {relativeTime(c.archivedAt).text}
-                      </time>
-                    )}
+                    {c.archivedAt === null ? null : <RelativeTime date={c.archivedAt} />}
                   </TableCell>
                   <TableCell className="text-right">
                     {archived.canManage ? (

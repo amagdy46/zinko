@@ -4,6 +4,7 @@ import { and, count, desc, eq, inArray, lte, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import {
   healthScore,
+  type Band,
   scoreCoverage,
   type ScoreCoverage,
   type ScoreFinding,
@@ -20,6 +21,8 @@ type Latest = {
   incompleteRuns: number
   /** The health score; the lowest of the sites' when `sites` is more than 1. Null when not evaluated. */
   score: number | null
+  /** The band of that score (the worst failing finding's severity), for the bar under it. */
+  band: Band | null
   sites: number
   /** What the score was computed from, summed over the sites when `sites` is more than 1. */
   scoreCoverage: ScoreCoverage
@@ -100,7 +103,7 @@ export const scoresOf = (orgId: string, details: readonly AuditDetail[]) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const ids = details.filter((d) => d.evaluated > 0).map((d) => d.id)
-    const scores = new Map<string, number>()
+    const scores = new Map<string, { score: number; band: Band }>()
     if (ids.length === 0) return scores
     const failing = yield* db
       .select({
@@ -147,7 +150,7 @@ export const scoresOf = (orgId: string, details: readonly AuditDetail[]) =>
         totalRuns: d.total,
         versions: [],
       })
-      if (result.evaluated) scores.set(d.id, result.score)
+      if (result.evaluated) scores.set(d.id, { score: result.score, band: result.band })
     }
     return scores
   })
@@ -155,7 +158,7 @@ export const scoresOf = (orgId: string, details: readonly AuditDetail[]) =>
 const latestOf = (
   head: { id: string; createdAt: Date; status: string },
   detail: AuditDetail,
-  score: number | undefined,
+  scored: { score: number; band: Band } | undefined,
 ): Latest => ({
   auditId: head.id,
   createdAt: head.createdAt,
@@ -163,7 +166,8 @@ const latestOf = (
   coverage: coverageOf(detail),
   couldNotCheck: detail.couldNotCheck,
   incompleteRuns: detail.incomplete,
-  score: score ?? null,
+  score: scored?.score ?? null,
+  band: scored?.band ?? null,
   scoreCoverage: coverageOfAudit(detail),
   sites: 1,
   runs: detail.total,
@@ -261,10 +265,10 @@ const worstCoverage = (results: readonly Latest[], siteCount: number): Latest["c
     : "partial"
 }
 
-const lowestScore = (results: readonly Latest[]) => {
-  const scores = results.flatMap((r) => (r.score === null ? [] : [r.score]))
-  return scores.length === 0 ? null : Math.min(...scores)
-}
+const lowestScored = (results: readonly Latest[]) =>
+  results.filter((r) => r.score !== null).toSorted((a, b) => (a.score ?? 0) - (b.score ?? 0))[0]
+
+const lowestScore = (results: readonly Latest[]) => lowestScored(results)?.score ?? null
 
 const sum = (results: readonly Latest[], pick: (r: Latest) => number) =>
   results.reduce((n, r) => n + pick(r), 0)
@@ -283,6 +287,7 @@ export const clientSummary = (sites: readonly SiteSummary[]) => {
           couldNotCheck: results.reduce((n, r) => n + r.couldNotCheck, 0),
           incompleteRuns: results.reduce((n, r) => n + r.incompleteRuns, 0),
           score: lowestScore(results),
+          band: lowestScored(results)?.band ?? null,
           scoreCoverage: {
             totalRuns: sum(results, (r) => r.scoreCoverage.totalRuns),
             evaluatedRuns: sum(results, (r) => r.scoreCoverage.evaluatedRuns),
@@ -350,7 +355,7 @@ export const trendsOf = (orgId: string, clientIds: readonly string[]) =>
     const scores = yield* scoresOf(orgId, details)
     const detailById = new Map(details.map((d) => [d.id, d]))
     for (const { id, clientId } of recent) {
-      const score = scores.get(id)
+      const score = scores.get(id)?.score
       const detail = detailById.get(id)
       if (score === undefined || detail === undefined) continue
       trends.set(clientId, [

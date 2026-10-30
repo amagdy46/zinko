@@ -5,11 +5,13 @@ import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { Button } from "@/components/ui/button"
-import { MoreHorizontal } from "lucide-react"
-import { PageContainer } from "@/components/page-container"
+import { Globe, MoreHorizontal } from "lucide-react"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { EmptyState } from "@/components/empty-state"
-import { LastAudit, OpenFindings } from "@/components/first-run"
+import { RelativeTime } from "@/components/relative-time"
+import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
+import { LastAudit, LatestScore, OpenFindings } from "@/components/first-run"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -34,7 +36,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { pageTitle } from "@/lib/page-title"
-import { count, relativeTime } from "@/lib/format"
+import { cn } from "@/lib/utils"
+import { count } from "@/lib/format"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
@@ -122,7 +125,7 @@ function ClientPage() {
     null,
   )
   return (
-    <PageContainer>
+    <PageShell>
       <PageHeader
         title={client.name}
         breadcrumb={[{ label: "Clients", to: "/app/clients" }, { label: client.name }]}
@@ -131,7 +134,13 @@ function ClientPage() {
             {client.archived ? <Badge variant="secondary">Archived</Badge> : null}
             <span>
               {count(sites.length, "site")} ·{" "}
-              {lastAudit ? `last audit ${relativeTime(lastAudit).text}` : "Not audited"}
+              {lastAudit ? (
+                <>
+                  last audit <RelativeTime date={lastAudit} />
+                </>
+              ) : (
+                "Not audited"
+              )}
             </span>
           </>
         }
@@ -251,6 +260,7 @@ function ClientPage() {
       />
       {sites.length === 0 ? (
         <EmptyState
+          icon={Globe}
           title="Add the site to audit"
           description={
             client.archived
@@ -267,42 +277,85 @@ function ClientPage() {
           <h2 id="sites-heading" className="sr-only">
             Sites
           </h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Site</TableHead>
-                <TableHead>Origin</TableHead>
-                <TableHead>Last audit</TableHead>
-                <TableHead>Open findings</TableHead>
-                <TableHead>Audits</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sites.map((s) => (
-                <TableRow key={s.id} className="relative">
-                  <TableCell className="font-medium">
+          <ul className="overflow-hidden rounded-lg border border-border-subtle bg-card shadow-xs md:hidden">
+            {sites.map((s) => (
+              <DataRow key={s.id} className="items-start">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
                     <Link
                       to="/app/sites/$siteId"
                       params={{ siteId: s.id }}
-                      className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
+                      className={cn(rowLink, "font-medium")}
                     >
                       {s.name}
                     </Link>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{s.origin}</TableCell>
-                  <TableCell>
-                    <LastAudit latest={s.latest} running={s.running} />
-                  </TableCell>
-                  <TableCell>
-                    <OpenFindings latest={s.latest} />
-                  </TableCell>
-                  <TableCell className="tabular-nums">{s.auditCount}</TableCell>
+                    <span className="block font-mono text-xs text-muted-foreground wrap-anywhere">
+                      {s.origin}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {count(s.auditCount, "audit")}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <LatestScore latest={s.latest} />
+                    <div className="space-y-2">
+                      <LastAudit latest={s.latest} running={s.running} />
+                      <OpenFindings latest={s.latest} />
+                    </div>
+                  </div>
+                </div>
+                <RowChevron className="mt-2" />
+              </DataRow>
+            ))}
+          </ul>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Site</TableHead>
+                  <TableHead>Origin</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Last audit</TableHead>
+                  <TableHead>Open findings</TableHead>
+                  <TableHead>Audits</TableHead>
+                  <TableHead className="w-8 pl-0">
+                    <span className="sr-only">Open</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {sites.map((s) => (
+                  <LinkRow key={s.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        to="/app/sites/$siteId"
+                        params={{ siteId: s.id }}
+                        className={cn(rowLink, "-my-1.5")}
+                      >
+                        {s.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{s.origin}</TableCell>
+                    <TableCell>
+                      <LatestScore latest={s.latest} />
+                    </TableCell>
+                    <TableCell>
+                      <LastAudit latest={s.latest} running={s.running} />
+                    </TableCell>
+                    <TableCell>
+                      <OpenFindings latest={s.latest} />
+                    </TableCell>
+                    <TableCell className="tabular-nums">{s.auditCount}</TableCell>
+                    <TableCell className="pl-0">
+                      <RowChevron />
+                    </TableCell>
+                  </LinkRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </section>
       )}
-    </PageContainer>
+    </PageShell>
   )
 }

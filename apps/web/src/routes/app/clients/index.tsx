@@ -1,10 +1,12 @@
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router"
+import { SearchX, Users } from "lucide-react"
 import { useRef, useState, type FormEvent, type ReactNode } from "react"
-import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
+import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
+import { FirstRun, LastAudit, LatestScore, OpenFindings } from "@/components/first-run"
 import { EmptyState } from "@/components/empty-state"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { ScoreSparkline } from "@/components/score-figure"
-import { PageContainer } from "@/components/page-container"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import {
@@ -25,6 +27,7 @@ import {
 } from "@/components/ui/table"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { cn } from "@/lib/utils"
 import { count } from "@/lib/format"
 import { pageTitle } from "@/lib/page-title"
 import { formField } from "@/lib/form"
@@ -87,7 +90,7 @@ function Clients() {
     c.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
   )
   return (
-    <PageContainer>
+    <PageShell>
       <PageHeader
         title="Clients"
         actions={
@@ -170,6 +173,7 @@ function Clients() {
       ) : null}
       {clients.length === 0 && ungroupedSites > 0 ? (
         <EmptyState
+          icon={Users}
           title="No clients yet"
           description={`Your ${count(ungroupedSites, "site")} ${ungroupedSites === 1 ? "is" : "are"} listed under Sites. Add a client to group sites by customer.`}
           action={
@@ -194,6 +198,7 @@ function Clients() {
       ) : null}
       {clients.length === 0 && ungroupedSites === 0 ? (
         <EmptyState
+          icon={Users}
           title="Add your first client"
           description="Group the sites you audit for one customer, then run your first audit."
           steps={[
@@ -216,6 +221,7 @@ function Clients() {
       ) : null}
       {clients.length > 0 && filtered.length === 0 ? (
         <EmptyState
+          icon={SearchX}
           title="No matching clients"
           description="Try another name or clear your search."
           action={
@@ -226,47 +232,91 @@ function Clients() {
         />
       ) : null}
       {filtered.length > 0 ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Client</TableHead>
-              <TableHead>Sites</TableHead>
-              <TableHead>Last audit</TableHead>
-              <TableHead>Open findings</TableHead>
-              <TableHead>Last five scores</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          <ul className="overflow-hidden rounded-lg border border-border-subtle bg-card shadow-xs md:hidden">
             {filtered.map((c) => (
-              <TableRow key={c.id} className="relative">
-                <TableCell className="font-medium">
-                  <Link
-                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
-                    to="/app/clients/$clientId"
-                    params={{ clientId: c.id }}
-                  >
-                    {c.name}
-                  </Link>
-                  {c.distinguisher !== null ? (
-                    <span className="block text-xs font-normal text-muted-foreground">
-                      {c.distinguisher}
+              <DataRow key={c.id} className="items-start">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div>
+                    <Link
+                      className={cn(rowLink, "font-medium")}
+                      to="/app/clients/$clientId"
+                      params={{ clientId: c.id }}
+                    >
+                      {c.name}
+                    </Link>
+                    <span className="block text-xs text-muted-foreground">
+                      {c.distinguisher === null ? "" : `${c.distinguisher} · `}
+                      {count(c.siteCount, "site")}
                     </span>
-                  ) : null}
-                </TableCell>
-                <TableCell className="tabular-nums">{c.siteCount}</TableCell>
-                <TableCell>
-                  <LastAudit latest={c.latest} running={c.running} />
-                </TableCell>
-                <TableCell>
-                  <OpenFindings latest={c.latest} />
-                </TableCell>
-                <TableCell>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <LatestScore latest={c.latest} />
+                    <div className="space-y-2">
+                      <LastAudit latest={c.latest} running={c.running} />
+                      <OpenFindings latest={c.latest} />
+                    </div>
+                  </div>
                   <ScoreSparkline points={c.trend} />
-                </TableCell>
-              </TableRow>
+                </div>
+                <RowChevron className="mt-2" />
+              </DataRow>
             ))}
-          </TableBody>
-        </Table>
+          </ul>
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Sites</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Last audit</TableHead>
+                  <TableHead>Open findings</TableHead>
+                  <TableHead>Last five scores</TableHead>
+                  <TableHead className="w-8 pl-0">
+                    <span className="sr-only">Open</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((c) => (
+                  <LinkRow key={c.id}>
+                    <TableCell className="font-medium">
+                      <Link
+                        className={cn(rowLink, "-my-1.5")}
+                        to="/app/clients/$clientId"
+                        params={{ clientId: c.id }}
+                      >
+                        {c.name}
+                      </Link>
+                      {c.distinguisher !== null ? (
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          {c.distinguisher}
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="tabular-nums">{c.siteCount}</TableCell>
+                    <TableCell>
+                      <LatestScore latest={c.latest} />
+                    </TableCell>
+                    <TableCell>
+                      <LastAudit latest={c.latest} running={c.running} />
+                    </TableCell>
+                    <TableCell>
+                      <OpenFindings latest={c.latest} />
+                    </TableCell>
+                    <TableCell>
+                      <ScoreSparkline points={c.trend} />
+                    </TableCell>
+                    <TableCell className="pl-0">
+                      <RowChevron />
+                    </TableCell>
+                  </LinkRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       ) : null}
       {clients.length > 0 && ungroupedSites > 0 ? (
         <p className="text-sm text-muted-foreground">
@@ -279,6 +329,6 @@ function Clients() {
           · {count(ungroupedSites, "site")} without a client
         </p>
       ) : null}
-    </PageContainer>
+    </PageShell>
   )
 }

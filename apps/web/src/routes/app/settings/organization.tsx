@@ -49,7 +49,7 @@ function OrganizationSettings() {
               checked={grouping}
               disabled={saving}
               onCheckedChange={(value) => setGrouping(value === true)}
-              className="mt-1.5"
+              className="mt-2"
             />
             <div className="space-y-1">
               <Label htmlFor="group-by-client" className="min-h-8">

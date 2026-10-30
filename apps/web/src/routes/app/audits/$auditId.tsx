@@ -13,6 +13,7 @@ import { ChevronDown, ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
+import { PageShell } from "@/components/page-shell"
 import { RerunDialog } from "@/components/rerun-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -290,12 +291,7 @@ function AuditPage() {
     </Link>
   )
   return (
-    <div
-      className={cn(
-        "min-w-0 print:[&>:not([data-report])]:hidden",
-        full ? "space-y-6" : "space-y-2",
-      )}
-    >
+    <PageShell className={cn("print:[&>:not([data-report])]:hidden", !full && "space-y-2")}>
       {full ? (
         <PageHeader
           title={title}
@@ -474,7 +470,7 @@ function AuditPage() {
       <nav
         ref={tabBar}
         aria-label="Audit"
-        className="scroll-edges -mx-1.5 flex gap-2.5 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
+        className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
       >
         {tabs.map((tab) => (
           <Link key={tab.label} {...tab.link} className={tabLink}>
@@ -510,6 +506,6 @@ function AuditPage() {
         </Collapsible>
       ) : null}
       <Outlet />
-    </div>
+    </PageShell>
   )
 }

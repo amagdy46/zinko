@@ -67,8 +67,8 @@ export function OrgSwitcher({
           disabled={switching}
           aria-label="Switch organization"
         >
-          <Avatar className="size-6">
-            <AvatarFallback className="bg-muted text-xs">
+          <Avatar className="size-6 rounded-md">
+            <AvatarFallback className="text-xs">
               {active?.name.charAt(0).toUpperCase() ?? "?"}
             </AvatarFallback>
           </Avatar>

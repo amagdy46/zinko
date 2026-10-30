@@ -107,7 +107,7 @@ function Explanations({
               checked={enabled}
               disabled={!policy.canManage || saving}
               onCheckedChange={(value) => setEnabled(value === true)}
-              className="mt-1.5"
+              className="mt-2"
             />
             <div className="space-y-1">
               <Label htmlFor="ai-explanations" className="min-h-8">
@@ -151,7 +151,7 @@ function Explanations({
               checked={paths}
               disabled={!policy.canManage || saving}
               onCheckedChange={(value) => setPaths(value === true)}
-              className="mt-1.5"
+              className="mt-2"
             />
             <div className="space-y-1">
               <Label htmlFor="ai-paths" className="min-h-8">

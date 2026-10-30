@@ -1,9 +1,8 @@
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router"
 
-import { PageContainer } from "@/components/page-container"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { tabLink } from "@/lib/row-style"
-import { cn } from "@/lib/utils"
 
 export const Route = createFileRoute("/app/settings")({ component: SettingsLayout })
 
@@ -18,24 +17,19 @@ const tabs = [
 
 function SettingsLayout() {
   return (
-    <PageContainer className="max-w-5xl">
+    <PageShell width="readable">
       <PageHeader title="Settings" description="Your profile and organization preferences." />
       <nav
         aria-label="Settings"
-        className="scroll-edges -mx-1.5 flex gap-2.5 overflow-x-auto overflow-y-hidden border-b"
+        className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b"
       >
         {tabs.map(({ to, label }) => (
-          <Link
-            key={to}
-            to={to}
-            activeOptions={{ exact: true }}
-            className={cn(tabLink, "min-w-8 justify-center")}
-          >
+          <Link key={to} to={to} activeOptions={{ exact: true }} className={tabLink}>
             {label}
           </Link>
         ))}
       </nav>
       <Outlet />
-    </PageContainer>
+    </PageShell>
   )
 }

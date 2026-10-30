@@ -367,7 +367,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             startPath: startPathOf(a.startPage),
             coverage: coverageOf(details, a.id),
             score: SETTLED.some((status) => status === a.status)
-              ? (scores.get(a.id) ?? null)
+              ? (scores.get(a.id)?.score ?? null)
               : null,
           })),
           clients: clients.slice(0, SEARCH_LIMIT).map((c) => ({
@@ -977,7 +977,11 @@ export const getSite = createServerFn({ method: "GET" })
               // a re-check has no score: it ran a few pages for one check
               score:
                 a.kind === "full" && SETTLED.some((status) => status === a.status)
-                  ? (scores.get(a.id) ?? null)
+                  ? (scores.get(a.id)?.score ?? null)
+                  : null,
+              band:
+                a.kind === "full" && SETTLED.some((status) => status === a.status)
+                  ? (scores.get(a.id)?.band ?? null)
                   : null,
               coverage: a.kind === "full" ? coverageOf(summaries, a.id) : null,
               findings:

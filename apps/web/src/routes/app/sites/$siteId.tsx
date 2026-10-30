@@ -2,18 +2,19 @@ import { NotFound } from "@/components/not-found"
 import { siteReturn, siteTrail } from "@/lib/site-trail"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState, type FormEvent } from "react"
-import { MoreHorizontal } from "lucide-react"
+import { ClipboardList, MoreHorizontal } from "lucide-react"
 import { Schema } from "effect"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { RerunDialog } from "@/components/rerun-dialog"
-import { ScoreFigure } from "@/components/score-figure"
+import { ScoreChip } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
-import { PageContainer } from "@/components/page-container"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { SectionHeading } from "@/components/section-heading"
 import { EmptyState } from "@/components/empty-state"
 import { SampleReportLink } from "@/components/sample-report-link"
+import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
 import { FindingCounts } from "@/components/first-run"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -48,6 +49,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { pageTitle } from "@/lib/page-title"
+import { cn } from "@/lib/utils"
 import { count, relativeTime, shortDateTime, useTimeZone } from "@/lib/format"
 import { formField } from "@/lib/form"
 import { withScheme } from "@/lib/site-url"
@@ -206,8 +208,41 @@ function SitePage() {
     await router.navigate(siteReturn(groupByClient, client))
   }
 
+  const auditSubtitle = (a: (typeof audits)[number]) =>
+    (a.kind === "narrow"
+      ? `Re-check of ${a.recheckTitle ?? "one check"}`
+      : count(a.pages, "page")) +
+    (a.kind !== "narrow" && a.startPath !== null ? ` · ${a.startPath}` : "")
+  const auditActions = (a: (typeof audits)[number]) => (
+    <>
+      {a.hasBaseline ? (
+        <Link
+          to="/app/audits/$auditId/compare"
+          params={{ auditId: a.id }}
+          className="relative inline-flex h-8 items-center rounded-sm px-2 text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        >
+          Compare
+        </Link>
+      ) : null}
+      {a.kind === "full" && (a.status === "complete" || a.status === "partial") ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="relative h-8"
+          disabled={site.archived}
+          onClick={(event) => {
+            rerunButton.current = event.currentTarget
+            setRerunOf(a.id)
+            setRerunOpen(true)
+          }}
+        >
+          Re-run
+        </Button>
+      ) : null}
+    </>
+  )
   return (
-    <PageContainer>
+    <PageShell>
       <PageHeader
         title={site.name}
         breadcrumb={[...siteTrail(groupByClient, client), { label: site.name }]}
@@ -505,6 +540,7 @@ function SitePage() {
       <SectionHeading title="Audits" />
       {audits.length === 0 ? (
         <EmptyState
+          icon={ClipboardList}
           title="No audits yet"
           description="Run the first audit to see which tags fire on this site."
           action={
@@ -519,93 +555,113 @@ function SitePage() {
           secondary={<SampleReportLink />}
         />
       ) : (
-        <Table data-testid="audit-history">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Started</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Runs</TableHead>
-              <TableHead>Score</TableHead>
-              <TableHead>Findings</TableHead>
-              <TableHead>
-                <span className="sr-only">Actions</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        <>
+          <ul
+            data-testid="audit-history-list"
+            className="overflow-hidden rounded-lg border border-border-subtle bg-card shadow-xs md:hidden"
+          >
             {audits.map((a) => (
-              <TableRow key={a.id} className="relative">
-                <TableCell>
-                  <Link
-                    to="/app/audits/$auditId"
-                    params={{ auditId: a.id }}
-                    className="-my-1.5 inline-flex min-h-8 items-center after:absolute after:inset-0 focus-visible:outline-2 focus-visible:outline-ring"
-                  >
-                    <time title={relativeTime(a.createdAt).text}>
-                      {shortDateTime(a.createdAt, timeZone)}
-                    </time>
-                  </Link>
-                  <span className="block text-xs text-muted-foreground">
-                    {a.kind === "narrow"
-                      ? `Re-check of ${a.recheckTitle ?? "one check"}`
-                      : count(a.pages, "page")}
-                    {a.kind !== "narrow" && a.startPath !== null ? ` · ${a.startPath}` : ""}
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <span className="flex flex-wrap items-center gap-1.5">
+              <DataRow key={a.id} className="items-start">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <Link
+                      to="/app/audits/$auditId"
+                      params={{ auditId: a.id }}
+                      className={cn(rowLink, "font-medium")}
+                    >
+                      <time title={relativeTime(a.createdAt).text} suppressHydrationWarning>
+                        {shortDateTime(a.createdAt, timeZone)}
+                      </time>
+                    </Link>
                     <StatusBadge status={toBadgeStatus(a.status)} />
                     {a.kind === "narrow" ? <Badge variant="outline">Re-check</Badge> : null}
-                  </span>
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {a.runs.finished} of {a.runs.total}
-                  {a.runs.incomplete > 0 ? (
-                    <span className="block text-xs text-muted-foreground">
-                      {count(a.runs.incomplete, "run")} could not finish
+                  </div>
+                  <p className="text-xs text-muted-foreground">{auditSubtitle(a)}</p>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
+                    <span>
+                      {a.runs.finished} of {a.runs.total} runs
                     </span>
-                  ) : null}
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {a.score === null || a.coverage === null ? (
-                    <span className="text-muted-foreground">–</span>
-                  ) : (
-                    <ScoreFigure score={a.score} coverage={a.coverage} />
-                  )}
-                </TableCell>
-                <TableCell>
+                    {a.coverage === null ? null : (
+                      <ScoreChip score={a.score} band={a.band} coverage={a.coverage} />
+                    )}
+                  </div>
                   <AuditFindings audit={a} />
-                </TableCell>
-                <TableCell className="text-right">
-                  {a.hasBaseline ? (
-                    <Link
-                      to="/app/audits/$auditId/compare"
-                      params={{ auditId: a.id }}
-                      className="relative inline-flex h-8 items-center rounded-sm px-2 text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                    >
-                      Compare
-                    </Link>
-                  ) : null}
-                  {a.kind === "full" && (a.status === "complete" || a.status === "partial") ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="relative h-8"
-                      disabled={site.archived}
-                      onClick={(event) => {
-                        rerunButton.current = event.currentTarget
-                        setRerunOf(a.id)
-                        setRerunOpen(true)
-                      }}
-                    >
-                      Re-run
-                    </Button>
-                  ) : null}
-                </TableCell>
-              </TableRow>
+                  {auditActions(a)}
+                </div>
+                <RowChevron className="mt-2" />
+              </DataRow>
             ))}
-          </TableBody>
-        </Table>
+          </ul>
+          <div className="hidden md:block">
+            <Table data-testid="audit-history">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Started</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Runs</TableHead>
+                  <TableHead>Score</TableHead>
+                  <TableHead>Findings</TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                  <TableHead className="w-8 pl-0">
+                    <span className="sr-only">Open</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {audits.map((a) => (
+                  <LinkRow key={a.id}>
+                    <TableCell>
+                      <Link
+                        to="/app/audits/$auditId"
+                        params={{ auditId: a.id }}
+                        className={cn(rowLink, "-my-1.5")}
+                      >
+                        <time title={relativeTime(a.createdAt).text} suppressHydrationWarning>
+                          {shortDateTime(a.createdAt, timeZone)}
+                        </time>
+                      </Link>
+                      <span className="block text-xs text-muted-foreground">
+                        {auditSubtitle(a)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <StatusBadge status={toBadgeStatus(a.status)} />
+                        {a.kind === "narrow" ? <Badge variant="outline">Re-check</Badge> : null}
+                      </span>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {a.runs.finished} of {a.runs.total}
+                      {a.runs.incomplete > 0 ? (
+                        <span className="block text-xs text-muted-foreground">
+                          {count(a.runs.incomplete, "run")} could not finish
+                        </span>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {a.coverage === null ? (
+                        <span className="text-muted-foreground">
+                          –<span className="sr-only">Not scored</span>
+                        </span>
+                      ) : (
+                        <ScoreChip score={a.score} band={a.band} coverage={a.coverage} />
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <AuditFindings audit={a} />
+                    </TableCell>
+                    <TableCell className="text-right">{auditActions(a)}</TableCell>
+                    <TableCell className="pl-0">
+                      <RowChevron />
+                    </TableCell>
+                  </LinkRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
       )}
       {rerunOf === null ? null : (
         <RerunDialog
@@ -641,7 +697,7 @@ function SitePage() {
           ) : null}
         </div>
       ) : null}
-    </PageContainer>
+    </PageShell>
   )
 }
 

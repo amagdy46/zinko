@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router"
 import type { ReactNode } from "react"
+import { RootNotFound } from "@/components/not-found"
 import { ThemeProvider, themeScript } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/sonner"
 import appCss from "../styles.css?url"
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
     scripts: [{ children: themeScript }],
   }),
   component: RootComponent,
+  notFoundComponent: RootNotFound,
   shellComponent: RootDocument,
 })
 

@@ -1,6 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { FlaskConical } from "lucide-react"
-import { PageContainer } from "@/components/page-container"
+import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
 import { ReportView } from "@/components/report/report-view"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -36,7 +36,7 @@ function SampleReport() {
   const label = from === undefined ? null : backLabel(from)
   const start = groupByClient ? "Start with a client" : "Start with a site"
   return (
-    <PageContainer>
+    <PageShell>
       <PageHeader
         title="Sample report"
         breadcrumb={[
@@ -71,6 +71,6 @@ function SampleReport() {
         </AlertDescription>
       </Alert>
       <ReportView model={sampleReport} logoSrc={null} mode="client" draft={false} />
-    </PageContainer>
+    </PageShell>
   )
 }

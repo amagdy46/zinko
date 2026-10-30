@@ -26,29 +26,31 @@ export function PageHeader({
 }) {
   return (
     <header className="space-y-3">
-      {breadcrumb && breadcrumb.length > 0 && (
-        <Breadcrumb>
-          <BreadcrumbList>
-            {breadcrumb.map((item, index) => (
-              <Fragment key={`${item.to ?? "current"}-${item.label}`}>
-                {index > 0 && <BreadcrumbSeparator />}
-                <BreadcrumbItem>
-                  {item.to ? (
-                    <BreadcrumbLink asChild>
-                      <Link to={item.to} params={item.params}>
-                        {item.label}
-                      </Link>
-                    </BreadcrumbLink>
-                  ) : (
-                    <BreadcrumbPage>{item.label}</BreadcrumbPage>
-                  )}
-                </BreadcrumbItem>
-              </Fragment>
-            ))}
-          </BreadcrumbList>
-        </Breadcrumb>
-      )}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-h-5 items-center">
+        {breadcrumb && breadcrumb.length > 0 && (
+          <Breadcrumb>
+            <BreadcrumbList>
+              {breadcrumb.map((item, index) => (
+                <Fragment key={`${item.to ?? "current"}-${item.label}`}>
+                  {index > 0 && <BreadcrumbSeparator />}
+                  <BreadcrumbItem>
+                    {item.to ? (
+                      <BreadcrumbLink asChild>
+                        <Link to={item.to} params={item.params}>
+                          {item.label}
+                        </Link>
+                      </BreadcrumbLink>
+                    ) : (
+                      <BreadcrumbPage>{item.label}</BreadcrumbPage>
+                    )}
+                  </BreadcrumbItem>
+                </Fragment>
+              ))}
+            </BreadcrumbList>
+          </Breadcrumb>
+        )}
+      </div>
+      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
         <div className="min-w-0 space-y-1">
           <h1 className="text-xl font-semibold tracking-tight wrap-break-word sm:text-2xl">
             {title}

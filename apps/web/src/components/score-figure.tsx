@@ -17,6 +17,20 @@ const BAND_GLYPH: Record<Band, StatusMeaning> = {
 
 const NOT_ENOUGH = "Not enough was captured to score"
 
+const BAND_BAR: Record<Band, string> = {
+  critical: "fill-sev-critical-solid",
+  attention: "fill-sev-warning-solid",
+  minor: "fill-sev-info-solid",
+  "no-failures": "fill-status-pass-solid",
+}
+
+/** The glyph for a band, downgraded when the number does not cover everything (see `scoreCoverage`). */
+function bandGlyph(band: Band | undefined, state: "full" | "checks" | "runs"): StatusMeaning {
+  if (state === "runs" || band === undefined) return "partial"
+  if (band === "no-failures" && state !== "full") return "could-not-check"
+  return BAND_GLYPH[band]
+}
+
 /**
  * A health score and how much of it was checked. Below full coverage (see `scoreCoverage`) the
  * number is muted, "Not fully checked" and the exact counts follow it, and the band never reads as
@@ -109,9 +123,7 @@ export function ScoreFigure({
   let bandWord =
     band === undefined || caveated ? "No failures in what was checked" : BAND_LABEL[band]
   if (bandAllAccepted && band !== "no-failures") bandWord += " (accepted)"
-  let glyph: StatusMeaning = band === undefined ? "partial" : BAND_GLYPH[band]
-  if (state === "runs") glyph = "partial"
-  else if (caveated) glyph = "could-not-check"
+  const glyph = bandGlyph(band, state)
   return (
     <div className={cn("min-w-0 space-y-1", className)}>
       <p className="flex items-baseline gap-1.5" data-testid="score">
@@ -137,6 +149,86 @@ export function ScoreFigure({
       <p className="text-xs text-muted-foreground">
         {state === "full" ? "All runs evaluated, every check resolved" : notes.join(" · ")}
       </p>
+    </div>
+  )
+}
+
+/**
+ * The score as one small, fixed-width figure for lists: a band glyph, the number, a 3px bar that is
+ * the score on a 0 to 100 track in the band's colour, and, when the number does not cover everything,
+ * the same qualifier `ScoreFigure` uses. Not scorable (no score, or too little captured) is an honest
+ * "—", never a zero. Pure props in, markup out. Reads the band and coverage logic of `health-score`; it adds no thresholds.
+ */
+export function ScoreChip({
+  score,
+  band,
+  coverage,
+  className,
+}: {
+  score: number | null
+  band: Band | null
+  coverage: ScoreCoverage
+  className?: string
+}) {
+  const { state, notes } = scoreCoverage(coverage)
+  if (score === null || tooLittleCaptured(coverage))
+    return (
+      <div
+        className={cn("w-24 space-y-1", className)}
+        title={score === null ? "Not scored" : NOT_ENOUGH}
+      >
+        <p className="text-base leading-6 font-semibold text-muted-foreground">
+          —<span className="sr-only">{score === null ? "Not scored" : NOT_ENOUGH}</span>
+        </p>
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 100 3"
+          preserveAspectRatio="none"
+          className="h-[3px] w-full"
+        >
+          <rect width="100" height="3" className="fill-muted" />
+        </svg>
+      </div>
+    )
+  let bandWord: string | null = null
+  if (band !== null)
+    bandWord =
+      band === "no-failures" && state !== "full"
+        ? "No failures in what was checked"
+        : BAND_LABEL[band]
+  return (
+    <div
+      className={cn("w-24 space-y-1", state !== "full" && "w-auto min-w-24 max-w-44", className)}
+      title={notes.join(" · ") || undefined}
+    >
+      <p className="flex items-center gap-1.5 text-base leading-6 font-semibold tabular-nums">
+        <StatusGlyph meaning={bandGlyph(band ?? undefined, state)} className="size-3.5" />
+        <span className={cn(state === "runs" && "text-muted-foreground")}>{score}</span>
+        <span className="text-2xs font-normal text-muted-foreground">/100</span>
+        {bandWord === null ? null : <span className="sr-only">{bandWord}</span>}
+      </p>
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 100 3"
+        preserveAspectRatio="none"
+        className="h-[3px] w-full"
+      >
+        <rect width="100" height="3" className="fill-muted" />
+        <rect
+          width={score}
+          height="3"
+          className={band === null ? "fill-muted-foreground" : BAND_BAR[band]}
+        />
+      </svg>
+      {state === "full" ? null : (
+        <p className="text-2xs leading-4 text-muted-foreground">
+          {bandWord === null ? null : (
+            <span className="font-medium text-foreground">{bandWord}</span>
+          )}
+          {bandWord === null ? null : <br />}
+          {notes.join(" · ")}
+        </p>
+      )}
     </div>
   )
 }

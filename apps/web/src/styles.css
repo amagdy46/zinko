@@ -7,7 +7,7 @@
 .report-paper {
   color-scheme: light;
   --radius: 0.5rem;
-  --background: oklch(0.97 0.004 285);
+  --background: oklch(0.965 0.005 285);
   --foreground: oklch(0.19 0.012 285);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.19 0.012 285);
@@ -19,13 +19,14 @@
   --secondary-foreground: oklch(0.25 0.012 285);
   --muted: oklch(0.945 0.006 285);
   --muted-foreground: oklch(0.5 0.016 285);
-  --accent: oklch(0.925 0.02 286);
+  --accent: oklch(0.915 0.024 286);
   --accent-foreground: oklch(0.25 0.04 286);
   --destructive: oklch(0.52 0.2 25);
   --border: oklch(0.9 0.008 285);
+  --border-subtle: oklch(0.925 0.007 285);
   --input: oklch(0.62 0.012 285);
   --ring: oklch(0.52 0.19 286);
-  --sidebar: oklch(0.945 0.007 285);
+  --sidebar: oklch(0.935 0.009 285);
   --sev-critical: oklch(0.47 0.19 25);
   --sev-critical-bg: oklch(0.965 0.02 25);
   --sev-critical-border: oklch(0.88 0.06 25);
@@ -70,6 +71,7 @@
   --accent-foreground: oklch(0.945 0.007 286);
   --destructive: oklch(0.714 0.146 21);
   --border: oklch(1 0 0 / 9%);
+  --border-subtle: oklch(1 0 0 / 6%);
   --input: oklch(1 0 0 / 34%);
   --ring: oklch(0.68 0.16 286);
   --sidebar: oklch(0.145 0.008 285);
@@ -161,6 +163,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
+  --color-border-subtle: var(--border-subtle);
+  --shadow-xs: 0 1px 2px 0 oklch(0.19 0.03 285 / 0.07), 0 0 0 1px oklch(0.19 0.03 285 / 0.02);
+  --shadow-raised:
+    0 10px 28px -8px oklch(0.19 0.03 285 / 0.28), 0 2px 6px -1px oklch(0.19 0.03 285 / 0.12);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-report-accent: var(--report-accent);
@@ -237,6 +243,15 @@
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
   }
+}
+
+/* The type ramp's roles. Display is a size picked where the answer lives (score: text-5xl; page title: PageHeader), so it has no utility. */
+@utility type-section {
+  @apply text-lg font-semibold tracking-tight;
+}
+
+@utility type-label {
+  @apply text-2xs font-medium tracking-wide text-muted-foreground uppercase;
 }
 
 /* A soft edge on the side of a scrolling container that still has content (a table wider than the screen). */

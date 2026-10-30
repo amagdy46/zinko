@@ -123,6 +123,8 @@ Round 7 (2026-10-29): `docs/qa/2026-10-29-ux-sweep-r7.md`, 6 medium and 6 minor 
 
 Round 8 batch T (2026-10-30): H12, H13, H20 (Start with copy beside its heading), H27 (c), (e), (g) fixed: an audit is named by start path and time wherever one refers to another (`auditName`, `AuditLink`), the default baseline is the latest evaluated audit with the same cells (`sameScope`), a comparison with no shared run says so in one sentence, app pages use the workspace width, a cookie has one Copy as JSON, and the audit-finished toast has no Overview action on the Overview.
 
+Round 9 batch U (2026-10-30, `docs/qa/2026-10-30-ux-sweep-r9.md`): the design-system foundation, V3, V13, V14, V15, V17, V21, V23, V25, V26, V27, V29, V30 and V1: `PageShell` frame, `type-section`/`type-label` roles, surface depth tokens, `LinkRow`/`DataRow`, `ScoreChip` and `Stat`, narrow empty states, `RelativeTime`, shaped skeletons and a styled root 404.
+
 Round 8 batch R (2026-10-30): `docs/qa/2026-10-30-ux-sweep-r8.md` H9, H10, H24 to H27 fixed: no second live client with the same name, an honest Clients checklist, an org switcher that keeps the section, the organization shown on accept-invite, forgot, reset and change password, and a Ctrl K hint with palette audits searchable by start path.
 
 Round 9 batch V (2026-10-30): `docs/qa/2026-10-30-ux-sweep-r9.md` V2 (the "Fix first" callout is numbered 1, so Next steps starts at 2 without a gap), V4 (print: only the cover, Findings and Appendix start pages, finding headers stay with their text, wider prose), V5 (the consent cell count stays on one line) and V24 (a finding is a rule inside the paper, not a card; the paper is edge to edge on a phone) fixed; V16 left to the page frame.

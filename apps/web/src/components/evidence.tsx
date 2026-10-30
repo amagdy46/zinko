@@ -273,7 +273,7 @@ export function RequestView({ request }: { request: CapturedRequest }) {
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-1">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{title}</h3>
+      <h3 className="type-label">{title}</h3>
       {children}
     </section>
   )

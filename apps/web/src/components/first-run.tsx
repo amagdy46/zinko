@@ -1,10 +1,11 @@
 import { useSyncExternalStore, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { StatusGlyph } from "@/components/status-glyph"
-import { ScoreFigure } from "@/components/score-figure"
+import { ScoreChip } from "@/components/score-figure"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
-import { count, relativeTime, useTimeZone } from "@/lib/format"
-import type { ScoreCoverage } from "@/lib/health-score"
+import { RelativeTime } from "@/components/relative-time"
+import { count } from "@/lib/format"
+import type { Band, ScoreCoverage } from "@/lib/health-score"
 
 type Result = {
   createdAt: Date | string
@@ -13,6 +14,7 @@ type Result = {
   couldNotCheck: number
   incompleteRuns: number
   score: number | null
+  band: Band | null
   scoreCoverage: ScoreCoverage
   sites: number
   runs: number
@@ -24,30 +26,36 @@ const runningLabel = (running: number, hasFinished: boolean) => {
   return hasFinished ? "New audit running" : "First audit running"
 }
 
+/** The score of the last finished audit as a chip; a client's is the lowest of its sites'. */
+export function LatestScore({ latest }: { latest: Result | null }) {
+  if (latest === null)
+    return (
+      <span className="text-muted-foreground">
+        —<span className="sr-only">Not audited</span>
+      </span>
+    )
+  return (
+    <div className="space-y-1">
+      <ScoreChip score={latest.score} band={latest.band} coverage={latest.scoreCoverage} />
+      {latest.sites > 1 && latest.score !== null ? (
+        <p className="text-2xs text-muted-foreground">Lowest of {latest.sites} sites</p>
+      ) : null}
+    </div>
+  )
+}
+
 /** The last finished audit leads; an audit still running is a separate, smaller line so it never reads as the finished one. */
 export function LastAudit({ latest, running }: { latest: Result | null; running: number }) {
-  const timeZone = useTimeZone()
   return (
     <div className="space-y-1 text-xs">
       {latest ? (
         <>
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            {latest.score === null ? null : (
-              <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} size="inline" />
-            )}
             {latest.status === "complete" ? null : (
               <StatusBadge status={toBadgeStatus(latest.status)} />
             )}
-            <time
-              className="text-muted-foreground"
-              title={relativeTime(latest.createdAt, timeZone).title}
-            >
-              {relativeTime(latest.createdAt).text}
-            </time>
+            <RelativeTime date={latest.createdAt} className="text-muted-foreground" />
           </div>
-          {latest.sites > 1 && latest.score !== null ? (
-            <p className="text-muted-foreground">Lowest of {latest.sites} sites</p>
-          ) : null}
           {latest.incompleteRuns > 0 && latest.score === null ? (
             <p className="text-muted-foreground">
               {count(latest.incompleteRuns, "run")} could not finish

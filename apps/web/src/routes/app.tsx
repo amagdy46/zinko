@@ -82,7 +82,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
         type="button"
         data-find-return
         onClick={onFind}
-        className="flex h-9 items-center gap-2 rounded-md border bg-card px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+        className="flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Find…</span>
@@ -173,7 +173,7 @@ function AppShell() {
         <main
           id="main"
           tabIndex={-1}
-          className="min-w-0 flex-1 p-4 [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset md:p-6 print:p-0"
+          className="min-w-0 flex-1 [&_h1:focus-visible]:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
         >
           <Outlet />
         </main>

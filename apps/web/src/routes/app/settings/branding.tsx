@@ -217,9 +217,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
 
   const preview = (
     <div className="space-y-2">
-      <h3 className="text-2xs font-medium uppercase tracking-wide text-muted-foreground">
-        Cover preview
-      </h3>
+      <h3 className="type-label">Cover preview</h3>
       <CoverPreview
         agencyName={agencyName}
         logoUrl={branding.logoUrl}
@@ -313,7 +311,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
               checked={showPoweredBy}
               disabled={disabled}
               onCheckedChange={(value) => setShowPoweredBy(value === true)}
-              className="mt-1.5"
+              className="mt-2"
             />
             <div className="space-y-1">
               <Label htmlFor="branding-powered" className="min-h-8">

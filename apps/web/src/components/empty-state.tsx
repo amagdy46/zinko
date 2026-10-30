@@ -2,6 +2,7 @@ import { Inbox, type LucideIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 
+/** A narrow, centred block: a task-specific icon, two lines and the action. It never spans the page. */
 export function EmptyState({
   title,
   description,
@@ -13,6 +14,7 @@ export function EmptyState({
 }: {
   title: string
   description: string
+  /** Say what is missing (Globe for sites, Users for clients), not "empty". */
   icon?: LucideIcon
   /** A short numbered "What happens next", for the first run of a list. */
   steps?: ReadonlyArray<string>
@@ -24,8 +26,8 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-start gap-4 rounded-lg border bg-card p-6 sm:p-8",
-        dashed && "border-dashed bg-transparent",
+        "mx-auto flex w-full max-w-md flex-col items-center gap-4 px-4 py-12 text-center",
+        dashed && "rounded-lg border border-dashed py-10",
       )}
     >
       <span
@@ -35,18 +37,18 @@ export function EmptyState({
         <Icon className="size-5" />
       </span>
       <div className="space-y-1">
-        <h2 className="text-lg font-semibold">{title}</h2>
-        <p className="max-w-prose text-sm text-muted-foreground">{description}</p>
+        <h2 className="type-section">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
       </div>
       {steps && (
-        <div className="space-y-2">
-          <h3 className="text-2xs font-medium tracking-wide text-muted-foreground uppercase">
-            What happens next
-          </h3>
-          <ol className="space-y-1 text-sm">
+        <div className="w-full space-y-2 rounded-lg border border-border-subtle bg-card p-4 text-left shadow-xs">
+          <h3 className="type-label">What happens next</h3>
+          <ol className="space-y-1.5 text-sm">
             {steps.map((step, index) => (
               <li key={step} className="flex items-baseline gap-2">
-                <span className="w-4 text-muted-foreground tabular-nums">{index + 1}.</span>
+                <span className="w-4 shrink-0 text-muted-foreground tabular-nums">
+                  {index + 1}.
+                </span>
                 {step}
               </li>
             ))}
@@ -54,7 +56,7 @@ export function EmptyState({
         </div>
       )}
       {(action || secondary) && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           {action}
           {secondary}
         </div>
