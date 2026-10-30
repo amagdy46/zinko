@@ -68,3 +68,19 @@ export const onSiteScheme = (url: string, site: { origin: string }): string => {
   parsed.protocol = new URL(site.origin).protocol
   return parsed.href
 }
+
+/** The path and query of an address someone typed, when it names a page below the host; null for the bare host. */
+export const startPathOfAddress = (text: string): string | null => {
+  const parsed = parse(withScheme(text))
+  if (parsed === null || (parsed.protocol !== "http:" && parsed.protocol !== "https:")) return null
+  // `//checkout` would read as another host once it is a path on its own, so leading slashes collapse.
+  const pathname = parsed.pathname.replace(/^\/+/, "/")
+  if (pathname === "/" && parsed.search === "") return null
+  return `${pathname}${parsed.search}`
+}
+
+/** A key page typed as a path (`/checkout`) is a page of the site; anything else is left for the URL check. */
+export const resolveOnSite = (text: string, base: string): string => {
+  if (!text.startsWith("/") || text.startsWith("//") || !URL.canParse(text, base)) return text
+  return new URL(text, base).href
+}

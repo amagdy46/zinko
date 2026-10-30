@@ -57,6 +57,8 @@ import {
   deleteSite,
   getSite,
   listClients,
+  renameSite,
+  unarchiveSite,
   updateMeasuredHosts,
   updateSiteClient,
   updateSiteAddress,
@@ -81,12 +83,15 @@ export const Route = createFileRoute("/app/sites/$siteId")({
 })
 
 function SitePage() {
-  const { site, client, clients, canManage, audits, page, hasMore } = Route.useLoaderData()
+  const { site, client, clients, canManage, hasAudits, audits, page, hasMore } =
+    Route.useLoaderData()
   const { groupByClient } = Route.useRouteContext()
   const router = useRouter()
   const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
   const [editing, setEditing] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [nameError, setNameError] = useState<string>()
   const [pending, setPending] = useState(false)
   const [rerunOf, setRerunOf] = useState<string | null>(null)
   const [rerunOpen, setRerunOpen] = useState(false)
@@ -111,6 +116,25 @@ function SitePage() {
       }
       setEditing(false)
       toast.success("Address saved")
+      await router.invalidate()
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function saveName(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setPending(true)
+    try {
+      const result = await renameSite({
+        data: { id: site.id, name: formField(new FormData(event.currentTarget), "name") },
+      })
+      if (!result.ok) {
+        setNameError(result.message)
+        return
+      }
+      setRenaming(false)
+      toast.success("Site renamed")
       await router.invalidate()
     } finally {
       setPending(false)
@@ -158,12 +182,27 @@ function SitePage() {
     }
   }
 
-  async function leave(action: typeof archiveSite) {
+  async function restore() {
+    const result = await unarchiveSite({ data: { id: site.id } })
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    toast.success(`Restored ${site.name}`)
+    await router.invalidate()
+  }
+
+  async function leave(action: typeof archiveSite | typeof deleteSite) {
     const result = await action({ data: { id: site.id } })
     if (!result.ok) {
       toast.error(result.message)
       return
     }
+    if (action === archiveSite)
+      toast.success(`Archived ${site.name}`, {
+        duration: 10000,
+        action: { label: "Undo", onClick: () => void restore() },
+      })
     await router.navigate(siteReturn(groupByClient, client))
   }
 
@@ -177,6 +216,14 @@ function SitePage() {
             <span className="font-mono break-all" data-testid="site-origin">
               {site.origin}
             </span>
+            {site.archived ? (
+              <span className="mt-1 block text-sm">
+                This site is archived.{" "}
+                {canManage
+                  ? "Restore it to run audits again."
+                  : "An owner or admin can restore it."}
+              </span>
+            ) : null}
             {groupByClient ? (
               <span className="mt-1 block text-sm" data-testid="site-client">
                 {client === null ? "No client" : `Client: ${client.name}`}
@@ -192,6 +239,11 @@ function SitePage() {
         meta={site.archived ? <Badge variant="secondary">Archived</Badge> : undefined}
         actions={
           <>
+            {site.archived && canManage ? (
+              <Button variant="outline" onClick={() => void restore()}>
+                Restore
+              </Button>
+            ) : null}
             {!site.archived && audits.length > 0 ? (
               <Button asChild>
                 <Link to="/app/sites/$siteId/audits/new" params={{ siteId: site.id }}>
@@ -207,6 +259,7 @@ function SitePage() {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => setRenaming(true)}>Rename</DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setEditing(true)}>
                     Edit address
                   </DropdownMenuItem>
@@ -228,13 +281,15 @@ function SitePage() {
                       <DropdownMenuItem onSelect={() => setConfirming("archive")}>
                         Archive
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        className="text-destructive"
-                        onSelect={() => setConfirming("delete")}
-                      >
-                        Delete
-                      </DropdownMenuItem>
+                      {hasAudits ? null : (
+                        <DropdownMenuItem
+                          variant="destructive"
+                          className="text-destructive"
+                          onSelect={() => setConfirming("delete")}
+                        >
+                          Delete
+                        </DropdownMenuItem>
+                      )}
                     </>
                   ) : null}
                 </DropdownMenuContent>
@@ -243,6 +298,52 @@ function SitePage() {
           </>
         }
       />
+      <Dialog
+        open={renaming}
+        onOpenChange={(isOpen) => {
+          setRenaming(isOpen)
+          if (!isOpen) setNameError(undefined)
+        }}
+      >
+        <DialogContent
+          onCloseAutoFocus={(event) => {
+            event.preventDefault()
+            menuButton.current?.focus()
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Rename site</DialogTitle>
+            <DialogDescription>
+              The new name shows on the next report. Reports already published keep the name they
+              were published with.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={saveName} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="site-rename">Name</Label>
+              <Input
+                id="site-rename"
+                name="name"
+                required
+                maxLength={100}
+                autoComplete="off"
+                defaultValue={site.name}
+                aria-invalid={nameError !== undefined}
+                aria-describedby={nameError === undefined ? undefined : "site-rename-error"}
+                onChange={() => setNameError(undefined)}
+              />
+              {nameError === undefined ? null : (
+                <p id="site-rename-error" role="alert" className="text-sm text-destructive">
+                  {nameError}
+                </p>
+              )}
+            </div>
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save name"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={editing}
         onOpenChange={(isOpen) => {
@@ -381,7 +482,11 @@ function SitePage() {
         label="Archive"
         variant="outline"
         title={`Archive ${site.name}?`}
-        description="The site is hidden from the lists. Nothing is deleted."
+        description={
+          hasAudits
+            ? "This site has audits, so it cannot be deleted. Archiving hides it from the lists and keeps its audits and reports. You can restore it from the Archived view on Sites."
+            : "The site is hidden from the lists. Nothing is deleted, and you can restore it from the Archived view on Sites."
+        }
         returnFocus={menuButton}
         onConfirm={() => leave(archiveSite)}
       />

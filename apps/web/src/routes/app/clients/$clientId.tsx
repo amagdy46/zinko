@@ -39,7 +39,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { formField } from "@/lib/form"
 import { withScheme } from "@/lib/site-url"
-import { archiveClient, createSite, deleteClient, getClient } from "@/server/clients"
+import {
+  archiveClient,
+  createSite,
+  deleteClient,
+  getClient,
+  unarchiveClient,
+} from "@/server/clients"
 
 export const Route = createFileRoute("/app/clients/$clientId")({
   loader: ({ params }) => getClient({ data: { id: params.clientId } }),
@@ -84,17 +90,28 @@ function ClientPage() {
     }
   }
 
-  async function leave(
-    action: (args: {
-      data: { id: string }
-    }) => Promise<{ ok: true } | { ok: false; message: string }>,
-  ) {
+  async function leave(action: typeof archiveClient | typeof deleteClient) {
     const result = await action({ data: { id: client.id } })
     if (!result.ok) {
       toast.error(result.message)
       return
     }
+    if (action === archiveClient)
+      toast.success(`Archived ${client.name}`, {
+        duration: 10000,
+        action: { label: "Undo", onClick: () => void restore() },
+      })
     await router.navigate({ to: "/app/clients" })
+  }
+
+  async function restore() {
+    const result = await unarchiveClient({ data: { id: client.id } })
+    if (!result.ok) {
+      toast.error(result.message)
+      return
+    }
+    toast.success(`Restored ${client.name}`)
+    await router.invalidate()
   }
 
   const lastAudit = sites.reduce<Date | string | null>(
@@ -182,6 +199,11 @@ function ClientPage() {
                   </form>
                 </DialogContent>
               </Dialog>
+            ) : null}
+            {canManage && client.archived ? (
+              <Button variant="outline" onClick={() => void restore()}>
+                Restore
+              </Button>
             ) : null}
             {canManage && !client.archived ? (
               <DropdownMenu>

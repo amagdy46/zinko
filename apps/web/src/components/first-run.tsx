@@ -19,37 +19,48 @@ type Result = {
   openFindings: { critical: number; warning: number; info: number }
 }
 
+const runningLabel = (running: number, hasFinished: boolean) => {
+  if (running > 1) return `${running} audits running`
+  return hasFinished ? "New audit running" : "First audit running"
+}
+
+/** The last finished audit leads; an audit still running is a separate, smaller line so it never reads as the finished one. */
 export function LastAudit({ latest, running }: { latest: Result | null; running: number }) {
   const timeZone = useTimeZone()
   return (
     <div className="space-y-1 text-xs">
-      {running > 0 ? (
-        <span className="flex items-center gap-1.5">
-          <StatusGlyph meaning="running" />
-          Audit running
-        </span>
-      ) : null}
       {latest ? (
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <StatusBadge status={toBadgeStatus(latest.status)} />
-          <time title={relativeTime(latest.createdAt, timeZone).title}>
-            {relativeTime(latest.createdAt).text}
-          </time>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {latest.score === null ? null : (
+              <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} size="inline" />
+            )}
+            {latest.status === "complete" ? null : (
+              <StatusBadge status={toBadgeStatus(latest.status)} />
+            )}
+            <time
+              className="text-muted-foreground"
+              title={relativeTime(latest.createdAt, timeZone).title}
+            >
+              {relativeTime(latest.createdAt).text}
+            </time>
+          </div>
+          {latest.sites > 1 && latest.score !== null ? (
+            <p className="text-muted-foreground">Lowest of {latest.sites} sites</p>
+          ) : null}
+          {latest.incompleteRuns > 0 && latest.score === null ? (
+            <p className="text-muted-foreground">
+              {count(latest.incompleteRuns, "run")} could not finish
+            </p>
+          ) : null}
+        </>
       ) : (
         <span className="text-muted-foreground">Not audited</span>
       )}
-      {latest === null || latest.score === null ? null : (
-        <p className="flex items-center gap-1.5">
-          <ScoreFigure score={latest.score} coverage={latest.scoreCoverage} size="inline" />
-          {latest.sites > 1 ? (
-            <span className="text-muted-foreground">· lowest of {latest.sites} sites</span>
-          ) : null}
-        </p>
-      )}
-      {latest !== null && latest.incompleteRuns > 0 && latest.score === null ? (
-        <p className="text-muted-foreground">
-          {count(latest.incompleteRuns, "run")} could not finish
+      {running > 0 ? (
+        <p className="flex items-center gap-1.5 text-muted-foreground">
+          <StatusGlyph meaning="running" />
+          {runningLabel(running, latest !== null)}
         </p>
       ) : null}
     </div>

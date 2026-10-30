@@ -1,7 +1,7 @@
 import { Database } from "@repo/core/Database"
 import { audit, client, orgSetting, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm"
+import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { startPathOf } from "@/lib/audit-labels"
@@ -34,6 +34,7 @@ import {
 } from "./server-fn"
 
 const AUDITS_PER_PAGE = 20
+const MAX_RESTORE_ATTEMPTS = 3
 
 const requireManager = (role: string, action = "archive or delete") =>
   isManager(role)
@@ -290,6 +291,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             and(
               eq(audit.orgId, orgId),
               eq(audit.kind, "full"),
+              isNull(site.archivedAt),
               text === "" ? undefined : ilike(site.name, pattern),
             ),
           )
@@ -354,10 +356,11 @@ export const archiveClient = createServerFn({ method: "POST" })
         yield* clientInOrg(orgId, data.id)
         yield* requireManager(role)
         const { db } = yield* Database
-        const archivedAt = new Date()
         yield* atomically(
           Effect.gen(function* () {
             const found = yield* clientInOrg(orgId, data.id, "update")
+            // a second archive keeps the first stamp: `unarchiveClient` restores the sites that carry it
+            const archivedAt = found.archivedAt ?? new Date()
             yield* db
               .update(site)
               .set({ archivedAt })
@@ -370,6 +373,91 @@ export const archiveClient = createServerFn({ method: "POST" })
               .where(and(eq(client.orgId, orgId), eq(client.id, found.id)))
           }),
         )
+      }),
+    ),
+  )
+
+/**
+ * Restores a client and the sites that were archived with it (`archiveClient` gives them the same
+ * `archived_at`); a site archived on its own earlier stays archived. Owners and admins only.
+ */
+export const unarchiveClient = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(IdInput))
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        yield* clientInOrg(orgId, data.id)
+        yield* requireManager(role, "restore")
+        const { db } = yield* Database
+        yield* atomically(
+          Effect.gen(function* () {
+            const found = yield* clientInOrg(orgId, data.id, "update")
+            if (found.archivedAt === null) return
+            yield* db
+              .update(site)
+              .set({ archivedAt: null })
+              .where(
+                and(
+                  eq(site.orgId, orgId),
+                  eq(site.clientId, found.id),
+                  eq(site.archivedAt, found.archivedAt),
+                ),
+              )
+            yield* db
+              .update(client)
+              .set({ archivedAt: null })
+              .where(and(eq(client.orgId, orgId), eq(client.id, found.id)))
+          }),
+        )
+      }),
+    ),
+  )
+
+/** The archived sites and named clients, newest archive first, for the Archived view. Any member may read; restoring needs `canManage`. */
+export const listArchived = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .handler(({ context }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        const { db } = yield* Database
+        const sites = yield* db
+          .select({
+            id: site.id,
+            name: site.name,
+            host: site.host,
+            archivedAt: site.archivedAt,
+            clientId: client.id,
+            clientName: client.name,
+            clientArchived: client.archivedAt,
+            isDefault: client.isDefault,
+          })
+          .from(site)
+          .innerJoin(client, eq(client.id, site.clientId))
+          .where(and(eq(site.orgId, orgId), isNotNull(site.archivedAt)))
+          .orderBy(desc(site.archivedAt), site.name, site.id)
+        const clients = yield* db
+          .select({ id: client.id, name: client.name, archivedAt: client.archivedAt })
+          .from(client)
+          .where(
+            and(eq(client.orgId, orgId), eq(client.isDefault, false), isNotNull(client.archivedAt)),
+          )
+          .orderBy(desc(client.archivedAt), client.name, client.id)
+        return {
+          canManage: isManager(role),
+          sites: sites.map((s) => ({
+            id: s.id,
+            name: s.name,
+            host: s.host,
+            archivedAt: s.archivedAt,
+            client: s.isDefault
+              ? null
+              : { id: s.clientId, name: s.clientName, archived: s.clientArchived !== null },
+          })),
+          clients: clients.map((c) => ({ id: c.id, name: c.name, archivedAt: c.archivedAt })),
+        }
       }),
     ),
   )
@@ -635,6 +723,80 @@ export const archiveSite = createServerFn({ method: "POST" })
     ),
   )
 
+/**
+ * Restores an archived site. Lock order client, then site: the site's client is locked `for share`
+ * (an archived client has to be restored first, which brings its sites back), then the site.
+ */
+export const unarchiveSite = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(IdInput))
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId, role } = yield* membership(context.session)
+        yield* siteInOrg(orgId, data.id)
+        yield* requireManager(role, "restore")
+        const { db } = yield* Database
+        // Each attempt is its own transaction: the client is found by an unlocked read, locked, then
+        // the site is locked; if the site moved meanwhile the attempt ends and the next one starts
+        // from the current client, so the lock order stays client, then site.
+        for (let attempt = 0; attempt < MAX_RESTORE_ATTEMPTS; attempt++) {
+          const done = yield* atomically(
+            Effect.gen(function* () {
+              const current = yield* siteInOrg(orgId, data.id)
+              const [owner] = yield* db
+                .select()
+                .from(client)
+                .where(and(eq(client.id, current.clientId), eq(client.orgId, orgId)))
+                .for("share")
+              if (owner === undefined) return yield* new NotFound({ message: "Not found" })
+              const found = yield* siteInOrg(orgId, data.id, true)
+              if (found.clientId !== owner.id) return null
+              if (owner.archivedAt !== null)
+                return yield* new Invalid({
+                  message: `The client ${owner.name} is archived. Restore the client first.`,
+                })
+              yield* db
+                .update(site)
+                .set({ archivedAt: null })
+                .where(and(eq(site.orgId, orgId), eq(site.id, found.id)))
+              return { clientId: found.clientId }
+            }),
+          )
+          if (done !== null) return done
+        }
+        return yield* new Invalid({ message: "The site changed while it was restored. Try again." })
+      }),
+    ),
+  )
+
+/** Renames a site. Any member may, like changing its address; published reports keep the name they were published with. */
+export const renameSite = createServerFn({ method: "POST" })
+  .middleware([requireSession])
+  .validator(Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.String, name: Schema.String })))
+  .handler(({ context, data }) =>
+    mutation(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        yield* siteInOrg(orgId, data.id)
+        const name = yield* parseName(data.name)
+        const { db } = yield* Database
+        return yield* atomically(
+          Effect.gen(function* () {
+            const found = yield* siteInOrg(orgId, data.id, true)
+            if (found.archivedAt !== null)
+              return yield* new Invalid({ message: "This site is archived." })
+            yield* db
+              .update(site)
+              .set({ name })
+              .where(and(eq(site.orgId, orgId), eq(site.id, found.id)))
+            return { name }
+          }),
+        )
+      }),
+    ),
+  )
+
 export const deleteSite = createServerFn({ method: "POST" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(IdInput))
@@ -714,6 +876,7 @@ export const getSite = createServerFn({ method: "GET" })
             measuredHosts: found.measuredHosts,
             archived: found.archivedAt !== null,
           },
+          hasAudits: (yield* auditCount(orgId, [found.id])) > 0,
           client: owner ?? null,
           canManage: isManager(role),
           audits: audits.map((a) => {
