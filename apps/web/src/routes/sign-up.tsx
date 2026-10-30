@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { flushSync } from "react-dom"
-import { AuthCard } from "@/components/auth-card"
+import { AuthCard, authLinkClass } from "@/components/auth-card"
 import { AuthField, FormError } from "@/components/auth-field"
 import { Button } from "@/components/ui/button"
 import { pageTitle } from "@/lib/page-title"
@@ -72,7 +72,7 @@ function SignUp() {
           <Link
             to="/sign-in"
             search={next === undefined ? {} : { redirect: next }}
-            className="underline"
+            className={authLinkClass}
           >
             Sign in
           </Link>

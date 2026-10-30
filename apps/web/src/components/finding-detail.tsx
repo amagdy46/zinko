@@ -19,6 +19,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { RecheckDialog } from "@/components/recheck-dialog"
+import { CodeText } from "@/components/report/code-text"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -243,10 +244,12 @@ export function FindingDetail({
   row,
   runs,
   canVerify,
+  onTriaged,
 }: {
   auditId: string
   row: FindingRow
   canVerify: boolean
+  onTriaged: () => void
   runs: ReadonlyArray<{ id: string; screenshotUrl: string | null }>
 }) {
   const router = useRouter()
@@ -294,6 +297,7 @@ export function FindingDetail({
             ? { label: "Undo", onClick: () => void changeTriage("open") }
             : undefined,
       })
+      onTriaged()
       await router.invalidate()
       await load()
       return null
@@ -323,20 +327,17 @@ export function FindingDetail({
         )}
         <span>{AREAS[row.area] ?? row.area}</span>
       </div>
-      <h2 className="type-section">{couldNotCheck ? row.checkTitle : row.title}</h2>
-      {couldNotCheck ? null : (
-        <div className="space-y-0.5 text-xs">
-          {row.firstFix === null ? null : (
-            <p data-testid="fix-first">
-              <span className="text-muted-foreground">Fix first:</span> {row.firstFix}
-            </p>
-          )}
-          {row.owner === null ? null : (
-            <p className="text-muted-foreground" data-testid="finding-owner">
-              Usually fixed by: <span className="text-foreground">{OWNER_LABELS[row.owner]}</span>
-            </p>
-          )}
-        </div>
+      <h2
+        tabIndex={-1}
+        data-finding-heading=""
+        className="type-section rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+      >
+        {couldNotCheck ? row.checkTitle : row.title}
+      </h2>
+      {couldNotCheck || row.owner === null ? null : (
+        <p className="text-xs text-muted-foreground" data-testid="finding-owner">
+          Usually fixed by: <span className="text-foreground">{OWNER_LABELS[row.owner]}</span>
+        </p>
       )}
       <div className="flex flex-wrap items-center gap-2">
         {couldNotCheck ? null : (
@@ -464,8 +465,11 @@ export function FindingDetail({
                   />
                 </div>
                 <ol className="list-decimal space-y-1 pl-5">
-                  {finding.fix.map((step) => (
-                    <li key={step}>{step}</li>
+                  {finding.fix.map((step, i) => (
+                    <li key={step}>
+                      {i === 0 ? <span className="type-label mr-1.5">Fix first</span> : null}
+                      <CodeText text={step} />
+                    </li>
                   ))}
                 </ol>
               </section>

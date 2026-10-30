@@ -205,6 +205,7 @@ function SitePage() {
         duration: 10000,
         action: { label: "Undo", onClick: () => void restore() },
       })
+    else toast.success(`Deleted ${site.name}`)
     await router.navigate(siteReturn(groupByClient, client))
   }
 

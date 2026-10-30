@@ -1,7 +1,7 @@
 import { Database } from "@repo/core/Database"
 import { audit, client, orgSetting, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
+import { type SQL, and, count, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { startPathOf } from "@/lib/audit-labels"
@@ -248,6 +248,24 @@ const SearchInput = Schema.Struct({ query: Schema.String.check(Schema.isMaxLengt
 /** Escapes `\`, `%` and `_` so the text matches literally inside `ilike`. */
 const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`
 
+/** Every word of the text (the first eight) must be found in one of the columns, apostrophes ignored ("sams store" finds "Sam's store"). */
+const APOSTROPHES = "'’"
+const wordsIn = (columns: ReadonlyArray<SQL>, text: string) =>
+  and(
+    ...text
+      .replace(/['’]/g, "")
+      .split(/\s+/)
+      .filter((word) => word !== "")
+      .slice(0, 8)
+      .map((word) =>
+        or(
+          ...columns.map(
+            (column) => sql`translate(${column}, ${APOSTROPHES}, '') ilike ${likePattern(word)}`,
+          ),
+        ),
+      ),
+  )
+
 /** The first `SEARCH_LIMIT` matches by name; `capped` says more exist. Clients are listed only when the organization groups sites by client, and a site carries its client's name only when that client is a named one. An empty query lists the first by name. `audits` are the newest few, of sites matching the query. */
 export const searchTargets = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -258,8 +276,11 @@ export const searchTargets = createServerFn({ method: "GET" })
         const { organizationId: orgId } = yield* membership(context.session)
         const { db } = yield* Database
         const text = data.query.trim()
-        const pattern = likePattern(text)
         const grouping = yield* groupByClientOf(orgId)
+        // a named client's name is searchable only where the interface shows it
+        const ownerName = grouping
+          ? sql`case when ${client.isDefault} then '' else ${client.name} end`
+          : sql`''`
         const clients = grouping
           ? yield* db
               .select({
@@ -273,7 +294,7 @@ export const searchTargets = createServerFn({ method: "GET" })
                   eq(client.orgId, orgId),
                   eq(client.isDefault, false),
                   isNull(client.archivedAt),
-                  text === "" ? undefined : ilike(client.name, pattern),
+                  text === "" ? undefined : wordsIn([sql`${client.name}`], text),
                 ),
               )
               .orderBy(client.name)
@@ -294,7 +315,9 @@ export const searchTargets = createServerFn({ method: "GET" })
             and(
               eq(site.orgId, orgId),
               isNull(site.archivedAt),
-              text === "" ? undefined : or(ilike(site.name, pattern), ilike(site.host, pattern)),
+              text === ""
+                ? undefined
+                : wordsIn([sql`${site.name}`, sql`${site.host}`, ownerName], text),
             ),
           )
           .orderBy(site.name)
@@ -305,11 +328,15 @@ export const searchTargets = createServerFn({ method: "GET" })
             createdAt: audit.createdAt,
             status: audit.status,
             siteName: site.name,
+            clientName: sql<
+              string | null
+            >`case when ${client.isDefault} then null else ${client.name} end`,
             pages: sql<number>`jsonb_array_length(${audit.config} -> 'pages')`.mapWith(Number),
             startPage: sql<string>`${audit.config} -> 'pages' ->> 0`,
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
+          .innerJoin(client, eq(client.id, site.clientId))
           .where(
             and(
               eq(audit.orgId, orgId),
@@ -317,9 +344,9 @@ export const searchTargets = createServerFn({ method: "GET" })
               isNull(site.archivedAt),
               text === ""
                 ? undefined
-                : or(
-                    ilike(site.name, pattern),
-                    sql`${audit.config} -> 'pages' ->> 0 ilike ${pattern}`,
+                : wordsIn(
+                    [sql`${site.name}`, sql`${audit.config} -> 'pages' ->> 0`, ownerName],
+                    text,
                   ),
             ),
           )
@@ -363,6 +390,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             createdAt: a.createdAt,
             status: a.status,
             siteName: a.siteName,
+            clientName: a.clientName,
             pages: a.pages,
             startPath: startPathOf(a.startPage),
             coverage: coverageOf(details, a.id),

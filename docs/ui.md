@@ -182,8 +182,20 @@ What a client sees at `/r/<token>`: the report on a plain page (no sidebar, them
 
 ## Round 9 batch W
 
-- **Findings list.** Rows are `DataRow`s in one bordered list per severity: a glyph (diamond, triangle, dot: the shape tells Critical from Warning in grayscale; the word is read to screen readers), the title as the row link, one meta line ("Consent · 1 page · 4 scenarios", then the owner as a small chip) and "4 of 4 runs" as a quiet figure. "Fix first" lives in the detail header, under the title, with "Usually fixed by". The toolbar is two rows: triage tabs with Export CSV at their right, then severity chips and Area. The scrolling list is not a tab stop; its rows are.
-- **Finding detail header** (sticky): severity glyph and word with the area, the title as a `type-section` heading, then "Fix first: <step>" and the owner, then one actions row (triage select, Re-check this finding, and the rule id with its copy button at the right).
+- **Findings list.** Rows are `DataRow`s in one bordered list per severity: a glyph (diamond, triangle, dot: the shape tells Critical from Warning in grayscale; the word is read to screen readers), the title as the row link, one meta line ("Consent · 1 page · 4 scenarios", then the owner as a small chip) and "4 of 4 runs" as a quiet figure. "Fix first" is the label on step 1 of "How to fix it" in the detail (round 10: it is no longer repeated in the header, which keeps only "Usually fixed by"). The toolbar is two rows: triage tabs with Export CSV at their right, then severity chips and Area. The scrolling list is not a tab stop; its rows are.
+- **Finding detail header** (sticky): severity glyph and word with the area, the title as a `type-section` heading, then "Usually fixed by", then one actions row (triage select, Re-check this finding, and the rule id with its copy button at the right).
 - **Runs.** The explanation and the legend come after the grid, and the legend lists only the glyphs the audit shows.
 - **Report tab.** The intro and toolbar share the paper's 210mm column.
-- **Palette.** "Recent audits" are two-line rows (site, then path, pages, date) with the status and score at the right; the list is up to 30rem tall.
+- **Palette.** "Recent audits" are two-line rows (site, then date, the client when the organization groups by client, path, pages) with the status and score at the right; the list is up to 30rem tall.
+
+## Round 10 batch X
+
+- **Palette matching.** cmdk's fuzzy match is replaced by `matchRank` (substring, word starts first), so "store" no longer reaches Settings through its keywords; when a query is typed the Actions group comes after the sites, audits and clients. Site and "New audit for" rows carry a second line: `Client · host` when the organization groups by client ("No client · host" for an ungrouped site), the host otherwise. Recent audit rows put the date first, then the client (grouping only), path and pages; the status chip is hidden below `sm` so the date is never cut off.
+- **Signed-in auth card** (onboarding). `AuthCard` with `account` shows one header (logo, account line, `ThemeToggle`) and only the form card: no brand panel and no second logo. Inline links in an auth card (`authLinkClass`) are 32px targets with the standard ring.
+- **Running audit.** Elapsed and time left appear once the clock is known (after hydration); the server and first client render say nothing instead of "0s elapsed".
+- **Findings detail focus.** The detail heading is focusable (`data-finding-heading`). The bottom sheet opens on it instead of the first button; on desktop, when the selection moves on while focus was in the detail (an accepted risk leaves the Open list), focus lands on the new detail heading.
+- **Fix steps** print inline code in monospace through `CodeText` (Findings detail, Overview), as the report does.
+- **New audit.** The breadcrumb is the site trail (Sites, or Clients and the client) plus the site and "New audit"; the comparison note and "Settings copied from your last audit. Reset to defaults" share one note box.
+- **Toasts.** Adding a site with a pasted path says "Site added. Start page set to /path/."; deleting a site says "Deleted <name>".
+- **Lists with no audit.** A site or client with no finished audit says "Not audited" once (Last audit); Score, Open findings and Last five scores show a muted dash with a screen-reader reason.
+- **Print.** The top of a finding (header, triage line, "What happened", "What it means", "Fix first"), an evidence table and "What was not tested" are kept on one page (`keep-together`); a longer-than-a-page block still flows.

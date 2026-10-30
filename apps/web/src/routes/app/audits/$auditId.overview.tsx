@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/empty-state"
 import { OverviewSkeleton } from "@/components/page-skeleton"
 import { ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
 import { ScoreFigure } from "@/components/score-figure"
+import { CodeText } from "@/components/report/code-text"
 import { SeverityBadge } from "@/components/severity"
 import { SectionHeading } from "@/components/section-heading"
 import { Stat } from "@/components/stat"
@@ -588,7 +589,7 @@ function WorstFinding({
       <div className="flex flex-wrap items-center gap-2">
         <span className="type-label">Start with</span>
         <SeverityBadge severity={worst.severity} />
-        <h2 className="min-w-0 text-base font-semibold [overflow-wrap:anywhere]">{worst.title}</h2>
+        <h2 className="type-section min-w-0 [overflow-wrap:anywhere]">{worst.title}</h2>
       </div>
       <p className="max-w-prose text-sm text-muted-foreground">
         Failed on {worst.failingRuns} of {count(worst.knownRuns, "run")} where it could be checked,
@@ -618,7 +619,9 @@ function WorstFinding({
           </div>
           <ol className="list-decimal space-y-1 pl-5 text-sm">
             {worst.fix.map((step) => (
-              <li key={step}>{step}</li>
+              <li key={step}>
+                <CodeText text={step} />
+              </li>
             ))}
           </ol>
         </div>

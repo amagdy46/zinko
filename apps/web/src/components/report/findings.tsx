@@ -80,7 +80,7 @@ function Evidence({ evidence }: { evidence: NonNullable<ReportFinding["evidence"
   })
   const hasUnknown = rows.some(({ c }) => c.consent.includes("unknown"))
   return (
-    <div className="space-y-1">
+    <div className="keep-together space-y-1">
       <p className="text-xs text-muted-foreground">{evidence.caption}</p>
       <div
         role="region"
@@ -242,54 +242,56 @@ function FindingCard({
       )}
       aria-labelledby={`finding-title-${finding.ruleId}`}
     >
-      <div className="keep-together space-y-1 print:break-after-avoid">
-        <div className="flex flex-wrap items-center gap-2">
-          <SeverityBadge severity={finding.severity} />
-          {hidden ? (
-            <span className="rounded-md border px-2 py-0.5 text-xs" data-testid="left-out">
-              Hidden from the detail
+      <div className="keep-together space-y-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <SeverityBadge severity={finding.severity} />
+            {hidden ? (
+              <span className="rounded-md border px-2 py-0.5 text-xs" data-testid="left-out">
+                Hidden from the detail
+              </span>
+            ) : null}
+            <span className="text-xs text-muted-foreground">
+              {AREAS[finding.area] ?? finding.area}
             </span>
+          </div>
+          <h3
+            id={`finding-title-${finding.ruleId}`}
+            className="text-base font-semibold [overflow-wrap:anywhere]"
+          >
+            {finding.title}
+          </h3>
+          {finding.clientVoice === null ? (
+            <p className="text-muted-foreground">
+              Failed on {finding.failingRuns} of {count(finding.knownRuns, "run")} where it could be
+              checked, {whereOf(finding.pages, finding.scenarios, scenarioCount)}.
+            </p>
           ) : null}
-          <span className="text-xs text-muted-foreground">
-            {AREAS[finding.area] ?? finding.area}
-          </span>
         </div>
-        <h3
-          id={`finding-title-${finding.ruleId}`}
-          className="text-base font-semibold [overflow-wrap:anywhere]"
-        >
-          {finding.title}
-        </h3>
-        {finding.clientVoice === null ? (
-          <p className="text-muted-foreground">
-            Failed on {finding.failingRuns} of {count(finding.knownRuns, "run")} where it could be
-            checked, {whereOf(finding.pages, finding.scenarios, scenarioCount)}.
+        <Triage finding={finding} agency={agency} />
+        {finding.clientVoice === null ? null : (
+          <div className="space-y-2" data-testid="client-voice">
+            <div className="space-y-1">
+              <h4 className="font-semibold">What happened</h4>
+              <p className="max-w-[65ch]">{finding.clientVoice.happened}</p>
+            </div>
+            <div className="space-y-1">
+              <h4 className="font-semibold">What it means for you</h4>
+              <p className="max-w-[65ch]">{finding.clientVoice.means}</p>
+            </div>
+          </div>
+        )}
+        {first === undefined || !open ? null : (
+          <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
+            <span className="font-semibold tabular-nums">1. Fix first</span>
+            <span className="text-muted-foreground">
+              {" "}
+              ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
+            </span>{" "}
+            <CodeText text={first} />
           </p>
-        ) : null}
+        )}
       </div>
-      <Triage finding={finding} agency={agency} />
-      {finding.clientVoice === null ? null : (
-        <div className="space-y-2" data-testid="client-voice">
-          <div className="space-y-1">
-            <h4 className="font-semibold">What happened</h4>
-            <p className="max-w-[65ch]">{finding.clientVoice.happened}</p>
-          </div>
-          <div className="space-y-1">
-            <h4 className="font-semibold">What it means for you</h4>
-            <p className="max-w-[65ch]">{finding.clientVoice.means}</p>
-          </div>
-        </div>
-      )}
-      {first === undefined || !open ? null : (
-        <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
-          <span className="font-semibold tabular-nums">1. Fix first</span>
-          <span className="text-muted-foreground">
-            {" "}
-            ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
-          </span>{" "}
-          <CodeText text={first} />
-        </p>
-      )}
       {open ? <Steps steps={rest} start={2} title="Next steps" /> : null}
       <TechnicalDetail finding={finding} withSteps={!open} />
       {finding.evidence === null ? (

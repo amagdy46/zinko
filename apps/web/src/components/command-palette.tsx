@@ -22,13 +22,38 @@ import {
 import { useTheme } from "@/components/theme-provider"
 import { authClient } from "@/lib/auth-client"
 import { ScoreFigure } from "@/components/score-figure"
-import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
+import { StatusBadge, StatusMark, toBadgeStatus } from "@/components/status-badge"
 import { count, shortDateTime, useTimeZone } from "@/lib/format"
 import { createClient, searchTargets } from "@/server/clients"
 
 interface Organization {
   readonly id: string
   readonly name: string
+}
+
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/g
+const fold = (text: string) => text.toLowerCase().replace(/['\u2019]/g, "")
+
+/**
+ * Every word of the query (split like the item, so "example.com" or "/drift/" work) has to start a word (rank 2) or sit inside one (rank 1) of the item; the
+ * rank is the weakest word's. cmdk's own fuzzy match lets "store" reach Settings through its keywords,
+ * and ids are not searched.
+ */
+const matchRank = (value: string, search: string, keywords?: string[]) => {
+  const words = fold(search)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean)
+  if (words.length === 0) return 1
+  const haystack = fold([value, ...(keywords ?? [])].join(" ").replace(UUID, " ")).split(
+    /[^\p{L}\p{N}]+/u,
+  )
+  let rank = 2
+  for (const word of words) {
+    if (haystack.some((token) => token.startsWith(word))) continue
+    if (haystack.some((token) => token.includes(word))) rank = 1
+    else return 0
+  }
+  return rank
 }
 
 /** ⌘K / Ctrl+K palette: jump to a site (and a client when the organization groups by client), recent audit or settings page, start an audit, create a client, toggle the theme, switch organization. */
@@ -174,6 +199,84 @@ export function CommandPalette({
   let placeholder = groupByClient ? "Find a client, site or action…" : "Find a site or action…"
   if (naming) placeholder = "Name the new client…"
 
+  const actions = (
+    <CommandGroup heading="Actions">
+      <CommandItem
+        value="New site"
+        keywords={["create", "add"]}
+        onSelect={() => go(() => router.navigate({ to: "/app/sites", search: { add: true } }))}
+      >
+        <Plus />
+        New site
+      </CommandItem>
+      {groupByClient ? (
+        <CommandItem
+          value="New client"
+          keywords={["create", "add"]}
+          onSelect={() => {
+            setSearch("")
+            setNaming(true)
+            input.current?.focus()
+          }}
+        >
+          <Plus />
+          New client
+        </CommandItem>
+      ) : null}
+      <CommandItem
+        value="All sites"
+        onSelect={() => go(() => router.navigate({ to: "/app/sites" }))}
+      >
+        <Globe />
+        All sites
+      </CommandItem>
+      {groupByClient ? (
+        <CommandItem
+          value="All clients"
+          onSelect={() => go(() => router.navigate({ to: "/app/clients" }))}
+        >
+          <Users />
+          All clients
+        </CommandItem>
+      ) : null}
+      <CommandItem
+        value="Settings"
+        keywords={["profile", "account"]}
+        onSelect={() => go(() => router.navigate({ to: "/app/settings" }))}
+      >
+        <Settings />
+        Settings
+      </CommandItem>
+      <CommandItem
+        value="AI settings"
+        keywords={["model", "key", "explanations", "provider"]}
+        onSelect={() => go(() => router.navigate({ to: "/app/settings/ai" }))}
+      >
+        <Sparkles />
+        AI settings
+      </CommandItem>
+      <CommandItem
+        value="Members"
+        keywords={["team", "invite", "people"]}
+        onSelect={() => go(() => router.navigate({ to: "/app/settings/members" }))}
+      >
+        <Users />
+        Members
+      </CommandItem>
+      <CommandItem
+        value="Toggle theme"
+        keywords={["dark", "light", "mode"]}
+        onSelect={() => {
+          change(false)
+          setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")
+        }}
+      >
+        <Moon />
+        Toggle theme
+      </CommandItem>
+    </CommandGroup>
+  )
+
   return (
     <CommandDialog
       open={open}
@@ -183,6 +286,7 @@ export function CommandPalette({
       onCloseAutoFocus={restoreFocus}
       commandProps={{
         shouldFilter: !naming,
+        filter: matchRank,
         label: groupByClient ? "Find clients, sites and actions" : "Find sites and actions",
       }}
     >
@@ -207,89 +311,13 @@ export function CommandPalette({
         ) : (
           <>
             <CommandEmpty>{targets === null ? "Loading…" : "Nothing found."}</CommandEmpty>
-            <CommandGroup heading="Actions">
-              <CommandItem
-                value="New site"
-                keywords={["create", "add"]}
-                onSelect={() =>
-                  go(() => router.navigate({ to: "/app/sites", search: { add: true } }))
-                }
-              >
-                <Plus />
-                New site
-              </CommandItem>
-              {groupByClient ? (
-                <CommandItem
-                  value="New client"
-                  keywords={["create", "add"]}
-                  onSelect={() => {
-                    setSearch("")
-                    setNaming(true)
-                    input.current?.focus()
-                  }}
-                >
-                  <Plus />
-                  New client
-                </CommandItem>
-              ) : null}
-              <CommandItem
-                value="All sites"
-                onSelect={() => go(() => router.navigate({ to: "/app/sites" }))}
-              >
-                <Globe />
-                All sites
-              </CommandItem>
-              {groupByClient ? (
-                <CommandItem
-                  value="All clients"
-                  onSelect={() => go(() => router.navigate({ to: "/app/clients" }))}
-                >
-                  <Users />
-                  All clients
-                </CommandItem>
-              ) : null}
-              <CommandItem
-                value="Settings"
-                keywords={["profile", "account"]}
-                onSelect={() => go(() => router.navigate({ to: "/app/settings" }))}
-              >
-                <Settings />
-                Settings
-              </CommandItem>
-              <CommandItem
-                value="AI settings"
-                keywords={["model", "key", "explanations", "provider"]}
-                onSelect={() => go(() => router.navigate({ to: "/app/settings/ai" }))}
-              >
-                <Sparkles />
-                AI settings
-              </CommandItem>
-              <CommandItem
-                value="Members"
-                keywords={["team", "invite", "people"]}
-                onSelect={() => go(() => router.navigate({ to: "/app/settings/members" }))}
-              >
-                <Users />
-                Members
-              </CommandItem>
-              <CommandItem
-                value="Toggle theme"
-                keywords={["dark", "light", "mode"]}
-                onSelect={() => {
-                  change(false)
-                  setTheme(document.documentElement.classList.contains("dark") ? "light" : "dark")
-                }}
-              >
-                <Moon />
-                Toggle theme
-              </CommandItem>
-            </CommandGroup>
+            {text === "" ? actions : null}
             {audits.length > 0 ? (
               <CommandGroup heading="Recent audits">
                 {audits.map((a) => (
                   <CommandItem
                     key={a.id}
-                    value={`audit of ${a.siteName} ${a.startPath ?? ""} ${a.id}`}
+                    value={`audit of ${a.siteName} ${groupByClient ? (a.clientName ?? "") : ""} ${a.startPath ?? ""} ${a.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({
@@ -303,12 +331,14 @@ export function CommandPalette({
                     <span className="min-w-0">
                       <span className="block truncate">Audit of {a.siteName}</span>
                       <span className="block truncate text-xs text-muted-foreground">
-                        {a.startPath ?? "/"} · {count(a.pages, "page")} ·{" "}
                         {shortDateTime(a.createdAt, timeZone)}
+                        {groupByClient ? ` · ${a.clientName ?? "No client"}` : ""} ·{" "}
+                        {a.startPath ?? "/"} · {count(a.pages, "page")}
                       </span>
                     </span>
                     <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted-foreground">
-                      <StatusBadge status={toBadgeStatus(a.status)} />
+                      <StatusBadge status={toBadgeStatus(a.status)} className="max-sm:hidden" />
+                      <StatusMark status={toBadgeStatus(a.status)} className="sm:hidden" />
                       {a.score === null || a.coverage === null ? null : (
                         <ScoreFigure score={a.score} coverage={a.coverage} size="inline" />
                       )}
@@ -322,7 +352,7 @@ export function CommandPalette({
                 {sites.map((s) => (
                   <CommandItem
                     key={s.id}
-                    value={`site ${s.name} ${s.host} ${s.id}`}
+                    value={`site ${s.name} ${s.host} ${groupByClient ? (s.clientName ?? "") : ""} ${s.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({ to: "/app/sites/$siteId", params: { siteId: s.id } }),
@@ -330,8 +360,12 @@ export function CommandPalette({
                     }
                   >
                     <Globe />
-                    <span className="truncate">{s.name}</span>
-                    <span className="ml-auto truncate text-xs text-muted-foreground">{s.host}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate">{s.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {siteLabel(s, groupByClient)}
+                      </span>
+                    </span>
                   </CommandItem>
                 ))}
                 {targets?.sitesCapped ? <CapNote noun="sites" /> : null}
@@ -372,7 +406,7 @@ export function CommandPalette({
                 {sites.map((s) => (
                   <CommandItem
                     key={s.id}
-                    value={`new audit for ${s.name} ${s.host} ${s.id}`}
+                    value={`new audit for ${s.name} ${s.host} ${groupByClient ? (s.clientName ?? "") : ""} ${s.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({
@@ -383,11 +417,17 @@ export function CommandPalette({
                     }
                   >
                     <Plus />
-                    <span className="truncate">New audit for {s.name}</span>
+                    <span className="min-w-0">
+                      <span className="block truncate">New audit for {s.name}</span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {siteLabel(s, groupByClient)}
+                      </span>
+                    </span>
                   </CommandItem>
                 ))}
               </CommandGroup>
             ) : null}
+            {text === "" ? null : actions}
             {organizations.length > 1 ? (
               <CommandGroup heading="Switch organization">
                 {organizations
@@ -410,6 +450,10 @@ export function CommandPalette({
     </CommandDialog>
   )
 }
+
+/** What tells two sites of one name apart: their client when the organization groups by client, else the address. */
+const siteLabel = (s: { host: string; clientName: string | null }, groupByClient: boolean) =>
+  groupByClient ? `${s.clientName ?? "No client"} · ${s.host}` : s.host
 
 function CapNote({ noun }: { noun: string }) {
   return (

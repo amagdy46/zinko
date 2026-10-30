@@ -95,7 +95,12 @@ function NoFindings({ latest, full }: { latest: Result; full: boolean }) {
 }
 
 export function OpenFindings({ latest }: { latest: Result | null }) {
-  if (latest === null) return <span className="text-muted-foreground">Not audited</span>
+  if (latest === null)
+    return (
+      <span className="text-muted-foreground">
+        —<span className="sr-only">No audit to count findings from</span>
+      </span>
+    )
   const total = Object.values(latest.openFindings).reduce((sum, n) => sum + n, 0)
   const full = latest.coverage === "full" && latest.couldNotCheck === 0
   return (

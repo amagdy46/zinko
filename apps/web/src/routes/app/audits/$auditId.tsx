@@ -103,8 +103,13 @@ function AuditPage() {
   useEffect(() => () => clearTimeout(refetch.current), [])
   useEffect(() => {
     if (!active) return undefined
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
+    const tick = () => setNow(Date.now())
+    const first = setTimeout(tick, 0)
+    const timer = setInterval(tick, 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(timer)
+    }
   }, [active])
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const onFindings = useLocation({ select: (location) => location.pathname.endsWith("/findings") })
@@ -145,9 +150,13 @@ function AuditPage() {
   // Announce about every fifth of the runs, not every tick of the progress bar.
   const announceStep = Math.max(1, Math.ceil(runs.length / 5))
   const announced = Math.floor(done / announceStep) * announceStep
-  const progressNote = waiting
-    ? "Waiting for a capture slot. It starts automatically when one frees up."
-    : remainingTime(remainingUnits, elapsed, workUnits)
+  // The clock is unknown until hydration, so the server render and the first client render say
+  // nothing about elapsed or remaining time instead of "0s".
+  const clockKnown = now !== null
+  let progressNote: string | null = null
+  if (waiting)
+    progressNote = "Waiting for a capture slot. It starts automatically when one frees up."
+  else if (clockKnown) progressNote = remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
       const noun = findings === 1 ? "finding" : "findings"
@@ -355,7 +364,9 @@ function AuditPage() {
             <span>
               {done} of {runs.length} runs
             </span>
-            <span className="text-muted-foreground">{duration(elapsed)} elapsed</span>
+            {clockKnown && audit.startedAt !== null ? (
+              <span className="text-muted-foreground">{duration(elapsed)} elapsed</span>
+            ) : null}
             {progressNote ? <span className="text-muted-foreground">{progressNote}</span> : null}
             <span>{running} running</span>
             <span>{partial} partial</span>

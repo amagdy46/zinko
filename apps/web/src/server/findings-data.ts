@@ -337,7 +337,6 @@ export const findingsOf = (orgId: string, auditId: string) =>
             title: f.title,
             checkTitle: checkTitleOf(f.checkTitle, f.ruleId, f.area),
             owner: yield* decodeOwner(f.owner).pipe(Effect.orDie),
-            firstFix: (yield* decodeFix(f.fix).pipe(Effect.orDie))[0] ?? null,
             reason: f.kind === "inconclusive" ? (reasonOf.get(f.ruleId) ?? null) : null,
             rulesVersions: f.rulesVersions,
             failingRuns: f.failingRuns,

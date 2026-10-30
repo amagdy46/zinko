@@ -105,6 +105,7 @@ function Sites() {
       setAddress("")
       setClientId(NO_CLIENT)
       setOpen(false)
+      if (first !== null) toast.success(`Site added. Start page set to ${first}.`)
       await (first === null
         ? router.navigate({ to: "/app/sites/$siteId", params: { siteId: result.value.id } })
         : router.navigate({

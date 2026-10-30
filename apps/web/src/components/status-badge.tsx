@@ -49,6 +49,17 @@ export function StatusBadge({ status, className }: { status: BadgeStatus; classN
   )
 }
 
+/** The glyph of a status with its word for a screen reader, where there is no room for the badge. */
+export function StatusMark({ status, className }: { status: BadgeStatus; className?: string }) {
+  const display = statuses[status]
+  return (
+    <span className={cn("inline-flex items-center", className)}>
+      <StatusGlyph meaning={display.meaning} />
+      <span className="sr-only">{display.label}</span>
+    </span>
+  )
+}
+
 const checks = {
   fail: {
     label: "Fail",

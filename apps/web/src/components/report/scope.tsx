@@ -87,7 +87,7 @@ export function Scope({ model }: { model: ReportModel }) {
             <h3 className="font-semibold">This is not legal advice</h3>
             <p className="max-w-[65ch]">{model.limits.disclaimer}</p>
           </div>
-          <div className="space-y-1">
+          <div className="keep-together space-y-1">
             <h3 className="font-semibold">What was not tested</h3>
             <ul className="max-w-[65ch] list-disc space-y-0.5 pl-5">
               {model.limits.notTested.map((line) => (

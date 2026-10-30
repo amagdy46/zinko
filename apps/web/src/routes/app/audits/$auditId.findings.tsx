@@ -373,6 +373,9 @@ function FindingsScreen() {
           ) : null}
         </div>
         {below ? null : (
+          <KeepFocus ruleId={selected?.ruleId} listed={ordered.map((f) => f.ruleId).join(",")} />
+        )}
+        {below ? null : (
           <aside
             aria-label="Finding detail"
             tabIndex={0}
@@ -387,6 +390,7 @@ function FindingsScreen() {
                 row={selected}
                 runs={runs}
                 canVerify={audit.kind === "full"}
+                onTriaged={announceTriaged}
               />
             )}
           </aside>
@@ -402,6 +406,11 @@ function FindingsScreen() {
           <SheetContent
             side="bottom"
             className="max-h-[90svh] gap-0 p-0"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault()
+              if (event.currentTarget instanceof HTMLElement)
+                event.currentTarget.querySelector<HTMLElement>("[data-finding-heading]")?.focus()
+            }}
             onCloseAutoFocus={(event) => {
               event.preventDefault()
               if (opener.current?.isConnected) opener.current.focus()
@@ -440,6 +449,7 @@ function FindingsScreen() {
                   row={explicit}
                   runs={runs}
                   canVerify={audit.kind === "full"}
+                  onTriaged={announceTriaged}
                 />
               )}
             </div>
@@ -448,6 +458,36 @@ function FindingsScreen() {
       ) : null}
     </div>
   )
+}
+
+const TRIAGED_EVENT = "zinko:finding-triaged"
+const announceTriaged = () => window.dispatchEvent(new Event(TRIAGED_EVENT))
+
+/** After a triage change takes the selected finding out of the list, focus lands on the next finding's heading, or on the detail pane when nothing is left to select. Only a triage change starts it. */
+function KeepFocus({ ruleId, listed }: { ruleId: string | undefined; listed: string }) {
+  const last = useRef(ruleId)
+  const triaged = useRef(false)
+  useEffect(() => {
+    const mark = () => {
+      triaged.current = true
+    }
+    window.addEventListener(TRIAGED_EVENT, mark)
+    return () => window.removeEventListener(TRIAGED_EVENT, mark)
+  }, [])
+  useEffect(() => {
+    const previous = last.current
+    last.current = ruleId
+    if (!triaged.current) return
+    triaged.current = false
+    // the triaged finding is still the one shown (it stays selected by its link): focus stays put
+    if (ruleId === previous) return
+    if (previous === undefined || listed.split(",").includes(previous)) return
+    const target =
+      document.querySelector<HTMLElement>("[data-finding-heading]") ??
+      document.querySelector<HTMLElement>('aside[aria-label="Finding detail"]')
+    target?.focus()
+  }, [ruleId, listed])
+  return null
 }
 
 function Coverage({

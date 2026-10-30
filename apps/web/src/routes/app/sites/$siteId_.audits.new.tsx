@@ -9,6 +9,8 @@ import { AuditLink } from "@/components/audit-link"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
+import { siteTrail } from "@/lib/site-trail"
+import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
@@ -88,7 +90,8 @@ function NewAudit() {
 }
 
 function NewAuditForm() {
-  const { site, lastConfig } = Route.useLoaderData()
+  const { site, client, lastConfig } = Route.useLoaderData()
+  const { groupByClient } = Route.useRouteContext()
   const { start: startPath } = Route.useSearch()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
@@ -300,6 +303,7 @@ function NewAuditForm() {
       <PageHeader
         title="New audit"
         breadcrumb={[
+          ...siteTrail(groupByClient, client),
           { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
           { label: "New audit" },
         ]}
@@ -312,43 +316,44 @@ function NewAuditForm() {
         actions={last === null ? <SampleReportLink /> : undefined}
       />
       {/* Mounted throughout so a screen reader hears the comparison change as the settings do. */}
-      <div role="status">
+      <div
+        role="status"
+        className={cn(
+          "space-y-2 text-sm text-muted-foreground",
+          (baseline !== null || copied || preview?.failed === true || noComparison) &&
+            "rounded-md border bg-muted/30 p-3",
+        )}
+      >
         {baseline !== null && (
-          <div className="flex gap-3 rounded-md border bg-muted/30 p-3 text-sm">
-            <GitCompareArrows
-              aria-hidden="true"
-              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-            />
-            <p className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+          <p className="flex gap-2 [overflow-wrap:anywhere]">
+            <GitCompareArrows aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0">
               Compared with <AuditLink audit={baseline} />.
               {carried === "" ? "" : ` Carried over from it: ${carried}.`}
-            </p>
-          </div>
+            </span>
+          </p>
         )}
         {preview?.failed === true && (
-          <p className="text-sm text-muted-foreground">
+          <p>
             Could not check which earlier audit this one will be compared with. Starting it still
             works.
           </p>
         )}
         {noComparison && (
-          <p className="text-sm text-muted-foreground">
+          <p>
             No earlier audit checked these pages, scenarios and viewports, so this one will not be
             compared.
           </p>
         )}
+        {copied && (
+          <p className="flex flex-wrap items-center gap-x-3">
+            Settings copied from your last audit.
+            <Button type="button" size="sm" variant="link" className="h-8 px-0" onClick={reset}>
+              Reset to defaults
+            </Button>
+          </p>
+        )}
       </div>
-      {copied && (
-        <p
-          role="status"
-          className="flex flex-wrap items-center gap-x-3 rounded-md border bg-muted/40 px-3 py-1 text-sm"
-        >
-          Settings copied from your last audit.
-          <Button type="button" size="sm" variant="link" className="px-0" onClick={reset}>
-            Reset to defaults
-          </Button>
-        </p>
-      )}
       <form
         onSubmit={submit}
         className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]"
