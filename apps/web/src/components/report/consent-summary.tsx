@@ -27,8 +27,12 @@ function CellBody({ cell }: { cell: Cell }) {
         <span>
           <span className="font-medium">{fired ? "Fired" : "None seen"}</span>
           {" · "}
-          {fired ? `${cell.runsWithHits} of ${runs.total}` : `0 of ${runs.complete + runs.partial}`}
-          {marks}
+          <span className="whitespace-nowrap">
+            {fired
+              ? `${cell.runsWithHits} of ${runs.total}`
+              : `0 of ${runs.complete + runs.partial}`}
+            {marks}
+          </span>
         </span>
       </p>
       {split ? (
@@ -71,7 +75,7 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
     <section
       id="consent"
       aria-label="Consent scenarios"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:p-0 print:pt-8 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Consent scenarios</h2>
       {consent.rows.length === 0 ? (

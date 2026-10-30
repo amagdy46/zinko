@@ -24,7 +24,7 @@ export function Cover({
     <section
       id="cover"
       aria-label="Cover"
-      className="flex flex-col gap-16 border-t-8 border-report-accent px-8 py-10 print:min-h-[24cm] print:justify-between print:gap-0 print:p-0 print:pt-8"
+      className="flex flex-col gap-16 border-t-8 border-report-accent px-4 sm:px-8 py-10 print:min-h-[24cm] print:justify-between print:gap-0 print:p-0 print:pt-8"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         {/* fetchPriority low keeps React from adding a <link rel="preload"> to the head, which would repeat the public logo URL (and its token) outside the img */}

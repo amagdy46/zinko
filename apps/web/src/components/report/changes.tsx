@@ -61,12 +61,12 @@ const tagLine = (tag: Tag) => {
 export function Changes({ model, extra }: { model: ReportModel; extra?: ReactNode }) {
   const { changes } = model
   if (changes === null && extra === undefined) return null
-  if (changes === null) return <div className="px-8 pt-6 text-sm print:hidden">{extra}</div>
+  if (changes === null) return <div className="px-4 sm:px-8 pt-6 text-sm print:hidden">{extra}</div>
   return (
     <section
       id="changes"
       aria-label="What changed"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:p-0 print:pt-8 print:leading-snug"
     >
       {changes === null ? null : (
         <>

@@ -50,7 +50,7 @@ export function ReportView({
   return (
     <article
       data-accent={model.branding.accent}
-      className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden rounded-lg border bg-card text-card-foreground print:max-w-none print:overflow-visible print:rounded-none print:border-0"
+      className="report-paper mx-auto w-full max-w-[210mm] overflow-hidden max-sm:rounded-none max-sm:border-x-0 sm:rounded-lg border bg-card text-card-foreground print:max-w-none print:overflow-visible print:rounded-none print:border-0"
     >
       <Cover
         model={model}

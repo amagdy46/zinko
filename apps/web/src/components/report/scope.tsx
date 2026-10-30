@@ -13,7 +13,7 @@ export function Scope({ model }: { model: ReportModel }) {
     <section
       id="scope"
       aria-label="Scope and method"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:p-0 print:pt-8 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Scope and method</h2>
       <p>

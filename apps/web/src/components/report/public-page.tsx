@@ -55,11 +55,11 @@ export function renderReportPage(input: {
           Save as PDF
         </button>
       </header>
-      <main className="mx-auto max-w-[210mm] space-y-4 p-4 md:p-6 print:p-0">
+      <main className="mx-auto max-w-[210mm] space-y-4 px-0 py-4 sm:px-4 md:p-6 print:p-0">
         {input.newerPublishedAt === null ? null : (
           <p
             role="note"
-            className="rounded-md border border-sev-warning-border bg-sev-warning-bg p-3 text-sm"
+            className="mx-4 rounded-md border border-sev-warning-border bg-sev-warning-bg p-3 text-sm sm:mx-0"
           >
             A newer version was published on {reportDate(input.newerPublishedAt)}. This page shows
             version {input.version}; ask {model.branding.agencyName} for the current link.
@@ -72,7 +72,7 @@ export function renderReportPage(input: {
           standalone
           published={{ version: input.version, publishedAt: input.publishedAt }}
         />
-        <p className="text-xs text-muted-foreground print:hidden">
+        <p className="px-4 text-xs text-muted-foreground sm:px-0 print:hidden">
           Save as PDF opens the print dialog. Turn off headers and footers there so the page address
           is not printed.
         </p>

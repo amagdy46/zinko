@@ -16,7 +16,7 @@ export function ActionPlan({ model }: { model: ReportModel }) {
     <section
       id="plan"
       aria-label="Action plan"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:p-0 print:pt-6 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:p-0 print:pt-6 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Action plan</h2>
       {model.actionPlan.length === 0 ? (

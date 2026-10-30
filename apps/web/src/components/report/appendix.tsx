@@ -32,7 +32,7 @@ export function Appendix({ model }: { model: ReportModel }) {
     <section
       id="appendix"
       aria-label="Appendix"
-      className="space-y-6 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
+      className="space-y-6 px-4 sm:px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Appendix</h2>
       <div className="space-y-2">

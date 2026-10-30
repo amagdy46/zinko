@@ -76,7 +76,7 @@ export function Summary({ model, actions }: { model: ReportModel; actions?: Reac
     <section
       id="summary"
       aria-label="Summary"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:space-y-2 print:p-0 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:break-before-page print:space-y-2 print:p-0 print:leading-snug"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 className="text-xl font-semibold">Summary</h2>

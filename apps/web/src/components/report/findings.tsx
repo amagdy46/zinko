@@ -237,12 +237,12 @@ function FindingCard({
     <article
       id={`finding-${finding.ruleId}`}
       className={cn(
-        "space-y-3 rounded-md border p-4 text-sm leading-6",
-        hidden && "border-dashed bg-muted/40 print:hidden",
+        "space-y-3 border-t pt-4 text-sm leading-6",
+        hidden && "rounded-md border border-dashed bg-muted/40 p-4 print:hidden",
       )}
       aria-labelledby={`finding-title-${finding.ruleId}`}
     >
-      <div className="space-y-1">
+      <div className="keep-together space-y-1 print:break-after-avoid">
         <div className="flex flex-wrap items-center gap-2">
           <SeverityBadge severity={finding.severity} />
           {hidden ? (
@@ -282,7 +282,7 @@ function FindingCard({
       )}
       {first === undefined || !open ? null : (
         <p className="rounded-md bg-muted/50 px-3 py-2" data-testid="fix-first">
-          <span className="font-semibold">Fix first</span>
+          <span className="font-semibold tabular-nums">1. Fix first</span>
           <span className="text-muted-foreground">
             {" "}
             ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
@@ -333,7 +333,7 @@ export function Findings({ model, controls }: { model: ReportModel; controls?: R
     <section
       id="findings"
       aria-label="Findings"
-      className="space-y-4 px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
+      className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:break-before-page print:p-0 print:leading-snug"
     >
       <h2 className="text-xl font-semibold">Findings</h2>
       {controls === undefined ? null : (

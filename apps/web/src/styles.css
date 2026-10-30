@@ -310,6 +310,10 @@
     break-inside: avoid;
   }
 
+  .report-paper [class*="max-w-[65ch]"] {
+    max-width: 88ch;
+  }
+
   .report-paper thead {
     display: table-header-group;
   }
