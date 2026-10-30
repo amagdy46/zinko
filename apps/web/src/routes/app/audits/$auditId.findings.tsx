@@ -302,7 +302,10 @@ function FindingsScreen() {
                       <h2 className="sticky top-0 z-10 flex items-center gap-1.5 bg-background py-1.5 text-xs font-medium">
                         <StatusGlyph meaning={s} />
                         {SEVERITY_LABEL[s]}
-                        <span className="tabular-nums text-muted-foreground">{rows.length}</span>
+                        <span aria-hidden="true" className="tabular-nums text-muted-foreground">
+                          {rows.length}
+                        </span>
+                        <span className="sr-only">, {count(rows.length, "finding")}</span>
                       </h2>
                       <ul>
                         {rows.map((row) => (

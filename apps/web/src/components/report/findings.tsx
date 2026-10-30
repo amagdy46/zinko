@@ -1,3 +1,4 @@
+import { CodeText } from "./code-text"
 import type { ReportControls } from "./report-view"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
@@ -185,7 +186,9 @@ function Steps({
       <h4 className="font-semibold">{title}</h4>
       <ol start={start} className="max-w-[65ch] list-decimal space-y-1 pl-5">
         {steps.map((step) => (
-          <li key={step}>{step}</li>
+          <li key={step}>
+            <CodeText text={step} />
+          </li>
         ))}
       </ol>
     </div>
@@ -284,7 +287,7 @@ function FindingCard({
             {" "}
             ({finding.owner === null ? "owner not assigned" : OWNER_LABELS[finding.owner]}):
           </span>{" "}
-          {first}
+          <CodeText text={first} />
         </p>
       )}
       {open ? <Steps steps={rest} start={2} title="Next steps" /> : null}

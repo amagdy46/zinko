@@ -146,7 +146,31 @@ function Clients() {
           }
         />
       ) : null}
-      {clients.length === 0 ? (
+      {clients.length === 0 && ungroupedSites > 0 ? (
+        <EmptyState
+          title="No clients yet"
+          description={`Your ${count(ungroupedSites, "site")} ${ungroupedSites === 1 ? "is" : "are"} listed under Sites. Add a client to group sites by customer.`}
+          action={
+            <Button
+              onClick={(event) => {
+                opener.current = event.currentTarget
+                setOpen(true)
+              }}
+            >
+              New client
+            </Button>
+          }
+          secondary={
+            <Link
+              to="/app/sites"
+              className="inline-flex h-8 items-center rounded-sm px-2 text-sm underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+            >
+              Go to Sites
+            </Link>
+          }
+        />
+      ) : null}
+      {clients.length === 0 && ungroupedSites === 0 ? (
         <EmptyState
           title="Add your first client"
           description="Group the sites you audit for one customer, then run your first audit."
@@ -217,7 +241,7 @@ function Clients() {
           </TableBody>
         </Table>
       ) : null}
-      {ungroupedSites > 0 ? (
+      {clients.length > 0 && ungroupedSites > 0 ? (
         <p className="text-sm text-muted-foreground">
           <Link
             to="/app/sites"

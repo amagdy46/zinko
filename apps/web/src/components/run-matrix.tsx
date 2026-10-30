@@ -45,6 +45,33 @@ const failingText = (run: AuditRun) =>
     ? null
     : `${count(run.failing.count, "failing check")}, worst ${SEVERITY_WORD[run.failing.severity]}`
 
+const LEGEND = [
+  ["captured", "Captured"],
+  ["queued", "Queued"],
+  ["running", "Running"],
+  ["partial", "Partial"],
+  ["failed", "Failed"],
+  ["critical", "Critical failing"],
+  ["warning", "Warning failing"],
+  ["info", "Info failing"],
+] as const
+
+function MatrixLegend() {
+  return (
+    <ul
+      aria-label="Legend"
+      className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
+    >
+      {LEGEND.map(([meaning, word]) => (
+        <li key={meaning} className="flex items-center gap-1.5">
+          <StatusGlyph meaning={meaning} />
+          {word}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export function RunMatrix({
   runs,
   view,
@@ -177,6 +204,7 @@ export function RunMatrix({
         Captured means the page was loaded and recorded. Open Findings for pass or fail. A cell
         shows the worst failing severity with its number of failing checks, then the hits.
       </p>
+      <MatrixLegend />
       <Table>
         <TableHeader>
           <TableRow>

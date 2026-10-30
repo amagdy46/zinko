@@ -1,3 +1,4 @@
+import { CodeText } from "./code-text"
 import { SeverityBadge } from "@/components/severity"
 import { StatusGlyph } from "@/components/status-glyph"
 import { OWNER_LABELS, type ReportModel } from "@/lib/report-model"
@@ -43,7 +44,8 @@ export function ActionPlan({ model }: { model: ReportModel }) {
                       </a>
                     </p>
                     <p className="max-w-[65ch] [overflow-wrap:anywhere]">
-                      <span className="font-semibold">Ask for:</span> {item.firstStep}
+                      <span className="font-semibold">Ask for:</span>{" "}
+                      <CodeText text={item.firstStep} />
                     </p>
                     <p className="max-w-[65ch] text-muted-foreground">
                       <span className="font-semibold">Done when:</span> a re-run no longer fails
