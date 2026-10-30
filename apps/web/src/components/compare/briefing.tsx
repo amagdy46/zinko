@@ -2,7 +2,8 @@ import { Link } from "@tanstack/react-router"
 import { GitCompareArrows } from "lucide-react"
 import { StatusGlyph } from "@/components/status-glyph"
 import { recheckVerdict } from "@/lib/compare-text"
-import { count, shortDate, useTimeZone } from "@/lib/format"
+import { AuditLink } from "@/components/audit-link"
+import { count } from "@/lib/format"
 
 /** "What changed" at the top of a re-run's Overview: a few lines, then the whole Compare tab. */
 export function Briefing({
@@ -11,16 +12,15 @@ export function Briefing({
   lines,
 }: {
   auditId: string
-  since: string
+  since: { id: string; startPath: string; createdAt: string }
   lines: ReadonlyArray<string>
 }) {
-  const timeZone = useTimeZone()
   return (
     <section aria-labelledby="briefing-heading" className="space-y-2 rounded-lg border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <h2 id="briefing-heading" className="flex items-center gap-2 text-base font-semibold">
           <GitCompareArrows aria-hidden="true" className="size-4 text-muted-foreground" />
-          Since the audit of {shortDate(since, timeZone)}
+          Since <AuditLink audit={since} />
         </h2>
         <Link
           to="/app/audits/$auditId/compare"

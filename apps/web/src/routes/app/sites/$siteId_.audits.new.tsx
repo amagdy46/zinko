@@ -3,8 +3,9 @@ import type { Scenario } from "@repo/capture-contract"
 import { AuditConfig, JOURNEY_STEPS } from "@repo/core/audit"
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
-import { CircleHelp } from "lucide-react"
-import { type FormEvent, type ReactNode, useRef, useState } from "react"
+import { CircleHelp, GitCompareArrows } from "lucide-react"
+import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react"
+import { AuditLink } from "@/components/audit-link"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { PageContainer } from "@/components/page-container"
 import { PageHeader } from "@/components/page-header"
@@ -21,7 +22,7 @@ import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
 import { LOCAL_ANSWER_SENTENCE, runBreakdown, SCENARIOS } from "@/lib/audit-labels"
 import { carryOverText } from "@/lib/carry-over"
-import { count, shortDate, useTimeZone } from "@/lib/format"
+import { count } from "@/lib/format"
 import {
   isOnSite,
   onSiteScheme,
@@ -29,7 +30,7 @@ import {
   resolveOnSite,
   withoutCredentials,
 } from "@/lib/site-url"
-import { startAudit } from "@/server/audits"
+import { previewBaseline, startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
 
 const StartPath = Schema.String.check(Schema.isMaxLength(2000))
@@ -87,9 +88,8 @@ function NewAudit() {
 }
 
 function NewAuditForm() {
-  const { site, lastConfig, baseline, carryOver } = Route.useLoaderData()
+  const { site, lastConfig } = Route.useLoaderData()
   const { start: startPath } = Route.useSearch()
-  const timeZone = useTimeZone()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
   const [copied, setCopied] = useState(last !== null)
@@ -197,6 +197,56 @@ function NewAuditForm() {
       </>
     ) : undefined
 
+  const previewConfig = {
+    pages: [start, ...keyPages],
+    scenarios,
+    viewports,
+    clickIds,
+    blockVendorRequests,
+    journey,
+    reload: journey && reload,
+    crossHost,
+  }
+  const formReady =
+    startError === undefined &&
+    pageErrors.length === 0 &&
+    pageLimitError === undefined &&
+    disabledReason === undefined
+  const previewKey = formReady ? JSON.stringify(previewConfig) : null
+  const [fetched, setFetched] = useState<{
+    key: string
+    baseline: Awaited<ReturnType<typeof previewBaseline>>["baseline"]
+    carryOver: Awaited<ReturnType<typeof previewBaseline>>["carryOver"]
+    failed: boolean
+  }>()
+  useEffect(() => {
+    if (previewKey === null) return undefined
+    const config = decodeConfig(JSON.parse(previewKey))
+    if (Option.isNone(config)) return undefined
+    let current = true
+    const timer = setTimeout(() => {
+      previewBaseline({ data: { siteId: site.id, config: config.value } }).then(
+        (result) => {
+          if (current) setFetched({ key: previewKey, ...result, failed: false })
+        },
+        () => {
+          if (current)
+            setFetched({ key: previewKey, baseline: null, carryOver: null, failed: true })
+        },
+      )
+    }, 300)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [previewKey, site.id])
+  const preview = fetched?.key === previewKey ? fetched : undefined
+  const baseline = preview?.baseline ?? null
+  const carried =
+    preview === undefined || preview.carryOver === null ? "" : carryOverText(preview.carryOver)
+  const noComparison =
+    preview !== undefined && !preview.failed && baseline === null && last !== null
+
   function toggleScenario(scenario: Scenario, checked: boolean) {
     setScenarios(
       SCENARIOS.map((s) => s.value).filter((value) =>
@@ -246,7 +296,7 @@ function NewAuditForm() {
   }
 
   return (
-    <PageContainer>
+    <PageContainer className="max-w-5xl">
       <PageHeader
         title="New audit"
         breadcrumb={[
@@ -261,14 +311,33 @@ function NewAuditForm() {
         }
         actions={last === null ? <SampleReportLink /> : undefined}
       />
-      {baseline !== null && (
-        <p className="text-sm text-muted-foreground">
-          Compared with the audit of {shortDate(baseline.createdAt, timeZone)}.{" "}
-          {carryOver === null
-            ? ""
-            : carryOverText(carryOver, shortDate(baseline.createdAt, timeZone))}
-        </p>
-      )}
+      {/* Mounted throughout so a screen reader hears the comparison change as the settings do. */}
+      <div role="status">
+        {baseline !== null && (
+          <div className="flex gap-3 rounded-md border bg-muted/30 p-3 text-sm">
+            <GitCompareArrows
+              aria-hidden="true"
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            />
+            <p className="min-w-0 text-muted-foreground [overflow-wrap:anywhere]">
+              Compared with <AuditLink audit={baseline} />.
+              {carried === "" ? "" : ` Carried over from it: ${carried}.`}
+            </p>
+          </div>
+        )}
+        {preview?.failed === true && (
+          <p className="text-sm text-muted-foreground">
+            Could not check which earlier audit this one will be compared with. Starting it still
+            works.
+          </p>
+        )}
+        {noComparison && (
+          <p className="text-sm text-muted-foreground">
+            No earlier audit checked these pages, scenarios and viewports, so this one will not be
+            compared.
+          </p>
+        )}
+      </div>
       {copied && (
         <p
           role="status"

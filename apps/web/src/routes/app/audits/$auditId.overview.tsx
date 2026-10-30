@@ -552,7 +552,7 @@ function WorstFinding({
           </p>
         </div>
         <div className="space-y-1">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1">
             <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
               How to fix it
             </h3>

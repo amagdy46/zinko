@@ -1,5 +1,5 @@
 import type { Scenario } from "@repo/capture-contract"
-import { count, shortDate } from "@/lib/format"
+import { count, shortDate, shortDateTime } from "@/lib/format"
 
 /**
  * Wall time of one page run (a journey run counts as one per page it loads). Audits of the fixture
@@ -291,3 +291,21 @@ export const auditTabName = (audit: {
   audit.kind === "narrow"
     ? `Re-check of ${audit.recheckTitle ?? "one check"}`
     : `Audit of ${audit.siteName} · ${count(audit.pages, "page")}`
+
+/** The path an audit started from, "/" for the home page: the one thing besides the day that tells two audits of a site apart. */
+export const startPathOfPage = (startPage: string | null | undefined): string =>
+  startPage === null || startPage === undefined || !URL.canParse(startPage)
+    ? "/"
+    : new URL(startPage).pathname
+
+/**
+ * How one audit names another: its start path and when it started ("/drift/, 30 Oct 2026, 18:15").
+ * Used wherever an audit refers to a different one; the time shows once the reader's zone is known.
+ */
+export function auditName(
+  audit: { startPath: string; createdAt: Date | string },
+  timeZone?: string,
+): string {
+  const when = shortDateTime(audit.createdAt, timeZone) || shortDate(audit.createdAt, timeZone)
+  return `${audit.startPath}, ${when}`
+}

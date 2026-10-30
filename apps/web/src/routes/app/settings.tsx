@@ -18,7 +18,7 @@ const tabs = [
 
 function SettingsLayout() {
   return (
-    <PageContainer>
+    <PageContainer className="max-w-5xl">
       <PageHeader title="Settings" description="Your profile and organization preferences." />
       <nav
         aria-label="Settings"

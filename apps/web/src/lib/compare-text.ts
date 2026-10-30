@@ -145,6 +145,15 @@ export const triageLine = (f: FindingChange, shortDate: (iso: string) => string)
   return null
 }
 
+/**
+ * The one sentence for a comparison that has nothing to show: no run (page, scenario and viewport)
+ * was checked in both audits. Null when at least one was, however much else limits it.
+ */
+export const refusalOf = (c: Comparison) =>
+  c.comparability.commonCells === 0
+    ? "These audits did not check the same pages, scenarios and viewports, so there is nothing to compare."
+    : null
+
 /** What limits the comparison, one entry each, in the order a reader should weigh them. */
 export const noticesOf = (c: Comparison) => {
   const { comparability: k } = c

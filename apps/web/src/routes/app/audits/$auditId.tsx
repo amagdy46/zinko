@@ -160,18 +160,21 @@ function AuditPage() {
         message = "Audit finished: not evaluated"
       else if (audit.status === "partial")
         message = `Audit finished with gaps: ${findings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
+      const onOverview = router.state.location.pathname.endsWith("/overview")
       toast(message, {
         id: `audit-finished-${audit.id}`,
         duration: FINISHED_TOAST_MS,
-        action: {
-          label: "Overview",
-          onClick: () => {
-            void router.navigate({
-              to: "/app/audits/$auditId/overview",
-              params: { auditId: audit.id },
-            })
-          },
-        },
+        action: onOverview
+          ? undefined
+          : {
+              label: "Overview",
+              onClick: () => {
+                void router.navigate({
+                  to: "/app/audits/$auditId/overview",
+                  params: { auditId: audit.id },
+                })
+              },
+            },
       })
     }
     previous.current = { id: audit.id, active }

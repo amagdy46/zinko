@@ -1,6 +1,7 @@
 import { JOURNEY_STEPS } from "@repo/core/audit"
 import { useRouter } from "@tanstack/react-router"
-import { type RefObject, useEffect, useState } from "react"
+import { type ReactNode, type RefObject, useEffect, useState } from "react"
+import { AuditLink } from "@/components/audit-link"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { runBreakdown } from "@/lib/audit-labels"
 import { carryOverText } from "@/lib/carry-over"
-import { count, shortDate, useTimeZone } from "@/lib/format"
+import { count } from "@/lib/format"
 import { previewRerun, rerunAudit } from "@/server/audits"
 
 type Preview = Awaited<ReturnType<typeof previewRerun>>
@@ -49,7 +50,6 @@ export function RerunDialog({
 /** Mounted only while the dialog is open, so every opening reads the audit afresh. */
 function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void }) {
   const router = useRouter()
-  const timeZone = useTimeZone()
   const [preview, setPreview] = useState<Preview | null>(null)
   const [failed, setFailed] = useState(false)
   const [message, setMessage] = useState<string>()
@@ -88,7 +88,7 @@ function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void 
     }
   }
 
-  let description = "Loading the settings..."
+  let description: ReactNode = "Loading the settings..."
   if (failed) description = "The re-run could not be prepared. Try again."
   if (preview !== null) {
     const { config, baseline } = preview
@@ -102,18 +102,24 @@ function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void 
           : 0,
       crossHostRuns: config.crossHost === true ? (config.measuredHosts?.length ?? 0) : 0,
     })
-    let comparison = "There is no earlier evaluated audit to compare it with."
+    const carried = preview.carryOver === null ? "" : carryOverText(preview.carryOver)
+    let comparison: ReactNode =
+      "There is no earlier evaluated audit with the same pages, scenarios and viewports to compare it with."
     if (baseline !== null)
       comparison =
-        baseline.id === auditId
-          ? "It will be compared with this audit."
-          : `It will be compared with the audit of ${shortDate(baseline.createdAt, timeZone)}.`
-    const carried =
-      baseline === null || preview.carryOver === null
-        ? ""
-        : carryOverText(preview.carryOver, shortDate(baseline.createdAt, timeZone))
-    description =
-      `${count(breakdown.runs, "run")}, ${breakdown.duration}, with the same settings. ${comparison} ${carried}`.trim()
+        baseline.id === auditId ? (
+          "It will be compared with this audit."
+        ) : (
+          <>
+            It will be compared with <AuditLink audit={baseline} onNavigate={onClose} />.
+          </>
+        )
+    description = (
+      <>
+        {count(breakdown.runs, "run")}, {breakdown.duration}, with the same settings. {comparison}
+        {baseline === null || carried === "" ? "" : ` Carried over from it: ${carried}.`}
+      </>
+    )
   }
 
   return (

@@ -2,6 +2,7 @@ import { createFileRoute, getRouteApi, useRouter } from "@tanstack/react-router"
 import { GitCompareArrows } from "lucide-react"
 import { Option, Schema } from "effect"
 import { useRef, useState } from "react"
+import { AuditLink } from "@/components/audit-link"
 import { ChangeSheet } from "@/components/compare/change-sheet"
 import { FindingsTable } from "@/components/compare/findings-table"
 import { CompareNotices } from "@/components/compare/notices"
@@ -16,9 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import type { ChangeState } from "@/lib/compare"
-import { nothingChanged } from "@/lib/compare-text"
-import { shortDate, shortDateTime, useTimeZone } from "@/lib/format"
+import { auditName } from "@/lib/audit-labels"
+import type { AuditRef, ChangeState } from "@/lib/compare"
+import { nothingChanged, refusalOf } from "@/lib/compare-text"
+import { useTimeZone } from "@/lib/format"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { getComparison } from "@/server/compare"
 import type { NoComparison } from "@/server/compare-data"
@@ -100,8 +102,8 @@ function CompareScreen() {
   const [pending, setPending] = useState(false)
   const { comparison, candidates, baselineId } = view
   const against = comparison?.before.id
-  const label = (iso: string, id: string) =>
-    `${shortDateTime(iso, timeZone)}${id === baselineId ? " (baseline)" : ""}`
+  const label = (ref: AuditRef) =>
+    `${auditName(ref, timeZone)}${ref.id === baselineId ? " (baseline)" : ""}`
 
   async function makeBaseline() {
     if (against === undefined) return
@@ -134,13 +136,13 @@ function CompareScreen() {
             })
           }
         >
-          <SelectTrigger id="compare-against" className="h-8 w-60 max-w-full">
+          <SelectTrigger id="compare-against" className="h-8 w-72 max-w-full">
             <SelectValue placeholder="Choose an earlier audit" />
           </SelectTrigger>
           <SelectContent>
             {candidates.map((c) => (
               <SelectItem key={c.id} value={c.id}>
-                {label(c.createdAt, c.id)}
+                {label(c)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -174,13 +176,14 @@ function CompareScreen() {
     )
   }
 
+  const refusal = refusalOf(comparison)
   const shownCount = state === undefined ? comparison.findings.length : comparison.counts[state]
   return (
     <div className="min-w-0 space-y-6">
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
           <h2 className="text-base font-semibold">
-            Compared with the audit of {shortDate(comparison.before.createdAt, timeZone)}
+            Compared with <AuditLink audit={comparison.before} />
           </h2>
           {picker}
         </div>
@@ -196,38 +199,53 @@ function CompareScreen() {
           </p>
         )}
       </div>
-      <CompareSummary
-        comparison={comparison}
-        selected={state}
-        onSelect={(next) => void navigate({ search: (prev) => ({ ...prev, state: next }) })}
-      />
-      <CompareNotices comparison={comparison} />
-      {nothingChanged(comparison) ? (
-        <p role="status" className="text-sm">
-          No finding changed in the {comparison.comparability.commonCells} shared runs. Open Tags
-          below to see whether any tag did.
-        </p>
-      ) : null}
-      {shownCount === 0 ? (
-        <p className="text-sm text-muted-foreground">No findings in this state.</p>
+      {refusal === null ? (
+        <>
+          <CompareSummary
+            comparison={comparison}
+            selected={state}
+            onSelect={(next) => void navigate({ search: (prev) => ({ ...prev, state: next }) })}
+          />
+          <CompareNotices comparison={comparison} />
+          {nothingChanged(comparison) ? (
+            <p role="status" className="text-sm">
+              No finding changed in the {comparison.comparability.commonCells} shared runs. Open
+              Tags below to see whether any tag did.
+            </p>
+          ) : null}
+          {shownCount === 0 ? (
+            <p className="text-sm text-muted-foreground">No findings in this state.</p>
+          ) : (
+            <FindingsTable
+              findings={comparison.findings}
+              state={state}
+              onOpen={(ruleId, element) => {
+                opener.current = element
+                void navigate({ search: (prev) => ({ ...prev, finding: ruleId }) })
+              }}
+            />
+          )}
+          <TagsSection
+            key={comparison.before.id}
+            auditId={auditId}
+            against={comparison.before.id}
+          />
+          <ChangeSheet
+            auditId={auditId}
+            comparison={comparison}
+            ruleId={finding}
+            opener={opener}
+            onClose={() => void navigate({ search: (prev) => ({ ...prev, finding: undefined }) })}
+          />
+        </>
       ) : (
-        <FindingsTable
-          findings={comparison.findings}
-          state={state}
-          onOpen={(ruleId, element) => {
-            opener.current = element
-            void navigate({ search: (prev) => ({ ...prev, finding: ruleId }) })
-          }}
+        <EmptyState
+          title="Nothing to compare"
+          description={refusal}
+          icon={GitCompareArrows}
+          dashed
         />
       )}
-      <TagsSection key={comparison.before.id} auditId={auditId} against={comparison.before.id} />
-      <ChangeSheet
-        auditId={auditId}
-        comparison={comparison}
-        ruleId={finding}
-        opener={opener}
-        onClose={() => void navigate({ search: (prev) => ({ ...prev, finding: undefined }) })}
-      />
     </div>
   )
 }

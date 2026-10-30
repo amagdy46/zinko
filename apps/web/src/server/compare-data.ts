@@ -21,7 +21,8 @@ import {
   type TriageLine,
 } from "@/lib/compare"
 import { healthScore } from "@/lib/health-score"
-import { changesBriefing } from "@/lib/compare-text"
+import { startPathOfPage } from "@/lib/audit-labels"
+import { changesBriefing, refusalOf } from "@/lib/compare-text"
 import { vendorName } from "@/lib/tag-matrix"
 import { diffTags, type TagRun, type TagTriple } from "@/lib/tag-diff"
 import { evaluatedAudit } from "./audit-create"
@@ -59,10 +60,18 @@ export interface ComparisonView {
   comparison: Comparison | null
 }
 
-const refOf = (row: { id: string; createdAt: Date; status: string }): AuditRef => ({
+const refOf = (row: {
+  id: string
+  createdAt: Date
+  status: string
+  config: unknown
+}): AuditRef => ({
   id: row.id,
   createdAt: row.createdAt.toISOString(),
   status: row.status,
+  startPath: startPathOfPage(
+    Option.getOrUndefined(Schema.decodeUnknownOption(AuditConfig)(row.config))?.pages[0],
+  ),
 })
 
 /** Earlier evaluated full audits of the site, before `thanId` in creation order. */
@@ -250,7 +259,13 @@ const historyOf = (
       const runs = (yield* cellRunsOf(orgId, a.id, config, true)).filter((r) =>
         own.some((c) => c.runId === r.id),
       )
-      history.push({ auditId: a.id, date: a.createdAt.toISOString(), runs, checks: own })
+      history.push({
+        auditId: a.id,
+        date: a.createdAt.toISOString(),
+        startPath: startPathOfPage(config.pages[0]),
+        runs,
+        checks: own,
+      })
     }
     return history
   })
@@ -271,7 +286,12 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       .limit(1)
     if (current === undefined) return yield* new NotFound({ message: "Not found" })
     const newest = yield* db
-      .select({ id: audit.id, createdAt: audit.createdAt, status: audit.status })
+      .select({
+        id: audit.id,
+        createdAt: audit.createdAt,
+        status: audit.status,
+        config: audit.config,
+      })
       .from(audit)
       .where(earlierAudits(orgId, current.siteId, id))
       .orderBy(desc(audit.createdAt), desc(audit.id))
@@ -370,7 +390,7 @@ export const comparisonOf = (orgId: string, auditId: string, againstId: string |
       confirmations: yield* confirmationsOf(orgId, current.siteId, id, changed),
     })
     const comparison: Comparison = {
-      now: { id, createdAt: current.createdAt.toISOString(), status: current.status },
+      now: refOf(current),
       before: baselineRef,
       ...compared,
       score: scoreDeltaOf(before.score, now.score, compared.comparability),
@@ -571,7 +591,8 @@ export const briefingOf = (orgId: string, auditId: string) =>
     const gone = tags.changes
       .filter((c) => c.change === "disappeared" && c.cellsAffected === c.cellsCompared)
       .map((c) => `${vendorName(c.vendor)} ${c.destinationId}`)
-    return { since: comparison.before.createdAt, lines: changesBriefing(comparison, gone) }
+    if (refusalOf(comparison) !== null) return null
+    return { since: comparison.before, lines: changesBriefing(comparison, gone) }
   })
 
 /**

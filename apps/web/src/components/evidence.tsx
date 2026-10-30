@@ -17,16 +17,19 @@ export function CopyButton({
   value,
   label = "Copy value",
   className,
+  showLabel = false,
 }: {
   value: string
   label?: string
   className?: string
+  /** Show the label as text next to the icon, for a copy that is not self-evident from its row. */
+  showLabel?: boolean
 }) {
   return (
     <Button
       type="button"
       variant="ghost"
-      size="icon-sm"
+      size={showLabel ? "sm" : "icon-sm"}
       aria-label={label}
       title={label}
       className={className}
@@ -38,6 +41,7 @@ export function CopyButton({
       }}
     >
       <Copy aria-hidden="true" />
+      {showLabel ? label : null}
     </Button>
   )
 }
@@ -85,10 +89,13 @@ export function KeyValueTable({
   rows,
   empty = "No values.",
   label = "Parameters",
+  copyAsJson = false,
 }: {
   rows: ReadonlyArray<readonly [string, string | number]>
   empty?: string
   label?: string
+  /** One "Copy as JSON" for the whole table instead of a copy button on every row. */
+  copyAsJson?: boolean
 }) {
   const [filter, setFilter] = useState("")
   const filterable = rows.length > 12
@@ -115,6 +122,15 @@ export function KeyValueTable({
           className="h-8"
         />
       ) : null}
+      {copyAsJson ? (
+        <div className="flex justify-end">
+          <CopyButton
+            value={JSON.stringify(Object.fromEntries(rows), null, 2)}
+            label={`Copy ${label.toLowerCase()} as JSON`}
+            showLabel
+          />
+        </div>
+      ) : null}
       {visible.length === 0 ? (
         <p className="text-xs text-muted-foreground">
           {rows.length === 0 ? empty : "No values match this filter."}
@@ -135,11 +151,13 @@ export function KeyValueTable({
                 <TableCell className="whitespace-normal">
                   <div className="flex items-start gap-1">
                     <span className="min-w-0 flex-1 break-all font-mono">{value}</span>
-                    <CopyButton
-                      value={String(value)}
-                      label={`Copy ${name}`}
-                      className="-my-2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
-                    />
+                    {copyAsJson ? null : (
+                      <CopyButton
+                        value={String(value)}
+                        label={`Copy ${name}`}
+                        className="-my-2 text-muted-foreground [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100"
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

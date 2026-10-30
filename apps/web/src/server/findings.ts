@@ -131,7 +131,7 @@ export const getFinding = createServerFn({ method: "GET" })
             inconclusiveRuns: f.inconclusiveRuns,
           },
           triage: {
-            ...(yield* triageOf(found.triage, found.originExists)),
+            ...(yield* triageOf(found.triage, found.originStartPage)),
             updatedByName: actor?.name ?? null,
           },
           checks: yield* Effect.forEach(checks, (check) =>

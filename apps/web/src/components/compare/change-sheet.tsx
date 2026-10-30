@@ -1,3 +1,5 @@
+import { AuditLink } from "@/components/audit-link"
+import { auditName } from "@/lib/audit-labels"
 import { Link } from "@tanstack/react-router"
 import { useEffect, useRef, useState } from "react"
 import { ChangeBadge } from "@/components/change-badge"
@@ -83,7 +85,7 @@ export function ChangeSheet({
           <SheetDescription>
             {finding === undefined
               ? "This finding is not part of this comparison."
-              : `${finding.ruleId}, compared with the audit of ${shortDate(comparison.before.createdAt, timeZone)}`}
+              : `${finding.ruleId}, compared with the audit of ${auditName(comparison.before, timeZone)}`}
           </SheetDescription>
         </SheetHeader>
         {finding === undefined ? null : (
@@ -113,7 +115,6 @@ function Detail({
   cells: ReadonlyArray<CellKey>
   triage: string | null
 }) {
-  const timeZone = useTimeZone()
   const earlier = finding.earlierFailure
   const confirmation = confirmationLine(finding)
   const recheckButton = useRef<HTMLButtonElement>(null)
@@ -137,7 +138,11 @@ function Detail({
       <p className="text-sm">{changeLine(finding)}</p>
       {earlier === null ? null : (
         <p className="text-sm text-muted-foreground">
-          It also failed in the audit of {shortDate(earlier.date, timeZone)}.
+          It also failed in{" "}
+          <AuditLink
+            audit={{ id: earlier.auditId, startPath: earlier.startPath, createdAt: earlier.date }}
+          />
+          .
         </p>
       )}
       {triage === null ? null : <p className="text-sm text-muted-foreground">{triage}</p>}

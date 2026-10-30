@@ -147,7 +147,7 @@ export interface FindingChange {
   /** `cell` indexes `Comparison.cells`. A finding that fails on the same cells as before lists only a few. */
   cellChanges: { cell: number; before: Verdict; now: Verdict | Resolution }[]
   cellChangesTotal: number
-  earlierFailure: { auditId: string; date: string } | null
+  earlierFailure: { auditId: string; date: string; startPath: string } | null
   /** Low confidence never changes the state; it adds a label and the Re-check action. */
   confidence: { level: "normal" | "low"; because: ("volatile_rule" | "flips" | "single_run")[] }
   /** What a later re-check of these cells (a narrow audit) found; null when none covers them. */
@@ -164,6 +164,8 @@ export interface AuditRef {
   id: string
   createdAt: string
   status: string
+  /** The path of the audit's start page, so audits of one site tell apart (see `auditName`). */
+  startPath: string
 }
 
 export interface Comparability {
@@ -208,6 +210,7 @@ export interface Side {
 export interface HistoryAudit {
   auditId: string
   date: string
+  startPath: string
   runs: ReadonlyArray<CellRun>
   checks: ReadonlyArray<CheckRow>
 }
@@ -352,7 +355,7 @@ const earlierFailureOf = (
       // a witness counts only when its consent choice and banner agree with the current run's
       if (compatDiffers(ruleId, witness, current, input.bannerDependent) !== null) continue
       if (input.ruleChanged(ruleId, [row.rulesVersion, ...currentVersions])) continue
-      return { auditId: audit.auditId, date: audit.date }
+      return { auditId: audit.auditId, date: audit.date, startPath: audit.startPath }
     }
   }
   return null
@@ -843,6 +846,13 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
     ),
     ...crossHost,
   ]
+}
+
+/** Two configs are comparable when they run exactly the same cells: pages, scenarios and viewports (and the journey and hosts they add). */
+export const sameScope = (a: ConfigShape, b: ConfigShape) => {
+  const ids = new Set(cellsOfConfig(a).map(cellId))
+  const other = cellsOfConfig(b).map(cellId)
+  return ids.size === other.length && other.every((id) => ids.has(id))
 }
 
 const SCENARIO_ORDER = ["none", "accept", "reject", "gpc"] as const

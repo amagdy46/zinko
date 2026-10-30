@@ -36,7 +36,7 @@ function SampleReport() {
   const label = from === undefined ? null : backLabel(from)
   const start = groupByClient ? "Start with a client" : "Start with a site"
   return (
-    <PageContainer className="max-w-none">
+    <PageContainer>
       <PageHeader
         title="Sample report"
         breadcrumb={[

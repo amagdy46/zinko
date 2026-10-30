@@ -19,6 +19,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "branding-logo.uploadLogo": "mutation",
   "branding-logo.removeLogo": "mutation",
   "audits.startAudit": "mutation",
+  "audits.previewBaseline": "read",
   "audits.previewRerun": "read",
   "audits.rerunAudit": "mutation",
   "audits.setBaseline": "mutation",

@@ -1,10 +1,11 @@
 import { MAX_URL_LENGTH } from "@repo/capture-contract"
-import { type AuditConfig, Jobs, TEST_CLICK_IDS } from "@repo/core"
+import { AuditConfig, Jobs, TEST_CLICK_IDS } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, findingTriage, reportEdit, reportFindingEdit, run } from "@repo/db"
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
-import { Effect, Option } from "effect"
-import { type CellKey, cellId, cellKeyOf } from "@/lib/compare"
+import { Effect, Option, Schema } from "effect"
+import { startPathOfPage } from "@/lib/audit-labels"
+import { type CellKey, cellId, cellKeyOf, sameScope } from "@/lib/compare"
 import { hasCredentials, isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
 import { storedCells } from "./cell-key"
 import { atomically, Invalid, NotFound, siteInOrg } from "./server-fn"
@@ -51,34 +52,80 @@ const captureUrls = (pages: ReadonlyArray<string>, clickIds: boolean) =>
 export const evaluatedAudit = (orgId: string) =>
   sql<boolean>`exists (select 1 from ${run} join ${checkResult} on ${checkResult.runId} = ${run.id} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId})`
 
+/** An audit a new one is compared with: enough to name it ("/drift/, 30 Oct 2026, 18:15"). */
+export interface Baseline {
+  readonly id: string
+  readonly createdAt: Date
+  readonly startPath: string
+}
+
+const decodeStoredConfig = Schema.decodeUnknownOption(AuditConfig)
+
+/** Evaluated audits read per page while looking for one with the same scope. */
+const BASELINE_BATCH = 25
+
 /**
- * The site's latest evaluated `full` audit, the default baseline of a new audit. With `lock`
- * (inside `atomically`) a concurrent delete of that audit waits for the transaction.
+ * The default baseline of a new audit: the site's latest evaluated `full` audit that ran exactly
+ * the same cells (pages, scenarios and viewports, `sameScope`, the same test a comparison uses to
+ * tell whether two audits can be compared), or none. Newest first, a page at a time on the
+ * `(created_at, id)` key, until one matches or none are left. Without `scope` the latest evaluated
+ * audit, whatever it ran. With `lock` (inside `atomically`) a concurrent delete of a page's audits
+ * waits for the transaction.
  */
-export const latestBaseline = (orgId: string, siteId: string, lock = false) =>
+export const latestBaseline = (
+  orgId: string,
+  siteId: string,
+  lock = false,
+  scope?: Parameters<typeof sameScope>[0],
+) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const query = db
-      .select({ id: audit.id, createdAt: audit.createdAt })
-      .from(audit)
-      .where(
-        and(
-          eq(audit.orgId, orgId),
-          eq(audit.siteId, siteId),
-          eq(audit.kind, "full"),
-          inArray(audit.status, ["complete", "partial"]),
-          evaluatedAudit(orgId),
-        ),
-      )
-      .orderBy(desc(audit.createdAt), desc(audit.id))
-      .limit(1)
-    const [found] = yield* lock ? query.for("key share") : query
-    return Option.fromNullishOr(found)
+    let after: { at: string; id: string } | null = null
+    while (true) {
+      const query = db
+        .select({
+          id: audit.id,
+          createdAt: audit.createdAt,
+          at: sql<string>`${audit.createdAt}::text`,
+          config: audit.config,
+        })
+        .from(audit)
+        .where(
+          and(
+            eq(audit.orgId, orgId),
+            eq(audit.siteId, siteId),
+            eq(audit.kind, "full"),
+            inArray(audit.status, ["complete", "partial"]),
+            evaluatedAudit(orgId),
+            after === null
+              ? undefined
+              : sql`(${audit.createdAt}, ${audit.id}) < (${after.at}::timestamptz, ${after.id}::uuid)`,
+          ),
+        )
+        .orderBy(desc(audit.createdAt), desc(audit.id))
+        .limit(scope === undefined ? 1 : BASELINE_BATCH)
+      const rows: ReadonlyArray<{ id: string; createdAt: Date; at: string; config: unknown }> =
+        yield* lock ? query.for("key share") : query
+      for (const row of rows) {
+        const config = decodeStoredConfig(row.config)
+        if (scope !== undefined && (Option.isNone(config) || !sameScope(config.value, scope)))
+          continue
+        return Option.some<Baseline>({
+          id: row.id,
+          createdAt: row.createdAt,
+          startPath: startPathOfPage(Option.getOrUndefined(config)?.pages[0]),
+        })
+      }
+      const last: { id: string; at: string } | undefined = rows.at(-1)
+      if (scope === undefined || last === undefined || rows.length < BASELINE_BATCH)
+        return Option.none<Baseline>()
+      after = { at: last.at, id: last.id }
+    }
   })
 
 /**
  * The baseline a re-run of `auditId` gets: that audit when it is an evaluated `full` audit, else
- * the site's latest evaluated one. An audit that does not exist (any more) is a 404.
+ * the latest evaluated one with the same scope. An audit that does not exist (any more) is a 404.
  */
 export const rerunBaseline = (orgId: string, siteId: string, auditId: string, lock = false) =>
   Effect.gen(function* () {
@@ -87,6 +134,7 @@ export const rerunBaseline = (orgId: string, siteId: string, auditId: string, lo
       .select({
         id: audit.id,
         createdAt: audit.createdAt,
+        config: audit.config,
         valid: sql<boolean>`${audit.kind} = 'full' and ${audit.status} in ('complete', 'partial') and ${evaluatedAudit(orgId)}`,
       })
       .from(audit)
@@ -94,9 +142,19 @@ export const rerunBaseline = (orgId: string, siteId: string, auditId: string, lo
       .limit(1)
     const [found] = yield* lock ? query.for("key share") : query
     if (found === undefined) return yield* new NotFound({ message: "Not found" })
-    return found.valid
-      ? Option.some({ id: found.id, createdAt: found.createdAt })
-      : yield* latestBaseline(orgId, siteId, lock)
+    const config = decodeStoredConfig(found.config)
+    if (found.valid)
+      return Option.some<Baseline>({
+        id: found.id,
+        createdAt: found.createdAt,
+        startPath: startPathOfPage(Option.getOrUndefined(config)?.pages[0]),
+      })
+    return yield* latestBaseline(
+      orgId,
+      siteId,
+      lock,
+      Option.isSome(config) ? config.value : undefined,
+    )
   })
 
 /**
@@ -173,12 +231,16 @@ const copyCarryOver = (orgId: string, auditId: string, sourceId: string) =>
       where audit_id = ${sourceId} and org_id = ${orgId} and (detail <> 'standard' or not include_changes)`)
   })
 
-/** A new audit is compared with the site's latest evaluated full audit, a re-run with the audit it re-runs, a re-check with none. */
-const baselineFor = (orgId: string, siteId: string, input: CreateAudit) => {
-  if (input.narrow !== undefined)
-    return Effect.succeed(Option.none<{ id: string; createdAt: Date }>())
+/** A new audit is compared with the site's latest evaluated full audit of the same scope, a re-run with the audit it re-runs, a re-check with none. */
+const baselineFor = (
+  orgId: string,
+  siteId: string,
+  input: CreateAudit,
+  config: Parameters<typeof sameScope>[0],
+) => {
+  if (input.narrow !== undefined) return Effect.succeed(Option.none<Baseline>())
   if (input.origin.kind === "rerun") return rerunBaseline(orgId, siteId, input.origin.auditId, true)
-  return latestBaseline(orgId, siteId, true)
+  return latestBaseline(orgId, siteId, true, config)
 }
 
 export interface CreateAudit {
@@ -186,7 +248,7 @@ export interface CreateAudit {
   readonly userId: string
   readonly siteId: string
   readonly config: AuditConfig
-  /** `new`: compared with the site's latest evaluated full audit. `rerun`: compared with that audit, and one re-run per baseline at a time. */
+  /** `new`: compared with the site's latest evaluated full audit that ran the same cells. `rerun`: compared with that audit, and one re-run per baseline at a time. */
   readonly origin: { readonly kind: "new" } | { readonly kind: "rerun"; readonly auditId: string }
   /** A re-check: a `narrow` audit of some cells for one rule. It has no baseline and carries nothing over. */
   readonly narrow?: {
@@ -215,7 +277,15 @@ export const createAudit = (input: CreateAudit) =>
       if (target.archivedAt !== null)
         return yield* new Invalid({ message: "This site is archived." })
       const { narrow } = input
-      const baseline = yield* baselineFor(orgId, target.id, input)
+      const pages = yield* normalizePages(input.config.pages, target)
+      // the site's declared hosts at creation: the workflow reads this copy, never the live site
+      // a re-check follows only hosts the site still declares; any other audit snapshots the whole list
+      const measuredHosts =
+        narrow === undefined
+          ? target.measuredHosts
+          : (input.config.measuredHosts ?? []).filter((host) => target.measuredHosts.includes(host))
+      const config = { ...input.config, pages, measuredHosts }
+      const baseline = yield* baselineFor(orgId, target.id, input, config)
       const baselineId = Option.match(baseline, { onNone: () => null, onSome: (b) => b.id })
       const [active] = yield* db
         .select({ total: count() })
@@ -263,14 +333,6 @@ export const createAudit = (input: CreateAudit) =>
             message: "A re-run of this audit is already in progress.",
           })
       }
-      const pages = yield* normalizePages(input.config.pages, target)
-      // the site's declared hosts at creation: the workflow reads this copy, never the live site
-      // a re-check follows only hosts the site still declares; any other audit snapshots the whole list
-      const measuredHosts =
-        narrow === undefined
-          ? target.measuredHosts
-          : (input.config.measuredHosts ?? []).filter((host) => target.measuredHosts.includes(host))
-      const config = { ...input.config, pages, measuredHosts }
       const urls = yield* captureUrls(pages, config.clickIds)
       const [created] = yield* db
         .insert(audit)

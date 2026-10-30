@@ -1,3 +1,4 @@
+import { AuditLink } from "@/components/audit-link"
 import { Link, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { ChevronDown, CircleDashed, LoaderCircle, Sparkles } from "lucide-react"
@@ -93,9 +94,16 @@ function TriageLine({ triage }: { triage: FindingDetailData["triage"] }) {
         : `Marked fixed by ${who}, ${when}`}
       {origin === null ? null : (
         <span className="block" data-testid="carried-over">
-          {origin.auditId === null
-            ? `Carried over from an earlier audit (${shortDate(origin.at)})`
-            : `Carried over from the audit of ${shortDate(origin.at)}`}
+          {origin.auditId === null || origin.startPath === null ? (
+            `Carried over from an earlier audit (${shortDate(origin.at)})`
+          ) : (
+            <>
+              Carried over from{" "}
+              <AuditLink
+                audit={{ id: origin.auditId, startPath: origin.startPath, createdAt: origin.at }}
+              />
+            </>
+          )}
         </span>
       )}
     </p>
@@ -1190,6 +1198,7 @@ function EvidenceView({
       <div className="space-y-2">
         <KeyValueTable
           label="Cookie"
+          copyAsJson
           rows={[
             ["name", evidence.cookie.name],
             ["value", evidence.cookie.value],

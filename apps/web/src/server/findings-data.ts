@@ -3,7 +3,7 @@ import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
 import { ruleById } from "@repo/rules"
 import { and, asc, count, eq, inArray, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
-import { AREAS } from "@/lib/audit-labels"
+import { AREAS, startPathOfPage } from "@/lib/audit-labels"
 import { findingsFrom } from "@/lib/findings-from"
 import { BANNER_DEPENDENT_RULES, bannerDetection } from "./consent-context"
 import { NotFound } from "./server-fn"
@@ -26,7 +26,10 @@ export const SEVERITY_ORDER: Record<typeof Severity.Type, number> = {
 }
 
 /** A finding with no triage row is `open`. */
-export const triageOf = (row: typeof findingTriage.$inferSelect | null, originKept: boolean) =>
+export const triageOf = (
+  row: typeof findingTriage.$inferSelect | null,
+  originStartPage: string | null,
+) =>
   row === null
     ? Effect.succeed({
         status: "open" as const,
@@ -46,8 +49,9 @@ export const triageOf = (row: typeof findingTriage.$inferSelect | null, originKe
             row.inheritedFromAt === null
               ? null
               : {
-                  auditId: originKept ? row.inheritedFromAuditId : null,
+                  auditId: originStartPage === null ? null : row.inheritedFromAuditId,
                   at: row.inheritedFromAt,
+                  startPath: originStartPage === null ? null : startPathOfPage(originStartPage),
                 },
         })),
       )
@@ -56,9 +60,11 @@ export const triageOf = (row: typeof findingTriage.$inferSelect | null, originKe
 export const checkTitleOf = (stored: string | null, ruleId: string, area: string) =>
   stored ?? ruleById(ruleId)?.checkTitle ?? `Check: ${AREAS[area] ?? area}`
 
-/** Whether the audit a triage row was carried over from still exists in the organization. */
-export const originExists = (orgId: string) =>
-  sql<boolean>`exists (select 1 from ${audit} where ${audit.id} = ${findingTriage.inheritedFromAuditId} and ${audit.orgId} = ${orgId})`
+/** The start page of the audit a triage row was carried over from; null when that audit is gone or not in the organization. */
+export const originStartPage = (orgId: string) =>
+  sql<
+    string | null
+  >`(select ${audit.config}->'pages'->>0 from ${audit} where ${audit.id} = ${findingTriage.inheritedFromAuditId} and ${audit.orgId} = ${orgId})`
 
 export const triageJoin = and(
   eq(findingTriage.auditId, finding.auditId),
@@ -114,7 +120,7 @@ const narrowFindingRows = (orgId: string, auditId: string, ruleId: string) =>
     return findingsFrom(auditId, checks).map((f) => ({
       finding: f,
       triage: triage.find((t) => t.ruleId === f.ruleId) ?? null,
-      originExists: true,
+      originStartPage: null,
     }))
   })
 
@@ -135,7 +141,7 @@ export const findingRowsOf = (orgId: string, auditId: string) =>
     return head.kind === "narrow" && head.narrowRuleId !== null
       ? yield* narrowFindingRows(orgId, auditId, head.narrowRuleId)
       : yield* db
-          .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
+          .select({ finding, triage: findingTriage, originStartPage: originStartPage(orgId) })
           .from(finding)
           .leftJoin(findingTriage, triageJoin)
           .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
@@ -277,7 +283,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
       current.narrowRuleId !== null
         ? yield* narrowFindingRows(orgId, auditId, current.narrowRuleId)
         : yield* db
-            .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
+            .select({ finding, triage: findingTriage, originStartPage: originStartPage(orgId) })
             .from(finding)
             .leftJoin(findingTriage, triageJoin)
             .where(and(eq(finding.auditId, auditId), eq(finding.orgId, orgId)))
@@ -317,7 +323,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
     }
     const findings = yield* Effect.forEach(
       rows,
-      ({ finding: f, triage, originExists: originKept }) =>
+      ({ finding: f, triage, originStartPage: originStart }) =>
         Effect.gen(function* () {
           const affected = f.runIds.flatMap((id) => {
             const found = runById.get(id)
@@ -341,7 +347,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
             runIds: f.runIds,
             pages: new Set(affected.map((r) => r.pageUrl)).size,
             scenarios: new Set(affected.map((r) => r.scenario)).size,
-            triage: yield* triageOf(triage, originKept),
+            triage: yield* triageOf(triage, originStart),
           }
         }),
     )

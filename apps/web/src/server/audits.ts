@@ -11,6 +11,7 @@ import {
   carryOverOf,
   createAudit,
   evaluatedAudit,
+  latestBaseline,
   launchAudit,
   normalizePages,
   rerunBaseline,
@@ -128,6 +129,39 @@ export const startAudit = createServerFn({ method: "POST" })
         })
         yield* launchAudit(auditId)
         return { auditId }
+      }),
+    ),
+  )
+
+/**
+ * The audit a new audit with these settings would be compared with, and what it would carry over,
+ * read-only. The same choice `createAudit` makes; settings the site refuses answer with none.
+ */
+export const previewBaseline = createServerFn({ method: "GET" })
+  .middleware([requireSession])
+  .validator(
+    Schema.toStandardSchemaV1(Schema.Struct({ siteId: Schema.String, config: AuditConfig })),
+  )
+  .handler(({ context, data }) =>
+    read(
+      Effect.gen(function* () {
+        const { organizationId: orgId } = yield* membership(context.session)
+        const target = yield* siteInOrg(orgId, data.siteId)
+        const pages = yield* normalizePages(data.config.pages, target).pipe(
+          Effect.catchTag("Invalid", () => Effect.succeed(null)),
+        )
+        if (pages === null) return { baseline: null, carryOver: null }
+        const baseline = Option.getOrNull(
+          yield* latestBaseline(orgId, target.id, false, {
+            ...data.config,
+            pages,
+            measuredHosts: target.measuredHosts,
+          }),
+        )
+        return {
+          baseline,
+          carryOver: baseline === null ? null : yield* carryOverOf(orgId, baseline.id),
+        }
       }),
     ),
   )

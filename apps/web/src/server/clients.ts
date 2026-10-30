@@ -2,12 +2,11 @@ import { Database } from "@repo/core/Database"
 import { audit, client, orgSetting, site } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from "drizzle-orm"
-import { Effect, Option, Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { startPathOf } from "@/lib/audit-labels"
 import { distinguishers } from "@/lib/client-label"
 import { canonicalHost } from "@/lib/site-url"
-import { carryOverOf, latestBaseline } from "./audit-create"
 import {
   auditDetails,
   clientSummary,
@@ -945,8 +944,6 @@ export const getSite = createServerFn({ method: "GET" })
           .where(and(eq(audit.siteId, found.id), eq(audit.orgId, orgId), eq(audit.kind, "full")))
           .orderBy(desc(audit.createdAt))
           .limit(1)
-        const baseline = Option.getOrNull(yield* latestBaseline(orgId, found.id))
-        const carryOver = baseline === null ? null : yield* carryOverOf(orgId, baseline.id)
         return {
           site: {
             id: found.id,
@@ -1000,8 +997,6 @@ export const getSite = createServerFn({ method: "GET" })
           page,
           hasMore: rows.length > AUDITS_PER_PAGE,
           lastConfig: latest?.config ?? null,
-          baseline,
-          carryOver,
         }
       }),
     ),
