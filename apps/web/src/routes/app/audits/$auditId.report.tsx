@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { Download, Ellipsis, Palette, Printer, Tag } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
+import { AuditRunning } from "@/components/audit-running"
 import { EmptyState } from "@/components/empty-state"
 import {
   DisclosureDialog,
@@ -54,9 +55,7 @@ function ReportScreen() {
     )
   if (!draft.available)
     return draft.reason === "running" ? (
-      <p className="text-sm text-muted-foreground" data-testid="report-running">
-        Available when the audit finishes
-      </p>
+      <AuditRunning what="The report" testId="report-running" />
     ) : (
       <EmptyState
         title="Not evaluated"
@@ -92,8 +91,8 @@ function ReportScreen() {
           }}
           aria-label="View"
         >
-          <ToggleGroupItem value="consultant">Consultant view</ToggleGroupItem>
-          <ToggleGroupItem value="client">Shared view</ToggleGroupItem>
+          <ToggleGroupItem value="consultant">Your view</ToggleGroupItem>
+          <ToggleGroupItem value="client">Reader view</ToggleGroupItem>
         </ToggleGroup>
         <DisclosureDialog
           auditId={auditId}
@@ -103,59 +102,48 @@ function ReportScreen() {
           onOpenChange={setLabelsOpen}
           menuOpener={moreRef}
         />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="max-sm:hidden"
-          title="Opens the print dialog. Turn off headers and footers there so the page address is not printed."
-          onClick={() => window.print()}
-        >
-          <Printer />
-          Save as PDF
-        </Button>
-        <Button asChild variant="outline" size="sm" className="max-sm:hidden">
-          <a href={`/api/audits/${auditId}/register.csv`} download>
-            <Download />
-            Export CSV
-          </a>
-        </Button>
-        {draft.canManageBranding ? (
-          <Link
-            to="/app/settings/branding"
-            className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background max-sm:hidden"
-          >
-            Branding
-          </Link>
-        ) : (
-          <span className="text-muted-foreground max-sm:hidden">
-            Ask an owner or admin to change the agency's branding.
-          </span>
-        )}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button ref={moreRef} type="button" variant="outline" size="sm" className="sm:hidden">
+            <Button ref={moreRef} type="button" variant="outline" size="sm">
               <Ellipsis />
               More
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem className="min-h-8" onSelect={() => setLabelsOpen(true)}>
-              <Tag />
-              Show page addresses
+            <DropdownMenuItem
+              className="min-h-8 justify-between gap-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              data-testid="disclosure"
+              onSelect={() => setLabelsOpen(true)}
+            >
+              <span className="flex items-center gap-2">
+                <Tag />
+                Page addresses
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {draft.model.detail === "standard" ? "Hidden" : "Shown"}
+              </span>
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-8" onSelect={() => window.print()}>
+            <DropdownMenuItem
+              className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              onSelect={() => window.print()}
+            >
               <Printer />
               Save as PDF
             </DropdownMenuItem>
-            <DropdownMenuItem className="min-h-8" asChild>
+            <DropdownMenuItem
+              className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+              asChild
+            >
               <a href={`/api/audits/${auditId}/register.csv`} download>
                 <Download />
                 Export CSV
               </a>
             </DropdownMenuItem>
             {draft.canManageBranding ? (
-              <DropdownMenuItem className="min-h-8" asChild>
+              <DropdownMenuItem
+                className="min-h-8 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+                asChild
+              >
                 <Link to="/app/settings/branding">
                   <Palette />
                   Branding
@@ -163,7 +151,7 @@ function ReportScreen() {
               </DropdownMenuItem>
             ) : (
               <DropdownMenuLabel className="max-w-56 font-normal text-muted-foreground">
-                Ask an owner or admin to change the agency's branding.
+                Ask an owner or admin to change the report's branding.
               </DropdownMenuLabel>
             )}
           </DropdownMenuContent>

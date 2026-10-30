@@ -9,12 +9,13 @@ import {
 import { NotFound } from "@/components/not-found"
 import { siteTrail } from "@/lib/site-trail"
 import { useEffect, useRef, useState } from "react"
-import { ChevronLeft } from "lucide-react"
+import { ChevronDown, ChevronLeft } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
 import { PageHeader } from "@/components/page-header"
 import { RerunDialog } from "@/components/rerun-dialog"
 import { Button } from "@/components/ui/button"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
@@ -22,7 +23,8 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { pageTitle } from "@/lib/page-title"
 import {
   auditTabName,
-  auditTitle,
+  auditFacts,
+  auditHeading,
   startPathOf,
   remainingTime,
   runReason,
@@ -105,6 +107,7 @@ function AuditPage() {
     return () => clearInterval(timer)
   }, [active])
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
+  const onFindings = useLocation({ select: (location) => location.pathname.endsWith("/findings") })
   const reportTab = useLocation({ select: (location) => location.pathname.endsWith("/report") })
   const runsTab = useLocation({
     select: (location) => location.pathname.replace(/\/$/, "") === `/app/audits/${audit.id}`,
@@ -182,7 +185,8 @@ function AuditPage() {
     pages: audit.config.pages.length,
     recheckTitle: audit.recheckTitle,
   }
-  const title = auditTitle(
+  const title = auditHeading(named)
+  const facts = auditFacts(
     { ...named, startPath: startPathOf(audit.config.pages[0]), createdAt: audit.createdAt },
     timeZone,
   )
@@ -203,7 +207,7 @@ function AuditPage() {
       link: { to: "/app/audits/$auditId/findings", params },
     },
     { label: "Compare", link: { to: "/app/audits/$auditId/compare", params } },
-    { label: "Tag matrix", link: { to: "/app/audits/$auditId/matrix", params } },
+    { label: "Tags", link: { to: "/app/audits/$auditId/matrix", params } },
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
     { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
@@ -305,6 +309,7 @@ function AuditPage() {
           meta={
             <>
               <StatusBadge status={toBadgeStatus(audit.status)} />
+              <span>{facts}</span>
               {active ? (
                 <TooltipProvider>
                   <Tooltip>
@@ -317,13 +322,13 @@ function AuditPage() {
                               : "size-2 rounded-full border border-muted-foreground"
                           }
                         />
-                        {connected ? "Connected" : "Reconnecting"}
+                        {connected ? "Live" : "Live updates paused"}
                       </span>
                     </TooltipTrigger>
                     <TooltipContent>
                       {connected
                         ? "Connected to live audit progress"
-                        : "Reconnecting to live audit progress"}
+                        : "Live updates are paused and the audit continues. This page reconnects by itself."}
                     </TooltipContent>
                   </Tooltip>
                 </TooltipProvider>
@@ -374,6 +379,21 @@ function AuditPage() {
           </div>
         </header>
       )}
+      {site.archived && audit.kind === "full" ? (
+        <p
+          role="status"
+          className="rounded-md border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+        >
+          This site is archived. Restore it to run new audits.{" "}
+          <Link
+            to="/app/sites/$siteId"
+            params={{ siteId: site.id }}
+            className="inline-flex h-8 items-center rounded-sm text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            Open the site
+          </Link>
+        </p>
+      ) : null}
       {active ? (
         <div className="space-y-3">
           <p role="status" className="sr-only">
@@ -459,6 +479,33 @@ function AuditPage() {
           </Link>
         ))}
       </nav>
+      {audit.kind === "narrow" && (overview || onFindings) && summary.otherFailing.length > 0 ? (
+        <Collapsible>
+          <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            Also failing in these runs ({summary.otherFailing.length})
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 transition-transform group-data-[state=open]:rotate-180"
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <p className="text-xs text-muted-foreground">
+              A re-check answers about one check, so these are not part of its result. Run a full
+              audit to see them in context.
+            </p>
+            <ul className="mt-1 space-y-1 text-sm" data-testid="other-failing">
+              {summary.otherFailing.map((other) => (
+                <li key={other.ruleId}>
+                  {other.title}{" "}
+                  <span className="text-muted-foreground">
+                    · fails on {count(other.runs, "run")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : null}
       <Outlet />
     </div>
   )

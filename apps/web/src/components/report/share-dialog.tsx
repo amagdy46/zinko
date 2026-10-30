@@ -67,6 +67,7 @@ function ShareBody({
   changes,
   carriedNotes,
   incomplete,
+  onClose,
 }: {
   auditId: string
   detail: DisclosureLevel
@@ -74,6 +75,7 @@ function ShareBody({
   changes: boolean
   carriedNotes: number
   incomplete: boolean
+  onClose: () => void
 }) {
   const router = useRouter()
   const timeZone = useTimeZone()
@@ -116,11 +118,10 @@ function ShareBody({
     0,
   )
   const days = DAYS[expiry]
-  const nextVersion = changes || latestVersion === null ? (latestVersion ?? 0) + 1 : latestVersion
   const publishNote =
     changes || latestVersion === null
-      ? `This publishes version ${nextVersion}.`
-      : `The report is unchanged since version ${nextVersion}, so the link opens that version.`
+      ? "The link shows the report as it is now; later edits do not change what it shows."
+      : "The report has not changed since you last shared it, so this link shows the same report."
 
   async function create() {
     setPending(true)
@@ -212,13 +213,14 @@ function ShareBody({
             {error}
           </p>
         )}
-        <Button type="button" disabled={pending} onClick={create} data-testid="create-link">
-          Create link
-        </Button>
-        {created === null ? null : (
-          <div className="space-y-1.5 rounded-md border p-3" data-testid="created-link">
+        {created === null ? (
+          <Button type="button" disabled={pending} onClick={create} data-testid="create-link">
+            Create link
+          </Button>
+        ) : (
+          <div className="space-y-2 rounded-md border p-3" data-testid="created-link">
             <p role="status" className="font-medium">
-              Link created for version {created.version}. It is shown once.
+              Link created. The address is shown once, so copy it now.
             </p>
             <div className="flex items-center gap-2">
               <Input
@@ -248,12 +250,23 @@ function ShareBody({
                 </a>
               </Button>
             </div>
-            <p className="text-muted-foreground">Create another link to send it again.</p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" onClick={() => void copy(created.url)}>
+                <Copy />
+                Copy link
+              </Button>
+              <Button type="button" variant="outline" onClick={onClose}>
+                Done
+              </Button>
+              <Button type="button" variant="ghost" onClick={() => setCreated(null)}>
+                Create another link
+              </Button>
+            </div>
           </div>
         )}
         {versions.length === 0 ? null : (
           <div className="space-y-3" data-testid="share-versions">
-            <h3 className="font-medium">Versions</h3>
+            <h3 className="font-medium">Shared so far</h3>
             {activeLinks === 0 || created !== null ? null : (
               <p className="text-muted-foreground" data-testid="active-links">
                 {count(activeLinks, "active link")}. A link's address is shown once, when it is
@@ -389,7 +402,7 @@ export function ShareDialog({
           returnFocus.current?.focus()
         }}
       >
-        <ShareBody {...rest} />
+        <ShareBody {...rest} onClose={() => onOpenChange(false)} />
       </DialogContent>
     </Dialog>
   )

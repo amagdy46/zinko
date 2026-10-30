@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/empty-state"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
@@ -27,6 +28,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { scenarioLabel } from "@/lib/audit-labels"
+import { count } from "@/lib/format"
 import { searchText, searchValues } from "@/lib/hits-filter"
 import { hasClickIds, runPageLabel } from "@/lib/page-label"
 import { sharePending } from "@/lib/share-pending"
@@ -596,16 +598,7 @@ function HitsExplorer() {
           ) : null}
         </div>
         <p className="text-xs text-muted-foreground tabular-nums" data-testid="timeline-counts">
-          {[
-            search.source === "dataLayer"
-              ? null
-              : `${thousands(counts.hits.matched)} of ${thousands(counts.hits.total)} hits`,
-            search.source === "network"
-              ? null
-              : `${thousands(counts.pushes.matched)} of ${thousands(counts.pushes.total)} pushes`,
-          ]
-            .filter((part) => part !== null)
-            .join(" · ")}
+          {eventCounts(counts, search.source)}
         </p>
         <Timeline
           key={JSON.stringify({ search, run, hit })}
@@ -760,10 +753,22 @@ function Timeline({
     >
       <div className="min-w-0 space-y-2">
         <h2 className="sr-only">Hits</h2>
-        <p className="text-xs text-muted-foreground">
-          Time: ms since the capture started. Status: the HTTP status, or Answered locally. Consent:
-          Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in full.
-        </p>
+        <Collapsible>
+          <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+            How to read this
+            <ChevronDown
+              aria-hidden="true"
+              className="size-4 transition-transform group-data-[state=open]:rotate-180"
+            />
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <p className="text-xs text-muted-foreground">
+              Time: ms since the capture started. Status: the HTTP status, or Answered locally.
+              Consent: Ads is ad_storage, Analytics is analytics_storage. Select a row to see it in
+              full.
+            </p>
+          </CollapsibleContent>
+        </Collapsible>
         <div className="scroll-edges max-h-[70svh] overflow-auto rounded-lg border">
           <table
             className="group/timeline w-full text-left text-xs"
@@ -773,7 +778,7 @@ function Timeline({
             <caption className="sr-only">Decoded hits and dataLayer pushes, in time order</caption>
             <thead className="sticky top-0 z-10 bg-muted text-muted-foreground">
               <tr className="h-7">
-                {singleRun ? null : <th className="px-2 font-medium">Run</th>}
+                {singleRun ? null : <th className="px-2 font-medium max-md:hidden">Run</th>}
                 <th className="hidden px-2 font-medium md:table-cell">Time</th>
                 <th className="px-2 font-medium">Vendor</th>
                 <th className="px-2 font-medium">Event</th>
@@ -867,7 +872,7 @@ function Timeline({
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <span data-testid="timeline-count">
-            {thousands(items.length)} of {thousands(matched)} items loaded
+            {thousands(items.length)} of {count(matched, "event")} loaded
           </span>
           {cursor === null ? null : (
             <Button variant="outline" size="sm" disabled={loading} onClick={() => void more()}>
@@ -939,6 +944,24 @@ function Timeline({
 const cellBase = "px-2 py-0 whitespace-nowrap"
 
 /** Status, consent, destination and key params make room for the detail pane; the pane repeats them. */
+/** One count: the events (hits plus dataLayer pushes) and what they are made of, or how many of them match. */
+const eventCounts = (
+  counts: { hits: { matched: number; total: number }; pushes: { matched: number; total: number } },
+  source: string | undefined,
+) => {
+  const hits = source === "dataLayer" ? null : counts.hits
+  const pushes = source === "network" ? null : counts.pushes
+  const matched = (hits?.matched ?? 0) + (pushes?.matched ?? 0)
+  const total = (hits?.total ?? 0) + (pushes?.total ?? 0)
+  const parts = [
+    hits === null ? null : count(hits.matched, "hit"),
+    pushes === null ? null : count(pushes.matched, "dataLayer push"),
+  ].filter((part) => part !== null)
+  const lead =
+    matched === total ? count(total, "event") : `${thousands(matched)} of ${count(total, "event")}`
+  return `${lead}: ${parts.join(", ")}`
+}
+
 const paneHidden = "group-data-[pane=open]/timeline:hidden!"
 
 function RunCell({
@@ -952,7 +975,7 @@ function RunCell({
 }) {
   if (singleRun) return null
   return (
-    <td className={cn(cellBase, "text-muted-foreground")}>
+    <td className={cn(cellBase, "text-muted-foreground max-md:hidden")}>
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="block max-w-36 truncate md:max-w-56">
@@ -965,6 +988,24 @@ function RunCell({
         )}
       </Tooltip>
     </td>
+  )
+}
+
+/** At narrow widths the Run column is hidden and the run is named under the event instead. */
+function RunSubtitle({
+  ordinal,
+  run,
+  singleRun,
+}: {
+  ordinal: number
+  run: RunInfo | undefined
+  singleRun: boolean
+}) {
+  if (singleRun || run === undefined) return null
+  return (
+    <span className="block max-w-56 truncate font-sans text-[11px] leading-4 font-normal text-muted-foreground md:hidden">
+      #{ordinal + 1} {runPageLabel(run)} · {scenarioLabel(run.scenario)}
+    </span>
   )
 }
 
@@ -991,7 +1032,7 @@ function HitRow({
       data-row-key={itemKey(item)}
       data-selected={isSelected}
       onClick={onSelect}
-      className={cn("h-8 border-t max-md:h-9", selectableRow)}
+      className={cn("h-8 border-t max-md:h-auto", selectableRow)}
     >
       <RunCell ordinal={item.ordinal} run={run} singleRun={singleRun} />
       <td className={cn(cellBase, "hidden font-mono tabular-nums md:table-cell")}>
@@ -1002,10 +1043,11 @@ function HitRow({
         <button
           type="button"
           title={item.event}
-          className="block h-8 max-w-40 truncate px-2 text-left font-mono leading-8 font-medium outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          className="block min-h-8 max-w-40 truncate px-2 text-left font-mono leading-8 font-medium outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset max-md:max-w-56 max-md:py-1 max-md:leading-4"
           onClick={onSelect}
         >
           {item.event}
+          <RunSubtitle ordinal={item.ordinal} run={run} singleRun={singleRun} />
         </button>
       </td>
       <td className={cn(cellBase, "hidden md:table-cell", paneHidden)}>
@@ -1065,7 +1107,7 @@ function PushRow({
       data-selected={isSelected}
       onClick={onSelect}
       className={cn(
-        "h-8 border-t text-muted-foreground max-md:h-9",
+        "h-8 border-t text-muted-foreground max-md:h-auto",
         selectableRow,
         isSelected && "text-foreground",
       )}
@@ -1080,7 +1122,7 @@ function PushRow({
           type="button"
           aria-expanded={group?.open}
           className={cn(
-            "inline-flex h-8 items-center gap-1 px-2 text-left font-mono outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+            "inline-flex min-h-8 items-center gap-1 px-2 text-left font-mono outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset max-md:py-1",
             nested && "pl-5",
           )}
           onClick={(event) => {
@@ -1094,7 +1136,10 @@ function PushRow({
               className={cn("size-3.5", !group.open && "-rotate-90")}
             />
           ) : null}
-          {pushName(item.value)}
+          <span className="min-w-0">
+            {pushName(item.value)}
+            <RunSubtitle ordinal={item.ordinal} run={run} singleRun={singleRun} />
+          </span>
           {group ? <Badge variant="secondary">{group.count} pushes</Badge> : null}
         </button>
       </td>

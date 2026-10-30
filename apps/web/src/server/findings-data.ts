@@ -73,11 +73,11 @@ export const triageJoin = and(
 const LOCAL_LIMIT = sql<boolean>`(${checkResult.ruleId} = 'hygiene.tag-errors' and ${checkResult.status} = 'inconclusive' and ${checkResult.message} ~ 'answered (tracking requests )?locally')`
 
 /**
- * A re-check's findings, grouped from the check results of its target runs only. The stored
- * `finding` rows of a narrow audit were aggregated over its companion and extra runs too, so they
- * are not trusted.
+ * A re-check's finding: its one check, grouped from the check results of its target runs only. The
+ * stored `finding` rows of a narrow audit were aggregated over its companion and extra runs too,
+ * and over every other check, so they are not trusted: a re-check answers about one check.
  */
-const narrowFindingRows = (orgId: string, auditId: string) =>
+const narrowFindingRows = (orgId: string, auditId: string, ruleId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const checks = yield* db
@@ -103,6 +103,7 @@ const narrowFindingRows = (orgId: string, auditId: string) =>
           eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
+          eq(checkResult.ruleId, ruleId),
         ),
       )
       .orderBy(asc(run.ordinal), asc(checkResult.ruleId))
@@ -126,13 +127,13 @@ export const findingRowsOf = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
     const [head] = yield* db
-      .select({ kind: audit.kind })
+      .select({ kind: audit.kind, narrowRuleId: audit.narrowRuleId })
       .from(audit)
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     if (head === undefined) return yield* new NotFound({ message: "Not found" })
-    return head.kind === "narrow"
-      ? yield* narrowFindingRows(orgId, auditId)
+    return head.kind === "narrow" && head.narrowRuleId !== null
+      ? yield* narrowFindingRows(orgId, auditId, head.narrowRuleId)
       : yield* db
           .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
           .from(finding)
@@ -167,11 +168,14 @@ export const findingsOf = (orgId: string, auditId: string) =>
     // Read first: `finish` writes the findings and settles the status in one transaction, so
     // a finished status here means the reads below see the findings (a later read could not).
     const [current] = yield* db
-      .select({ status: audit.status, kind: audit.kind })
+      .select({ status: audit.status, kind: audit.kind, narrowRuleId: audit.narrowRuleId })
       .from(audit)
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     if (current === undefined) return yield* new NotFound({ message: "Not found" })
+    // A re-check answers about its one check; the other rules' results of its runs are not its findings.
+    const scope =
+      current.narrowRuleId === null ? undefined : eq(checkResult.ruleId, current.narrowRuleId)
     const runs = yield* db
       .select({ id: run.id, pageUrl: run.pageUrl, scenario: run.scenario, status: run.status })
       .from(run)
@@ -207,6 +211,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
           eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
+          scope,
         ),
       )
       .groupBy(checkResult.runId, checkResult.status, LOCAL_LIMIT)
@@ -226,6 +231,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
           eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
+          scope,
         ),
       )
       .groupBy(checkResult.ruleId, checkResult.status, checkResult.area, checkResult.checkTitle)
@@ -239,6 +245,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
           eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
+          scope,
           eq(checkResult.status, "fail"),
           inArray(checkResult.ruleId, [...BANNER_DEPENDENT_RULES]),
         ),
@@ -261,13 +268,14 @@ export const findingsOf = (orgId: string, auditId: string) =>
           eq(run.role, "target"),
           eq(run.orgId, orgId),
           eq(checkResult.orgId, orgId),
+          scope,
           eq(checkResult.status, "inconclusive"),
         ),
       )
       .orderBy(asc(run.ordinal))
     const rows =
-      current.kind === "narrow"
-        ? yield* narrowFindingRows(orgId, auditId)
+      current.narrowRuleId !== null
+        ? yield* narrowFindingRows(orgId, auditId, current.narrowRuleId)
         : yield* db
             .select({ finding, triage: findingTriage, originExists: originExists(orgId) })
             .from(finding)

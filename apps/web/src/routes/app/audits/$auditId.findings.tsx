@@ -722,17 +722,14 @@ function FindingItem({
             </span>
           )}
         </span>
+        {failing && row.owner !== null ? (
+          <span className="block text-xs text-muted-foreground" data-testid="finding-owner">
+            Usually fixed by: <span className="text-foreground">{OWNER_LABELS[row.owner]}</span>
+          </span>
+        ) : null}
         {failing && row.firstFix !== null ? (
-          <span className="flex items-baseline gap-1 text-xs" data-testid="fix-first">
-            <span className="shrink-0 text-muted-foreground">Fix first:</span>
-            <span className="line-clamp-2 min-w-0" title={row.firstFix}>
-              {row.firstFix}
-            </span>
-            {row.owner === null ? null : (
-              <span className="hidden shrink-0 text-muted-foreground sm:inline">
-                · {OWNER_LABELS[row.owner]}
-              </span>
-            )}
+          <span className="mt-0.5 block text-xs" data-testid="fix-first">
+            <span className="text-muted-foreground">Fix first:</span> {row.firstFix}
           </span>
         ) : null}
         {isLocalLimit(row) ? (

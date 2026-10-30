@@ -3,7 +3,7 @@ import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, run, site, client, checkResult } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, count, eq, countDistinct, sql } from "drizzle-orm"
+import { and, asc, eq, countDistinct, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost, isOnSite, originHost } from "@/lib/site-url"
@@ -312,8 +312,13 @@ export const getAudit = createServerFn({ method: "GET" })
           .where(and(eq(run.auditId, found.audit.id), eq(run.orgId, orgId)))
           .orderBy(asc(run.ordinal))
         const storage = yield* Storage
-        const failingChecks = yield* db
-          .select({ runId: checkResult.runId, severity: checkResult.severity, n: count() })
+        const failingOnTargets = yield* db
+          .select({
+            runId: checkResult.runId,
+            ruleId: checkResult.ruleId,
+            title: checkResult.title,
+            severity: checkResult.severity,
+          })
           .from(checkResult)
           .innerJoin(run, eq(run.id, checkResult.runId))
           .where(
@@ -325,7 +330,21 @@ export const getAudit = createServerFn({ method: "GET" })
               eq(checkResult.status, "fail"),
             ),
           )
-          .groupBy(checkResult.runId, checkResult.severity)
+        // A re-check answers about one check: its runs count that check's failures only, and the
+        // other checks that failed on the same runs are listed apart.
+        const narrowRule = found.audit.narrowRuleId
+        const failingChecks = failingOnTargets
+          .filter((c) => narrowRule === null || c.ruleId === narrowRule)
+          .map((c) => ({ runId: c.runId, severity: c.severity, n: 1 }))
+        const others = new Map<string, { ruleId: string; title: string; runs: number }>()
+        for (const c of failingOnTargets) {
+          if (narrowRule === null || c.ruleId === narrowRule) continue
+          const seen = others.get(c.ruleId)
+          if (seen === undefined)
+            others.set(c.ruleId, { ruleId: c.ruleId, title: c.title, runs: 1 })
+          else seen.runs += 1
+        }
+        const otherFailing = [...others.values()]
         const failingOf = (runId: string) => {
           const own = failingChecks.filter((c) => c.runId === runId)
           const worst = SEVERITIES.find((s) => own.some((c) => c.severity === s))
@@ -409,6 +428,7 @@ export const getAudit = createServerFn({ method: "GET" })
             info: openCount("info"),
           },
           evaluatedRuns: evaluation?.total ?? 0,
+          otherFailing,
         }
         const { audit: a } = found
         return {

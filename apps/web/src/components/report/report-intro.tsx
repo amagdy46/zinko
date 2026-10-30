@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router"
 import { Palette } from "lucide-react"
 import { useSyncExternalStore } from "react"
 import { Button } from "@/components/ui/button"
+import { useReportVoice } from "@/lib/use-agency-voice"
 
 const KEY = "zinko:report-intro-dismissed"
 const DISMISS_EVENT = "zinko:report-intro-dismissed"
@@ -30,6 +31,7 @@ export function ReportIntro({
     () => localStorage.getItem(KEY) === "1",
     () => true,
   )
+  const { who } = useReportVoice()
   const showHelp = !dismissed && !shared
   if (!showHelp && !unbranded) return null
   return (
@@ -51,16 +53,16 @@ export function ReportIntro({
             <Palette aria-hidden="true" className="size-4 shrink-0" />
             {canManageBranding ? (
               <>
-                No agency branding yet: the report prints your organization's name and no logo.
+                No branding yet: the report prints your organization's name and no logo.
                 <Link
                   to="/app/settings/branding"
                   className="inline-flex h-8 items-center rounded-md text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  Add a logo and agency name
+                  Add a logo and {who} name
                 </Link>
               </>
             ) : (
-              "No agency branding yet. Ask an owner or admin to add it."
+              "No branding yet. Ask an owner or admin to add it."
             )}
           </p>
         ) : null}

@@ -235,7 +235,7 @@ export const remainingTime = (remainingUnits: number, elapsed: number, totalUnit
       ? SECONDS_PER_RUN
       : (elapsed / 1000 + PRIOR_UNITS * SECONDS_PER_RUN) / (done + PRIOR_UNITS)
   const seconds = remainingUnits * pace
-  if (seconds < 50) return "less than a minute left"
+  if (seconds < 90) return `about ${Math.max(10, Math.round(seconds / 10) * 10)} seconds left`
   const minutes = Math.round(seconds / 60)
   return `about ${minutes} ${minutes === 1 ? "minute" : "minutes"} left`
 }
@@ -257,24 +257,28 @@ export function startPathOf(startPage: string | null | undefined): string | null
 }
 
 /**
- * What an audit is called wherever it is listed: a full audit by its site, day and size, a
- * re-check by the check it re-checked. `pages` counts the start page and the key pages.
+ * The audit page's heading: just what it is of. The day, size and start page are the meta line
+ * under it (`auditFacts`), so the heading does not wrap into a sentence at narrow widths.
  */
-export function auditTitle(
-  audit: {
-    kind: string
-    siteName: string
-    createdAt: Date | string
-    pages: number
-    startPath: string | null
-    recheckTitle: string | null
-  },
+export const auditHeading = (audit: {
+  kind: string
+  siteName: string
+  recheckTitle: string | null
+}) =>
+  audit.kind === "narrow"
+    ? `Re-check of ${audit.recheckTitle ?? "one check"}`
+    : `Audit of ${audit.siteName}`
+
+/** The facts that tell audits of one site apart, for the line under the heading. */
+export function auditFacts(
+  audit: { kind: string; createdAt: Date | string; pages: number; startPath: string | null },
   timeZone?: string,
 ): string {
   const day = shortDate(audit.createdAt, timeZone)
-  if (audit.kind === "narrow") return `Re-check of ${audit.recheckTitle ?? "one check"} · ${day}`
-  const where = audit.startPath === null ? "" : ` · ${audit.startPath}`
-  return `Audit of ${audit.siteName} · ${day} · ${count(audit.pages, "page")}${where}`
+  if (audit.kind === "narrow") return day
+  return [day, count(audit.pages, "page"), audit.startPath]
+    .filter((part) => part !== null)
+    .join(" · ")
 }
 
 /** The same without the day, for the browser tab: a time zone is not known while the head renders. */

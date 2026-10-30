@@ -21,6 +21,7 @@ type Preview = Awaited<ReturnType<typeof previewRecheck>>
 export function RecheckDialog({
   auditId,
   ruleId,
+  title,
   against,
   verify,
   open,
@@ -29,6 +30,8 @@ export function RecheckDialog({
 }: {
   auditId: string
   ruleId: string
+  /** The check's title, so the dialog names what is re-checked. */
+  title: string
   against?: string
   /** Opened from a finding ("Re-check this finding") rather than from a change in Compare ("Re-check these pages"). */
   verify: boolean
@@ -47,6 +50,7 @@ export function RecheckDialog({
         <RecheckBody
           auditId={auditId}
           ruleId={ruleId}
+          title={title}
           against={against}
           verify={verify}
           onClose={() => onOpenChange(false)}
@@ -60,12 +64,14 @@ export function RecheckDialog({
 function RecheckBody({
   auditId,
   ruleId,
+  title,
   against,
   verify,
   onClose,
 }: {
   auditId: string
   ruleId: string
+  title: string
   against: string | undefined
   verify: boolean
   onClose: () => void
@@ -136,6 +142,7 @@ function RecheckBody({
     <>
       <DialogHeader>
         <DialogTitle>{verify ? "Re-check this finding?" : "Re-check these pages?"}</DialogTitle>
+        <p className="text-sm font-medium [overflow-wrap:anywhere]">{title}</p>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>
       {preview?.unavailable && preview.summary !== null ? (

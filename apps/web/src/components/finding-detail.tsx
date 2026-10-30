@@ -1,6 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { ChevronDown, CircleDashed, LoaderCircle } from "lucide-react"
+import { ChevronDown, CircleDashed, LoaderCircle, Sparkles } from "lucide-react"
 import { toast } from "sonner"
 import {
   ConsentTokens,
@@ -51,6 +51,8 @@ import {
   listFindings,
   setTriage,
 } from "@/server/findings"
+
+const SEEN_ROWS = 6
 
 const getFinding = sharePending(fetchFinding)
 const getEvidence = sharePending(fetchEvidence)
@@ -243,6 +245,7 @@ export function FindingDetail({
   const [pending, setPending] = useState(false)
   const [pickedRun, setPickedRun] = useState<string | null>(null)
   const [pickedRef, setPickedRef] = useState<Ref | null>(null)
+  const [showAllChecks, setShowAllChecks] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const verifyButton = useRef<HTMLButtonElement>(null)
   const [verifying, setVerifying] = useState(false)
@@ -336,6 +339,7 @@ export function FindingDetail({
           <RecheckDialog
             auditId={auditId}
             ruleId={row.ruleId}
+            title={row.title}
             verify
             open={verifying}
             onOpenChange={setVerifying}
@@ -445,6 +449,7 @@ export function FindingDetail({
             </div>
           </>
         )}
+        {couldNotCheck ? null : <ExplainSection auditId={auditId} ruleId={row.ruleId} />}
         <Section title="Where it was seen">
           {row.kind === "fail" && row.inconclusiveRuns > 0 ? (
             <p className="text-xs text-muted-foreground">
@@ -457,12 +462,8 @@ export function FindingDetail({
               {BANNER_NOTE[detection]} The finding keeps its severity.
             </p>
           ))}
-          <ul
-            className="max-h-36 divide-y overflow-y-auto rounded-md border text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-            aria-label="Where it was seen"
-            tabIndex={0}
-          >
-            {checks.map((c) => (
+          <ul className="divide-y rounded-md border text-xs" aria-label="Where it was seen">
+            {(showAllChecks ? checks : checks.slice(0, SEEN_ROWS)).map((c) => (
               <li key={c.runId} data-testid="check">
                 <button
                   type="button"
@@ -501,6 +502,11 @@ export function FindingDetail({
               </li>
             ))}
           </ul>
+          {checks.length > SEEN_ROWS ? (
+            <Button variant="ghost" size="sm" onClick={() => setShowAllChecks((open) => !open)}>
+              {showAllChecks ? "Show fewer" : `Show all ${checks.length}`}
+            </Button>
+          ) : null}
         </Section>
         {check === undefined ? null : (
           <Evidence
@@ -512,7 +518,6 @@ export function FindingDetail({
             screenshotUrl={runs.find((r) => r.id === check.runId)?.screenshotUrl ?? null}
           />
         )}
-        {couldNotCheck ? null : <ExplainSection auditId={auditId} ruleId={row.ruleId} />}
       </div>
     </div>
   )
@@ -545,16 +550,23 @@ const WHERE_LABEL = {
   other: "Other",
 } as const
 
-function SettingsLink({ canManage }: { canManage: boolean }) {
-  return canManage ? (
-    <Link
-      to="/app/settings/ai"
-      className="inline-flex h-8 items-center rounded-sm font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      Open Settings &gt; AI
-    </Link>
-  ) : (
-    <span>Ask an owner or admin.</span>
+/** The way to turn explanations on: a button for an owner or admin, who can, a plain request for a member. */
+function EnableExplanations({ canManage, message }: { canManage: boolean; message: string }) {
+  return (
+    <Alert role="status" className="border-dashed" data-testid="explain-off">
+      <Sparkles aria-hidden="true" />
+      <AlertTitle>{message}</AlertTitle>
+      <AlertDescription>
+        <p>The steps above are the rule&apos;s standard steps and stay available.</p>
+        {canManage ? (
+          <Button asChild variant="outline" size="sm" className="mt-2">
+            <Link to="/app/settings/ai">Set up AI explanations</Link>
+          </Button>
+        ) : (
+          <p className="mt-1 font-medium">Ask an owner or admin to turn on explanations.</p>
+        )}
+      </AlertDescription>
+    </Alert>
   )
 }
 
@@ -646,10 +658,10 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
     return (
       <section className="space-y-1" data-testid="explain">
         {heading}
-        <p className="text-muted-foreground">
-          AI explanations are switched off for this organization. The steps above are the
-          rule&apos;s standard steps. <SettingsLink canManage={state.canManage} />
-        </p>
+        <EnableExplanations
+          canManage={state.canManage}
+          message="AI explanations are switched off for this organization"
+        />
       </section>
     )
 
@@ -667,15 +679,24 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
   return (
     <section className="space-y-2" data-testid="explain">
       {heading}
-      {state.configured ? null : (
+      {!state.configured && cached === null ? (
+        <EnableExplanations canManage={state.canManage} message="AI explanations need an API key" />
+      ) : null}
+      {!state.configured && cached !== null ? (
         <p className="text-muted-foreground">
-          AI explanations need a key.{" "}
-          {cached === null
-            ? "The steps above are the rule's standard steps. "
-            : "The text below was written before it was removed and cannot be regenerated. "}
-          <SettingsLink canManage={state.canManage} />
+          The text below was written before the key was removed and cannot be regenerated.{" "}
+          {state.canManage ? (
+            <Link
+              to="/app/settings/ai"
+              className="inline-flex h-8 items-center rounded-sm font-medium text-foreground underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Open Settings &gt; AI
+            </Link>
+          ) : (
+            "Ask an owner or admin to add a key."
+          )}
         </p>
-      )}
+      ) : null}
       {cached === null || written === null ? null : (
         <div className="space-y-3 rounded-md border p-3" data-testid="explanation">
           <p className="font-medium">{cached.explanation.summary}</p>

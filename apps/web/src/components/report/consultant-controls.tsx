@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
+import { useReportVoice } from "@/lib/use-agency-voice"
 import { CHANGE_WORDS } from "@/lib/compare-text"
 import { cn } from "@/lib/utils"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -94,6 +95,7 @@ export function EditSummary({
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(summary ?? "")
   const save = useSave(() => setOpen(false))
+  const { who } = useReportVoice()
   return (
     <Sheet
       open={open}
@@ -114,8 +116,9 @@ export function EditSummary({
         <SheetHeader>
           <SheetTitle>Edit summary</SheetTitle>
           <SheetDescription>
-            Your text opens the report as "Summary by" your agency; the sentences Zinko generates
-            from the findings follow the score. Clear it to go back to the generated summary alone.
+            Your text opens the report as "Summary by" your {who} name; the sentences Zinko
+            generates from the findings follow the score. Clear it to go back to the generated
+            summary alone.
           </SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col gap-2 px-4">
@@ -316,90 +319,97 @@ export function DisclosureDialog({
   disclosure: ConsultantPayload["disclosure"]
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** The "More" button that opens this from a menu below `sm`, where the trigger is hidden. */
+  /** The "More" button whose menu opens this; it gets focus back. */
   menuOpener: React.RefObject<HTMLElement | null>
 }) {
-  const [value, setValue] = useState<DisclosureLevel>(detail)
-  const save = useSave(() => setOpen(false))
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next)
-        if (next) {
-          setValue(detail)
-          save.clear()
-        }
-      }}
-    >
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" data-testid="disclosure" className="max-sm:hidden">
-          Show page addresses: {detail === "standard" ? "Off" : "On"}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent
         className="max-h-[85vh] overflow-y-auto"
         onCloseAutoFocus={(event) => {
-          if (window.matchMedia("(min-width: 40rem)").matches) return
           event.preventDefault()
           menuOpener.current?.focus()
         }}
       >
-        <DialogHeader>
-          <DialogTitle>Show page addresses</DialogTitle>
-          <DialogDescription>
-            A page path can hold a name or a token, and no check can tell. Read the list below
-            before you switch it on. Off prints page aliases only: no page addresses, query strings
-            or personal data, and no Meta or TikTok IDs. Google Analytics and Google Ads IDs are
-            shown either way.
-          </DialogDescription>
-        </DialogHeader>
-        <RadioGroup
-          value={value}
-          onValueChange={(next) => setValue(next === "detailed" ? "detailed" : "standard")}
-          aria-label="Show page addresses"
-        >
-          <div className="flex items-start gap-2">
-            <RadioGroupItem value="standard" id="detail-standard" className="mt-1" />
-            <Label htmlFor="detail-standard" className="font-normal">
-              Off: pages are numbered (Page 1, Page 2) and no address is printed
-            </Label>
-          </div>
-          <div className="flex items-start gap-2">
-            <RadioGroupItem value="detailed" id="detail-detailed" className="mt-1" />
-            <Label htmlFor="detail-detailed" className="font-normal">
-              On: print page paths and Meta and TikTok pixel IDs
-            </Label>
-          </div>
-        </RadioGroup>
-        <div className="space-y-2 text-sm" data-testid="disclosure-list">
-          <p className="font-medium">Exactly what On prints, beyond Off</p>
-          <ul className="list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
-            {disclosure.pages.map((page) => (
-              <li key={page}>{page}</li>
-            ))}
-            {disclosure.destinations.map((id) => (
-              <li key={id}>{id}</li>
-            ))}
-          </ul>
-          <p className="text-muted-foreground">
-            Paths are printed as entered, without query or fragment. The IDs listed are the Meta and
-            TikTok pixel IDs found in the evidence.
-          </p>
-        </div>
-        <Feedback error={save.error} warning={null} />
-        <DialogFooter>
-          <Button
-            disabled={save.pending || value === detail}
-            onClick={() =>
-              void save.run(() => saveReportEdit({ data: { auditId, detail: value } }))
-            }
-          >
-            Save
-          </Button>
-        </DialogFooter>
+        <DisclosureBody
+          auditId={auditId}
+          detail={detail}
+          disclosure={disclosure}
+          onSaved={() => setOpen(false)}
+        />
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Mounted only while the dialog is open, so every opening starts from the current state with no old error. */
+function DisclosureBody({
+  auditId,
+  detail,
+  disclosure,
+  onSaved,
+}: {
+  auditId: string
+  detail: DisclosureLevel
+  disclosure: ConsultantPayload["disclosure"]
+  onSaved: () => void
+}) {
+  const [value, setValue] = useState<DisclosureLevel>(detail)
+  const save = useSave(onSaved)
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Show page addresses</DialogTitle>
+        <DialogDescription>
+          A page path can hold a name or a token, and no check can tell. Read the list below before
+          you switch it on. Off prints page aliases only: no page addresses, query strings or
+          personal data, and no Meta or TikTok IDs. Google Analytics and Google Ads IDs are shown
+          either way.
+        </DialogDescription>
+      </DialogHeader>
+      <RadioGroup
+        value={value}
+        onValueChange={(next) => setValue(next === "detailed" ? "detailed" : "standard")}
+        aria-label="Show page addresses"
+      >
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="standard" id="detail-standard" className="mt-1" />
+          <Label htmlFor="detail-standard" className="font-normal">
+            Off: pages are numbered (Page 1, Page 2) and no address is printed
+          </Label>
+        </div>
+        <div className="flex items-start gap-2">
+          <RadioGroupItem value="detailed" id="detail-detailed" className="mt-1" />
+          <Label htmlFor="detail-detailed" className="font-normal">
+            On: print page paths and Meta and TikTok pixel IDs
+          </Label>
+        </div>
+      </RadioGroup>
+      <div className="space-y-2 text-sm" data-testid="disclosure-list">
+        <p className="font-medium">Exactly what On prints, beyond Off</p>
+        <ul className="list-disc space-y-0.5 pl-5 [overflow-wrap:anywhere]">
+          {disclosure.pages.map((page) => (
+            <li key={page}>{page}</li>
+          ))}
+          {disclosure.destinations.map((id) => (
+            <li key={id}>{id}</li>
+          ))}
+        </ul>
+        <p className="text-muted-foreground">
+          Paths are printed as entered, without query or fragment. The IDs listed are the Meta and
+          TikTok pixel IDs found in the evidence.
+        </p>
+      </div>
+      <Feedback error={save.error} warning={null} />
+      <DialogFooter>
+        <Button
+          disabled={save.pending || value === detail}
+          onClick={() => void save.run(() => saveReportEdit({ data: { auditId, detail: value } }))}
+        >
+          Save
+        </Button>
+      </DialogFooter>
+    </>
   )
 }
 

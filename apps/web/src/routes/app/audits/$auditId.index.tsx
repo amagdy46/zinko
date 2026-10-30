@@ -6,6 +6,9 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
+/** The URL keeps "matrix"; the word on screen is "Grid" so it is not mistaken for the Tags tab. */
+const VIEW_LABELS = { matrix: "Grid", list: "List", thumbnails: "Thumbnails" } as const
+
 const View = Schema.Literals(["matrix", "list", "thumbnails"])
 const decodeView = Schema.decodeUnknownOption(View)
 const decodeRun = Schema.decodeUnknownOption(Schema.String)
@@ -56,8 +59,8 @@ function RunsPage() {
         }}
       >
         {(["matrix", "list", "thumbnails"] as const).map((value) => (
-          <ToggleGroupItem key={value} value={value} className="capitalize">
-            {value}
+          <ToggleGroupItem key={value} value={value}>
+            {VIEW_LABELS[value]}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ACCENTS, type AccentId, contrastOnWhite } from "@/lib/report-accent"
+import { useReportVoice } from "@/lib/use-agency-voice"
 import { cn } from "@/lib/utils"
 import { getBranding, saveBranding } from "@/server/branding"
 import { removeLogo, uploadLogo } from "@/server/branding-logo"
@@ -46,7 +47,8 @@ function CoverPreview({
   footerText: string
   showPoweredBy: boolean
 }) {
-  const name = agencyName.trim() === "" ? "Your agency" : agencyName.trim()
+  const { who } = useReportVoice()
+  const name = agencyName.trim() === "" ? `Your ${who}` : agencyName.trim()
   return (
     <div
       data-accent={accent}
@@ -184,6 +186,7 @@ function LogoCard({ logoUrl, canManage }: { logoUrl: string | null; canManage: b
 
 function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
   const router = useRouter()
+  const { who, Who } = useReportVoice()
   const { branding, canManage } = data
   const [agencyName, setAgencyName] = useState(branding.agencyName)
   const [accent, setAccent] = useState<AccentId>(branding.accent)
@@ -237,7 +240,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
       >
         <form onSubmit={save} className="max-w-xl space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="branding-name">Agency name</Label>
+            <Label htmlFor="branding-name">{Who} name</Label>
             <Input
               id="branding-name"
               value={agencyName}
@@ -325,7 +328,7 @@ function BrandingForm({ data, logo }: { data: Branding; logo: ReactNode }) {
             <Alert>
               <Info aria-hidden="true" />
               <AlertDescription>
-                The agency name looks like it contains an email address or phone number. Reports
+                The {who} name looks like it contains an email address or phone number. Reports
                 print it exactly as typed.
               </AlertDescription>
             </Alert>

@@ -1,5 +1,6 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { ChevronDown, Info } from "lucide-react"
+import { AuditRunning } from "@/components/audit-running"
 import { CopyButton, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
@@ -66,11 +67,7 @@ function OverviewScreen() {
   } = Route.useLoaderData()
   const { briefing, recheck, bandAllAccepted } = Route.useLoaderData()
   if (status === "queued" || status === "running")
-    return (
-      <p className="text-sm text-muted-foreground" data-testid="overview-running">
-        Available when the audit finishes
-      </p>
-    )
+    return <AuditRunning what="The score, findings and next steps" testId="overview-running" />
   if (!score.evaluated)
     return (
       <EmptyState
@@ -449,7 +446,7 @@ function NextSteps({
           search={{ view: "client" }}
           className={stepLink}
         >
-          Preview the shared report
+          Preview the reader view
         </Link>
       ),
       hint: "See what a reader of the report will see.",
@@ -543,32 +540,34 @@ function WorstFinding({
           ? ` ${count(worst.bannerUncertainRuns, "failing run")} ${rests(worst.bannerUncertainRuns)} on an undetected banner.`
           : ""}
       </p>
-      <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Why it matters
-        </h3>
-        <Lead text={worst.why} />
-      </div>
-      <div className="space-y-1">
-        <div className="flex items-center justify-between">
+      <div className="space-y-3 lg:grid lg:grid-cols-2 lg:gap-8 lg:space-y-0">
+        <div className="space-y-1">
           <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            How to fix it
+            Why it matters
           </h3>
-          <CopyButton
-            value={worst.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
-            label="Copy fix steps"
-          />
+          <Lead text={worst.why} />
+          <p className="max-w-prose text-sm">
+            <span className="text-muted-foreground">First failing run: </span>
+            {worst.message}
+          </p>
         </div>
-        <ol className="max-w-prose list-decimal space-y-1 pl-5 text-sm">
-          {worst.fix.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              How to fix it
+            </h3>
+            <CopyButton
+              value={worst.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
+              label="Copy fix steps"
+            />
+          </div>
+          <ol className="max-w-prose list-decimal space-y-1 pl-5 text-sm">
+            {worst.fix.map((step) => (
+              <li key={step}>{step}</li>
+            ))}
+          </ol>
+        </div>
       </div>
-      <p className="max-w-prose text-sm">
-        <span className="text-muted-foreground">First failing run: </span>
-        {worst.message}
-      </p>
       <div className="flex flex-wrap gap-2">
         <Button asChild size="sm">
           <Link
@@ -602,16 +601,18 @@ function TagsSeen({ auditId, tags }: { auditId: string; tags: Overview["tags"] }
           No tags were seen.
         </p>
       ) : (
-        <ul className="space-y-1 text-sm" data-testid="tags-seen">
+        <ul className="flex flex-wrap gap-2 text-sm" data-testid="tags-seen">
           {tags.map((tag) => (
             <li key={tag.vendor}>
               <Link
                 to="/app/audits/$auditId/matrix"
                 params={{ auditId }}
-                className={`inline-flex min-h-8 items-center rounded-md underline underline-offset-4 ${focusRing}`}
+                className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border bg-card px-3 hover:bg-muted/50 ${focusRing}`}
               >
-                {vendorName(tag.vendor)}: {count(tag.destinations, "destination")},{" "}
-                {count(tag.events, "event")}
+                <span className="font-medium">{vendorName(tag.vendor)}</span>
+                <span className="text-muted-foreground">
+                  {count(tag.destinations, "destination")}, {count(tag.events, "event")}
+                </span>
               </Link>
             </li>
           ))}
@@ -904,7 +905,8 @@ function AreaStrip({
         ) : null}
       </ul>
       <p className="text-xs text-muted-foreground">
-        Failing rules per area, accepted and fixed ones included. Could not check counts rules.
+        Failing rules per area, accepted and fixed ones included. Could not check counts rules. Bars
+        share one scale: the longest is {count(widest, "rule")}.
       </p>
     </section>
   )

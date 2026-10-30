@@ -20,7 +20,7 @@ type Search = {
 }
 
 export const Route = createFileRoute("/app/audits/$auditId/matrix")({
-  head: ({ matches }: TitleContext) => auditTabTitle("Tag matrix", matches),
+  head: ({ matches }: TitleContext) => auditTabTitle("Tags", matches),
   validateSearch: (search: Record<string, unknown>): Search => {
     const view = matrixView(search)
     return {

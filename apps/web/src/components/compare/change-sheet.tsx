@@ -156,6 +156,7 @@ function Detail({
           <RecheckDialog
             auditId={auditId}
             ruleId={finding.ruleId}
+            title={finding.title}
             against={against}
             verify={false}
             open={rechecking}
