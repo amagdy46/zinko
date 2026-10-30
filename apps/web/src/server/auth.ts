@@ -1,6 +1,8 @@
 import { type BetterAuthOptions, betterAuth } from "better-auth"
+import { waitUntil } from "cloudflare:workers"
 import { organization } from "better-auth/plugins"
 import { sendInvitationEmail } from "./invitation-email"
+import { sendResetPasswordEmail } from "./password-reset-email"
 
 export interface AuthSettings {
   readonly database: NonNullable<BetterAuthOptions["database"]>
@@ -33,7 +35,14 @@ export const makeAuth = ({ database, secret, baseURL, local, organizationFiles }
     database,
     secret,
     ...(origin === undefined ? {} : { baseURL: origin }),
-    emailAndPassword: { enabled: true },
+    // Mail goes out after the response, so the time to answer a reset request does not tell
+    // whether the address has an account.
+    advanced: { backgroundTasks: { handler: waitUntil } },
+    emailAndPassword: {
+      enabled: true,
+      sendResetPassword: sendResetPasswordEmail,
+      revokeSessionsOnPasswordReset: true,
+    },
     plugins: [
       /* efforge:auth-plugins */ organization({
         sendInvitationEmail,

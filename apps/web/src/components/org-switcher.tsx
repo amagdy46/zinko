@@ -1,5 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router"
-import { Check, ChevronsUpDown, Plus, Users } from "lucide-react"
+import { Check, ChevronsUpDown, Plus } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -17,6 +17,17 @@ import { authClient } from "@/lib/auth-client"
 interface Organization {
   readonly id: string
   readonly name: string
+}
+
+/** A page of another organization's data does not exist here, so only the section is kept. */
+const sectionOf = (pathname: string) => {
+  if (pathname.startsWith("/app/sites")) return "/app/sites"
+  if (pathname.startsWith("/app/clients")) return "/app/clients"
+  if (pathname.startsWith("/app/settings/ai")) return "/app/settings/ai"
+  if (pathname.startsWith("/app/settings/members")) return "/app/settings/members"
+  if (pathname.startsWith("/app/settings/branding")) return "/app/settings/branding"
+  if (pathname.startsWith("/app/settings")) return "/app/settings"
+  return "/app"
 }
 
 /** Lists the user's organizations in the sidebar; picking one makes it the active organization. */
@@ -42,7 +53,7 @@ export function OrgSwitcher({
       return
     }
     await router.invalidate()
-    await router.navigate({ to: "/app" })
+    await router.navigate({ to: sectionOf(router.state.location.pathname) })
     setSwitching(false)
     onNavigate?.()
   }
@@ -74,12 +85,6 @@ export function OrgSwitcher({
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link to="/app/settings/members" onClick={onNavigate}>
-            <Users className="size-4" />
-            Members
-          </Link>
-        </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/onboarding" onClick={onNavigate}>
             <Plus className="size-4" />

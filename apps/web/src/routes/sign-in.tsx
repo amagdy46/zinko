@@ -85,8 +85,15 @@ function SignIn() {
           autoComplete="current-password"
           error={fieldErrors.password}
           formError={error !== null}
-          hint="Password reset is not available yet."
         />
+        <p className="text-sm">
+          <Link
+            to="/forgot-password"
+            className="inline-flex min-h-8 items-center rounded-sm underline underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+          >
+            Forgot your password?
+          </Link>
+        </p>
         <FormError message={error} />
         <Button type="submit" className="w-full" disabled={pending || !hydrated}>
           {pending ? "Signing in…" : "Sign in"}

@@ -5,17 +5,24 @@ import { Button } from "@/components/ui/button"
 import { useHydrated } from "@/lib/use-hydrated"
 import { pageTitle } from "@/lib/page-title"
 import { authClient } from "@/lib/auth-client"
+import { getInvitationPreview } from "@/server/invitation-preview"
 import { getSession } from "@/server/session"
 
 export const Route = createFileRoute("/accept-invite/$id")({
   head: () => pageTitle("Join an organization"),
-  loader: async () => ({ session: await getSession() }),
+  loader: async ({ params }) => {
+    const session = await getSession()
+    return {
+      session,
+      preview: session === null ? await getInvitationPreview({ data: { id: params.id } }) : null,
+    }
+  },
   component: AcceptInvite,
 })
 
 function AcceptInvite() {
   const { id } = Route.useParams()
-  const { session } = Route.useLoaderData()
+  const { session, preview } = Route.useLoaderData()
   const [error, setError] = useState<{ id: string; message: string } | null>(null)
   const [loaded, setLoaded] = useState<{
     id: string
@@ -65,8 +72,12 @@ function AcceptInvite() {
   if (session === null)
     return (
       <AuthCard
-        title="You have been invited"
-        description="Sign in or create an account with the invited email address to join."
+        title={preview === null ? "You have been invited" : `Join ${preview.organizationName}`}
+        description={
+          preview === null
+            ? "Sign in or create an account with the invited email address to join."
+            : `${preview.inviterName} invited you to ${preview.organizationName}. Sign in or create an account with the invited email address to join.`
+        }
       >
         <div className="flex gap-2">
           <Button asChild className="flex-1">

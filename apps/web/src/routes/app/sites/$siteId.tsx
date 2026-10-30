@@ -464,7 +464,9 @@ function SitePage() {
                   <SelectItem value={NO_CLIENT}>No client</SelectItem>
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.name}
+                      {c.distinguisher === null
+                        ? c.name
+                        : `${c.name} · ${c.distinguisher} (${count(c.siteCount, "site")})`}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -21,6 +21,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { UserMenu } from "@/components/user-menu"
+import { useFindShortcut } from "@/lib/find-shortcut"
 import { safeRedirect } from "@/lib/redirect"
 import { getAppState } from "@/server/session"
 
@@ -60,6 +61,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
   const { session, organizations, groupByClient } = Route.useRouteContext()
   const nav = groupByClient ? [clientsNav, sitesNav, settingsNav] : [sitesNav, settingsNav]
   const section = useRouterState({ select: (state) => state.location.pathname.split("/")[2] })
+  const shortcut = useFindShortcut()
   return (
     <>
       <Link
@@ -84,7 +86,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
       >
         <Search className="size-4" />
         <span className="flex-1 text-left">Find…</span>
-        <kbd className="hidden font-sans text-xs md:inline">⌘K</kbd>
+        <kbd className="hidden font-sans text-xs md:inline">{shortcut}</kbd>
       </button>
       <nav aria-label="Workspace" className="flex flex-1 flex-col gap-0.5">
         {nav.map(({ to, label, icon: Icon, sections }) => (

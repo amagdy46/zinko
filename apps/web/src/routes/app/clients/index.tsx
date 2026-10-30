@@ -1,6 +1,5 @@
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router"
-import { useRef, useState, type FormEvent } from "react"
-import { toast } from "sonner"
+import { useRef, useState, type FormEvent, type ReactNode } from "react"
 import { FirstRun, LastAudit, OpenFindings } from "@/components/first-run"
 import { EmptyState } from "@/components/empty-state"
 import { SampleReportLink } from "@/components/sample-report-link"
@@ -31,6 +30,9 @@ import { pageTitle } from "@/lib/page-title"
 import { formField } from "@/lib/form"
 import { createClient, listClients } from "@/server/clients"
 
+const nextLink =
+  "inline-flex h-8 items-center rounded-sm text-sm text-status-active underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+
 export const Route = createFileRoute("/app/clients/")({
   beforeLoad: ({ context }) => {
     if (!context.groupByClient) throw redirect({ to: "/app/sites" })
@@ -48,6 +50,7 @@ function Clients() {
   const [open, setOpen] = useState(false)
   const opener = useRef<HTMLElement | null>(null)
   const [pending, setPending] = useState(false)
+  const [nameError, setNameError] = useState<string>()
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
@@ -56,14 +59,29 @@ function Clients() {
         data: { name: formField(new FormData(event.currentTarget), "name") },
       })
       if (!result.ok) {
-        toast.error(result.message)
+        setNameError(result.message)
         return
       }
+      setNameError(undefined)
       setOpen(false)
       await router.navigate({ to: "/app/clients/$clientId", params: { clientId: result.value.id } })
     } finally {
       setPending(false)
     }
+  }
+  const clientsWithSites = clients.some((c) => c.siteCount > 0)
+  let nextStep: ReactNode = undefined
+  if (!clientsWithSites && clients[0] !== undefined) {
+    nextStep =
+      ungroupedSites > 0 ? (
+        <Link className={nextLink} to="/app/sites">
+          {ungroupedSites === 1 ? "Move your site to a client" : "Move a site to a client"}
+        </Link>
+      ) : (
+        <Link className={nextLink} to="/app/clients/$clientId" params={{ clientId: clients[0].id }}>
+          Add your first site
+        </Link>
+      )
   }
   const filtered = clients.filter((c) =>
     c.name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
@@ -83,7 +101,13 @@ function Clients() {
                 className="w-44"
               />
             ) : null}
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+              open={open}
+              onOpenChange={(isOpen) => {
+                setOpen(isOpen)
+                if (!isOpen) setNameError(undefined)
+              }}
+            >
               {clients.length > 0 ? (
                 <DialogTrigger asChild>
                   <Button>New client</Button>
@@ -106,7 +130,20 @@ function Clients() {
                 <form onSubmit={create} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="client-name">Name</Label>
-                    <Input id="client-name" name="name" required maxLength={100} />
+                    <Input
+                      id="client-name"
+                      name="name"
+                      required
+                      maxLength={100}
+                      aria-invalid={nameError !== undefined}
+                      aria-describedby={nameError === undefined ? undefined : "client-name-error"}
+                      onChange={() => setNameError(undefined)}
+                    />
+                    {nameError === undefined ? null : (
+                      <p id="client-name-error" role="alert" className="text-sm text-destructive">
+                        {nameError}
+                      </p>
+                    )}
                   </div>
                   <Button type="submit" disabled={pending}>
                     {pending ? "Creating…" : "Create client"}
@@ -122,28 +159,13 @@ function Clients() {
           organizationId={session.activeOrganizationId ?? ""}
           steps={[
             { label: "Add a client", done: true },
-            {
-              label: "Add a site",
-              done: ungroupedSites > 0 || clients.some((c) => c.siteCount > 0),
-            },
+            { label: "Add a site to a client", done: clientsWithSites },
             {
               label: "Run an audit",
               done: clients.some((c) => c.running > 0 || c.latest !== null),
             },
           ]}
-          next={
-            ungroupedSites > 0 ||
-            clients.some((c) => c.siteCount > 0) ||
-            clients[0] === undefined ? undefined : (
-              <Link
-                className="inline-flex h-8 items-center rounded-sm text-sm text-status-active underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
-                to="/app/clients/$clientId"
-                params={{ clientId: clients[0].id }}
-              >
-                Add your first site
-              </Link>
-            )
-          }
+          next={nextStep}
         />
       ) : null}
       {clients.length === 0 && ungroupedSites > 0 ? (
@@ -225,6 +247,11 @@ function Clients() {
                   >
                     {c.name}
                   </Link>
+                  {c.distinguisher !== null ? (
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      {c.distinguisher}
+                    </span>
+                  ) : null}
                 </TableCell>
                 <TableCell className="tabular-nums">{c.siteCount}</TableCell>
                 <TableCell>

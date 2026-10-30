@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router"
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 import { type FormEvent, useState } from "react"
 import { AuthCard } from "@/components/auth-card"
 import { Button } from "@/components/ui/button"
@@ -8,14 +8,14 @@ import { pageTitle } from "@/lib/page-title"
 import { useHydrated } from "@/lib/use-hydrated"
 import { authClient } from "@/lib/auth-client"
 import { formField } from "@/lib/form"
-import { getSession } from "@/server/session"
+import { getAppState } from "@/server/session"
 
 export const Route = createFileRoute("/onboarding")({
   head: () => pageTitle("Create your organization"),
   beforeLoad: async () => {
-    const session = await getSession()
-    if (session === null) throw redirect({ to: "/sign-in" })
-    return { session }
+    const state = await getAppState()
+    if (state === null) throw redirect({ to: "/sign-in" })
+    return { session: state.session, organizations: state.organizations }
   },
   component: Onboarding,
 })
@@ -30,7 +30,9 @@ const slugify = (name: string) =>
   }-${crypto.randomUUID().slice(0, 6)}`
 
 function Onboarding() {
-  const { session } = Route.useRouteContext()
+  const { session, organizations } = Route.useRouteContext()
+  const current = organizations.find((org) => org.id === session.activeOrganizationId)
+  const another = organizations.length > 0
   const [signingOut, setSigningOut] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
@@ -52,12 +54,24 @@ function Onboarding() {
 
   return (
     <AuthCard
-      title="Create your organization"
-      description="Your organization is your company or team. Its name appears on the reports you share, and you can add a logo later. You add your first site next."
+      title={another ? "Create another organization" : "Create your organization"}
+      description={
+        another
+          ? "A separate organization has its own sites, audits, members and reports. You can switch between organizations from the sidebar."
+          : "Your organization is your company or team. Its name appears on the reports you share, and you can add a logo later. You add your first site next."
+      }
       account={
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span className="break-all">Signed in as {session.email}</span>
           <span aria-hidden="true">·</span>
+          {current === undefined ? null : (
+            <>
+              <Button asChild variant="ghost" size="sm">
+                <Link to="/app">Back to {current.name}</Link>
+              </Button>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
           <Button
             variant="ghost"
             size="sm"

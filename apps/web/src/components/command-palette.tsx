@@ -289,7 +289,7 @@ export function CommandPalette({
                 {audits.map((a) => (
                   <CommandItem
                     key={a.id}
-                    value={`audit of ${a.siteName} ${a.id}`}
+                    value={`audit of ${a.siteName} ${a.startPath ?? ""} ${a.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({
@@ -301,7 +301,10 @@ export function CommandPalette({
                   >
                     <ClipboardList />
                     <span className="flex min-w-0 items-baseline gap-1">
-                      <span className="truncate">Audit of {a.siteName}</span>
+                      <span className="truncate">
+                        Audit of {a.siteName}
+                        {a.startPath === null ? "" : ` ${a.startPath}`}
+                      </span>
                       <span className="shrink-0 text-muted-foreground">
                         · {count(a.pages, "page")}
                       </span>
@@ -344,7 +347,7 @@ export function CommandPalette({
                 {clients.map((c) => (
                   <CommandItem
                     key={c.id}
-                    value={`client ${c.name} ${c.id}`}
+                    value={`client ${c.name} ${c.distinguisher ?? ""} ${c.id}`}
                     onSelect={() =>
                       go(() =>
                         router.navigate({
@@ -355,7 +358,15 @@ export function CommandPalette({
                     }
                   >
                     <Users />
-                    <span className="truncate">{c.name}</span>
+                    <span className="truncate">
+                      {c.name}
+                      {c.distinguisher === null ? null : (
+                        <span className="text-muted-foreground"> · {c.distinguisher}</span>
+                      )}
+                    </span>
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                      {count(c.siteCount, "site")}
+                    </span>
                   </CommandItem>
                 ))}
                 {targets?.clientsCapped ? <CapNote noun="clients" /> : null}

@@ -153,7 +153,12 @@ const PAD = 4
 
 /** The last few scores, oldest first, on a fixed 0 to 100 scale. Needs two points to say anything. */
 export function ScoreSparkline({ points }: { points: ReadonlyArray<SparkPoint> }) {
-  if (points.length < 2) return <span className="text-xs text-muted-foreground">One audit</span>
+  if (points.length < 2)
+    return (
+      <span className="text-xs text-muted-foreground">
+        {points.length === 0 ? "No audits yet" : "One audit"}
+      </span>
+    )
   const at = points.map((p, i) => ({
     ...p,
     x: PAD + (i * (WIDTH - 2 * PAD)) / (points.length - 1),

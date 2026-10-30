@@ -5,6 +5,7 @@ import { and, count, desc, eq, ilike, inArray, isNotNull, isNull, or, sql } from
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { startPathOf } from "@/lib/audit-labels"
+import { distinguishers } from "@/lib/client-label"
 import { canonicalHost } from "@/lib/site-url"
 import { carryOverOf, latestBaseline } from "./audit-create"
 import {
@@ -47,6 +48,9 @@ const parseName = (value: string) => {
     ? Effect.succeed(name)
     : Effect.fail(new Invalid({ message: "Name must be 1 to 100 characters." }))
 }
+
+/** Case- and whitespace-insensitive form of a name, to tell whether two clients are the same. */
+const nameKey = (name: string) => name.replace(/\s+/g, " ").toLocaleLowerCase()
 
 const parseSiteUrl = (value: string) =>
   Effect.gen(function* () {
@@ -186,7 +190,12 @@ export const listClients = createServerFn({ method: "GET" })
           )
           .orderBy(client.name)
         const sites = yield* db
-          .select({ id: site.id, clientId: site.clientId, onDefault: client.isDefault })
+          .select({
+            id: site.id,
+            name: site.name,
+            clientId: site.clientId,
+            onDefault: client.isDefault,
+          })
           .from(site)
           .innerJoin(client, eq(client.id, site.clientId))
           .where(and(eq(site.orgId, orgId), isNull(site.archivedAt)))
@@ -198,6 +207,15 @@ export const listClients = createServerFn({ method: "GET" })
           orgId,
           clients.map((c) => c.id),
         )
+        const firstSite = (id: string) =>
+          sites
+            .filter((s) => s.clientId === id)
+            .map((s) => s.name)
+            .reduce<string | null>(
+              (first, name) => (first === null || name < first ? name : first),
+              null,
+            )
+        const labels = distinguishers(clients.map((c) => ({ ...c, firstSite: firstSite(c.id) })))
         const rows = clients.map((c) => {
           const owned = sites.filter((s) => s.clientId === c.id)
           const summary = clientSummary(
@@ -209,6 +227,7 @@ export const listClients = createServerFn({ method: "GET" })
           return {
             id: c.id,
             name: c.name,
+            distinguisher: labels.get(c.id) ?? null,
             siteCount: owned.length,
             running: summary.running,
             latest: summary.latest,
@@ -244,7 +263,11 @@ export const searchTargets = createServerFn({ method: "GET" })
         const grouping = yield* groupByClientOf(orgId)
         const clients = grouping
           ? yield* db
-              .select({ id: client.id, name: client.name })
+              .select({
+                id: client.id,
+                name: client.name,
+                siteCount: sql<number>`(select count(*)::int from ${site} where ${site.clientId} = ${client.id} and ${site.archivedAt} is null)`,
+              })
               .from(client)
               .where(
                 and(
@@ -284,6 +307,7 @@ export const searchTargets = createServerFn({ method: "GET" })
             status: audit.status,
             siteName: site.name,
             pages: sql<number>`jsonb_array_length(${audit.config} -> 'pages')`.mapWith(Number),
+            startPage: sql<string>`${audit.config} -> 'pages' ->> 0`,
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
@@ -292,7 +316,12 @@ export const searchTargets = createServerFn({ method: "GET" })
               eq(audit.orgId, orgId),
               eq(audit.kind, "full"),
               isNull(site.archivedAt),
-              text === "" ? undefined : ilike(site.name, pattern),
+              text === ""
+                ? undefined
+                : or(
+                    ilike(site.name, pattern),
+                    sql`${audit.config} -> 'pages' ->> 0 ilike ${pattern}`,
+                  ),
             ),
           )
           .orderBy(desc(audit.createdAt))
@@ -302,6 +331,33 @@ export const searchTargets = createServerFn({ method: "GET" })
           audits.map((a) => a.id),
         )
         const scores = yield* scoresOf(orgId, details)
+        // Labels are worked out against every live client sharing a name with a result, not only
+        // the results, so a search never drops the label that tells two of them apart.
+        const keys = [...new Set(clients.map((c) => nameKey(c.name.trim())))]
+        const namesakes =
+          keys.length === 0
+            ? []
+            : yield* db
+                .select({
+                  id: client.id,
+                  name: client.name,
+                  firstSite: sql<
+                    string | null
+                  >`(select min(${site.name} collate "C") from ${site} where ${site.clientId} = ${client.id} and ${site.archivedAt} is null)`,
+                })
+                .from(client)
+                .where(
+                  and(
+                    eq(client.orgId, orgId),
+                    eq(client.isDefault, false),
+                    isNull(client.archivedAt),
+                    inArray(
+                      sql<string>`lower(regexp_replace(btrim(${client.name}), '\\s+', ' ', 'g'))`,
+                      keys,
+                    ),
+                  ),
+                )
+        const labels = distinguishers(namesakes)
         return {
           audits: audits.map((a) => ({
             id: a.id,
@@ -309,12 +365,18 @@ export const searchTargets = createServerFn({ method: "GET" })
             status: a.status,
             siteName: a.siteName,
             pages: a.pages,
+            startPath: startPathOf(a.startPage),
             coverage: coverageOf(details, a.id),
             score: SETTLED.some((status) => status === a.status)
               ? (scores.get(a.id) ?? null)
               : null,
           })),
-          clients: clients.slice(0, SEARCH_LIMIT),
+          clients: clients.slice(0, SEARCH_LIMIT).map((c) => ({
+            id: c.id,
+            name: c.name,
+            siteCount: c.siteCount,
+            distinguisher: labels.get(c.id) ?? null,
+          })),
           sites: sites.slice(0, SEARCH_LIMIT),
           clientsCapped: clients.length > SEARCH_LIMIT,
           sitesCapped: sites.length > SEARCH_LIMIT,
@@ -334,6 +396,24 @@ export const createClient = createServerFn({ method: "POST" })
         const { db } = yield* Database
         return yield* atomically(
           Effect.gen(function* () {
+            // one writer per organization at a time, so two creates cannot both pass the name check
+            yield* db.execute(
+              sql`select pg_advisory_xact_lock(hashtextextended(${`client-name:${orgId}`}, 0))`,
+            )
+            const live = yield* db
+              .select({ name: client.name })
+              .from(client)
+              .where(
+                and(
+                  eq(client.orgId, orgId),
+                  eq(client.isDefault, false),
+                  isNull(client.archivedAt),
+                ),
+              )
+            if (live.some((c) => nameKey(c.name) === nameKey(name)))
+              return yield* new Invalid({
+                message: `A client named "${name}" already exists. Use another name.`,
+              })
             const [created] = yield* db.insert(client).values({ orgId, name }).returning()
             yield* db
               .insert(orgSetting)

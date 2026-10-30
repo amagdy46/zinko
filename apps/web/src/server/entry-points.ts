@@ -10,6 +10,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "ai-policy.getAiPolicy": "read",
   "ai-policy.saveAiPolicy": "mutation",
   "ai-settings.getLlmSettings": "read",
+  "invitation-preview.getInvitationPreview": "read",
   "ai-settings.saveLlmSettings": "mutation",
   "ai-settings.clearLlmSettings": "mutation",
   "ai-settings.testLlmSettings": "mutation",
@@ -89,4 +90,5 @@ export const RUNTIME_ALLOWED: string[] = [
   "register-route.ts",
   "auth-live.ts",
   "invitation-email.ts",
+  "password-reset-email.ts",
 ]
