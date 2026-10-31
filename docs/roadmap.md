@@ -59,7 +59,7 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 - **`/files/` without signature or expiry answers 400, with a wrong signature 403** (the plan expected 403 for both); neither leaks.
 - **A detailed report prints entered paths as typed**; nothing detects a name in a path (by design, see the disclosure dialog).
 - **Links opened by preview bots count as views.**
-- **M4 leftovers:** the report summary now names the first three checks that could not be run (report model 7), the action plan links are 32px targets on screen, and the Overview Tab order is skip link, sidebar, then content (all done 2026-10-29); click IDs reaching the start URL only is open and costed in `docs/vision.md` (open questions).
+- **M4 leftovers:** the report summary now names the first three checks that could not be run (report model 7), the action plan links are 32px targets on screen, and the Overview Tab order is skip link, sidebar, then content (all done 2026-10-29); click IDs on key pages were built 2026-10-31 (see below and `docs/vision.md`).
 
 ## Left over from M4
 
@@ -69,7 +69,7 @@ M2 runs end to end locally against an engine started by hand (`BROWSER_URL`). No
 - **Banner detection needs a spike.** Uncertainty is read from the audit's own accept and reject runs. Detecting a CMP under none and gpc, or simulating a region, is an engine change; it has not been checked on a real public site without a banner.
 - **Finding markers in matrix cells** are deferred (M5/M6).
 - **Digest cost on real R2.** 158 failing runs read in 161 ms p50 (192 ms max) locally from one cached file; measure with 158 distinct objects on R2 before relying on it.
-- **Click IDs reach the start URL only.** Rules that need them on a key page cannot be tested from a key page; a per-page option would take about 1 to 1.5 days (`AuditConfig.clickIdPages`, `captureUrls`, a per-page toggle on the New audit form, compare, report scope and a report model bump; no capture-contract change), see `docs/vision.md`.
+- **Click IDs on key pages: done (2026-10-31).** `AuditConfig.clickIdPages` and a per-key-page checkbox on the New audit form; compare, re-checks and the report scope (report model 9) read it. Journey steps still carry the IDs on their first load only, by design. Details in `docs/vision.md`.
 - **Score weights, the 79 cap and the "Minor issues only" band** are provisional (plan open question 1); the score summarises one audit's pages and scenarios, not the site.
 - **Retention:** no TTL on `finding_explanation`; the 24 h ledger cleanup runs only when an organization reserves again.
 - Still open from M3 and not taken by M4: flaky verdict spread, vendor-side `hygiene.tag-errors`, build-before-check.

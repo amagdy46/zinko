@@ -493,7 +493,7 @@ const LEAF_VALIDATORS: ReadonlyMap<string, Validator> = new Map<string, Validato
   ["cover.scope.scenarios[]", oneOf("scenario", SCENARIO_LABELS)],
   ["cover.scope.viewports[]", oneOf("viewport", VIEWPORT_LABELS)],
   ["cover.scope.journey", flag],
-  ["cover.scope.clickIds", flag],
+  ["cover.scope.clickIds[]", pageLabelValidator],
   ["summary.source", oneOf("source", ["generated", "author"])],
   ["summary.text", nullable(author(2000))],
   ["summary.score.evaluated", (v) => (v === true ? null : "evaluated")],

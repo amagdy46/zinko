@@ -27,7 +27,7 @@ export const sampleReport = {
     scope: {
       pages: ["Page 1 (start page)", "Page 2", "Page 3", "Page 4", "Page 5", "Page 6"],
       journey: false,
-      clickIds: false,
+      clickIds: [],
       scenarios: ["No interaction", "Accept all", "Reject all", "Global Privacy Control"],
       viewports: ["Desktop"],
     },
@@ -1322,5 +1322,5 @@ export const sampleReport = {
     },
   ],
   generatedAt: "2026-10-29T07:18:52.014Z",
-  modelVersion: 8,
+  modelVersion: 9,
 } satisfies ReportModel & { modelVersion: typeof REPORT_MODEL_VERSION }

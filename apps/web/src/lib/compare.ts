@@ -1,4 +1,5 @@
 import { type AuditConfig, JOURNEY_STEPS, TEST_CLICK_IDS } from "@repo/core/audit"
+import { ambiguousClickIdPages, pageIndexOf } from "@/lib/page-match"
 import type { HealthScore } from "./health-score"
 
 /*
@@ -82,12 +83,18 @@ export const cellKeyOf = (
     journey: boolean
     followHost?: string | null
   },
-  config: { pages: ReadonlyArray<string> },
+  config: { pages: ReadonlyArray<string>; clickIdPages?: ReadonlyArray<string> | undefined },
 ): CellKey => {
   const injected = injectionOf(run.pageUrl)
   const [start = run.pageUrl] = config.pages
+  // an audit made before `clickIdPages` injected the start page only; `createAudit` refuses pages
+  // that only the test IDs tell apart, so with the list an injected run names exactly one page
+  const configured =
+    injected && config.clickIdPages !== undefined
+      ? config.pages[pageIndexOf(config.pages, run.pageUrl)]
+      : undefined
   return {
-    page: normalised(injected ? start : run.pageUrl),
+    page: normalised(configured ?? (injected ? start : run.pageUrl)),
     scenario: run.scenario,
     viewport: run.viewport,
     itinerary: itineraryOf(run, start, config.pages),
@@ -800,9 +807,20 @@ export const recheckTargets = (
 }
 
 type ConfigShape = Pick<AuditConfig, "pages" | "scenarios" | "viewports" | "clickIds"> & {
+  clickIdPages?: ReadonlyArray<string> | undefined
   journey?: boolean | undefined
   crossHost?: boolean | undefined
   measuredHosts?: ReadonlyArray<string> | undefined
+}
+
+/** Whether the page at `index` is captured with the test click IDs: the start page by `clickIds`, any page named in `clickIdPages`. */
+export const carriesClickIds = (config: ConfigShape, at: number) => {
+  const page = config.pages[at]
+  return (
+    page !== undefined &&
+    ((at === 0 && config.clickIds) ||
+      (config.clickIdPages ?? []).some((p) => normalised(p) === normalised(page)))
+  )
 }
 
 /** Every cell an audit with this config runs: its plain runs, its journey runs, then its cross-host runs. */
@@ -815,7 +833,7 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
         scenario,
         viewport,
         itinerary: null,
-        injected: p === 0 && config.clickIds,
+        injected: carriesClickIds(config, p),
       })),
     ),
   )
@@ -827,7 +845,7 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
           scenario: "accept",
           viewport: firstViewport,
           itinerary: [normalised(start), `follow ${host}`],
-          injected: config.clickIds,
+          injected: carriesClickIds(config, 0),
         }))
       : []
   if (config.journey !== true || config.pages.length < 2 || start === undefined)
@@ -841,7 +859,7 @@ export const cellsOfConfig = (config: ConfigShape): CellKey[] => {
         scenario,
         viewport,
         itinerary,
-        injected: config.clickIds,
+        injected: carriesClickIds(config, 0),
       })),
     ),
     ...crossHost,
@@ -893,6 +911,11 @@ const narrowedOnce = (
   const [first] = pages
   if (first === undefined) return null
   const companions = bannerDependent && targets.some((t) => t.scenario === "none")
+  const clickIdPages = pages.filter(
+    (p, i) =>
+      !(i === 0 && normalised(p) === normalised(config.pages[0] ?? "")) &&
+      targets.some((t) => t.injected && t.page === normalised(p)),
+  )
   return {
     pages,
     scenarios: SCENARIO_ORDER.filter(
@@ -904,6 +927,7 @@ const narrowedOnce = (
     clickIds:
       normalised(first) === normalised(config.pages[0] ?? "") &&
       targets.some((t) => t.injected && t.page === normalised(first)),
+    ...(clickIdPages.length > 0 ? { clickIdPages } : {}),
     blockVendorRequests: config.blockVendorRequests,
     ...(journey && pages.length > 1 ? { journey: true } : {}),
     // the hosts a re-check follows are the declared ones among its targets, a snapshot like any audit's
@@ -911,9 +935,26 @@ const narrowedOnce = (
   }
 }
 
+const clashingPages = (config: ConfigShape) => {
+  const clashing = new Set<string>()
+  if ((config.clickIdPages ?? []).length === 0) return clashing
+  for (let i = 0; i < config.pages.length; i++) {
+    for (let j = i + 1; j < config.pages.length; j++) {
+      const pair = ambiguousClickIdPages([config.pages[i] ?? "", config.pages[j] ?? ""], (k) =>
+        carriesClickIds(config, k === 0 ? i : j),
+      )
+      if (pair !== null) {
+        clashing.add(normalised(config.pages[i] ?? ""))
+        clashing.add(normalised(config.pages[j] ?? ""))
+      }
+    }
+  }
+  return clashing
+}
+
 /**
  * The config of a re-check of `targets`: their scenarios and viewports, their pages in the audit's
- * order (the whole list for a journey), click IDs only when the start page is a target that had them,
+ * order (the whole list for a journey), click IDs on the start page when it is a target that had them and on each key page whose target had them,
  * and accept and reject runs beside every `none` target of a banner-dependent rule. The result is
  * checked against `cellsOfConfig`: a target it cannot reproduce is dropped, never silently moved.
  * A cross-host target is kept only while its host is still one of the site's `declared` hosts.
@@ -924,36 +965,71 @@ export const narrowedConfig = (
   bannerDependent: boolean,
   declared: ReadonlyArray<string>,
 ): NarrowPlan | null => {
-  let kept = [...targets]
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // The config is built from the targets still kept. A config runs a page either with the click IDs
+  // or without, and `createAudit` refuses pages that only campaign parameters tell apart while one
+  // carries them. So a target that is not reproduced, or that is injected on a clashing page, is
+  // resolved first by dropping an injected target involved (a plain target wins over an injected
+  // one on the same page), and only if none is left, the unreproduced target itself; one at a time,
+  // in a fixed order, so the others are reconsidered against the rebuilt config.
+  // Every original target the final config reproduces is then retained, the rest are dropped.
+  const evaluate = (kept: ReadonlyArray<CellKey>) => {
     const narrowed = narrowedOnce(config, kept, bannerDependent, declared)
     if (narrowed === null) return null
     const produced = new Set(cellsOfConfig(narrowed).map(cellId))
-    const reproducible = kept.filter((t) => produced.has(cellId(t)))
-    if (reproducible.length === kept.length || attempt === 1 || reproducible.length === 0) {
-      if (reproducible.length === 0) return null
-      const companions = bannerDependent
-        ? kept
-            .filter((t) => t.scenario === "none")
-            .flatMap((t) =>
-              ["accept", "reject"].map((scenario): CellKey => ({
-                page: t.page,
-                scenario,
-                viewport: t.viewport,
-                itinerary: t.itinerary,
-                injected: t.injected,
-              })),
-            )
-            .filter((c) => !kept.some((t) => cellId(t) === cellId(c)))
-        : []
-      return {
-        config: narrowed,
-        targets: reproducible,
-        companions: companions.filter((c) => produced.has(cellId(c))),
-        dropped: targets.filter((t) => !produced.has(cellId(t))),
+    const clashing = clashingPages(narrowed)
+    return {
+      narrowed,
+      produced,
+      reproduced: (t: CellKey) => produced.has(cellId(t)) && !(t.injected && clashing.has(t.page)),
+    }
+  }
+  let kept = [...targets]
+  let found = evaluate(kept)
+  while (found !== null) {
+    const { reproduced } = found
+    const failing = kept.filter((t) => !reproduced(t))
+    if (failing.length === 0) break
+    const failingPages = new Set(failing.map((t) => t.page))
+    const injected = kept.filter((t) => t.injected && failingPages.has(t.page))
+    const [victim] = (injected.length > 0 ? injected : failing).toSorted((x, y) =>
+      codeUnitOrder(cellId(y), cellId(x)),
+    )
+    kept = kept.filter((t) => t !== victim)
+    found = evaluate(kept)
+  }
+  // a target dropped early may be reproducible once later ones are gone: take each back that fits
+  for (let changed = true; changed && found !== null;) {
+    changed = false
+    for (const t of targets.filter((x) => !kept.includes(x))) {
+      const trial = evaluate([...kept, t])
+      if (trial !== null && [...kept, t].every(trial.reproduced)) {
+        kept = [...kept, t]
+        found = trial
+        changed = true
       }
     }
-    kept = reproducible
   }
-  return null
+  if (found === null) return null
+  const { narrowed, produced, reproduced } = found
+  const retained = targets.filter(reproduced)
+  const companions = bannerDependent
+    ? retained
+        .filter((t) => t.scenario === "none")
+        .flatMap((t) =>
+          ["accept", "reject"].map((scenario): CellKey => ({
+            page: t.page,
+            scenario,
+            viewport: t.viewport,
+            itinerary: t.itinerary,
+            injected: t.injected,
+          })),
+        )
+        .filter((c) => !retained.some((t) => cellId(t) === cellId(c)))
+    : []
+  return {
+    config: narrowed,
+    targets: retained,
+    companions: companions.filter((c) => produced.has(cellId(c))),
+    dropped: targets.filter((t) => !reproduced(t)),
+  }
 }

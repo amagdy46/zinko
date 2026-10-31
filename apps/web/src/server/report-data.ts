@@ -17,6 +17,7 @@ import { buildDigest, canonicalJson } from "@repo/llm"
 import { and, asc, count, eq, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { AREAS, SCENARIOS, scenarioLabel } from "@/lib/audit-labels"
+import { carriesClickIds } from "@/lib/compare"
 import { pageIndexOf } from "@/lib/page-match"
 import { count as plural } from "@/lib/format"
 import {
@@ -816,7 +817,9 @@ export const buildReport = (orgId: string, auditId: string) =>
             (v) => VIEWPORT_LABEL[v],
           ),
           journey: config.journey === true,
-          clickIds: config.clickIds,
+          clickIds: config.pages.flatMap((url, index) =>
+            carriesClickIds(config, index) ? [label(url, false)] : [],
+          ),
         },
       },
       summary: {
@@ -873,7 +876,7 @@ export const buildReport = (orgId: string, auditId: string) =>
           viewports: config.viewports,
           pages: config.pages.length,
           journey: config.journey === true,
-          clickIds: config.clickIds,
+          clickIds: config.pages.some((_, index) => carriesClickIds(config, index)),
           runs: {
             complete: runs.filter((r) => r.status === "complete").length,
             partial: runs.filter((r) => r.status === "partial").length,

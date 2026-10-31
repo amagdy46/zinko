@@ -41,7 +41,7 @@ const planOf = (
   })
 
 const summaryOf = (planned: Effect.Success<ReturnType<typeof planOf>>) => {
-  const { narrowed, plan } = planned
+  const { narrowed } = planned
   if (narrowed === null) return null
   const { config } = narrowed
   const breakdown = runBreakdown({
@@ -60,7 +60,7 @@ const summaryOf = (planned: Effect.Success<ReturnType<typeof planOf>>) => {
     targets: narrowed.targets.length,
     bannerRuns: narrowed.companions.length,
     dropped: narrowed.dropped.length,
-    pages: new Set(plan.targets.map((t) => t.page)).size,
+    pages: new Set(narrowed.targets.map((t) => t.page)).size,
   }
 }
 

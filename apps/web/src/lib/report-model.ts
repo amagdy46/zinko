@@ -7,7 +7,7 @@ import { ACCENTS } from "./report-accent"
  * step to `UPGRADES`, so snapshots published earlier keep rendering (a shared link is a dated
  * record that a client may open months later).
  */
-export const REPORT_MODEL_VERSION = 8
+export const REPORT_MODEL_VERSION = 9
 
 /** An array that is never empty in a report: an emptied one is a defect, not "nothing to show". */
 const Some = <S extends Schema.Top>(item: S) => Schema.Array(item).check(Schema.isMinLength(1))
@@ -172,7 +172,7 @@ const Changes = Schema.Struct({
 })
 
 export const ReportModel = Schema.Struct({
-  modelVersion: Schema.Literals([1, 2, 3, 4, 5, 6, 7, REPORT_MODEL_VERSION]),
+  modelVersion: Schema.Literals([1, 2, 3, 4, 5, 6, 7, 8, REPORT_MODEL_VERSION]),
   generatedAt: Schema.String,
   detail: Detail,
   branding: Schema.Struct({
@@ -193,7 +193,8 @@ export const ReportModel = Schema.Struct({
       scenarios: Some(Schema.String),
       viewports: Some(Schema.String),
       journey: Schema.Boolean,
-      clickIds: Schema.Boolean,
+      /** The pages that carried the test click IDs, as labelled in `pages`; empty when none did. */
+      clickIds: Schema.Array(Schema.String),
     }),
   }),
   summary: Schema.Struct({
@@ -374,6 +375,17 @@ const UPGRADES: Record<number, (json: unknown) => unknown> = {
   },
   /** Version 8 allows no client name on the cover; every version 7 value is still valid. */
   7: (json) => json,
+  /** Version 8 said only whether the start page carried click IDs; version 9 lists the pages, and the start page is the first one listed under Pages. */
+  8: (json) => {
+    if (!isRecord(json) || !isRecord(json.cover) || !isRecord(json.cover.scope)) return json
+    const { cover } = json
+    const { scope } = json.cover
+    const [start] = Array.isArray(scope.pages) ? scope.pages : []
+    return {
+      ...json,
+      cover: { ...cover, scope: { ...scope, clickIds: scope.clickIds === true ? [start] : [] } },
+    }
+  },
 }
 
 export class UnknownModelVersion extends Data.TaggedError("UnknownModelVersion")<{

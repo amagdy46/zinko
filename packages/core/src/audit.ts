@@ -24,6 +24,13 @@ export const AuditConfig = Schema.Struct({
   ),
   /** Adds `TEST_CLICK_IDS` to the start URL. */
   clickIds: Schema.Boolean,
+  /**
+   * Key pages (hrefs from `pages`) that also carry `TEST_CLICK_IDS`, for a landing from an ad on
+   * that page. Optional, so older configs decode; the server checks each one is one of `pages`.
+   */
+  clickIdPages: Schema.optionalKey(
+    Schema.Array(Schema.String.check(Schema.isMaxLength(MAX_URL_LENGTH))),
+  ),
   /** Vendor collection requests are answered locally and never reach the vendor. */
   blockVendorRequests: Schema.Boolean,
   /**
@@ -53,8 +60,9 @@ export type AuditConfig = typeof AuditConfig.Type
 export const JOURNEY_STEPS = 5
 
 /**
- * Appended to the start URL only, when `clickIds` is on: a landing from an ad. Journey runs show
- * whether they survive into the key pages.
+ * Appended to the start URL when `clickIds` is on and to every page in `clickIdPages`: a landing
+ * from an ad. Journey runs carry them on their first load only and show whether they survive into
+ * the key pages.
  */
 export const TEST_CLICK_IDS = {
   gclid: "ZINKO-TEST-GCLID",

@@ -32,6 +32,7 @@ import {
   resolveOnSite,
   withoutCredentials,
 } from "@/lib/site-url"
+import { ambiguousClickIdPages, clickIdClashMessage } from "@/lib/page-match"
 import { previewBaseline, startAudit } from "@/server/audits"
 import { getSite } from "@/server/clients"
 
@@ -116,6 +117,9 @@ function NewAuditForm() {
     last?.viewports ?? ["desktop"],
   )
   const [clickIds, setClickIds] = useState(last?.clickIds ?? false)
+  const [clickIdPages, setClickIdPages] = useState<ReadonlyArray<string>>(
+    () => last?.clickIdPages?.map((page) => new URL(onSiteScheme(page, site)).href) ?? [],
+  )
   const [journey, setJourney] = useState(last?.journey ?? false)
   const [reload, setReload] = useState(last?.reload ?? false)
   const [crossHost, setCrossHost] = useState(
@@ -135,6 +139,7 @@ function NewAuditForm() {
     setScenarios(DEFAULT_SCENARIOS)
     setViewports(["desktop"])
     setClickIds(false)
+    setClickIdPages([])
     setJourney(false)
     setReload(false)
     setCrossHost(false)
@@ -160,6 +165,17 @@ function NewAuditForm() {
     })
     .filter((line) => line.value !== "")
   const keyPages = pageLines.filter((line) => line.error === undefined).map((line) => line.value)
+  const clickIdKeyPages = keyPages.filter((page) => clickIdPages.includes(new URL(page).href))
+  const clickIdClash =
+    clickIdKeyPages.length === 0 || startError !== undefined
+      ? null
+      : ambiguousClickIdPages(
+          [start, ...keyPages].map((page) => new URL(page).href),
+          (index) =>
+            index === 0
+              ? clickIds || clickIdKeyPages.includes(new URL(start).href)
+              : clickIdKeyPages.includes(new URL(keyPages[index - 1] ?? "").href),
+        )
   const pageErrors = pageLines.filter((line) => line.error !== undefined)
   const breakdown = runBreakdown({
     pages: startError === undefined ? 1 + keyPages.length : keyPages.length,
@@ -205,6 +221,7 @@ function NewAuditForm() {
     scenarios,
     viewports,
     clickIds,
+    ...(clickIdKeyPages.length > 0 ? { clickIdPages: clickIdKeyPages } : {}),
     blockVendorRequests,
     journey,
     reload: journey && reload,
@@ -214,6 +231,7 @@ function NewAuditForm() {
     startError === undefined &&
     pageErrors.length === 0 &&
     pageLimitError === undefined &&
+    clickIdClash === null &&
     disabledReason === undefined
   const previewKey = formReady ? JSON.stringify(previewConfig) : null
   const [fetched, setFetched] = useState<{
@@ -263,7 +281,9 @@ function NewAuditForm() {
     const found: Errors = {}
     if (startError !== undefined) found.startUrl = startError
 
-    if (disabledReason !== undefined) found.form = disabledReason
+    const formError =
+      disabledReason ?? (clickIdClash === null ? undefined : clickIdClashMessage(clickIdClash))
+    if (formError !== undefined) found.form = formError
     setErrors(found)
     const pagesBlocked = pageErrors.length > 0 || pageLimitError !== undefined
     if (pagesBlocked) keyPagesRef.current?.focus()
@@ -278,6 +298,7 @@ function NewAuditForm() {
           scenarios,
           viewports,
           clickIds,
+          ...(clickIdKeyPages.length > 0 ? { clickIdPages: clickIdKeyPages } : {}),
           blockVendorRequests,
           journey,
           reload: journey && reload,
@@ -499,10 +520,47 @@ function NewAuditForm() {
               <div className="space-y-3">
                 <Toggle
                   label="Simulate an ad click"
-                  help="Click IDs (gclid, fbclid, ttclid) are the codes ad platforms add to a link when someone clicks an ad. This adds test ones and UTMs to the start URL, to check that the site keeps them and tags receive them."
+                  help="Click IDs (gclid, fbclid, ttclid) are the codes ad platforms add to a link when someone clicks an ad. This adds test ones and UTMs to the start URL, and to the key pages you tick below, to check that the site keeps them and tags receive them."
                   checked={clickIds}
                   onChange={setClickIds}
                 />
+                {keyPages.length > 0 && (
+                  <fieldset className="space-y-1 rounded-md border p-3">
+                    <legend className="px-1 text-sm font-medium">
+                      Also add them to these key pages
+                    </legend>
+                    <p className="text-xs text-muted-foreground">
+                      Each ticked page is opened with the test click IDs, as if an ad linked to it.
+                      The journey carries them on its first load only.
+                    </p>
+                    {clickIdClash !== null && (
+                      <p role="alert" className="text-xs text-destructive">
+                        {clickIdClashMessage(clickIdClash)}
+                      </p>
+                    )}
+                    <ul className="space-y-1">
+                      {keyPages.map((page) => (
+                        <li key={page}>
+                          <label className="flex min-h-8 cursor-pointer items-center gap-2 text-xs">
+                            <Checkbox
+                              checked={clickIdPages.includes(new URL(page).href)}
+                              onCheckedChange={(checked) =>
+                                setClickIdPages(
+                                  checked === true
+                                    ? [...clickIdPages, new URL(page).href]
+                                    : clickIdPages.filter((p) => p !== new URL(page).href),
+                                )
+                              }
+                            />
+                            <span className="wrap-anywhere font-mono">
+                              {withoutCredentials(page)}
+                            </span>
+                          </label>
+                        </li>
+                      ))}
+                    </ul>
+                  </fieldset>
+                )}
                 <Toggle
                   label="Also walk through the key pages as a journey"
                   help={`A journey opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session, like a visitor would, so cookies carry over. Adds one run per scenario and viewport; needs at least one key page.`}

@@ -5,7 +5,8 @@ import { audit, checkResult, findingTriage, reportEdit, reportFindingEdit, run }
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { startPathOfPage } from "@/lib/audit-labels"
-import { type CellKey, cellId, cellKeyOf, sameScope } from "@/lib/compare"
+import { type CellKey, carriesClickIds, cellId, cellKeyOf, sameScope } from "@/lib/compare"
+import { ambiguousClickIdPages, clickIdClashMessage } from "@/lib/page-match"
 import { hasCredentials, isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
 import { storedCells } from "./cell-key"
 import { atomically, Invalid, NotFound, siteInOrg } from "./server-fn"
@@ -37,11 +38,26 @@ export const normalizePages = (
     return hrefs
   })
 
-/** The URL each page is captured at: the test click IDs go on the start URL only. */
-const captureUrls = (pages: ReadonlyArray<string>, clickIds: boolean) =>
-  Effect.forEach(pages, (page, index) => {
+/** The click-ID pages as `URL` writes them, each once; every one must be one of the audit's pages. */
+const normalizeClickIdPages = (clickIdPages: ReadonlyArray<string>, pages: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const hrefs: string[] = []
+    for (const page of clickIdPages) {
+      const href = URL.canParse(page) ? new URL(page).href : page
+      if (!pages.includes(href))
+        return yield* new Invalid({
+          message: `${withoutCredentials(page)} is not one of the audit's pages, so it cannot carry click IDs.`,
+        })
+      if (!hrefs.includes(href)) hrefs.push(href)
+    }
+    return hrefs
+  })
+
+/** The URL each page is captured at: the test click IDs go on the start URL when `clickIds` is on and on every click-ID page. */
+const captureUrls = (config: AuditConfig) =>
+  Effect.forEach(config.pages, (page, index) => {
     const url = new URL(page)
-    if (index === 0 && clickIds)
+    if ((index === 0 && config.clickIds) || config.clickIdPages?.includes(page) === true)
       for (const [name, value] of Object.entries(TEST_CLICK_IDS)) url.searchParams.set(name, value)
     return url.href.length <= MAX_URL_LENGTH
       ? Effect.succeed(url.href)
@@ -284,7 +300,17 @@ export const createAudit = (input: CreateAudit) =>
         narrow === undefined
           ? target.measuredHosts
           : (input.config.measuredHosts ?? []).filter((host) => target.measuredHosts.includes(host))
-      const config = { ...input.config, pages, measuredHosts }
+      const { clickIdPages: requested, ...rest } = input.config
+      const clickIdPages = yield* normalizeClickIdPages(requested ?? [], pages)
+      const config = {
+        ...rest,
+        pages,
+        measuredHosts,
+        ...(clickIdPages.length === 0 ? {} : { clickIdPages }),
+      }
+      const clash = ambiguousClickIdPages(pages, (index) => carriesClickIds(config, index))
+      if (clickIdPages.length > 0 && clash !== null)
+        return yield* new Invalid({ message: clickIdClashMessage(clash) })
       const baseline = yield* baselineFor(orgId, target.id, input, config)
       const baselineId = Option.match(baseline, { onNone: () => null, onSome: (b) => b.id })
       const [active] = yield* db
@@ -333,7 +359,7 @@ export const createAudit = (input: CreateAudit) =>
             message: "A re-run of this audit is already in progress.",
           })
       }
-      const urls = yield* captureUrls(pages, config.clickIds)
+      const urls = yield* captureUrls(config)
       const [created] = yield* db
         .insert(audit)
         .values({

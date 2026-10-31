@@ -46,12 +46,14 @@ export function Scope({ model }: { model: ReportModel }) {
           ))}
         </ul>
       </div>
-      {scope.journey || scope.clickIds ? (
+      {scope.journey || scope.clickIds.length > 0 ? (
         <p>
           Also checked:{" "}
           {[
             scope.journey ? "a journey through the key pages in one browser session" : null,
-            scope.clickIds ? "a landing from an ad click, with test click IDs" : null,
+            scope.clickIds.length > 0
+              ? `a landing from an ad click, with test click IDs, on ${scope.clickIds.join(", ")}`
+              : null,
           ]
             .filter((line) => line !== null)
             .join("; ")}
