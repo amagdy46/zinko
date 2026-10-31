@@ -16,7 +16,7 @@ type Preview = Awaited<ReturnType<typeof previewRecheck>>
 
 /**
  * Re-checks the pages and scenarios a check failed on (or changed on), as a small `narrow` audit.
- * Opened from a finding or a Compare row, so it hands focus back to that control.
+ * Opened from a finding or a row in Changes, so it hands focus back to that control.
  */
 export function RecheckDialog({
   auditId,
@@ -33,7 +33,7 @@ export function RecheckDialog({
   /** The check's title, so the dialog names what is re-checked. */
   title: string
   against?: string
-  /** Opened from a finding ("Re-check this finding") rather than from a change in Compare ("Re-check these pages"). */
+  /** Opened from a finding ("Re-check this finding") rather than from a change in Changes ("Re-check these pages"). */
   verify: boolean
   open: boolean
   onOpenChange: (open: boolean) => void

@@ -189,3 +189,15 @@ T1, T2 and T3 run in parallel. Merge order T1, T2, T3, then T4.
 ## r3 review
 
 Approved. One minor, taken into T2: `RequestView` narrows its prop to the fields it reads.
+
+## Amendments after T1 review
+
+1. "Next" on the stage strip (amends decision 1): while the audit is active, Capture carries Next. Once
+   settled, Capture is never eligible for Next. With gaps, it keeps its gap glyph and counts and remains
+   unfinished.
+   Next goes to the first available unfinished step in order: Decisions when evaluated with undecided
+   findings; Report when evaluated and not shared; Re-audit when its button is enabled. Plain-text and
+   unavailable states are skipped; when none qualifies, no step carries Next.
+2. Decisions wording: when evaluated with no failing findings and Capture has any partial or failed run, the
+   step reads "No failing findings in evaluated runs" (still done). Otherwise unchanged; "Not evaluated" is
+   never done.

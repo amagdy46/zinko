@@ -44,7 +44,7 @@ export const Route = createFileRoute("/app/audits/$auditId/compare")({
     state: Option.getOrUndefined(decodeState(search.state)),
     finding: Option.getOrUndefined(decodeText(search.finding)),
   }),
-  head: ({ matches }: TitleContext) => auditTabTitle("Compare", matches),
+  head: ({ matches }: TitleContext) => auditTabTitle("Changes", matches),
   loaderDeps: ({ search }) => ({ against: search.against }),
   loader: ({ params, deps }) =>
     getComparison({

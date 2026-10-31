@@ -8,7 +8,7 @@ import {
 } from "@tanstack/react-router"
 import { NotFound } from "@/components/not-found"
 import { siteTrail } from "@/lib/site-trail"
-import { useEffect, useRef, useState } from "react"
+import { type MouseEvent, useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
 import { RunPath } from "@/components/evidence"
@@ -18,6 +18,7 @@ import { RerunDialog } from "@/components/rerun-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
+import { StageStrip } from "@/components/stage-strip"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -76,7 +77,7 @@ const RECONCILE_EVERY_MS = 5 * 60_000
 const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
-  const { audit, site, client, runs, summary } = Route.useLoaderData()
+  const { audit, site, client, runs, summary, stage } = Route.useLoaderData()
   const { groupByClient } = Route.useRouteContext()
   const router = useRouter()
   const timeZone = useTimeZone()
@@ -135,6 +136,13 @@ function AuditPage() {
   }, [active])
   const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const onFindings = useLocation({ select: (location) => location.pathname.endsWith("/findings") })
+  const evidenceTab = useLocation({
+    select: ({ pathname }) =>
+      pathname === `/app/audits/${audit.id}` ||
+      pathname === `/app/audits/${audit.id}/` ||
+      pathname.endsWith("/matrix") ||
+      pathname.endsWith("/hits"),
+  })
   const reportTab = useLocation({ select: (location) => location.pathname.endsWith("/report") })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
   const openFindings = summary.open.critical + summary.open.warning + summary.open.info
@@ -220,8 +228,27 @@ function AuditPage() {
     { ...named, startPath: startPathOf(audit.config.pages[0]), createdAt: audit.createdAt },
     timeZone,
   )
+  // The Evidence tab is current on Runs, Tags and Hits, which are three routes.
+  const evidenceCurrent = { "data-status": "active", "aria-current": "page" } as const
   const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
+    {
+      label: `Findings ${findingsTab}`,
+      link: { to: "/app/audits/$auditId/findings", params },
+    },
+    { label: "Changes", link: { to: "/app/audits/$auditId/compare", params } },
+    {
+      label: `Evidence ${runs.length}`,
+      link: {
+        to: "/app/audits/$auditId",
+        params,
+        search: { view: "matrix" },
+        ...(evidenceTab ? { activeProps: evidenceCurrent, inactiveProps: evidenceCurrent } : {}),
+      },
+    },
+    { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
+  ]
+  const evidenceTabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     {
       label: `Runs ${runs.length}`,
       link: {
@@ -231,14 +258,8 @@ function AuditPage() {
         activeOptions: { exact: true, includeSearch: false },
       },
     },
-    {
-      label: `Findings ${findingsTab}`,
-      link: { to: "/app/audits/$auditId/findings", params },
-    },
-    { label: "Compare", link: { to: "/app/audits/$auditId/compare", params } },
     { label: "Tags", link: { to: "/app/audits/$auditId/matrix", params } },
     { label: `Hits ${summary.hits}`, link: { to: "/app/audits/$auditId/hits", params } },
-    { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
   ]
   const problemsPill =
     problems.length > 0 && !active ? (
@@ -258,19 +279,23 @@ function AuditPage() {
         <span className="max-sm:hidden">· See why</span>
       </Link>
     ) : null
-  const rerunButton = useRef<HTMLButtonElement>(null)
+  // Whichever control opened the dialog (the header button or the stage strip) gets focus back.
+  const rerunOpener = useRef<HTMLElement | null>(null)
   const [rerunning, setRerunning] = useState(false)
+  const openRerun = (event: MouseEvent<HTMLElement>) => {
+    rerunOpener.current = event.currentTarget
+    setRerunning(true)
+  }
   const rerun =
     audit.kind === "full" && !active ? (
       <>
         <Button
-          ref={rerunButton}
           variant="outline"
           size="sm"
           className="h-8"
           disabled={site.archived}
           title={site.archived ? "This site is archived" : undefined}
-          onClick={() => setRerunning(true)}
+          onClick={openRerun}
         >
           Re-run
         </Button>
@@ -278,7 +303,7 @@ function AuditPage() {
           auditId={audit.id}
           open={rerunning}
           onOpenChange={setRerunning}
-          returnFocus={rerunButton}
+          returnFocus={rerunOpener}
         />
       </>
     ) : null
@@ -376,6 +401,15 @@ function AuditPage() {
           </Link>
         </p>
       ) : null}
+      {stage === null ? null : (
+        <StageStrip
+          auditId={audit.id}
+          stage={stage}
+          active={active}
+          archived={site.archived}
+          onRerun={openRerun}
+        />
+      )}
       {active ? (
         <div className="space-y-3">
           <p role="status" className="sr-only">
@@ -437,17 +471,31 @@ function AuditPage() {
           </ul>
         </div>
       ) : null}
-      <nav
-        ref={tabBar}
-        aria-label="Audit"
-        className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
-      >
-        {tabs.map((tab) => (
-          <Link key={tab.label} {...tab.link} className={tabLink}>
-            {tab.label}
-          </Link>
-        ))}
-      </nav>
+      <div className="space-y-1">
+        <nav
+          ref={tabBar}
+          aria-label="Audit"
+          className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
+        >
+          {tabs.map((tab) => (
+            <Link key={tab.label} {...tab.link} className={tabLink}>
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+        {evidenceTab ? (
+          <nav
+            aria-label="Evidence"
+            className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-xs tabular-nums"
+          >
+            {evidenceTabs.map((tab) => (
+              <Link key={tab.label} {...tab.link} className={cn(tabLink, "text-xs")}>
+                {tab.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
+      </div>
       {audit.kind === "narrow" && (overview || onFindings) && summary.otherFailing.length > 0 ? (
         <Collapsible>
           <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">

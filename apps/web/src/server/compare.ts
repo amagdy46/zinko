@@ -26,7 +26,7 @@ export const getComparison = createServerFn({ method: "GET" })
 
 /**
  * The tags that disappeared, appeared or changed between two audits of a site, on the runs both
- * captured completely. Loaded when the Tags section of the Compare tab opens.
+ * captured completely. Loaded when the Tags section of the Changes tab opens.
  */
 export const getTagDiff = createServerFn({ method: "GET" })
   .middleware([requireSession])

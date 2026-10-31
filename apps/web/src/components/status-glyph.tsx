@@ -5,6 +5,7 @@ import {
   CircleDot,
   CircleDashed,
   CircleMinus,
+  CircleSlash,
   CircleX,
   Diamond,
   LoaderCircle,
@@ -21,6 +22,7 @@ const meanings = {
   fail: { icon: CircleX, tone: "text-sev-critical" },
   "could-not-check": { icon: CircleDashed, tone: "text-muted-foreground" },
   "not-applicable": { icon: CircleMinus, tone: "text-muted-foreground" },
+  "not-evaluated": { icon: CircleSlash, tone: "text-muted-foreground" },
   queued: { icon: Circle, tone: "text-muted-foreground" },
   running: {
     icon: LoaderCircle,

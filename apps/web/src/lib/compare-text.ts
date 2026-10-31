@@ -10,7 +10,7 @@ import type {
 } from "./compare"
 import { count } from "./format"
 
-/** The words of a change, shared by the Compare tab and (later) the briefing and the report. */
+/** The words of a change, shared by the Changes tab and (later) the briefing and the report. */
 export const CHANGE_WORDS: Record<ChangeState, string> = {
   new: "New",
   regressed: "Regressed",
@@ -20,7 +20,7 @@ export const CHANGE_WORDS: Record<ChangeState, string> = {
   not_comparable: "Not comparable",
 }
 
-/** The order the Compare tab groups changes in. */
+/** The order the Changes tab groups changes in. */
 export const CHANGE_ORDER: ReadonlyArray<ChangeState> = [
   "regressed",
   "new",

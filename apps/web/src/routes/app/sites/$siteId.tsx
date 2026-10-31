@@ -222,7 +222,7 @@ function SitePage() {
           params={{ auditId: a.id }}
           className="relative inline-flex h-8 items-center rounded-sm px-2 text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Compare
+          Changes
         </Link>
       ) : null}
       {a.kind === "full" && (a.status === "complete" || a.status === "partial") ? (

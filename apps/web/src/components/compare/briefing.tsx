@@ -5,7 +5,7 @@ import { recheckVerdict } from "@/lib/compare-text"
 import { AuditLink } from "@/components/audit-link"
 import { count } from "@/lib/format"
 
-/** "What changed" at the top of a re-run's Overview: a few lines, then the whole Compare tab. */
+/** "What changed" at the top of a re-run's Overview: a few lines, then the whole Changes tab. */
 export function Briefing({
   auditId,
   since,
