@@ -2,7 +2,7 @@
 
 Every feature we plan to build, how we will build it, what we take from other products, and what is still open. `docs/product.md` is the v0.1 scope, `docs/architecture.md` the stack, `docs/roadmap.md` the milestones; this file ties them together and is updated whenever a spike or a working feature changes the plan.
 
-Last updated 2026-10-24 (UI refresh done and swept at both widths and themes; capture admission revised to per-capture FIFO).
+Last updated 2026-11-01 (design pass: the audit says where it is in the job loop; capture admission revised to per-capture FIFO 2026-10-24).
 
 Local admission proof: five two-capture audits interleaved in FIFO order; four single-capture audits finished before an earlier four-capture audit. Real five-minute lease expiry rejected stale tokens, and an injected expired-grant workflow retry requeued under new step names without calling the occupied engine. Commands, timings and local runtime limitations are in [decision 0003](decisions/0003-capture-admission.md#local-verification-2026-10-22). Cloudflare container behavior remains unverified.
 
@@ -154,6 +154,20 @@ The implementation plan is `docs/plans/2026-10-22-ui-refresh/plan.md`. It keeps 
 | Hits, settings and final sweep | Organization-scoped timeline accepts multi-value filters and search while retaining old single-value links; explicit matched/total counts and a per-run consent divider work across pagination. Auth/settings use the shared frame, followed by a responsive/theme sweep and documentation | working (Tasks 9, 10, 11). Sweep of 28 screens or states (clients, client, site, new audit, runs in three views and the run sheet, findings in three audits, the finding sheet and accept-risk dialog, hits with the filter popover or sheet and the detail sheet, palette, account menu, org switcher, settings x3, sign-in with an error, sign-up, onboarding, accept-invite and its not-found state) at 390px and 1440px, light and dark, with a scripted check on each: no horizontal page scroll anywhere (tables scroll in their container), no hard-coded colours in the source (only the logo mark and dialog scrim), keyboard focus rings on every focused element except menu items and the palette input (both highlight instead), and 32px touch targets except inline text links, label-wrapped checkboxes and dense hit rows with a pointer (28px; 36px below `md`). A grayscale pass of runs, findings and clients tells every severity and status apart by shape and word. Fixes from the sweep: 32px tabs, close buttons, copy buttons, breadcrumb and nav targets, a focus ring on focusable tab panels and on hits rows, and partial-run reasons that broke mid-word. Sales-page refresh remains optional |
 
 Decisions taken (2026-10-22): `cmdk` for the palette (the only new package); a required reason when accepting a risk (`finding_triage.reason`); stored neutral check titles (`check_result.check_title`, `finding.check_title`); the Findings list opens on Open with triaged findings in their own tabs, a finished audit with failures opens on Findings, and Hits has multi-value filters and search. Not covered by the browser sweep, open in the plan's leftovers: a 44-run density audit, the "Audit failed" and "not evaluated" toast variants, the mixed-rules-versions alert, the null `check_title` fallback and Open in Hits from every evidence kind.
+
+### Design pass: the job loop (2026-10-31)
+
+Plan: `docs/plans/2026-10-31-design-pass/plan.md`. No schema change, no new colours, fonts or dependencies; everything below is computed on read from rows that already exist. The written rules and the vocabulary are in `docs/ui.md` ("Design system"), and `/app/design-system` renders the tokens and shared components with the real code.
+
+| Feature | How we build it | Status |
+|---|---|---|
+| Stage strip on a full audit | `getAudit` returns `stage` (capture counts, decisions, report state, re-audit successor), scoped by the organization; `components/stage-strip.tsx` draws Capture, Decisions, Report, Re-audit as a glyph and words, with "Next" on the first available unfinished step. Decisions count the audit's current failing findings with a `finding_triage` of `accepted_risk` or `fixed`; Report uses the surviving `report_snapshot` rows and `liveShares`; Re-audit is the newest full audit whose `baseline_audit_id` is this audit, and opens the Re-run dialog from a button. A re-check shows no strip | working, merged |
+| Five audit tabs | Overview, Findings, Changes (was Compare), Evidence (Runs, Tags, Hits behind a second row, same URLs), Report; both rows scroll inside their container with inset rings | working, merged |
+| Overview "Start with" | `overview.ts` picks the open failing finding ranked by severity, most failing runs, rule id; the proof is the first cited hit or request of the first failing target run, read through `readCaptureTolerant` and drawn by the compact `RequestView`. Replaces the Next steps card | working, merged |
+| Sites "Needs attention" | `attentionOf` in `client-summary.ts`: one reason per active site from the latest settled and latest evaluated full audits (incomplete runs, open Critical findings, an unshared report after 24 hours). Regressions are not a reason: they need the per-site comparison, which stays on the audit's Overview | working, merged |
+| Design system page and docs | `/app/design-system` (signed in, `noindex`, no data) and the "Design system" section of `docs/ui.md` | working |
+
+Open: the Retry failed runs UI ships with the retry plan; regressions as a Sites reason would need a stored per-site comparison summary.
 
 ### Matrix, overview and LLM (M4)
 
