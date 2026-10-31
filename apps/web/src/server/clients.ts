@@ -13,6 +13,7 @@ import {
   coverageOfAudit,
   scoresOf,
   SETTLED,
+  attentionOf,
   siteSummaries,
   trendsOf,
 } from "./client-summary"
@@ -1058,6 +1059,10 @@ export const listSites = createServerFn({ method: "GET" })
           orgId,
           sites.map((s) => s.id),
         )
+        const attention = yield* attentionOf(
+          orgId,
+          sites.map((s) => s.id),
+        )
         return sites.map((s) => ({
           id: s.id,
           name: s.name,
@@ -1065,6 +1070,7 @@ export const listSites = createServerFn({ method: "GET" })
           client: s.isDefault ? null : { id: s.clientId, name: s.clientName },
           running: summaries.get(s.id)?.running ?? 0,
           latest: summaries.get(s.id)?.latest ?? null,
+          attention: attention.get(s.id) ?? null,
         }))
       }),
     ),

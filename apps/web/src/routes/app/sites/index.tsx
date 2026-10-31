@@ -10,6 +10,7 @@ import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
 import { FirstRun, LastAudit, LatestScore, OpenFindings } from "@/components/first-run"
 import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
+import { StatusGlyph } from "@/components/status-glyph"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { Button } from "@/components/ui/button"
 import {
@@ -43,6 +44,56 @@ import { formField } from "@/lib/form"
 import { pageTitle } from "@/lib/page-title"
 import { originHost, startPathOfAddress, withScheme } from "@/lib/site-url"
 import { createSite, listArchived, listClients, listSites } from "@/server/clients"
+
+type Attention = NonNullable<Awaited<ReturnType<typeof listSites>>[number]["attention"]>
+
+const attentionReason = (a: Attention) => {
+  if (a.reason === "incomplete") {
+    const parts = [
+      ...(a.failed > 0 ? [`${a.failed} failed`] : []),
+      ...(a.partial > 0 ? [`${a.partial} partial`] : []),
+    ]
+    return `${parts.join(", ")} of ${count(a.runs, "run")}`
+  }
+  if (a.reason === "critical") return `${a.critical} Critical open`
+  return "Report not shared"
+}
+
+const attentionGlyph = (a: Attention) => {
+  if (a.reason === "critical") return "critical"
+  return a.status === "failed" ? "failed" : "partial"
+}
+
+function AttentionAction({ site, a }: { site: string; a: Attention }) {
+  const className = cn(rowLink, "shrink-0 text-sm text-status-active")
+  const hidden = <span className="sr-only"> for {site}</span>
+  if (a.reason === "incomplete")
+    return (
+      <Link
+        className={className}
+        to="/app/audits/$auditId"
+        params={{ auditId: a.auditId }}
+        search={{ view: "matrix" }}
+      >
+        Open runs{hidden}
+      </Link>
+    )
+  if (a.reason === "critical")
+    return (
+      <Link
+        className={className}
+        to="/app/audits/$auditId/findings"
+        params={{ auditId: a.auditId }}
+      >
+        Open findings{hidden}
+      </Link>
+    )
+  return (
+    <Link className={className} to="/app/audits/$auditId/report" params={{ auditId: a.auditId }}>
+      Open report{hidden}
+    </Link>
+  )
+}
 
 const NO_CLIENT = "none"
 const SEARCH_FROM = 8
@@ -166,6 +217,7 @@ function Sites() {
       />
     )
   const archivedTotal = archived.sites.length + archived.clients.length
+  const needing = sites.flatMap((s) => (s.attention === null ? [] : [{ site: s, a: s.attention }]))
   const audited = sites.some((s) => s.running > 0 || s.latest !== null)
   const unaudited = sites.find((s) => s.running === 0 && s.latest === null)
   return (
@@ -176,6 +228,14 @@ function Sites() {
           showArchived === true
             ? [{ label: "Sites", to: "/app/sites" }, { label: "Archived" }]
             : undefined
+        }
+        meta={
+          showArchived !== true && needing.length > 0 ? (
+            <span className="inline-flex items-center gap-1.5">
+              <StatusGlyph meaning="partial" />
+              {needing.length} need{needing.length === 1 ? "s" : ""} attention
+            </span>
+          ) : undefined
         }
         actions={
           showArchived === true ? undefined : (
@@ -323,6 +383,28 @@ function Sites() {
           ) : (
             noSites
           )}
+          {needing.length > 0 ? (
+            <section aria-labelledby="needs-attention" className="space-y-3">
+              <h2 id="needs-attention" className="type-section">
+                Needs attention
+              </h2>
+              <ul className="overflow-hidden rounded-lg border border-border-subtle bg-card shadow-xs">
+                {needing.map(({ site: s, a }) => (
+                  <DataRow key={s.id}>
+                    <StatusGlyph meaning={attentionGlyph(a)} />
+                    <div className="min-w-0 flex-1">
+                      <span className="block font-medium wrap-break-word">{s.name}</span>
+                      <span className="block text-sm text-muted-foreground">
+                        {attentionReason(a)}
+                      </span>
+                    </div>
+                    <AttentionAction site={s.name} a={a} />
+                    <RowChevron />
+                  </DataRow>
+                ))}
+              </ul>
+            </section>
+          ) : null}
           {sites.length > 0 && filtered.length === 0 ? (
             <EmptyState
               icon={SearchX}

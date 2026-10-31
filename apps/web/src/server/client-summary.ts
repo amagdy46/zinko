@@ -10,6 +10,7 @@ import {
   type ScoreFinding,
 } from "@/lib/health-score"
 import { decodeSeverity } from "./findings-data"
+import { liveShares } from "./report-share-data"
 
 type Latest = {
   auditId: string
@@ -241,6 +242,142 @@ export const siteSummaries = (orgId: string, siteIds: readonly string[]) =>
       })
     }
     return summaries
+  })
+
+export type Attention = {
+  reason: "incomplete" | "critical" | "unshared"
+  /** The audit the action opens: the latest settled one for `incomplete`, else the latest evaluated one. */
+  auditId: string
+  /** The latest settled audit's status; only `incomplete` reads it. */
+  status: string
+  failed: number
+  partial: number
+  runs: number
+  critical: number
+}
+
+/** A report older than this with failing findings and no live share link needs attention. */
+const UNSHARED_AFTER_MS = 24 * 60 * 60 * 1000
+
+/**
+ * Why each site needs attention, if it does (a site that does not is absent): the first of an
+ * unfinished latest audit, open Critical findings, or an old report nobody was given a link to.
+ * Only full audits count. Grouped queries for all sites, never one per site.
+ */
+export const attentionOf = (orgId: string, siteIds: readonly string[]) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const attention = new Map<string, Attention>()
+    if (siteIds.length === 0) return attention
+    const scope = and(
+      eq(audit.orgId, orgId),
+      inArray(audit.siteId, [...siteIds]),
+      eq(audit.kind, "full"),
+      inArray(audit.status, [...SETTLED]),
+    )
+    const newest = [audit.siteId, desc(audit.createdAt), desc(audit.id)] as const
+    const settled = yield* db
+      .selectDistinctOn([audit.siteId], {
+        id: audit.id,
+        siteId: audit.siteId,
+        status: audit.status,
+      })
+      .from(audit)
+      .where(scope)
+      .orderBy(...newest)
+    const evaluated = yield* db
+      .selectDistinctOn([audit.siteId], {
+        id: audit.id,
+        siteId: audit.siteId,
+        finishedAt: audit.finishedAt,
+      })
+      .from(audit)
+      .where(
+        and(
+          scope,
+          sql`exists (select 1 from ${run} join ${checkResult} on ${checkResult.runId} = ${run.id} where ${run.auditId} = ${audit.id} and ${run.orgId} = ${orgId} and ${checkResult.orgId} = ${orgId})`,
+        ),
+      )
+      .orderBy(...newest)
+    const runCounts = yield* db
+      .select({ auditId: run.auditId, status: run.status, n: count() })
+      .from(run)
+      .where(
+        and(
+          eq(run.orgId, orgId),
+          inArray(
+            run.auditId,
+            settled.map((s) => s.id),
+          ),
+        ),
+      )
+      .groupBy(run.auditId, run.status)
+    const evaluatedIds = evaluated.map((e) => e.id)
+    const criticals = new Map(
+      (yield* auditDetails(orgId, evaluatedIds)).map((d) => [d.id, d.critical]),
+    )
+    const failing = new Set(
+      evaluatedIds.length === 0
+        ? []
+        : (yield* db
+            .selectDistinct({ auditId: finding.auditId })
+            .from(finding)
+            .where(
+              and(
+                eq(finding.orgId, orgId),
+                inArray(finding.auditId, evaluatedIds),
+                eq(finding.kind, "fail"),
+              ),
+            )).map((f) => f.auditId),
+    )
+    const cutoff = Date.now() - UNSHARED_AFTER_MS
+    const stale = evaluated.filter(
+      (e) => e.finishedAt !== null && e.finishedAt.getTime() < cutoff && failing.has(e.id),
+    )
+    const shared = yield* liveShares(
+      orgId,
+      stale.map((e) => e.id),
+    )
+    const runsOf = (auditId: string, status?: string) =>
+      runCounts
+        .filter((r) => r.auditId === auditId && (status === undefined || r.status === status))
+        .reduce((n, r) => n + r.n, 0)
+    const settledBySite = new Map(settled.map((s) => [s.siteId, s]))
+    const evaluatedBySite = new Map(evaluated.map((e) => [e.siteId, e]))
+    for (const siteId of siteIds) {
+      const last = settledBySite.get(siteId)
+      const lastEvaluated = evaluatedBySite.get(siteId)
+      if (last !== undefined) {
+        const failed = runsOf(last.id, "failed")
+        const partial = runsOf(last.id, "partial")
+        if (last.status === "failed" || (last.status === "partial" && failed + partial > 0)) {
+          attention.set(siteId, {
+            reason: "incomplete",
+            auditId: last.id,
+            status: last.status,
+            failed,
+            partial,
+            runs: runsOf(last.id),
+            critical: 0,
+          })
+          continue
+        }
+      }
+      if (lastEvaluated === undefined) continue
+      const critical = criticals.get(lastEvaluated.id) ?? 0
+      const base = {
+        auditId: lastEvaluated.id,
+        status: "complete",
+        failed: 0,
+        partial: 0,
+        runs: 0,
+        critical,
+      }
+      if (critical > 0) attention.set(siteId, { ...base, reason: "critical" })
+      else if (stale.includes(lastEvaluated) && !shared.has(lastEvaluated.id))
+        attention.set(siteId, { ...base, reason: "unshared" })
+    }
+    return attention
   })
 
 const openCount = (orgId: string, severity: string) =>
