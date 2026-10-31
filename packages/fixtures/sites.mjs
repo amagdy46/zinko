@@ -44,6 +44,7 @@ export const defaults = {
   consentPath: "/", // "/" | "restricted": the banner library's cookie is limited to /<site>/thank-you
   consentStorage: "cookie", // "cookie" | "localStorage": where the banner library keeps the choice
   cmpDelay: 0, // ms after load before the banner library starts (a CMP that loads late)
+  productConversion: false, // /product also sends an Ads conversion with a value (a "view item" conversion), no order id and no purchase event
   googleLoad: "immediate", // "immediate" | "consent" (basic Consent Mode: the Google tag loads only after an accept)
 }
 
@@ -61,6 +62,7 @@ export const sites = {
   "delayed-pixel": { meta: "delayed" },
   "gpc-echo": { gpcEcho: true },
   "purchase-missing-fields": { purchaseOrderId: false },
+  "ads-value-conversion": { productConversion: true },
   "bad-currency": { currency: "eur" },
   "no-page-view": { ga4PageView: false },
   "multiple-ga4": { secondGa4: true },

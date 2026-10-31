@@ -1,5 +1,10 @@
 import { count, distinct, hitRef, vendorName } from "../../documents.js"
-import { isPurchase, missingFields } from "../../purchases.js"
+import {
+  missingFields,
+  purchasesOf,
+  undecidedConversions,
+  undecidedResult,
+} from "../../purchases.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
@@ -19,15 +24,21 @@ export const purchaseMissingFields: Rule = {
     "Send value and currency with the Meta and TikTok Purchase events.",
   ],
   evaluate(input) {
-    const purchases = input.hits.filter(isPurchase)
-    if (purchases.length === 0) return notApplicable(id, "no purchase was sent")
+    const purchases = purchasesOf(input)
+    const undecided = undecidedConversions(input)
+    if (purchases.length === 0)
+      return undecided.length === 0
+        ? notApplicable(id, "no purchase was sent")
+        : undecidedResult(id, undecided)
     const incomplete = purchases.flatMap((hit) => {
       const missing = missingFields(hit)
       return missing.length === 0 ? [] : [{ hit, missing }]
     })
     const evidence = nonEmpty(incomplete.map(({ hit }) => hitRef(hit)))
     if (evidence === null)
-      return pass(id, `${count(purchases.length, "purchase hit")} carried every required field`)
+      return undecided.length > 0
+        ? undecidedResult(id, undecided)
+        : pass(id, `${count(purchases.length, "purchase hit")} carried every required field`)
     const what = distinct(
       incomplete.map(
         ({ hit, missing }) => `${vendorName(hit.vendor)} without ${missing.join(", ")}`,

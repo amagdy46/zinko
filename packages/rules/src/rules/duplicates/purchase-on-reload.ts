@@ -1,5 +1,5 @@
 import { count, documentRef, groupBy, hitRef, vendorName } from "../../documents.js"
-import { isPurchase, transactionId } from "../../purchases.js"
+import { purchasesOf, transactionId } from "../../purchases.js"
 import { fail, inconclusive, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { DecodedHit, EvidenceRef, Rule } from "../../types.js"
 
@@ -7,7 +7,7 @@ const id = "duplicates.purchase-on-reload"
 
 /** Meta and TikTok purchases carry no order id, so only Google's can be matched. */
 function isGooglePurchase(hit: DecodedHit): boolean {
-  return (hit.vendor === "ga4" || hit.vendor === "google-ads") && isPurchase(hit)
+  return hit.vendor === "ga4" || hit.vendor === "google-ads"
 }
 
 /** The same order for the same destination (and, for Ads, the same conversion label). */
@@ -41,7 +41,7 @@ export const purchaseOnReload: Rule = {
     if (reloaded?.navigation !== "reload" || before === undefined)
       return notApplicable(id, "the run did not end on a reload")
 
-    const byDocument = groupBy(input.hits.filter(isGooglePurchase), (hit) => hit.documentId)
+    const byDocument = groupBy(purchasesOf(input).filter(isGooglePurchase), (hit) => hit.documentId)
     const earlier = byDocument.get(before.id) ?? []
     const later = byDocument.get(reloaded.id) ?? []
     if (earlier.length === 0)

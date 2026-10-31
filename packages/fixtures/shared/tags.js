@@ -109,6 +109,12 @@
         items: [{ item_id: "SKU-1", item_name: "Zinko mug", price: 49.9 }],
       })
     }
+    if (cfg.page === "product" && cfg.productConversion)
+      gtag("event", "conversion", {
+        send_to: ID.ads + "/ZinkoViewConv01",
+        value: purchase.value,
+        currency: purchase.currency,
+      })
     if (cfg.page === "home" && cfg.homeBatch) {
       gtag("event", "view_promotion", { promotion_id: "P1" })
       gtag("event", "view_item_list", { item_list_id: "featured" })

@@ -43,6 +43,15 @@ export const RULE_CHANGES: Readonly<Record<string, readonly string[]>> = {
   // 10 added `consent.lost-across-subdomain`; a document reached by following a link to another host
   // is no longer a later page of `consent.not-persisted-across-navigation`
   "10": ["consent.not-persisted-across-navigation"],
+  // An Ads conversion with a value is a purchase only when the page says so (an order id of its own,
+  // or a GA4 purchase or dataLayer purchase on its document), and a Google-generated GG_ id is not
+  // an order id: the four rules that read purchases can differ on a run with such a conversion
+  "12": [
+    "coverage.invalid-currency",
+    "coverage.purchase-missing-fields",
+    "duplicates.purchase-on-reload",
+    "duplicates.purchase-sent-twice",
+  ],
 }
 
 /**

@@ -1,5 +1,5 @@
 import { count, distinct, hitRef, vendorName } from "../../documents.js"
-import { isPurchase } from "../../purchases.js"
+import { purchasesOf } from "../../purchases.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import type { Rule } from "../../types.js"
 
@@ -20,8 +20,8 @@ export const invalidCurrency: Rule = {
     "If the shop platform returns lowercase codes, uppercase them in the tag manager variable that feeds the purchase tags.",
   ],
   evaluate(input) {
-    const priced = input.hits.filter(
-      (hit) => isPurchase(hit) && hit.params.currency !== undefined && hit.params.currency !== "",
+    const priced = purchasesOf(input).filter(
+      (hit) => hit.params.currency !== undefined && hit.params.currency !== "",
     )
     if (priced.length === 0) return notApplicable(id, "no purchase carried a currency")
     const invalid = priced.filter((hit) => !ISO_4217.test(String(hit.params.currency)))

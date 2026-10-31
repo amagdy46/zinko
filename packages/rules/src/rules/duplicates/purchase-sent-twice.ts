@@ -1,5 +1,10 @@
 import { count, groupBy, hitRef, vendorName } from "../../documents.js"
-import { isPurchase, transactionId } from "../../purchases.js"
+import {
+  purchasesOf,
+  transactionId,
+  undecidedConversions,
+  undecidedResult,
+} from "../../purchases.js"
 import { fail, nonEmpty, notApplicable, pass } from "../../results.js"
 import { withoutRetransmissions } from "../../retransmissions.js"
 import type { DecodedHit, Rule } from "../../types.js"
@@ -51,14 +56,19 @@ export const purchaseSentTwice: Rule = {
     "Always send the order's transaction_id, so GA4 and Google Ads can drop the repeats that still get through.",
   ],
   evaluate(input) {
-    const purchases = withoutRetransmissions(input, input.hits.filter(isPurchase))
-    if (purchases.length === 0) return notApplicable(id, "no purchase was sent")
+    const purchases = withoutRetransmissions(input, purchasesOf(input))
+    const undecided = undecidedConversions(input)
+    if (purchases.length === 0)
+      return undecided.length === 0
+        ? notApplicable(id, "no purchase was sent")
+        : undecidedResult(id, undecided)
     const groups = [...groupBy(purchases, purchaseKey).values()].map((hits) => {
       const pairs = adsPairs(hits)
       return { hits, pairs, sends: hits.length - pairs }
     })
     const repeated = groups.filter((group) => group.sends > 1)
     const evidence = nonEmpty(repeated.flatMap((group) => group.hits.map(hitRef)))
+    if (evidence === null && undecided.length > 0) return undecidedResult(id, undecided)
     if (evidence === null) {
       const pairs = groups.reduce((sum, group) => sum + group.pairs, 0)
       const note =
