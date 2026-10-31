@@ -12,10 +12,10 @@ import {
   createAudit,
   evaluatedAudit,
   latestBaseline,
-  launchAudit,
   normalizePages,
   rerunBaseline,
 } from "./audit-create"
+import { launchAudit } from "./audit-launch"
 import { findingRowsOf } from "./findings-data"
 import { ruleTitleOf } from "./recheck-data"
 import { requireSession } from "./require-session"

@@ -160,6 +160,7 @@ const OWN_FAILURE_TEXT: Record<string, string> = {
   EngineBusy: NOT_CAPTURED,
   EngineFailure: NOT_CAPTURED,
   PersistFailure: NOT_CAPTURED,
+  Interrupted: NOT_CAPTURED,
 }
 
 /**

@@ -35,6 +35,7 @@ import { count, duration, useTimeZone } from "@/lib/format"
 import { tabLink } from "@/lib/row-style"
 import { cn } from "@/lib/utils"
 import { useAuditRoom } from "@/lib/use-audit-room"
+import { reconcileAudit } from "@/server/audit-reconcile"
 import { getAudit } from "@/server/audits"
 
 export const Route = createFileRoute("/app/audits/$auditId")({
@@ -68,6 +69,10 @@ const severitySplit = (open: { critical: number; warning: number; info: number }
 
 const ACTIVE = new Set(["queued", "running"])
 const REFETCH_DELAY_MS = 250
+// An audit that is still active this long may have lost its workflow: ask the server to look,
+// then every few minutes while the page is open.
+const RECONCILE_AFTER_MS = 15 * 60_000
+const RECONCILE_EVERY_MS = 5 * 60_000
 const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
@@ -101,6 +106,23 @@ function AuditPage() {
     active,
   )
   useEffect(() => () => clearTimeout(refetch.current), [])
+  const auditId = audit.id
+  const createdAt = audit.createdAt.getTime()
+  useEffect(() => {
+    if (!active) return undefined
+    const reconcile = () => {
+      if (Date.now() - createdAt < RECONCILE_AFTER_MS) return
+      reconcileAudit({ data: { auditId } })
+        .then((result) => {
+          if (result.ok && result.value.settled) void router.invalidate()
+        })
+        // a failed check changes nothing; the next one tries again
+        .catch(() => undefined)
+    }
+    reconcile()
+    const timer = setInterval(reconcile, RECONCILE_EVERY_MS)
+    return () => clearInterval(timer)
+  }, [active, auditId, createdAt, router])
   useEffect(() => {
     if (!active) return undefined
     const tick = () => setNow(Date.now())

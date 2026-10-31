@@ -47,6 +47,8 @@ export class Jobs extends Context.Service<
       options?: JobStartOptions,
     ) => Effect.Effect<JobRun, JobError>
     readonly status: (job: JobName, id: string) => Effect.Effect<JobStatus, JobError>
+    /** Stops a running instance. Best effort: a settled audit does not depend on it. */
+    readonly terminate: (job: JobName, id: string) => Effect.Effect<void, JobError>
     /** Wakes the instance's `waitForEvent` for `type`. */
     readonly sendEvent: (job: JobName, id: string, type: string) => Effect.Effect<void, JobError>
   }

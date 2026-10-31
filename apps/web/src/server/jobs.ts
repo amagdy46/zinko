@@ -41,6 +41,11 @@ const make = Effect.gen(function* () {
         })),
         Effect.mapError(fail("status")),
       ),
+    terminate: (job, id) =>
+      workflows[job].get(id).pipe(
+        Effect.flatMap((instance) => instance.terminate()),
+        Effect.mapError(fail("terminate")),
+      ),
     sendEvent: (job, id, type) =>
       workflows[job].get(id).pipe(
         Effect.flatMap((instance) => instance.sendEvent({ type, payload: null })),

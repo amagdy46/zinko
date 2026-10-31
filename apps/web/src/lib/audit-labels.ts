@@ -135,6 +135,7 @@ export const FAILURE_TEXT: Record<string, string> = {
   EngineBusy: "Zinko was busy, re-run the audit",
   EngineFailure: "The browser engine failed",
   PersistFailure: "Captured, but the results could not be saved",
+  Interrupted: "The audit stopped before this run finished",
 }
 
 type RunProblem = {

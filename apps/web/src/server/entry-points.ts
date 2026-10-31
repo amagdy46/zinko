@@ -24,6 +24,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "audits.rerunAudit": "mutation",
   "audits.setBaseline": "mutation",
   "audits.getAudit": "read",
+  "audit-reconcile.reconcileAudit": "mutation",
   "compare.getComparison": "read",
   "compare.getTagDiff": "read",
   "compare.getFindingChips": "read",

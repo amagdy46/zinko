@@ -2,8 +2,6 @@ import { DECODER_VERSION } from "@zinko/decoders"
 import { type CaptureRejected, CaptureResult, Scenario } from "@repo/capture-contract"
 import {
   AuditConfig,
-  type AuditEvent,
-  AuditProgress,
   Browser,
   type BrowserError,
   CaptureAdmission,
@@ -14,17 +12,27 @@ import {
   StorageError,
 } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, datalayerPush, finding, hit, run, site } from "@repo/db"
+import { audit, checkResult, datalayerPush, hit, run, site } from "@repo/db"
 import { decodeHits, evaluateRun, RULES_VERSION, ruleById } from "@repo/rules"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Data, Effect, Layer, Option, Schema } from "effect"
 import { Workflow } from "effect-cf"
-import { findingsFrom } from "../lib/findings-from"
+import { fenced, FENCED, type Fenced, heartbeat, isFenced } from "../server/audit-fence"
+import { closeAudit, publish } from "../server/audit-settle"
 import { runtime } from "../server/runtime"
 import { AuditWorkflow } from "./AuditWorkflow"
 
 /** The audit or one of its runs is not in the database, or not in the state this step needs. */
 class AuditStateError extends Data.TaggedError("AuditStateError")<{ readonly message: string }> {}
+
+/**
+ * The audit was settled while this workflow still ran: the workflow stops where it is. Every
+ * step reports it as the `Fenced` result, which Cloudflare stores like any other and never retries.
+ */
+class Stopped extends Data.TaggedError("Stopped")<{}> {}
+
+const stopIfFenced = <A>(result: A | Fenced) =>
+  isFenced(result) ? Effect.fail(new Stopped()) : Effect.succeed(result)
 
 const ENGINE_BUSY = "EngineBusy"
 
@@ -133,16 +141,6 @@ const keysFor = (auditId: string, runId: string) => ({
   screenshot: `audits/${auditId}/runs/${runId}/screenshot.png`,
 })
 
-/** Progress is a courtesy to open tabs, which refetch anyway: it never fails or stalls a step. */
-const publish = (auditId: string, event: AuditEvent) =>
-  Effect.gen(function* () {
-    const progress = yield* AuditProgress
-    yield* progress.publish(auditId, event)
-  }).pipe(
-    Effect.timeout("5 seconds"),
-    Effect.ignoreCause({ log: "Warn", message: "Audit progress not published" }),
-  )
-
 const decodeConfig = Schema.decodeUnknownEffect(AuditConfig)
 const decodeRunShape = Schema.decodeUnknownEffect(
   Schema.Struct({ scenario: Scenario, viewport: Schema.Literals(["desktop", "mobile"]) }),
@@ -211,35 +209,49 @@ const fromBase64 = (data: string) => Uint8Array.from(atob(data), (c) => c.charCo
 
 /** Lists the audit's runs. The audit stays `queued` until it is admitted to an engine. */
 const start = (auditId: string) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const found = yield* db.select({ id: audit.id }).from(audit).where(eq(audit.id, auditId))
-    if (found.length === 0)
-      return yield* new AuditStateError({ message: `audit ${auditId} not found` })
-    return yield* db
-      .select({ id: run.id, ordinal: run.ordinal })
-      .from(run)
-      .where(eq(run.auditId, auditId))
-      .orderBy(asc(run.ordinal))
-  }).pipe(Effect.catchTag("AuditStateError", failFast))
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const { db } = yield* Database
+      const found = yield* db.select({ id: audit.id }).from(audit).where(eq(audit.id, auditId))
+      if (found.length === 0)
+        return yield* new AuditStateError({ message: `audit ${auditId} not found` })
+      return yield* db
+        .select({ id: run.id, ordinal: run.ordinal })
+        .from(run)
+        .where(eq(run.auditId, auditId))
+        .orderBy(asc(run.ordinal))
+    }),
+  ).pipe(Effect.catchTag("AuditStateError", failFast))
 
 /**
  * Asks the gate for an engine for one capture. The first grant marks the audit running.
  */
 const admit = (auditId: string, turn: string) =>
-  Effect.gen(function* () {
-    const gate = yield* CaptureAdmission
-    const admission = yield* gate.admit(auditId, turn)
-    if (!("engine" in admission)) return admission
-    const { db } = yield* Database
-    const started = yield* db
-      .update(audit)
-      .set({ status: "running", startedAt: sql`coalesce(${audit.startedAt}, now())` })
-      .where(and(eq(audit.id, auditId), eq(audit.status, "queued")))
-      .returning({ id: audit.id })
-    if (started.length > 0) yield* publish(auditId, { type: "audit", status: "running" })
-    return admission
-  }).pipe(
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const gate = yield* CaptureAdmission
+      const admission = yield* gate.admit(auditId, turn)
+      if (!("engine" in admission)) return admission
+      const { db } = yield* Database
+      const started = yield* fenced(
+        auditId,
+        db
+          .update(audit)
+          .set({ status: "running", startedAt: sql`coalesce(${audit.startedAt}, now())` })
+          .where(and(eq(audit.id, auditId), eq(audit.status, "queued")))
+          .returning({ id: audit.id }),
+      )
+      if (isFenced(started)) {
+        // the grant was handed out for an audit that is already settled: give the engine back
+        yield* gate.release(auditId, admission)
+        return FENCED
+      }
+      if (started.length > 0) yield* publish(auditId, { type: "audit", status: "running" })
+      return admission
+    }),
+  ).pipe(
     Effect.catchTag("AdmissionError", (error) =>
       Effect.logWarning("Capture admission failed", error).pipe(
         Effect.andThen(
@@ -258,10 +270,12 @@ const admit = (auditId: string, turn: string) =>
 const grantFor = (auditId: string, turn: string) =>
   Effect.gen(function* () {
     for (let attempt = 0; ; attempt++) {
-      const admission = yield* Workflow.step(
-        attempt === 0 ? `admit-${turn}` : `admit-${turn}-${attempt}`,
-        runtime.provide(admit(auditId, turn)),
-        ADMIT_STEP,
+      const admission = yield* stopIfFenced(
+        yield* Workflow.step(
+          attempt === 0 ? `admit-${turn}` : `admit-${turn}-${attempt}`,
+          runtime.provide(admit(auditId, turn)),
+          ADMIT_STEP,
+        ),
       )
       if ("engine" in admission) return admission
       yield* Effect.logInfo(
@@ -299,11 +313,15 @@ const journeyOf = (
 const requeueRun = (auditId: string, runId: string, ordinal: number) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    yield* db
-      .update(run)
-      .set({ status: "pending", startedAt: null })
-      .where(and(eq(run.id, runId), eq(run.auditId, auditId)))
-    yield* publish(auditId, {
+    const written = yield* fenced(
+      auditId,
+      db
+        .update(run)
+        .set({ status: "pending", startedAt: null })
+        .where(and(eq(run.id, runId), eq(run.auditId, auditId))),
+    )
+    if (isFenced(written)) return FENCED
+    return yield* publish(auditId, {
       type: "run",
       runId,
       ordinal,
@@ -321,75 +339,92 @@ const requeueRun = (auditId: string, runId: string, ordinal: number) =>
  * the engine back when it ends.
  */
 const capture = (auditId: string, runId: string, grant: Grant) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const storage = yield* Storage
-    const gate = yield* CaptureAdmission
-    const { run: current, config, host } = yield* loadRun(auditId, runId)
-    if (current.captureKey !== null)
-      return Attempt.Stored({
-        captureKey: current.captureKey,
-        screenshotKey: current.screenshotKey,
-      })
-    const keys = keysFor(auditId, runId)
-    const storeKeys = (screenshotKey: string | null) =>
-      db
-        .update(run)
-        .set({
-          captureKey: keys.capture,
-          screenshotKey,
-          finishedAt: sql`coalesce(${run.finishedAt}, now())`,
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const { db } = yield* Database
+      const storage = yield* Storage
+      const gate = yield* CaptureAdmission
+      const { run: current, config, host } = yield* loadRun(auditId, runId)
+      if (current.captureKey !== null)
+        return Attempt.Stored({
+          captureKey: current.captureKey,
+          screenshotKey: current.screenshotKey,
         })
-        .where(eq(run.id, runId))
-        .pipe(Effect.as(Attempt.Stored({ captureKey: keys.capture, screenshotKey })))
-    // the screenshot is written first, so a stored capture.json means its screenshot is stored too
-    if (yield* exists(keys.capture))
-      return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
+      const keys = keysFor(auditId, runId)
+      const storeKeys = (screenshotKey: string | null) =>
+        fenced(
+          auditId,
+          db
+            .update(run)
+            .set({
+              captureKey: keys.capture,
+              screenshotKey,
+              finishedAt: sql`coalesce(${run.finishedAt}, now())`,
+            })
+            .where(eq(run.id, runId)),
+        ).pipe(
+          Effect.map((written) =>
+            isFenced(written)
+              ? FENCED
+              : Attempt.Stored({ captureKey: keys.capture, screenshotKey }),
+          ),
+        )
+      // the screenshot is written first, so a stored capture.json means its screenshot is stored too
+      if (yield* exists(keys.capture))
+        return yield* storeKeys((yield* exists(keys.screenshot)) ? keys.screenshot : null)
 
-    const { blockVendorRequests, measuredHosts, pages, reload } = yield* decodeConfig(config)
-    const { scenario, viewport } = yield* decodeRunShape(current)
-    yield* db
-      .update(run)
-      .set({ status: "running", startedAt: sql`coalesce(${run.startedAt}, now())` })
-      .where(eq(run.id, runId))
-    yield* publish(auditId, {
-      type: "run",
-      runId,
-      ordinal: current.ordinal,
-      status: "running",
-      hitCount: 0,
-      errors: [],
-    })
-    const browser = yield* Browser
-    const requeue = <A>(attempt: A) =>
-      requeueRun(auditId, runId, current.ordinal).pipe(Effect.as(attempt))
-    if (!(yield* gate.confirm(auditId, grant))) return yield* requeue(Attempt.Lost())
-    const answer = yield* browser
-      .capture(
-        {
-          url: current.pageUrl,
-          scenario,
-          viewport,
-          ...journeyOf(current, pages, reload === true),
-          blockVendorRequests,
-          allowedHosts: [host, ...(measuredHosts ?? [])],
-        },
-        { instance: grant.engine },
+      const { blockVendorRequests, measuredHosts, pages, reload } = yield* decodeConfig(config)
+      const { scenario, viewport } = yield* decodeRunShape(current)
+      const marked = yield* fenced(
+        auditId,
+        db
+          .update(run)
+          .set({ status: "running", startedAt: sql`coalesce(${run.startedAt}, now())` })
+          .where(eq(run.id, runId)),
       )
-      .pipe(Effect.catchTag("BrowserError", classify))
-    if ("retry" in answer) return yield* requeue(Attempt.Retry(answer.retry))
-    if ("error" in answer)
-      return Attempt.Refused({ code: answer.error, message: truncate(answer.message) })
-
-    if (answer.screenshot !== null)
-      yield* storage.put(keys.screenshot, fromBase64(answer.screenshot), {
-        contentType: "image/png",
+      if (isFenced(marked)) return FENCED
+      yield* publish(auditId, {
+        type: "run",
+        runId,
+        ordinal: current.ordinal,
+        status: "running",
+        hitCount: 0,
+        errors: [],
       })
-    yield* storage.put(keys.capture, JSON.stringify({ ...answer, screenshot: null }), {
-      contentType: "application/json",
-    })
-    return yield* storeKeys(answer.screenshot === null ? null : keys.screenshot)
-  }).pipe(
+      const browser = yield* Browser
+      const requeue = <A>(attempt: A) =>
+        requeueRun(auditId, runId, current.ordinal).pipe(
+          Effect.map((written) => (isFenced(written) ? FENCED : attempt)),
+        )
+      if (!(yield* gate.confirm(auditId, grant))) return yield* requeue(Attempt.Lost())
+      const answer = yield* browser
+        .capture(
+          {
+            url: current.pageUrl,
+            scenario,
+            viewport,
+            ...journeyOf(current, pages, reload === true),
+            blockVendorRequests,
+            allowedHosts: [host, ...(measuredHosts ?? [])],
+          },
+          { instance: grant.engine },
+        )
+        .pipe(Effect.catchTag("BrowserError", classify))
+      if ("retry" in answer) return yield* requeue(Attempt.Retry(answer.retry))
+      if ("error" in answer)
+        return Attempt.Refused({ code: answer.error, message: truncate(answer.message) })
+
+      if (answer.screenshot !== null)
+        yield* storage.put(keys.screenshot, fromBase64(answer.screenshot), {
+          contentType: "image/png",
+        })
+      yield* storage.put(keys.capture, JSON.stringify({ ...answer, screenshot: null }), {
+        contentType: "application/json",
+      })
+      return yield* storeKeys(answer.screenshot === null ? null : keys.screenshot)
+    }),
+  ).pipe(
     Effect.ensuring(
       Effect.gen(function* () {
         const gate = yield* CaptureAdmission
@@ -421,10 +456,12 @@ const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1
     for (let turn = 0; ; turn++) {
       const name = turn === 0 ? base : `${base}.${turn}`
       const grant = yield* grantFor(auditId, name)
-      const outcome = yield* Workflow.step(
-        `capture-${name}`,
-        runtime.provide(capture(auditId, runId, grant)),
-        CAPTURE_STEP,
+      const outcome = yield* stopIfFenced(
+        yield* Workflow.step(
+          `capture-${name}`,
+          runtime.provide(capture(auditId, runId, grant)),
+          CAPTURE_STEP,
+        ),
       )
       if (Attempt.$is("Stored")(outcome))
         return Captured({ captureKey: outcome.captureKey, screenshotKey: outcome.screenshotKey })
@@ -459,220 +496,191 @@ const captureRun = (auditId: string, runId: string, ordinal: number, pass: 0 | 1
  * identical rows.
  */
 const persist = (auditId: string, runId: string) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const { run: current, config, host } = yield* loadRun(auditId, runId)
-    const { measuredHosts } = yield* decodeConfig(config)
-    if (current.captureKey === null || current.finishedAt === null)
-      return yield* new AuditStateError({ message: `run ${runId} has no stored capture` })
-    const result = yield* decodeStoredCapture(yield* readText(current.captureKey))
-    const { scenario, viewport } = yield* decodeRunShape(current)
-    const createdAt = current.finishedAt
-    const { outcome, actionAt } = result.consent
-    // An action that did not take effect (`not-applied`) gave no consent, so it splits nothing.
-    const consentLine = outcome === "accepted" || outcome === "rejected" ? actionAt : null
-    const requests = new Map(result.requests.map((request) => [request.id, request]))
-    const decoded = decodeHits(result)
-    const hits = decoded.flatMap((found) => {
-      const request = requests.get(found.requestId)
-      if (request === undefined) return []
-      return [
-        {
-          orgId: current.orgId,
-          createdAt,
-          runId,
-          requestId: found.requestId,
-          batchIndex: found.batchIndex,
-          documentId: found.documentId,
-          at: Math.round(found.startedAt),
-          vendor: found.vendor,
-          destinationId: found.destinationId,
-          event: found.event,
-          params: found.params,
-          ids: found.ids,
-          consent: found.consent,
-          host: found.host,
-          url: found.url,
-          blocked: request.blocked,
-          status: request.status === null ? null : Math.round(request.status),
-          // gtag sends what Consent Mode held within milliseconds of the click, before autoconsent
-          // reports completion, so the action's start (accept or reject) is the line, not completedAt
-          afterConsentAction: consentLine !== null && found.startedAt >= consentLine,
-        },
-      ]
-    })
-    const results = evaluateRun({
-      scenario,
-      viewport,
-      pageUrl: current.pageUrl,
-      siteHost: host,
-      measuredHosts: measuredHosts ?? [],
-      journey: current.journey,
-      capture: result,
-      hits: decoded,
-    })
-    const checks = yield* Effect.forEach(results, (check) => {
-      const rule = ruleById(check.ruleId)
-      if (rule === undefined)
-        return Effect.fail(new AuditStateError({ message: `rule ${check.ruleId} is not listed` }))
-      return Effect.succeed({
-        runId,
-        orgId: current.orgId,
-        ruleId: check.ruleId,
-        rulesVersion: RULES_VERSION,
-        status: check.status,
-        message: check.message,
-        evidence: check.evidence,
-        area: rule.area,
-        severity: rule.severity,
-        title: rule.title,
-        checkTitle: rule.checkTitle,
-        owner: rule.owner,
-        why: rule.why,
-        fix: rule.fix,
-        createdAt,
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const { db } = yield* Database
+      const { run: current, config, host } = yield* loadRun(auditId, runId)
+      const { measuredHosts } = yield* decodeConfig(config)
+      if (current.captureKey === null || current.finishedAt === null)
+        return yield* new AuditStateError({ message: `run ${runId} has no stored capture` })
+      const result = yield* decodeStoredCapture(yield* readText(current.captureKey))
+      const { scenario, viewport } = yield* decodeRunShape(current)
+      const createdAt = current.finishedAt
+      const { outcome, actionAt } = result.consent
+      // An action that did not take effect (`not-applied`) gave no consent, so it splits nothing.
+      const consentLine = outcome === "accepted" || outcome === "rejected" ? actionAt : null
+      const requests = new Map(result.requests.map((request) => [request.id, request]))
+      const decoded = decodeHits(result)
+      const hits = decoded.flatMap((found) => {
+        const request = requests.get(found.requestId)
+        if (request === undefined) return []
+        return [
+          {
+            orgId: current.orgId,
+            createdAt,
+            runId,
+            requestId: found.requestId,
+            batchIndex: found.batchIndex,
+            documentId: found.documentId,
+            at: Math.round(found.startedAt),
+            vendor: found.vendor,
+            destinationId: found.destinationId,
+            event: found.event,
+            params: found.params,
+            ids: found.ids,
+            consent: found.consent,
+            host: found.host,
+            url: found.url,
+            blocked: request.blocked,
+            status: request.status === null ? null : Math.round(request.status),
+            // gtag sends what Consent Mode held within milliseconds of the click, before autoconsent
+            // reports completion, so the action's start (accept or reject) is the line, not completedAt
+            afterConsentAction: consentLine !== null && found.startedAt >= consentLine,
+          },
+        ]
       })
-    })
-    const pushes = result.dataLayer.map((push, seq) => ({
-      orgId: current.orgId,
-      createdAt,
-      runId,
-      seq,
-      documentId: push.documentId,
-      at: Math.round(push.at),
-      value: push.value,
-    }))
-    const status = result.complete ? "complete" : "partial"
-    yield* db.$client.withTransaction(
-      Effect.gen(function* () {
-        yield* db.delete(hit).where(eq(hit.runId, runId))
-        yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
-        yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
-        for (let i = 0; i < hits.length; i += INSERT_BATCH)
-          yield* db.insert(hit).values(hits.slice(i, i + INSERT_BATCH))
-        for (let i = 0; i < pushes.length; i += INSERT_BATCH)
-          yield* db.insert(datalayerPush).values(pushes.slice(i, i + INSERT_BATCH))
-        yield* db.insert(checkResult).values(checks)
-        yield* db
-          .update(run)
-          .set({
-            status,
-            failure: null,
-            engine: result.engine,
-            decoderVersion: DECODER_VERSION,
-            consent: result.consent,
-            documents: result.documents,
-            cookies: result.cookies,
-            errors: result.errors,
-            complete: result.complete,
-            truncated: result.truncated,
-            hitCount: hits.length,
-          })
-          .where(eq(run.id, runId))
-      }),
-    )
-    return yield* publish(auditId, {
-      type: "run",
-      runId,
-      ordinal: current.ordinal,
-      status,
-      hitCount: hits.length,
-      errors: result.errors.map(({ code, message }) => ({ code, message })),
-    })
-  }).pipe(Effect.catchTags({ AuditStateError: failFast, SchemaError: failFast }))
+      const results = evaluateRun({
+        scenario,
+        viewport,
+        pageUrl: current.pageUrl,
+        siteHost: host,
+        measuredHosts: measuredHosts ?? [],
+        journey: current.journey,
+        capture: result,
+        hits: decoded,
+      })
+      const checks = yield* Effect.forEach(results, (check) => {
+        const rule = ruleById(check.ruleId)
+        if (rule === undefined)
+          return Effect.fail(new AuditStateError({ message: `rule ${check.ruleId} is not listed` }))
+        return Effect.succeed({
+          runId,
+          orgId: current.orgId,
+          ruleId: check.ruleId,
+          rulesVersion: RULES_VERSION,
+          status: check.status,
+          message: check.message,
+          evidence: check.evidence,
+          area: rule.area,
+          severity: rule.severity,
+          title: rule.title,
+          checkTitle: rule.checkTitle,
+          owner: rule.owner,
+          why: rule.why,
+          fix: rule.fix,
+          createdAt,
+        })
+      })
+      const pushes = result.dataLayer.map((push, seq) => ({
+        orgId: current.orgId,
+        createdAt,
+        runId,
+        seq,
+        documentId: push.documentId,
+        at: Math.round(push.at),
+        value: push.value,
+      }))
+      const status = result.complete ? "complete" : "partial"
+      const written = yield* fenced(
+        auditId,
+        Effect.gen(function* () {
+          yield* db.delete(hit).where(eq(hit.runId, runId))
+          yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
+          yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
+          for (let i = 0; i < hits.length; i += INSERT_BATCH)
+            yield* db.insert(hit).values(hits.slice(i, i + INSERT_BATCH))
+          for (let i = 0; i < pushes.length; i += INSERT_BATCH)
+            yield* db.insert(datalayerPush).values(pushes.slice(i, i + INSERT_BATCH))
+          yield* db.insert(checkResult).values(checks)
+          yield* db
+            .update(run)
+            .set({
+              status,
+              failure: null,
+              engine: result.engine,
+              decoderVersion: DECODER_VERSION,
+              consent: result.consent,
+              documents: result.documents,
+              cookies: result.cookies,
+              errors: result.errors,
+              complete: result.complete,
+              truncated: result.truncated,
+              hitCount: hits.length,
+            })
+            .where(eq(run.id, runId))
+        }),
+      )
+      if (isFenced(written)) return FENCED
+      return yield* publish(auditId, {
+        type: "run",
+        runId,
+        ordinal: current.ordinal,
+        status,
+        hitCount: hits.length,
+        errors: result.errors.map(({ code, message }) => ({ code, message })),
+      })
+    }),
+  ).pipe(Effect.catchTags({ AuditStateError: failFast, SchemaError: failFast }))
 
 /**
  * Records a run that has no persisted capture, and removes anything a `persist` attempt left. A
  * stored capture (`PersistFailure`) is kept.
  */
 const fail = (auditId: string, runId: string, reason: RunFailure) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const errors = [{ code: reason.code, message: reason.message }]
-    const updated = yield* db.$client.withTransaction(
-      Effect.gen(function* () {
-        yield* db.delete(hit).where(eq(hit.runId, runId))
-        yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
-        yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
-        return yield* db
-          .update(run)
-          .set({
-            status: "failed",
-            failure: reason.failure,
-            errors,
-            hitCount: 0,
-            finishedAt: sql`coalesce(${run.finishedAt}, now())`,
-          })
-          .where(and(eq(run.id, runId), eq(run.auditId, auditId)))
-          .returning({ ordinal: run.ordinal })
-      }),
-    )
-    const [found] = updated
-    if (found === undefined)
-      return yield* new AuditStateError({ message: `run ${runId} of audit ${auditId} not found` })
-    return yield* publish(auditId, {
-      type: "run",
-      runId,
-      ordinal: found.ordinal,
-      status: "failed",
-      hitCount: 0,
-      errors,
-    })
-  }).pipe(Effect.catchTag("AuditStateError", failFast))
-
-/** `complete` when every run is; `failed` when no run has a capture; `partial` otherwise. */
-const auditStatus = (runs: ReadonlyArray<{ status: string; captureKey: string | null }>) => {
-  if (runs.every((r) => r.status === "complete")) return "complete"
-  if (runs.every((r) => r.captureKey === null)) return "failed"
-  return "partial"
-}
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const { db } = yield* Database
+      const errors = [{ code: reason.code, message: reason.message }]
+      const updated = yield* fenced(
+        auditId,
+        Effect.gen(function* () {
+          yield* db.delete(hit).where(eq(hit.runId, runId))
+          yield* db.delete(datalayerPush).where(eq(datalayerPush.runId, runId))
+          yield* db.delete(checkResult).where(eq(checkResult.runId, runId))
+          return yield* db
+            .update(run)
+            .set({
+              status: "failed",
+              failure: reason.failure,
+              errors,
+              hitCount: 0,
+              finishedAt: sql`coalesce(${run.finishedAt}, now())`,
+            })
+            .where(and(eq(run.id, runId), eq(run.auditId, auditId)))
+            .returning({ ordinal: run.ordinal })
+        }),
+      )
+      if (isFenced(updated)) return FENCED
+      const [found] = updated
+      if (found === undefined)
+        return yield* new AuditStateError({ message: `run ${runId} of audit ${auditId} not found` })
+      return yield* publish(auditId, {
+        type: "run",
+        runId,
+        ordinal: found.ordinal,
+        status: "failed",
+        hitCount: 0,
+        errors,
+      })
+    }),
+  ).pipe(Effect.catchTag("AuditStateError", failFast))
 
 /**
- * Settles the audit's status and recomputes its findings from its runs' check results, in one
- * transaction: a retry replaces them with the same rows. Triage is never touched.
+ * Closes the audit (see `closeAudit`) in one fenced transaction: a retry replaces the findings with
+ * the same rows. A settled audit is left as it is.
  */
 const finish = (auditId: string) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const settled = yield* db.$client.withTransaction(
-      Effect.gen(function* () {
-        const runs = yield* db
-          .select({ status: run.status, captureKey: run.captureKey })
-          .from(run)
-          .where(eq(run.auditId, auditId))
-        const status = auditStatus(runs)
-        const checks = yield* db
-          .select({
-            runId: checkResult.runId,
-            orgId: checkResult.orgId,
-            ruleId: checkResult.ruleId,
-            rulesVersion: checkResult.rulesVersion,
-            status: checkResult.status,
-            area: checkResult.area,
-            severity: checkResult.severity,
-            title: checkResult.title,
-            checkTitle: checkResult.checkTitle,
-            owner: checkResult.owner,
-            why: checkResult.why,
-            fix: checkResult.fix,
-          })
-          .from(checkResult)
-          .innerJoin(run, eq(run.id, checkResult.runId))
-          .where(eq(run.auditId, auditId))
-          .orderBy(asc(run.ordinal), asc(checkResult.ruleId))
-        const findings = findingsFrom(auditId, checks)
-        yield* db.delete(finding).where(eq(finding.auditId, auditId))
-        if (findings.length > 0) yield* db.insert(finding).values(findings)
-        yield* db
-          .update(audit)
-          .set({ status, finishedAt: sql`coalesce(${audit.finishedAt}, now())` })
-          .where(eq(audit.id, auditId))
-        return status
-      }),
-    )
-    yield* publish(auditId, { type: "audit", status: settled })
-    return settled
-  })
+  heartbeat(
+    auditId,
+    Effect.gen(function* () {
+      const settled = yield* fenced(auditId, closeAudit(auditId))
+      if (isFenced(settled)) return FENCED
+      yield* publish(auditId, { type: "audit", status: settled })
+      return settled
+    }),
+  )
 
 /**
  * One audit: `start`, then for each run `admit-<n>` and `capture-<n>` (repeated as
@@ -684,12 +692,15 @@ const finish = (auditId: string) =>
 export class Audit extends AuditWorkflow.make(Layer.empty, {
   run: ({ auditId }) =>
     Effect.gen(function* () {
-      const runs = yield* Workflow.step("start", runtime.provide(start(auditId)), STEP)
+      const runs = yield* stopIfFenced(
+        yield* Workflow.step("start", runtime.provide(start(auditId)), STEP),
+      )
       const settle = (id: string, ordinal: number, outcome: CaptureOutcome) =>
         Effect.gen(function* () {
           const reason = yield* $match(outcome, {
             Captured: () =>
               Workflow.step(`persist-${ordinal}`, runtime.provide(persist(auditId, id)), STEP).pipe(
+                Effect.flatMap((written) => stopIfFenced(written)),
                 Effect.as(null),
                 Effect.catchTag("WorkflowStepError", (error) =>
                   Effect.succeed<RunFailure>({
@@ -705,10 +716,12 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
               Effect.succeed<RunFailure>({ code, message, failure: code }),
           })
           if (reason !== null)
-            yield* Workflow.step(
-              `fail-${ordinal}`,
-              runtime.provide(fail(auditId, id, reason)),
-              STEP,
+            yield* stopIfFenced(
+              yield* Workflow.step(
+                `fail-${ordinal}`,
+                runtime.provide(fail(auditId, id, reason)),
+                STEP,
+              ),
             )
         })
       const attempt = (id: string, ordinal: number, pass: 0 | 1) =>
@@ -730,16 +743,20 @@ export class Audit extends AuditWorkflow.make(Layer.empty, {
         // a run that found the engine busy waits for the others, then asks again before it fails
         if ($is("Exhausted")(outcome) && outcome.code === ENGINE_BUSY) {
           // an attempt that died on a gate or confirm error never requeued itself
-          yield* Workflow.step(
-            `requeue-${ordinal}`,
-            runtime.provide(requeueRun(auditId, id, ordinal)),
-            STEP,
+          yield* stopIfFenced(
+            yield* Workflow.step(
+              `requeue-${ordinal}`,
+              runtime.provide(heartbeat(auditId, requeueRun(auditId, id, ordinal))),
+              STEP,
+            ),
           )
           busy.push({ id, ordinal })
         } else yield* settle(id, ordinal, outcome)
       }
       for (const { id, ordinal } of busy) yield* settle(id, ordinal, yield* attempt(id, ordinal, 1))
-      const status = yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP)
+      const status = yield* stopIfFenced(
+        yield* Workflow.step("finish", runtime.provide(finish(auditId)), STEP),
+      )
       return { status }
-    }),
+    }).pipe(Effect.catchTag("Stopped", () => Effect.succeed({ status: "fenced" }))),
 }) {}

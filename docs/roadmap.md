@@ -28,6 +28,10 @@ A site owner signs up, creates an organization, adds a site and audits it withou
 - Not built, by design (the plan's "Not in scope"): showing or renaming the default client, per-site client labels, a Sites search beyond names, filters or paging (`listSites` returns all sites; add paging when an organization has hundreds), per-user grouping, a "Group by client" option inside the Sites table, bulk moves between clients, nullable `site.client_id`.
 - Done (2026-10-30): the Clients empty state for an agency that has sites but no named client now says the sites are listed under Sites (with a link) and that a client groups them; members see "New client" on Clients and the palette (creating a client is allowed for any member, only moving a site and the switch are owner and admin).
 
+## Stuck audits reconciled (done locally, 2026-10-31)
+
+Retry-failed-runs Task 3a shipped alone (`docs/plans/2026-10-29-retry-failed-runs/plan.md`): `audit.progress_at`, the fence and per-attempt heartbeat in the `Audit` workflow, `settleAudit`, `reconcileActive` before `createAudit` and `reconcileAudit` from the audit page, `Interrupted` runs, `Jobs.terminate`, and a `launchAudit` that leaves a failed start `queued`. Left: the matching stage checks (plan Task 12); the admission gate keeps a terminated audit's queue entry and grant until its claim or lease lapses (up to about 90 s per stale entry, 5 minutes for a held grant), which slows the next audits; the shipped retry and reuse work (Tasks 0 to 12) is still not built.
+
 ## UI refresh (done locally, 2026-10-24)
 
 Shell with organization switcher and `⌘K` palette, clients and sites with honest aggregates, the new audit form with a live estimate, the audit header with live progress and the runs matrix, the findings screen with triage and a detail sheet, the hits explorer with filters and a consent divider, and refreshed auth and settings, all on one token set and one set of shared components (`docs/ui.md`). Checked in the browser at 390px and 1440px in both themes, plus a grayscale pass (`docs/plans/2026-10-22-ui-refresh/plan.md`, Task 11). Leftovers:
@@ -140,7 +144,7 @@ Round 8 (2026-10-30, `docs/qa/2026-10-30-ux-sweep-r8.md`), batch Q: H1 (Archived
 ## Left over from UX round 6 (F1)
 
 - **Retry failed runs.** A run that fails as `EngineBusy` after the in-audit retries still needs a whole re-run. A re-check (`recheck.ts`) is planned from the cells a rule fails on, so it cannot name arbitrary failed cells. Needs a re-check plan built from failed runs (same `CellKey`s, `role = target`), then a button next to the "Zinko was busy" row.
-  Planned, not scheduled: see `docs/plans/2026-10-29-retry-failed-runs/plan.md` (a new audit that reuses the original's good captures, not a re-check); Re-run covers it meanwhile.
+  Stuck-audit reconciliation (plan Task 3a) is done; the rest is planned, not scheduled: see `docs/plans/2026-10-29-retry-failed-runs/plan.md` (a new audit that reuses the original's good captures, not a re-check); Re-run covers it meanwhile.
 
 ## After v0.1
 

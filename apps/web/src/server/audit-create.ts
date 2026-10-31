@@ -1,5 +1,5 @@
 import { MAX_URL_LENGTH } from "@repo/capture-contract"
-import { AuditConfig, Jobs, TEST_CLICK_IDS } from "@repo/core"
+import { AuditConfig, TEST_CLICK_IDS } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, findingTriage, reportEdit, reportFindingEdit, run } from "@repo/db"
 import { and, count, desc, eq, inArray, isNull, sql } from "drizzle-orm"
@@ -9,11 +9,12 @@ import { type CellKey, carriesClickIds, cellId, cellKeyOf, sameScope } from "@/l
 import { ambiguousClickIdPages, clickIdClashMessage } from "@/lib/page-match"
 import { hasCredentials, isOnSite, originHost, withoutCredentials } from "@/lib/site-url"
 import { storedCells } from "./cell-key"
+import { ACTIVE_STATUSES } from "./audit-fence"
+import { reconcileActive } from "./audit-reconcile-data"
 import { atomically, Invalid, NotFound, siteInOrg } from "./server-fn"
 
 /** Queued or running audits one organization may have at once. Provisional. */
 export const MAX_ACTIVE_AUDITS = 5
-export const ACTIVE_STATUSES = ["queued", "running"] as const
 
 /**
  * The pages as `URL` writes them, each once: `http://LOCALHOST:4400/a` and `http://localhost:4400/a`
@@ -282,6 +283,13 @@ export interface CreateAudit {
  * to walk to). External work (the start-page preflight, the workflow start) stays outside.
  */
 export const createAudit = (input: CreateAudit) =>
+  reconcileActive(input.orgId).pipe(
+    // a failed sweep must not stop a new audit; the cap below still holds
+    Effect.ignoreCause({ log: "Warn", message: "Active audits not reconciled" }),
+    Effect.andThen(insertAudit(input)),
+  )
+
+const insertAudit = (input: CreateAudit) =>
   atomically(
     Effect.gen(function* () {
       const { orgId, userId } = input
@@ -447,35 +455,3 @@ export const createAudit = (input: CreateAudit) =>
       return created.id
     }),
   )
-
-/**
- * Starts the audit's workflow, named by the audit id so it cannot start twice. If the start
- * fails, the audit is saved `failed` with the reason; its id is still returned by the caller.
- */
-export const launchAudit = (auditId: string) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const jobs = yield* Jobs
-    yield* jobs.start("audit", { auditId }, { id: auditId }).pipe(
-      Effect.flatMap((instance) =>
-        db.update(audit).set({ workflowId: instance.id }).where(eq(audit.id, auditId)),
-      ),
-      Effect.catchTag("JobError", (error) =>
-        Effect.gen(function* () {
-          // the call can fail (a timeout) after the instance was created; then it runs
-          const created = yield* jobs.status("audit", auditId).pipe(Effect.option)
-          if (Option.isSome(created))
-            return yield* db.update(audit).set({ workflowId: auditId }).where(eq(audit.id, auditId))
-          yield* Effect.logError("Audit workflow did not start", error)
-          return yield* db
-            .update(audit)
-            .set({
-              status: "failed",
-              error: "The audit could not be started. Try again.",
-              finishedAt: new Date(),
-            })
-            .where(eq(audit.id, auditId))
-        }),
-      ),
-    )
-  })

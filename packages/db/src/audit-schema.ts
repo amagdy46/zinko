@@ -82,6 +82,11 @@ export const audit = pgTable(
     status: text().notNull(),
     error: text(),
     workflowId: text("workflow_id"),
+    /**
+     * The last time the audit's workflow recorded an attempt (the per-attempt heartbeat that is
+     * also the fence of every mutating workflow transaction). Bookkeeping, not a derived row.
+     */
+    progressAt: timestamp("progress_at", { withTimezone: true }),
     startedAt: timestamp("started_at", { withTimezone: true }),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
     /** High-water mark of report versions: raised under the publication lock, never lowered. */

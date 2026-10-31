@@ -43,6 +43,7 @@ Zinko should feel like a professional debugging tool: dense, calm and fast, in t
 | Triage | Open, Accepted risk, Fixed |
 | Audit | Queued, Running, Finished (neutral: it says the audit ended, not that the site is fine), Partial, Failed, Not audited |
 | Run | Queued, Running, Captured (a run that loaded), Partial, Failed |
+| Why a run failed because its audit stopped | Interrupted: "The audit stopped before this run finished" (a run of an audit whose workflow ended or went silent and was settled; never "failed" alone and never "The browser engine failed") |
 | An audit without check results | Not evaluated, never shown as clean |
 | Sites and clients | Sites first. "Client" appears only when the organization has switched on **Group sites by client** (Settings > Organization): then Clients, "Client: <name>", the client column and picker. A site without one reads "No client". The hidden default client is never named, listed or linked, and nothing says "ungrouped" or "default". With grouping off no menu, title, breadcrumb, palette entry, empty state, sample report or not-found page says "client" (the switch itself and its description are the one place, for owners and admins) |
 | Runs view and Tags tab | The Runs tab views are Grid (runs by scenario), List and Thumbnails; "matrix" names only the Tags tab's tag-by-scenario table, and never a Runs view |
