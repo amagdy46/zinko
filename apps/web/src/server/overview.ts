@@ -1,15 +1,7 @@
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
-import {
-  audit,
-  checkResult,
-  reportEdit,
-  reportFindingEdit,
-  reportShare,
-  reportSnapshot,
-  run,
-} from "@repo/db"
-import { and, asc, eq, gt, isNotNull, isNull, or, sql } from "drizzle-orm"
+import { audit, checkResult, reportEdit, reportFindingEdit, reportSnapshot, run } from "@repo/db"
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
@@ -17,6 +9,7 @@ import { briefingOf } from "./compare-data"
 import { decodeFix, findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { ruleTitleOf, verdictOf } from "./recheck-data"
+import { liveShares } from "./report-share-data"
 import { requireSession } from "./require-session"
 import { scoreSummaryOf } from "./score-summary"
 import { membership, read } from "./server-fn"
@@ -209,27 +202,14 @@ export const getOverview = createServerFn({ method: "GET" })
             ),
           )
           .limit(1)
-        const [shared] = yield* db
-          .select({ id: reportShare.id })
-          .from(reportShare)
-          .innerJoin(reportSnapshot, eq(reportSnapshot.id, reportShare.snapshotId))
-          .where(
-            and(
-              eq(reportSnapshot.auditId, auditId),
-              eq(reportSnapshot.orgId, orgId),
-              eq(reportShare.orgId, orgId),
-              isNull(reportShare.revokedAt),
-              or(isNull(reportShare.expiresAt), gt(reportShare.expiresAt, sql`now()`)),
-            ),
-          )
-          .limit(1)
+        const shared = (yield* liveShares(orgId, [auditId])).has(auditId)
         return {
           nextSteps: {
             hasFindings: failing.length > 0,
             triaged:
               failing.some((f) => f.triage.status === "accepted_risk") || noted !== undefined,
             reportReviewed: edited !== undefined || published !== undefined,
-            shared: shared !== undefined,
+            shared,
           },
           briefing,
           recheck,

@@ -1,6 +1,6 @@
 import { Database } from "@repo/core/Database"
 import { reportShare, reportSnapshot, user } from "@repo/db"
-import { and, asc, desc, eq } from "drizzle-orm"
+import { and, asc, desc, eq, gt, inArray, isNull, or, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import { auditInOrg } from "./audit-data"
 import { isManager, isUuid, NotFound } from "./server-fn"
@@ -19,6 +19,34 @@ export const shareInOrg = (orgId: string, id: string) =>
       .limit(1)
     if (found === undefined) return yield* new NotFound({ message: "Not found" })
     return found.id
+  })
+
+/**
+ * The versions each audit has live share links to (not revoked, not expired), through surviving
+ * snapshots only; an audit without one is absent from the map.
+ */
+export const liveShares = (orgId: string, auditIds: readonly string[]) =>
+  Effect.gen(function* () {
+    const shared = new Map<string, number[]>()
+    if (auditIds.length === 0) return shared
+    const { db } = yield* Database
+    const rows = yield* db
+      .selectDistinct({ auditId: reportSnapshot.auditId, version: reportSnapshot.version })
+      .from(reportShare)
+      .innerJoin(reportSnapshot, eq(reportSnapshot.id, reportShare.snapshotId))
+      .where(
+        and(
+          inArray(reportSnapshot.auditId, [...auditIds]),
+          eq(reportSnapshot.orgId, orgId),
+          eq(reportShare.orgId, orgId),
+          isNull(reportShare.revokedAt),
+          or(isNull(reportShare.expiresAt), gt(reportShare.expiresAt, sql`now()`)),
+        ),
+      )
+      .orderBy(reportSnapshot.auditId, desc(reportSnapshot.version))
+    for (const row of rows)
+      shared.set(row.auditId, [...(shared.get(row.auditId) ?? []), row.version])
+    return shared
   })
 
 export const statusOf = (
