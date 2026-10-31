@@ -1,8 +1,7 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
-import { useEffect, useRef } from "react"
 import { ChevronDown, Info } from "lucide-react"
 import { AuditRunning } from "@/components/audit-running"
-import { CopyButton, RunPath } from "@/components/evidence"
+import { CopyButton, RequestView, RunPath } from "@/components/evidence"
 import { EmptyState } from "@/components/empty-state"
 import { OverviewSkeleton } from "@/components/page-skeleton"
 import { ScoreArithmetic, ScoreDetails } from "@/components/score-arithmetic"
@@ -18,8 +17,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
-import { setLocalFlag, useLocalFlag } from "@/lib/local-flag"
-import { usePreviewed } from "@/lib/report-previewed"
 import { checkGapReason } from "@/lib/report-projection"
 import { cn } from "@/lib/utils"
 import {
@@ -69,11 +66,10 @@ function OverviewScreen() {
     runHealth,
     scoreCoverage,
     open,
-    nextSteps,
   } = Route.useLoaderData()
   const { briefing, recheck, bandAllAccepted } = Route.useLoaderData()
   if (status === "queued" || status === "running")
-    return <AuditRunning what="The score, findings and next steps" testId="overview-running" />
+    return <AuditRunning what="The score and findings" testId="overview-running" />
   if (!score.evaluated)
     return (
       <EmptyState
@@ -126,11 +122,10 @@ function OverviewScreen() {
         auditId={audit.id}
         bandAllAccepted={bandAllAccepted}
       />
+      <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
       {briefing === null ? null : (
         <Briefing auditId={audit.id} since={briefing.since} lines={briefing.lines} />
       )}
-      <WorstFinding auditId={audit.id} worst={worst} coverage={scoreCoverage} />
-      <NextSteps auditId={audit.id} worstRuleId={worst?.ruleId} steps={nextSteps} />
       <Caveats
         auditId={audit.id}
         runs={runs}
@@ -390,166 +385,20 @@ function Lead({ text }: { text: string }) {
   )
 }
 
-const NEXT_STEPS_HIDDEN = "zinko:next-steps-hidden"
+const OTHER_EVIDENCE = {
+  cookie: "a cookie",
+  push: "a dataLayer push",
+  document: "the page",
+} as const
 
-const stepLink =
-  "inline-flex min-h-8 items-center rounded-md font-medium underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-
-/**
- * From a finished audit to a shared report, derived from what is stored: triage rows and report
- * notes, a report edit or published version, a live share link. Reading the top finding leaves no
- * trace, so it counts as done once a later step is. Once a link exists it shrinks to one line, the
- * only place the Overview mentions it (the address itself is shown once, at creation).
- */
-function NextSteps({
-  auditId,
-  worstRuleId,
-  steps,
-}: {
-  auditId: string
-  worstRuleId: string | undefined
-  steps: Overview["nextSteps"]
-}) {
-  const previewed = usePreviewed(auditId)
-  const hidden = useLocalFlag(NEXT_STEPS_HIDDEN)
-  const hideButton = useRef<HTMLButtonElement>(null)
-  const showButton = useRef<HTMLButtonElement>(null)
-  const toggled = useRef(false)
-  // the control that was pressed unmounts, so focus follows to its counterpart
-  useEffect(() => {
-    const moveFocus = toggled.current
-    toggled.current = false
-    if (moveFocus) (hidden ? showButton : hideButton).current?.focus()
-  }, [hidden])
-  const toggle = (hide: boolean) => {
-    toggled.current = true
-    setLocalFlag(NEXT_STEPS_HIDDEN, hide)
-  }
-  if (steps.shared)
-    return (
-      <p className="text-sm text-muted-foreground" data-testid="active-share">
-        Active share link.{" "}
-        <Link
-          to="/app/audits/$auditId/report"
-          params={{ auditId }}
-          search={{ share: 1 }}
-          className={stepLink}
-        >
-          Manage in Share
-        </Link>
-      </p>
-    )
-  const items = [
-    ...(steps.hasFindings
-      ? [
-          {
-            key: "triage",
-            done: steps.triaged,
-            link: (
-              <Link
-                to="/app/audits/$auditId/findings"
-                params={{ auditId }}
-                search={worstRuleId === undefined ? {} : { finding: worstRuleId }}
-                className={stepLink}
-              >
-                Read the top finding
-              </Link>
-            ),
-            hint: "Read what it means for the site. Triage it only when you know its status.",
-          },
-        ]
-      : []),
-    {
-      key: "preview",
-      done: steps.reportReviewed || previewed,
-      link: (
-        <Link
-          to="/app/audits/$auditId/report"
-          params={{ auditId }}
-          search={{ view: "client" }}
-          className={stepLink}
-        >
-          Preview the reader view
-        </Link>
-      ),
-      hint: "See what a reader of the report will see.",
-    },
-    {
-      key: "share",
-      done: false,
-      link: (
-        <Link
-          to="/app/audits/$auditId/report"
-          params={{ auditId }}
-          search={{ share: 1 }}
-          className={stepLink}
-        >
-          Create a share link
-        </Link>
-      ),
-      hint: "Send a link to the report.",
-    },
-  ]
-  if (hidden)
-    return (
-      <p role="status" className="text-sm text-muted-foreground">
-        Next steps are hidden.{" "}
-        <Button
-          ref={showButton}
-          variant="ghost"
-          size="sm"
-          className="px-1.5 underline underline-offset-4"
-          onClick={() => toggle(false)}
-        >
-          Show them
-        </Button>
-      </p>
-    )
+function Proof({ proof }: { proof: NonNullable<Overview["worst"]>["proof"] }) {
+  if (proof.state === "request") return <RequestView request={proof.request} compact />
   return (
-    <section
-      aria-label="Next steps"
-      className="space-y-3 rounded-lg border bg-card p-4 shadow-xs"
-      data-testid="next-steps"
-    >
-      <SectionHeading
-        title="Next steps"
-        className="items-center"
-        actions={
-          <Button
-            ref={hideButton}
-            variant="ghost"
-            size="sm"
-            className="-mr-2 text-muted-foreground"
-            onClick={() => toggle(true)}
-          >
-            Hide
-          </Button>
-        }
-      />
-      <ol className="grid gap-4 text-sm md:grid-cols-3 md:gap-6">
-        {items.map((item, i) => (
-          <li key={item.key} className="flex items-start gap-2.5">
-            {item.done ? (
-              <StatusGlyph meaning="pass" className="mt-1" />
-            ) : (
-              <span
-                aria-hidden="true"
-                className="mt-1 flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-medium text-muted-foreground tabular-nums"
-              >
-                {i + 1}
-              </span>
-            )}
-            <span className="min-w-0">
-              {item.link}
-              {item.done ? <span className="text-muted-foreground"> (done)</span> : null}
-              {"hint" in item && !item.done ? (
-                <span className="block text-xs text-muted-foreground">{item.hint}</span>
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
+    <p className="text-sm text-muted-foreground" data-testid="proof-note">
+      {proof.state === "other"
+        ? `This finding cites ${OTHER_EVIDENCE[proof.kind]}; open it in Findings to see it.`
+        : "The captured request could not be loaded."}
+    </p>
   )
 }
 
@@ -580,6 +429,7 @@ function WorstFinding({
       </section>
     )
   }
+  const firstFix = worst.fix[0] ?? ""
   return (
     <section
       aria-label="Worst finding"
@@ -599,31 +449,28 @@ function WorstFinding({
           : ""}
       </p>
       <div className="grid items-start gap-6 md:grid-cols-2 md:gap-10">
-        <div className="max-w-prose space-y-2">
+        <div className="min-w-0 space-y-2">
           <div className="flex items-center md:h-8">
-            <h3 className="type-label">Why it matters</h3>
+            <h3 className="type-label">What we saw (first failing run)</h3>
           </div>
-          <Lead text={worst.why} />
-          <p className="pt-1 text-sm">
-            <span className="type-label block">First failing run</span>
-            {worst.message}
-          </p>
+          <Proof proof={worst.proof} />
         </div>
-        <div className="max-w-prose space-y-2">
-          <div className="flex h-8 items-center justify-between gap-2">
-            <h3 className="type-label">How to fix it</h3>
-            <CopyButton
-              value={worst.fix.map((step, i) => `${i + 1}. ${step}`).join("\n")}
-              label="Copy fix steps"
-            />
+        <div className="max-w-prose space-y-4">
+          <div className="space-y-2">
+            <div className="flex items-center md:h-8">
+              <h3 className="type-label">Why it matters</h3>
+            </div>
+            <Lead text={worst.why.split("\n\n")[0] ?? worst.why} />
           </div>
-          <ol className="list-decimal space-y-1 pl-5 text-sm">
-            {worst.fix.map((step) => (
-              <li key={step}>
-                <CodeText text={step} />
-              </li>
-            ))}
-          </ol>
+          <div className="space-y-2">
+            <div className="flex h-8 items-center justify-between gap-2">
+              <h3 className="type-label">First fix</h3>
+              <CopyButton value={firstFix} label="Copy first fix step" />
+            </div>
+            <p className="text-sm">
+              <CodeText text={firstFix} />
+            </p>
+          </div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -636,15 +483,20 @@ function WorstFinding({
             Open in Findings
           </Link>
         </Button>
-        <Button asChild variant="outline" size="sm">
-          <Link
-            to="/app/audits/$auditId/hits"
-            params={{ auditId }}
-            search={{ runId: worst.firstRunId }}
-          >
-            Open in Hits
-          </Link>
-        </Button>
+        {worst.proof.state === "request" && worst.proof.hit !== null ? (
+          <Button asChild variant="outline" size="sm">
+            <Link
+              to="/app/audits/$auditId/hits"
+              params={{ auditId }}
+              search={{
+                run: worst.proof.runId,
+                hit: `${worst.proof.hit.requestId}:${worst.proof.hit.batchIndex}`,
+              }}
+            >
+              Open in Hits
+            </Link>
+          </Button>
+        ) : null}
       </div>
     </section>
   )

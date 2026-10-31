@@ -1,20 +1,69 @@
+import type { CapturedRequest } from "@repo/capture-contract"
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, reportEdit, reportFindingEdit, reportSnapshot, run } from "@repo/db"
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm"
+import { audit, checkResult, run } from "@repo/db"
+import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
-import { auditInOrg } from "./audit-data"
+import { auditInOrg, readCaptureTolerant } from "./audit-data"
 import { briefingOf } from "./compare-data"
+import { type CandidateRun, candidateRunsOf } from "./digest-data"
 import { decodeFix, findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
 import { tagsSeenOf } from "./matrix-data"
 import { ruleTitleOf, verdictOf } from "./recheck-data"
-import { liveShares } from "./report-share-data"
 import { requireSession } from "./require-session"
 import { scoreSummaryOf } from "./score-summary"
 import { membership, read } from "./server-fn"
 
 const SEVERITY_RANK = ["critical", "warning", "info"] as const
+
+/** What the Overview's "Start with" card shows of the proof run: only what the compact `RequestView` reads. */
+type Proof =
+  | {
+      state: "request"
+      runId: string
+      request: Pick<CapturedRequest, "id" | "method" | "url" | "resourceType">
+      hit: { requestId: string; batchIndex: number } | null
+    }
+  | { state: "other"; kind: "cookie" | "push" | "document" }
+  | { state: "unreadable" }
+
+/**
+ * The first hit or request the proof run's check cites, read from its stored capture. A hit is
+ * offered to the Hits tab only when its decoded row exists; a raw request has no batch index.
+ */
+const proofOf = (candidate: CandidateRun) =>
+  Effect.gen(function* () {
+    const cited = candidate.evidence.find((ref) => ref.kind === "hit" || ref.kind === "request")
+    if (cited === undefined) {
+      const other = candidate.evidence.find((ref) => ref.kind !== "hit" && ref.kind !== "request")
+      return { state: "other", kind: other?.kind ?? "document" } satisfies Proof
+    }
+    const captured = yield* readCaptureTolerant(candidate.run.captureKey, candidate.run.id)
+    const request = captured.found
+      ? captured.capture.requests.find((r) => r.id === cited.requestId)
+      : undefined
+    if (request === undefined) return { state: "unreadable" } satisfies Proof
+    const decoded =
+      cited.kind === "hit" &&
+      candidate.hits.some(
+        (h) => h.requestId === cited.requestId && h.batchIndex === cited.batchIndex,
+      )
+    return {
+      state: "request",
+      runId: candidate.run.id,
+      request: {
+        id: request.id,
+        method: request.method,
+        url: request.url,
+        resourceType: request.resourceType,
+      },
+      hit:
+        decoded && cited.kind === "hit"
+          ? { requestId: cited.requestId, batchIndex: cited.batchIndex }
+          : null,
+    } satisfies Proof
+  })
 
 const decodeStartPage = Schema.decodeUnknownEffect(
   Schema.Struct({ pages: Schema.NonEmptyArray(Schema.String) }),
@@ -27,7 +76,7 @@ const decodeErrors = Schema.decodeUnknownEffect(
  * What the Overview shows, computed from the stored findings and check results on every read:
  * the score, the counts by area (failing findings by severity, and rules that could not be
  * checked), the triage tally, the worst open failing finding in full (the stored text of the
- * finding and the message of its first failing run) and the tags seen. Triage does not change
+ * finding and the proof from its first failing run) and the tags seen. Triage does not change
  * the score or the counts, only which finding is the worst; `withoutAccepted` is the same score
  * with accepted risks left out, for the one place that shows both. `runHealth` says whether the
  * start page could not be loaded or most runs did not finish, which makes the score incomplete.
@@ -73,22 +122,8 @@ export const getOverview = createServerFn({ method: "GET" })
         let worst = null
         if (top !== undefined) {
           const { finding: stored } = yield* findingRowOf(orgId, auditId, top.ruleId)
-          const [first] = yield* db
-            .select({ runId: checkResult.runId, message: checkResult.message })
-            .from(checkResult)
-            .innerJoin(run, eq(run.id, checkResult.runId))
-            .where(
-              and(
-                eq(run.auditId, auditId),
-                eq(run.role, "target"),
-                eq(run.orgId, orgId),
-                eq(checkResult.orgId, orgId),
-                eq(checkResult.ruleId, top.ruleId),
-                eq(checkResult.status, "fail"),
-              ),
-            )
-            .orderBy(asc(run.ordinal))
-            .limit(1)
+          const { candidates } = yield* candidateRunsOf(orgId, auditId, top, { candidates: 1 })
+          const [first] = candidates
           if (first !== undefined)
             worst = {
               ruleId: top.ruleId,
@@ -96,8 +131,7 @@ export const getOverview = createServerFn({ method: "GET" })
               title: top.title,
               why: stored.why,
               fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
-              message: first.message,
-              firstRunId: first.runId,
+              proof: yield* proofOf(first),
               failingRuns: top.failingRuns,
               knownRuns: top.knownRuns,
               pages: top.pages,
@@ -181,36 +215,7 @@ export const getOverview = createServerFn({ method: "GET" })
                 runs: coverage.totalRuns,
               }
             : null
-        const [edited] = yield* db
-          .select({ id: reportEdit.auditId })
-          .from(reportEdit)
-          .where(and(eq(reportEdit.auditId, auditId), eq(reportEdit.orgId, orgId)))
-          .limit(1)
-        const [published] = yield* db
-          .select({ id: reportSnapshot.id })
-          .from(reportSnapshot)
-          .where(and(eq(reportSnapshot.auditId, auditId), eq(reportSnapshot.orgId, orgId)))
-          .limit(1)
-        const [noted] = yield* db
-          .select({ ruleId: reportFindingEdit.ruleId })
-          .from(reportFindingEdit)
-          .where(
-            and(
-              eq(reportFindingEdit.auditId, auditId),
-              eq(reportFindingEdit.orgId, orgId),
-              isNotNull(reportFindingEdit.note),
-            ),
-          )
-          .limit(1)
-        const shared = (yield* liveShares(orgId, [auditId])).has(auditId)
         return {
-          nextSteps: {
-            hasFindings: failing.length > 0,
-            triaged:
-              failing.some((f) => f.triage.status === "accepted_risk") || noted !== undefined,
-            reportReviewed: edited !== undefined || published !== undefined,
-            shared,
-          },
           briefing,
           recheck,
           runHealth: summary.runHealth,

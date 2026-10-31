@@ -207,7 +207,42 @@ export function JsonView({ value }: { value: unknown }) {
   )
 }
 
-export function RequestView({ request }: { request: CapturedRequest }) {
+type RequestFields = Pick<
+  CapturedRequest,
+  "id" | "method" | "url" | "resourceType" | "bodyTruncated" | "body"
+>
+
+type CompactFields = Pick<CapturedRequest, "id" | "method" | "url" | "resourceType">
+
+/** `compact` is one line for the URL and one for what it is: no parameters or body, so it reads only four fields. */
+export function RequestView(
+  props: { request: RequestFields; compact?: false } | { request: CompactFields; compact: true },
+) {
+  return props.compact ? (
+    <CompactRequest request={props.request} />
+  ) : (
+    <FullRequest request={props.request} />
+  )
+}
+
+function CompactRequest({ request }: { request: CompactFields }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <div className="flex items-center gap-2 font-mono text-xs">
+        <span className="font-semibold">{request.method}</span>
+        <span className="min-w-0 flex-1 truncate" title={request.url}>
+          {request.url}
+        </span>
+        <CopyButton value={request.url} label="Copy request URL" />
+      </div>
+      <p className="truncate text-xs text-muted-foreground">
+        {request.resourceType} · {request.id}
+      </p>
+    </div>
+  )
+}
+
+function FullRequest({ request }: { request: RequestFields }) {
   const [mode, setMode] = useState("decoded")
   const [bodyOpen, setBodyOpen] = useState(false)
   const query = request.url.includes("?")
