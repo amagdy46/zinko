@@ -1,69 +1,16 @@
-import type { CapturedRequest } from "@repo/capture-contract"
 import { createServerFn } from "@tanstack/react-start"
 import { Database } from "@repo/core/Database"
 import { audit, checkResult, run } from "@repo/db"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
 import { runReason } from "@/lib/audit-labels"
-import { auditInOrg, readCaptureTolerant } from "./audit-data"
+import { auditInOrg } from "./audit-data"
 import { briefingOf } from "./compare-data"
-import { type CandidateRun, candidateRunsOf } from "./digest-data"
-import { decodeFix, findingRowOf, findingsOf, SEVERITY_ORDER } from "./findings-data"
-import { tagsSeenOf } from "./matrix-data"
+import { findingsOf } from "./findings-data"
 import { ruleTitleOf, verdictOf } from "./recheck-data"
 import { requireSession } from "./require-session"
 import { scoreSummaryOf } from "./score-summary"
 import { membership, read } from "./server-fn"
-
-const SEVERITY_RANK = ["critical", "warning", "info"] as const
-
-/** What the Overview's "Start with" card shows of the proof run: only what the compact `RequestView` reads. */
-type Proof =
-  | {
-      state: "request"
-      runId: string
-      request: Pick<CapturedRequest, "id" | "method" | "url" | "resourceType">
-      hit: { requestId: string; batchIndex: number } | null
-    }
-  | { state: "other"; kind: "cookie" | "push" | "document" }
-  | { state: "unreadable" }
-
-/**
- * The first hit or request the proof run's check cites, read from its stored capture. A hit is
- * offered to the Hits tab only when its decoded row exists; a raw request has no batch index.
- */
-const proofOf = (candidate: CandidateRun) =>
-  Effect.gen(function* () {
-    const cited = candidate.evidence.find((ref) => ref.kind === "hit" || ref.kind === "request")
-    if (cited === undefined) {
-      const other = candidate.evidence.find((ref) => ref.kind !== "hit" && ref.kind !== "request")
-      return { state: "other", kind: other?.kind ?? "document" } satisfies Proof
-    }
-    const captured = yield* readCaptureTolerant(candidate.run.captureKey, candidate.run.id)
-    const request = captured.found
-      ? captured.capture.requests.find((r) => r.id === cited.requestId)
-      : undefined
-    if (request === undefined) return { state: "unreadable" } satisfies Proof
-    const decoded =
-      cited.kind === "hit" &&
-      candidate.hits.some(
-        (h) => h.requestId === cited.requestId && h.batchIndex === cited.batchIndex,
-      )
-    return {
-      state: "request",
-      runId: candidate.run.id,
-      request: {
-        id: request.id,
-        method: request.method,
-        url: request.url,
-        resourceType: request.resourceType,
-      },
-      hit:
-        decoded && cited.kind === "hit"
-          ? { requestId: cited.requestId, batchIndex: cited.batchIndex }
-          : null,
-    } satisfies Proof
-  })
 
 const decodeStartPage = Schema.decodeUnknownEffect(
   Schema.Struct({ pages: Schema.NonEmptyArray(Schema.String) }),
@@ -91,55 +38,12 @@ export const getOverview = createServerFn({ method: "GET" })
         const auditId = yield* auditInOrg(orgId, data.auditId)
         const { status, coverage, uncertainty, findings } = yield* findingsOf(orgId, auditId)
         const failing = findings.filter((f) => f.kind === "fail")
-        const areas = new Map<
-          string,
-          { critical: number; warning: number; info: number; couldNotCheck: number }
-        >()
-        const areaOf = (area: string) => {
-          const found = areas.get(area) ?? { critical: 0, warning: 0, info: 0, couldNotCheck: 0 }
-          areas.set(area, found)
-          return found
-        }
-        for (const f of failing) areaOf(f.area)[f.severity] += 1
         const unchecked = findings.filter((f) => f.kind === "inconclusive")
-        for (const f of unchecked) areaOf(f.area).couldNotCheck += 1
         const { db } = yield* Database
         const [self] = yield* db
           .select({ kind: audit.kind, ruleId: audit.narrowRuleId })
           .from(audit)
           .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
-        const top = failing
-          .filter(
-            (f) =>
-              f.triage.status === "open" && (self?.kind !== "narrow" || f.ruleId === self.ruleId),
-          )
-          .toSorted(
-            (a, b) =>
-              SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
-              b.failingRuns - a.failingRuns ||
-              a.ruleId.localeCompare(b.ruleId),
-          )[0]
-        let worst = null
-        if (top !== undefined) {
-          const { finding: stored } = yield* findingRowOf(orgId, auditId, top.ruleId)
-          const { candidates } = yield* candidateRunsOf(orgId, auditId, top, { candidates: 1 })
-          const [first] = candidates
-          if (first !== undefined)
-            worst = {
-              ruleId: top.ruleId,
-              severity: top.severity,
-              title: top.title,
-              why: stored.why,
-              fix: yield* decodeFix(stored.fix).pipe(Effect.orDie),
-              proof: yield* proofOf(first),
-              failingRuns: top.failingRuns,
-              knownRuns: top.knownRuns,
-              pages: top.pages,
-              scenarios: top.scenarios,
-              bannerUncertainRuns: top.bannerUncertainRuns,
-            }
-        }
-        const tags = yield* tagsSeenOf(orgId, auditId)
         const checked = yield* db
           .select({
             area: checkResult.area,
@@ -189,8 +93,6 @@ export const getOverview = createServerFn({ method: "GET" })
             errors: errors ?? [],
           })),
         )
-        const openOf = (severity: string) =>
-          failing.filter((f) => f.severity === severity && f.triage.status === "open").length
         const summary = scoreSummaryOf({
           findings: failing,
           uncertainty,
@@ -199,7 +101,6 @@ export const getOverview = createServerFn({ method: "GET" })
           startUrl,
           reasonOf: runReason,
         })
-        const worstSeverity = SEVERITY_RANK.find((s) => failing.some((f) => f.severity === s))
         const briefing = yield* briefingOf(orgId, auditId)
         const verdicts =
           self?.kind === "narrow" && self.ruleId !== null
@@ -227,32 +128,18 @@ export const getOverview = createServerFn({ method: "GET" })
             unresolvedChecks: checked.reduce((n, c) => n + c.unresolved, 0),
             unauditedSites: 0,
           },
-          open: {
-            critical: openOf("critical"),
-            warning: openOf("warning"),
-            info: openOf("info"),
-          },
           couldNotCheck: {
             rules: unchecked.length,
             runs: new Set(unchecked.flatMap((f) => f.runIds)).size,
             titles: unchecked.map((f) => f.checkTitle).toSorted(),
           },
-          checkedAreas: Object.fromEntries(checked.map((c) => [c.area, c.passedRules])),
           withoutAccepted: summary.withoutAccepted,
-          bandAllAccepted:
-            worstSeverity !== undefined &&
-            failing
-              .filter((f) => f.severity === worstSeverity)
-              .every((f) => f.triage.status === "accepted_risk"),
-          worst,
-          tags,
           status,
           coverage,
           score: summary.score,
           bannerUncertain: failing
             .filter((f) => f.bannerUncertainRuns > 0)
             .map((f) => ({ ruleId: f.ruleId, title: f.title, runs: f.bannerUncertainRuns })),
-          areas: Object.fromEntries(areas),
           triage: {
             acceptedRisk: failing.filter((f) => f.triage.status === "accepted_risk").length,
             fixed: failing.filter((f) => f.triage.status === "fixed").length,

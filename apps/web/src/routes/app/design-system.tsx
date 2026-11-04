@@ -1,7 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 import { Globe, Info, TriangleAlert } from "lucide-react"
 import { useState, type ReactNode } from "react"
-import { toast } from "sonner"
 import { ChangeBadge } from "@/components/change-badge"
 import { DataRow, LinkRow, RowChevron, rowLink } from "@/components/data-row"
 import { EmptyState } from "@/components/empty-state"
@@ -12,7 +11,6 @@ import { ScoreChip } from "@/components/score-figure"
 import { SectionHeading } from "@/components/section-heading"
 import { SeverityBadge } from "@/components/severity"
 import { Stat } from "@/components/stat"
-import { StageStrip, type Stage } from "@/components/stage-strip"
 import { StatusGlyph, type StatusMeaning } from "@/components/status-glyph"
 import { CheckStatusBadge, StatusBadge, type BadgeStatus } from "@/components/status-badge"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -180,95 +178,6 @@ const CHANGE_STATES: ReadonlyArray<ChangeState> = [
   "not_comparable",
 ]
 
-const SAMPLE_AT = new Date("2026-10-30T10:00:00Z")
-
-const baseStage: Stage = {
-  capture: { active: false, total: 24, complete: 24, partial: 0, failed: 0 },
-  decisions: { evaluated: true, failing: 5, decided: 2, carriedOver: 1 },
-  report: { published: null, shared: null },
-  reaudit: null,
-}
-
-const STAGES: ReadonlyArray<{
-  label: string
-  stage: Stage
-  active: boolean
-  archived: boolean
-}> = [
-  {
-    label: "Running: capture is next",
-    stage: {
-      ...baseStage,
-      capture: { active: true, total: 24, complete: 9, partial: 1, failed: 0 },
-      decisions: { evaluated: false, failing: 0, decided: 0, carriedOver: 0 },
-    },
-    active: true,
-    archived: false,
-  },
-  {
-    label: "Settled with gaps: decisions are next, with one carried over",
-    stage: {
-      ...baseStage,
-      capture: { active: false, total: 24, complete: 20, partial: 3, failed: 1 },
-    },
-    active: false,
-    archived: false,
-  },
-  {
-    label: "All decided, published but not shared: report is next",
-    stage: {
-      ...baseStage,
-      decisions: { evaluated: true, failing: 5, decided: 5, carriedOver: 0 },
-      report: { published: 2, shared: null },
-    },
-    active: false,
-    archived: false,
-  },
-  {
-    label: "Shared, no re-run yet: re-audit is next",
-    stage: {
-      ...baseStage,
-      decisions: { evaluated: true, failing: 5, decided: 5, carriedOver: 0 },
-      report: { published: 2, shared: 2 },
-    },
-    active: false,
-    archived: false,
-  },
-  {
-    label: "Nothing failing, partial capture, successor still running",
-    stage: {
-      ...baseStage,
-      capture: { active: false, total: 24, complete: 21, partial: 3, failed: 0 },
-      decisions: { evaluated: true, failing: 0, decided: 0, carriedOver: 0 },
-      report: { published: 2, shared: 1 },
-      reaudit: { id: "sample", status: "running", evaluated: false, at: SAMPLE_AT },
-    },
-    active: false,
-    archived: false,
-  },
-  {
-    label: "Not evaluated, site archived",
-    stage: {
-      ...baseStage,
-      capture: { active: false, total: 24, complete: 0, partial: 0, failed: 24 },
-      decisions: { evaluated: false, failing: 0, decided: 0, carriedOver: 0 },
-    },
-    active: false,
-    archived: true,
-  },
-  {
-    label: "Everything done: re-run evaluated",
-    stage: {
-      ...baseStage,
-      decisions: { evaluated: true, failing: 5, decided: 5, carriedOver: 0 },
-      report: { published: 2, shared: 2 },
-      reaudit: { id: "sample", status: "complete", evaluated: true, at: SAMPLE_AT },
-    },
-    active: false,
-    archived: false,
-  },
-]
-
 const SAMPLE_REQUEST = {
   id: "req-14",
   method: "POST",
@@ -322,7 +231,7 @@ function Sample({ label, children }: { label: string; children: ReactNode }) {
 
 function DesignSystem() {
   const [grayscale, setGrayscale] = useState(false)
-  const [tab, setTab] = useState("overview")
+  const [tab, setTab] = useState("findings")
   const [secondary, setSecondary] = useState("runs")
   return (
     <PageShell>
@@ -531,26 +440,6 @@ function DesignSystem() {
         </Block>
 
         <Block
-          id="ds-stage"
-          title="Stage strip"
-          description="Where a full audit is in the loop. The first available unfinished step carries Next; plain text and unavailable steps are skipped. The sample props are fixed."
-        >
-          <div className="space-y-5">
-            {STAGES.map((sample) => (
-              <Sample key={sample.label} label={sample.label}>
-                <StageStrip
-                  auditId="sample"
-                  stage={sample.stage}
-                  active={sample.active}
-                  archived={sample.archived}
-                  onRerun={() => toast("Re-run opens the Re-run dialog on a real audit.")}
-                />
-              </Sample>
-            ))}
-          </div>
-        </Block>
-
-        <Block
           id="ds-tabs"
           title="Tabs"
           description="Audit tabs are links with an underline for the current one; Evidence holds Runs, Tags and Hits behind a second row. Both rows scroll inside their container with inset rings. TabsList is the segmented control for in-page views."
@@ -563,7 +452,6 @@ function DesignSystem() {
                   className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
                 >
                   {[
-                    ["overview", "Overview"],
                     ["findings", "Findings 7"],
                     ["changes", "Changes"],
                     ["evidence", "Evidence 24"],
@@ -575,7 +463,7 @@ function DesignSystem() {
                       aria-current={tab === id ? "page" : undefined}
                       data-status={tab === id ? "active" : "inactive"}
                       className={tabLink}
-                      onClick={() => setTab(id ?? "overview")}
+                      onClick={() => setTab(id ?? "findings")}
                     >
                       {label}
                     </button>

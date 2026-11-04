@@ -17,7 +17,6 @@ import { RerunDialog } from "@/components/rerun-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
-import { StageStrip } from "@/components/stage-strip"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -61,11 +60,10 @@ const SEVERITY_WORDS = [
   ["info", "Info"],
 ] as const
 
-/** "5 Critical, 1 Warning": the open findings by severity, skipping the empty ones. */
-const severitySplit = (open: { critical: number; warning: number; info: number }) =>
-  SEVERITY_WORDS.filter(([key]) => open[key] > 0)
-    .map(([key, word]) => `${open[key]} ${word}`)
-    .join(", ")
+const reportWord = ({ published, shared }: { published: number | null; shared: number | null }) => {
+  if (shared !== null) return "Shared"
+  return published === null ? "Draft" : "Published"
+}
 
 const ACTIVE = new Set(["queued", "running"])
 const REFETCH_DELAY_MS = 250
@@ -76,7 +74,7 @@ const RECONCILE_EVERY_MS = 5 * 60_000
 const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
-  const { audit, site, runs, summary, stage } = Route.useLoaderData()
+  const { audit, site, runs, summary, reportStatus } = Route.useLoaderData()
   const router = useRouter()
   const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
@@ -132,7 +130,6 @@ function AuditPage() {
       clearInterval(timer)
     }
   }, [active])
-  const overview = useLocation({ select: (location) => location.pathname.endsWith("/overview") })
   const onFindings = useLocation({ select: (location) => location.pathname.endsWith("/findings") })
   const evidenceTab = useLocation({
     select: ({ pathname }) =>
@@ -144,13 +141,6 @@ function AuditPage() {
   const reportTab = useLocation({ select: (location) => location.pathname.endsWith("/report") })
   const findings = summary.findings.critical + summary.findings.warning + summary.findings.info
   const openFindings = summary.open.critical + summary.open.warning + summary.open.info
-  let findingsText = `${openFindings} open`
-  let findingsSplit = `: ${severitySplit(summary.open)}`
-  if (openFindings === 0) findingsSplit = ""
-  if (summary.evaluatedRuns === 0) {
-    findingsText = "Not evaluated"
-    findingsSplit = ""
-  }
   let findingsTab = `${openFindings}`
   if (summary.evaluatedRuns === 0) findingsTab = "(not evaluated)"
   if (active) findingsTab = "(in progress)"
@@ -187,24 +177,24 @@ function AuditPage() {
   else if (clockKnown) progressNote = remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
-      const noun = findings === 1 ? "finding" : "findings"
+      const noun = findings === 1 ? "problem" : "problems"
       let message = `Audit complete: ${findings} ${noun}`
       if (audit.status === "failed") message = "Audit failed"
       if (audit.status === "partial" && summary.evaluatedRuns === 0)
         message = "Audit finished: not evaluated"
       else if (audit.status === "partial")
         message = `Audit finished with gaps: ${findings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
-      const onOverview = router.state.location.pathname.endsWith("/overview")
+      const onProblems = router.state.location.pathname.endsWith("/findings")
       toast(message, {
         id: `audit-finished-${audit.id}`,
         duration: FINISHED_TOAST_MS,
-        action: onOverview
+        action: onProblems
           ? undefined
           : {
-              label: "Overview",
+              label: "Problems",
               onClick: () => {
                 void router.navigate({
-                  to: "/app/audits/$auditId/overview",
+                  to: "/app/audits/$auditId/findings",
                   params: { auditId: audit.id },
                 })
               },
@@ -221,20 +211,26 @@ function AuditPage() {
     pages: audit.config.pages.length,
     recheckTitle: audit.recheckTitle,
   }
-  const title = auditHeading(named)
+  let title = auditHeading(named)
+  if (audit.kind === "full") {
+    title = count(openFindings, "problem")
+    if (openFindings === 0)
+      // never a clean headline for an audit that did not see everything
+      title =
+        audit.status === "complete" && summary.findings.couldNotCheck === 0
+          ? "No open problems"
+          : "No problems in what was checked"
+    if (summary.evaluatedRuns === 0) title = "Not evaluated"
+    if (active) title = `${done} of ${count(runs.length, "run")}`
+  }
   const facts = auditFacts(
     { ...named, startPath: startPathOf(audit.config.pages[0]), createdAt: audit.createdAt },
     timeZone,
   )
   // The Evidence tab is current on Runs, Tags and Hits, which are three routes.
   const evidenceCurrent = { "data-status": "active", "aria-current": "page" } as const
-  const tabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
-    { label: "Overview", link: { to: "/app/audits/$auditId/overview", params } },
-    {
-      label: `Findings ${findingsTab}`,
-      link: { to: "/app/audits/$auditId/findings", params },
-    },
-    { label: "Changes", link: { to: "/app/audits/$auditId/compare", params } },
+  const tabs: ReadonlyArray<{ label: string; link: LinkProps; className?: string }> = [
+    { label: `Problems ${findingsTab}`, link: { to: "/app/audits/$auditId/findings", params } },
     {
       label: `Evidence ${runs.length}`,
       link: {
@@ -244,7 +240,15 @@ function AuditPage() {
         ...(evidenceTab ? { activeProps: evidenceCurrent, inactiveProps: evidenceCurrent } : {}),
       },
     },
-    { label: "Report", link: { to: "/app/audits/$auditId/report", params } },
+    {
+      label: reportStatus === null ? "Report" : `Report ${reportWord(reportStatus)}`,
+      link: { to: "/app/audits/$auditId/report", params },
+    },
+    {
+      label: "Changes",
+      link: { to: "/app/audits/$auditId/compare", params },
+      className: "ml-auto",
+    },
   ]
   const evidenceTabs: ReadonlyArray<{ label: string; link: LinkProps }> = [
     {
@@ -277,7 +281,6 @@ function AuditPage() {
         <span className="max-sm:hidden">· See why</span>
       </Link>
     ) : null
-  // Whichever control opened the dialog (the header button or the stage strip) gets focus back.
   const rerunOpener = useRef<HTMLElement | null>(null)
   const [rerunning, setRerunning] = useState(false)
   const openRerun = (event: MouseEvent<HTMLElement>) => {
@@ -316,36 +319,33 @@ function AuditPage() {
         Share report
       </Link>
     ) : null
-  const findingsLink = (
-    <Link
-      to="/app/audits/$auditId/findings"
-      params={{ auditId: audit.id }}
-      className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-    >
-      {findingsText}
-      <span className="max-sm:sr-only">{findingsSplit}</span>
-    </Link>
-  )
+  const severityCounts =
+    active || summary.evaluatedRuns === 0
+      ? []
+      : SEVERITY_WORDS.filter(([key]) => summary.open[key] > 0)
   return (
     <PageShell className="print:[&>:not([data-report])]:hidden">
       <PageHeader
         title={title}
+        answer={audit.kind === "full"}
         meta={
           <>
-            <StatusBadge status={toBadgeStatus(audit.status)} />
-            <span>{facts}</span>
-            {active ? null : (
-              <>
-                <span className="tabular-nums">
-                  {count(runs.length, "run")}
-                  <span className="max-sm:sr-only">
-                    : {complete} captured, {partial} partial, {failed} failed
-                  </span>
-                </span>
-                {findingsLink}
-                <span className="tabular-nums">{duration(elapsed)}</span>
-              </>
+            {severityCounts.map(([severity, word]) => (
+              <Link
+                key={severity}
+                to="/app/audits/$auditId/findings"
+                params={{ auditId: audit.id }}
+                search={{ severity }}
+                className="inline-flex h-8 items-center gap-1.5 rounded-sm text-sm text-foreground tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <StatusGlyph meaning={severity} />
+                {summary.open[severity]} {word}
+              </Link>
+            ))}
+            {audit.status === "complete" ? null : (
+              <StatusBadge status={toBadgeStatus(audit.status)} />
             )}
+            <span>{facts}</span>
             {active ? (
               <TooltipProvider>
                 <Tooltip>
@@ -394,15 +394,6 @@ function AuditPage() {
           </Link>
         </p>
       ) : null}
-      {stage === null ? null : (
-        <StageStrip
-          auditId={audit.id}
-          stage={stage}
-          active={active}
-          archived={site.archived}
-          onRerun={openRerun}
-        />
-      )}
       {active ? (
         <div className="space-y-3">
           <p role="status" className="sr-only">
@@ -471,7 +462,7 @@ function AuditPage() {
           className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
         >
           {tabs.map((tab) => (
-            <Link key={tab.label} {...tab.link} className={tabLink}>
+            <Link key={tab.label} {...tab.link} className={cn(tabLink, tab.className)}>
               {tab.label}
             </Link>
           ))}
@@ -489,7 +480,7 @@ function AuditPage() {
           </nav>
         ) : null}
       </div>
-      {audit.kind === "narrow" && (overview || onFindings) && summary.otherFailing.length > 0 ? (
+      {audit.kind === "narrow" && onFindings && summary.otherFailing.length > 0 ? (
         <Collapsible>
           <CollapsibleTrigger className="group flex min-h-8 items-center gap-1.5 rounded-md text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
             Also failing in these runs ({summary.otherFailing.length})

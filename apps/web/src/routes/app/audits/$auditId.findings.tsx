@@ -2,7 +2,9 @@ import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
 import { useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lucide-react"
+import { Caveats, incompleteCauseOf, ScoreLine } from "@/components/audit-summary"
 import { ChangeGlyph } from "@/components/change-badge"
+import { Briefing, RecheckResult } from "@/components/compare/briefing"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { DataRow, rowLink } from "@/components/data-row"
 import { FindingsSkeleton } from "@/components/page-skeleton"
@@ -14,11 +16,11 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { auditTabTitle, type TitleContext } from "@/lib/page-title"
 import { AREAS, LOCAL_ANSWER_SENTENCE } from "@/lib/audit-labels"
@@ -30,6 +32,7 @@ import { CHANGE_WORDS } from "@/lib/compare-text"
 import type { ChangeState } from "@/lib/compare"
 import { getFindingChips as fetchFindingChips } from "@/server/compare"
 import { listFindings } from "@/server/findings"
+import { getOverview } from "@/server/overview"
 
 const auditRoute = getRouteApi("/app/audits/$auditId")
 
@@ -67,14 +70,18 @@ const getFindingChips = sharePending(fetchFindingChips)
 type Search = { finding?: string; triage?: Triage; severity?: string; area?: string }
 
 export const Route = createFileRoute("/app/audits/$auditId/findings")({
-  head: ({ matches }: TitleContext) => auditTabTitle("Findings", matches),
+  head: ({ matches }: TitleContext) => auditTabTitle("Problems", matches),
   validateSearch: (search: Record<string, unknown>): Search => ({
     finding: Option.getOrUndefined(decodeText(search.finding)),
     triage: Option.getOrUndefined(decodeTriage(search.triage)),
     severity: known(search.severity, SEVERITIES),
     area: known(search.area, AREA_IDS),
   }),
-  loader: ({ params }) => listFindings({ data: { auditId: params.auditId } }),
+  loader: async ({ params }) => {
+    const data = { auditId: params.auditId }
+    const [listing, overview] = await Promise.all([listFindings({ data }), getOverview({ data })])
+    return { ...listing, overview }
+  },
   notFoundComponent: () => <p className="text-sm text-muted-foreground">Audit not found.</p>,
   pendingComponent: FindingsSkeleton,
   component: FindingsScreen,
@@ -126,7 +133,7 @@ function useChips(auditId: string) {
 function FindingsScreen() {
   const { audit, runs } = auditRoute.useLoaderData()
   const chips = useChips(audit.id)
-  const { status, coverage, findings } = Route.useLoaderData()
+  const { status, coverage, findings, overview } = Route.useLoaderData()
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const below = useBelowLg()
@@ -155,7 +162,7 @@ function FindingsScreen() {
         <h2 className="font-medium">{active ? "Checks are still to come" : "Not evaluated"}</h2>
         <p className="mt-1 text-muted-foreground">
           {active
-            ? "Each run is checked as it is saved. Findings appear here as they are written."
+            ? "Each run is checked as it is saved. Problems appear here as they are written."
             : "No run of this audit has check results: it ran before Zinko checked rules, or none of its runs was saved. Nothing can be said about its tracking, and it is not clean."}
         </p>
       </div>
@@ -174,12 +181,18 @@ function FindingsScreen() {
   const tabCount = (t: Triage) => failing.filter((f) => f.triage.status === t).length
   const explicit = findings.find((f) => f.ruleId === search.finding)
   const selected = explicit ?? (below ? undefined : ordered[0])
+  const hasPane = !below && selected !== undefined
   const position =
     selected === undefined ? -1 : ordered.findIndex((f) => f.ruleId === selected.ruleId)
   const full = coverage.evaluatedRuns >= coverage.totalRuns && coverage.unfinishedRuns === 0
   const missing = coverage.totalRuns - coverage.evaluatedRuns
   const mixed = coverage.rulesVersions.length > 1
   const filtered = severities.length > 0 || areas.length > 0
+  const scope = [
+    count(audit.config.pages.length, "page"),
+    count(audit.config.scenarios.length, "choice"),
+    audit.config.viewports.join(" and "),
+  ].join(" × ")
 
   const go = (patch: Partial<Search>) =>
     void navigate({ search: (prev) => ({ ...prev, ...patch }), replace: true })
@@ -188,23 +201,61 @@ function FindingsScreen() {
     const next = AREA_IDS.filter((a) => (a === area ? on : areas.includes(a)))
     go({ area: next.length === 0 ? undefined : next.join(",") })
   }
+  const toggleSeverity = (severity: Severity, on: boolean) => {
+    const next = SEVERITIES.filter((s) => (s === severity ? on : severities.includes(s)))
+    go({ severity: next.length === 0 ? undefined : next.join(",") })
+  }
   const areaCount = (area: string) => inTab.filter((f) => f.area === area).length
   const severityCount = (severity: Severity) => inTab.filter((f) => f.severity === severity).length
 
   return (
-    <div className="space-y-4 lg:flex lg:h-[calc(100dvh-10rem)] lg:flex-col">
-      <Coverage
-        coverage={coverage}
-        full={full}
-        missing={missing}
-        active={active}
-        mixed={mixed}
-        localLimit={couldNotCheck.some(isLocalLimit)}
-      />
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+    <div className="space-y-4">
+      {active ? (
+        <Coverage
+          coverage={coverage}
+          missing={missing}
+          mixed={mixed}
+          localLimit={couldNotCheck.some(isLocalLimit)}
+        />
+      ) : null}
+      {overview.recheck === null ? null : <RecheckResult {...overview.recheck} />}
+      {!active && overview.recheck === null && overview.score.evaluated ? (
+        <ScoreLine
+          score={overview.score}
+          scoreCoverage={overview.scoreCoverage}
+          scope={scope}
+          triage={overview.triage}
+          withoutAccepted={overview.withoutAccepted}
+        />
+      ) : null}
+      {overview.briefing === null ? null : (
+        <Briefing
+          auditId={audit.id}
+          since={overview.briefing.since}
+          lines={overview.briefing.lines}
+        />
+      )}
+      {!active && overview.score.evaluated ? (
+        <Caveats
+          auditId={audit.id}
+          runs={runs}
+          runHealth={overview.runHealth}
+          cause={incompleteCauseOf(overview.runHealth, coverage.totalRuns)}
+          score={overview.score}
+          couldNotCheck={overview.couldNotCheck}
+          bannerUncertain={overview.bannerUncertain}
+          scored={overview.recheck === null}
+        />
+      ) : null}
+      <div
+        className={cn(
+          "grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]",
+          hasPane && "lg:h-[calc(100dvh-2rem)]",
+        )}
+      >
         <div
           role="region"
-          aria-label="Findings list"
+          aria-label="Problems list"
           className="min-w-0 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-2"
         >
           <Tabs
@@ -222,61 +273,55 @@ function FindingsScreen() {
                   </TabsTrigger>
                 ))}
               </TabsList>
-              <Button asChild variant="outline" size="sm">
-                <a href={`/api/audits/${audit.id}/register.csv`} download>
-                  <Download aria-hidden="true" />
-                  Export CSV
-                </a>
-              </Button>
             </div>
             <TabsContent value={triage} className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
-                <ToggleGroup
-                  type="multiple"
-                  variant="outline"
-                  size="sm"
-                  aria-label="Severity"
-                  value={severities}
-                  onValueChange={(next) => go({ severity: known(next.join(","), SEVERITIES) })}
-                >
-                  {SEVERITIES.map((s) => (
-                    <ToggleGroupItem
-                      key={s}
-                      value={s}
-                      disabled={severityCount(s) === 0 && !severities.includes(s)}
-                      className="gap-1.5"
-                    >
-                      <StatusGlyph meaning={s} />
-                      {SEVERITY_LABEL[s]}
-                      <span className="tabular-nums text-muted-foreground">{severityCount(s)}</span>
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <ListFilter aria-hidden="true" />
-                      {areas.length === 0
-                        ? "Area"
-                        : `Area: ${AREAS[areas[0] ?? ""] ?? areas[0]}${areas.length > 1 ? ` +${areas.length - 1}` : ""}`}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    {AREA_IDS.map((area) => (
-                      <DropdownMenuCheckboxItem
-                        key={area}
-                        checked={areas.includes(area)}
-                        onSelect={(event) => event.preventDefault()}
-                        onCheckedChange={(on) => toggleArea(area, on)}
-                      >
-                        {AREAS[area]}
-                        <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
-                          {areaCount(area)}
-                        </span>
-                      </DropdownMenuCheckboxItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                {inTab.length === 0 && !filtered ? null : (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="sm">
+                        <ListFilter aria-hidden="true" />
+                        Filter
+                        {filtered ? (
+                          <span className="tabular-nums text-muted-foreground">
+                            {severities.length + areas.length}
+                          </span>
+                        ) : null}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuLabel>Severity</DropdownMenuLabel>
+                      {SEVERITIES.map((severity) => (
+                        <DropdownMenuCheckboxItem
+                          key={severity}
+                          checked={severities.includes(severity)}
+                          onSelect={(event) => event.preventDefault()}
+                          onCheckedChange={(on) => toggleSeverity(severity, on)}
+                        >
+                          <StatusGlyph meaning={severity} />
+                          {SEVERITY_LABEL[severity]}
+                          <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
+                            {severityCount(severity)}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuLabel>Area</DropdownMenuLabel>
+                      {AREA_IDS.map((area) => (
+                        <DropdownMenuCheckboxItem
+                          key={area}
+                          checked={areas.includes(area)}
+                          onSelect={(event) => event.preventDefault()}
+                          onCheckedChange={(on) => toggleArea(area, on)}
+                        >
+                          {AREAS[area]}
+                          <span className="ml-auto pl-3 tabular-nums text-muted-foreground">
+                            {areaCount(area)}
+                          </span>
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
                 {filtered ? (
                   <Button
                     variant="ghost"
@@ -286,6 +331,14 @@ function FindingsScreen() {
                     Clear
                   </Button>
                 ) : null}
+                <span className="ml-auto">
+                  <Button asChild variant="outline" size="sm">
+                    <a href={`/api/audits/${audit.id}/register.csv`} download>
+                      <Download aria-hidden="true" />
+                      Export CSV
+                    </a>
+                  </Button>
+                </span>
               </div>
               {visible.length === 0 ? (
                 <EmptyList
@@ -310,7 +363,7 @@ function FindingsScreen() {
                         <span aria-hidden="true" className="tabular-nums text-muted-foreground">
                           {rows.length}
                         </span>
-                        <span className="sr-only">, {count(rows.length, "finding")}</span>
+                        <span className="sr-only">, {count(rows.length, "problem")}</span>
                       </h2>
                       <ul className="overflow-hidden rounded-lg border bg-card">
                         {rows.map((row) => (
@@ -359,42 +412,26 @@ function FindingsScreen() {
               )}
             </TabsContent>
           </Tabs>
-          {audit.kind === "full" ? (
-            <p className="pt-4 text-sm text-muted-foreground">
-              Ready to send?{" "}
-              <Link
-                to="/app/audits/$auditId/report"
-                params={{ auditId: audit.id }}
-                className="inline-flex h-8 items-center rounded-md underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              >
-                Open the report
-              </Link>
-            </p>
-          ) : null}
         </div>
         {below ? null : (
           <KeepFocus ruleId={selected?.ruleId} listed={ordered.map((f) => f.ruleId).join(",")} />
         )}
-        {below ? null : (
+        {hasPane ? (
           <aside
-            aria-label="Finding detail"
+            aria-label="Problem detail"
             tabIndex={0}
             className="overflow-hidden rounded-lg border bg-card text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background lg:min-h-0 lg:overflow-y-auto"
           >
-            {selected === undefined ? (
-              <p className="p-4 text-muted-foreground">Select a finding to see its evidence.</p>
-            ) : (
-              <FindingDetail
-                key={selected.ruleId}
-                auditId={audit.id}
-                row={selected}
-                runs={runs}
-                canVerify={audit.kind === "full"}
-                onTriaged={announceTriaged}
-              />
-            )}
+            <FindingDetail
+              key={selected.ruleId}
+              auditId={audit.id}
+              row={selected}
+              runs={runs}
+              canVerify={audit.kind === "full"}
+              onTriaged={announceTriaged}
+            />
           </aside>
-        )}
+        ) : null}
       </div>
       {below ? (
         <Sheet
@@ -416,13 +453,13 @@ function FindingsScreen() {
               if (opener.current?.isConnected) opener.current.focus()
             }}
           >
-            <SheetTitle className="sr-only">{explicit?.title ?? "Finding"}</SheetTitle>
+            <SheetTitle className="sr-only">{explicit?.title ?? "Problem"}</SheetTitle>
             <SheetDescription className="sr-only">Evidence and fix steps</SheetDescription>
             <div className="flex shrink-0 items-center gap-2 border-b px-4 py-2 pr-12">
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="Previous finding"
+                aria-label="Previous problem"
                 disabled={position < 1}
                 onClick={() => selectFinding(ordered[position - 1]?.ruleId)}
               >
@@ -434,7 +471,7 @@ function FindingsScreen() {
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="Next finding"
+                aria-label="Next problem"
                 disabled={position < 0 || position >= ordered.length - 1}
                 onClick={() => selectFinding(ordered[position + 1]?.ruleId)}
               >
@@ -484,7 +521,7 @@ function KeepFocus({ ruleId, listed }: { ruleId: string | undefined; listed: str
     if (previous === undefined || listed.split(",").includes(previous)) return
     const target =
       document.querySelector<HTMLElement>("[data-finding-heading]") ??
-      document.querySelector<HTMLElement>('aside[aria-label="Finding detail"]')
+      document.querySelector<HTMLElement>('aside[aria-label="Problem detail"]')
     target?.focus()
   }, [ruleId, listed])
   return null
@@ -492,50 +529,16 @@ function KeepFocus({ ruleId, listed }: { ruleId: string | undefined; listed: str
 
 function Coverage({
   coverage,
-  full,
   missing,
-  active,
   mixed,
   localLimit,
 }: {
   coverage: Listing["coverage"]
-  full: boolean
   missing: number
-  active: boolean
   mixed: boolean
   localLimit: boolean
 }) {
   const { runs } = coverage
-  const summary = [
-    runs.failing > 0 ? `${count(runs.failing, "run")} with a failing check` : null,
-    runs.couldNotCheck > 0
-      ? `${count(runs.couldNotCheck, "run")} with a check that could not run`
-      : null,
-    runs.passed > 0
-      ? `${count(runs.passed, "run")} passed${coverage.passedNothingApplied > 0 ? ` (${coverage.passedNothingApplied} with nothing applied)` : ""}`
-      : null,
-  ].filter((line) => line !== null)
-  if (full && !mixed)
-    return (
-      <Collapsible className="text-sm text-muted-foreground" data-testid="coverage">
-        <p className="flex flex-wrap items-center gap-x-1">
-          All {count(coverage.totalRuns, "run")} evaluated.
-          <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="group/details h-8">
-              <ChevronDown
-                aria-hidden="true"
-                className="group-data-[state=closed]/details:-rotate-90"
-              />
-              Details
-            </Button>
-          </CollapsibleTrigger>
-        </p>
-        <CollapsibleContent className="space-y-1 pb-1">
-          <p>Runs: {summary.join(" · ")}</p>
-          {localLimit ? <p>{LOCAL_ANSWER_NOTE}</p> : null}
-        </CollapsibleContent>
-      </Collapsible>
-    )
   const segments: ReadonlyArray<{ key: string; n: number; tone: string; label: string }> = [
     {
       key: "failing",
@@ -580,13 +583,7 @@ function Coverage({
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-2 pt-1">
             {missing === 0 ? null : (
-              <p>
-                {count(missing, "run")}{" "}
-                {active
-                  ? "still to be checked"
-                  : `${missing === 1 ? "has" : "have"} no check results`}
-                , so what follows may be incomplete.
-              </p>
+              <p>{count(missing, "run")} still to be checked, so what follows may be incomplete.</p>
             )}
             {missing === 0 && coverage.unfinishedRuns > 0 ? (
               <p>
@@ -677,17 +674,17 @@ function EmptyList({
   couldNotCheck: number
 }) {
   if (filtered)
-    return <p className="text-sm text-muted-foreground">No findings match these filters.</p>
+    return <p className="text-sm text-muted-foreground">No problems match these filters.</p>
   if (triage !== "open")
     return (
       <p className="text-sm text-muted-foreground">
-        {triage === "fixed" ? "No finding is marked fixed." : "No risk has been accepted."}
+        {triage === "fixed" ? "Nothing is marked fixed." : "No risk has been accepted."}
       </p>
     )
   if (!noFailing)
     return (
       <p className="text-sm" data-testid="all-triaged">
-        Nothing is open. {count(triagedElsewhere, "finding")}{" "}
+        Nothing is open. {count(triagedElsewhere, "problem")}{" "}
         {triagedElsewhere === 1 ? "is" : "are"} accepted or fixed.
         {couldNotCheck > 0 || !full
           ? " This audit is not confirmed clean: some checks could not run or some runs were not evaluated."
@@ -697,7 +694,7 @@ function EmptyList({
   if (!finished)
     return (
       <p className="text-sm" data-testid="collecting">
-        Checks are being collected. Findings are written when the audit finishes, so none are known
+        Checks are being collected. Problems are written when the audit finishes, so none are known
         yet.
       </p>
     )
@@ -711,14 +708,14 @@ function EmptyList({
   if (!full)
     return (
       <p className="text-sm" data-testid="partial-clean">
-        No findings were recorded for the {count(evaluated, "evaluated run")}, but{" "}
+        No problems were recorded for the {count(evaluated, "evaluated run")}, but{" "}
         {count(missing, "run")} could not be evaluated, so this audit is not confirmed clean.
       </p>
     )
   return (
     <p className="text-sm" data-testid="no-findings">
-      No findings. All {count(evaluated, "run")} were evaluated, and every check passed or did not
-      apply.
+      No problems. {evaluated === 1 ? "The run was" : `All ${evaluated} runs were`} evaluated, and
+      every check passed or did not apply.
     </p>
   )
 }
@@ -733,11 +730,9 @@ function FindingItem({
   chip: Chip | undefined
 }) {
   const failing = row.kind === "fail"
-  const where = `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`
-  let meta = row.reason ?? where
-  if (failing) {
-    meta = `${where} · ${count(row.scenarios, "choice")}`
-  }
+  const area = AREAS[row.area] ?? row.area
+  let meta = row.reason ?? area
+  if (failing) meta = row.owner === null ? area : OWNER_LABELS[row.owner]
   return (
     <DataRow selected={selected} data-testid="finding" className="items-start">
       <StatusGlyph meaning={failing ? row.severity : "could-not-check"} className="mt-1" />
@@ -754,16 +749,12 @@ function FindingItem({
           {failing ? row.title : row.checkTitle}
         </Link>
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-          <span>{meta}</span>
-          {failing && row.owner !== null ? (
-            <span
-              className="inline-flex h-5 shrink-0 items-center rounded-sm border bg-muted/60 px-1.5 text-2xs font-medium text-foreground"
-              title="Usually fixed by"
-            >
+          <span>
+            {failing && row.owner !== null ? (
               <span className="sr-only">Usually fixed by </span>
-              {OWNER_LABELS[row.owner]}
-            </span>
-          ) : null}
+            ) : null}
+            {meta}
+          </span>
           {chip === undefined ? null : (
             <span className="flex shrink-0 items-center gap-1 text-foreground">
               <ChangeGlyph state={chip.state} className="size-3" />

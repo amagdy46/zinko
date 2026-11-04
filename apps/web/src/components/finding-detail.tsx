@@ -121,7 +121,7 @@ function RecheckLine({ recheck }: { recheck: FindingDetailData["recheck"] }) {
       <span className="font-medium">Re-check, {dayOf(recheck.createdAt)}:</span>
       {verdict.text}
       <Link
-        to="/app/audits/$auditId/overview"
+        to="/app/audits/$auditId/findings"
         params={{ auditId: recheck.auditId }}
         className="inline-flex h-8 items-center rounded-sm underline underline-offset-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >

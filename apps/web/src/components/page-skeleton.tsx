@@ -77,34 +77,12 @@ export function SitesSkeleton() {
   )
 }
 
-/** The audit Overview: the score card with its three tiles, then the cards below it. */
-export function OverviewSkeleton() {
-  return (
-    <div role="status" aria-label="Loading overview" className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-6 rounded-xl border border-border-subtle bg-card p-5 shadow-xs">
-        <div className="space-y-3">
-          <Skeleton className="h-12 w-28" />
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="h-8 w-36" />
-        </div>
-        <div className="grid grid-cols-3 gap-2 md:w-[36rem]">
-          {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} className="h-[72px]" />
-          ))}
-        </div>
-      </div>
-      <Skeleton className="h-64 w-full rounded-xl" />
-      <Skeleton className="h-40 w-full rounded-xl" />
-    </div>
-  )
-}
-
 /** The Findings split: a list of rows on the left, the detail pane on the right. */
 export function FindingsSkeleton() {
   return (
     <div
       role="status"
-      aria-label="Loading findings"
+      aria-label="Loading problems"
       className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]"
     >
       <div className="space-y-3">

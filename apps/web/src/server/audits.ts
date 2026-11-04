@@ -3,7 +3,7 @@ import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, run, site, checkResult, reportSnapshot } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, desc, eq, countDistinct, max, sql } from "drizzle-orm"
+import { and, asc, eq, countDistinct, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost, isOnSite, originHost } from "@/lib/site-url"
@@ -317,90 +317,16 @@ export const setBaseline = createServerFn({ method: "POST" })
  * An audit of the session's organization with its runs in order. Screenshot URLs are signed for
  * 5 minutes. Another organization's audit is a 404, like a missing one.
  */
-/**
- * Where a full audit stands in the loop (the audit page's stage strip), computed on read and scoped
- * by the organization. Decisions count only the audit's current failing findings; a triage row of
- * any other rule is ignored. Published versions are the surviving snapshots, never the sequence.
- */
-const stageOf = (
-  orgId: string,
-  a: typeof audit.$inferSelect,
-  siteId: string,
-  runs: ReadonlyArray<{ status: string }>,
-  findingRows: Effect.Success<ReturnType<typeof findingRowsOf>>,
-  summary: { evaluatedRuns: number },
-) =>
+/** What the Report tab says of a full audit. Published versions are the surviving snapshots, never the sequence. */
+const reportStatusOf = (orgId: string, auditId: string) =>
   Effect.gen(function* () {
     const { db } = yield* Database
-    const active = a.status === "queued" || a.status === "running"
-    const countOf = (status: string) => runs.filter((r) => r.status === status).length
-    const complete = countOf("complete")
-    const partial = countOf("partial")
-    const failed = countOf("failed")
-    const failing = findingRows.filter((row) => row.finding.kind === "fail")
-    const decidedRows = failing.filter(
-      (row) => row.triage?.status === "accepted_risk" || row.triage?.status === "fixed",
-    )
     const [published] = yield* db
       .select({ version: max(reportSnapshot.version) })
       .from(reportSnapshot)
-      .where(and(eq(reportSnapshot.auditId, a.id), eq(reportSnapshot.orgId, orgId)))
-    const live = (yield* liveShares(orgId, [a.id])).get(a.id)
-    const [successor] = yield* db
-      .select({
-        id: audit.id,
-        status: audit.status,
-        createdAt: audit.createdAt,
-        finishedAt: audit.finishedAt,
-      })
-      .from(audit)
-      .where(
-        and(
-          eq(audit.orgId, orgId),
-          eq(audit.siteId, siteId),
-          eq(audit.kind, "full"),
-          eq(audit.baselineAuditId, a.id),
-        ),
-      )
-      .orderBy(desc(audit.createdAt), desc(audit.id))
-      .limit(1)
-    let evaluated = false
-    if (successor !== undefined) {
-      const [results] = yield* db
-        .select({ total: countDistinct(checkResult.runId) })
-        .from(checkResult)
-        .innerJoin(run, eq(run.id, checkResult.runId))
-        .where(
-          and(
-            eq(run.auditId, successor.id),
-            eq(run.role, "target"),
-            eq(run.orgId, orgId),
-            eq(checkResult.orgId, orgId),
-          ),
-        )
-      evaluated = (results?.total ?? 0) > 0
-    }
-    return {
-      capture: { active, total: runs.length, complete, partial, failed },
-      decisions: {
-        evaluated: !active && summary.evaluatedRuns > 0,
-        failing: failing.length,
-        decided: decidedRows.length,
-        carriedOver: decidedRows.filter(
-          (row) => (row.triage?.inheritedFromAuditId ?? null) !== null,
-        ).length,
-      },
-      report: { published: published?.version ?? null, shared: live?.[0] ?? null },
-      reaudit:
-        successor === undefined
-          ? null
-          : {
-              id: successor.id,
-              status: successor.status,
-              evaluated,
-              at: successor.finishedAt ?? successor.createdAt,
-            },
-    }
+      .where(and(eq(reportSnapshot.auditId, auditId), eq(reportSnapshot.orgId, orgId)))
+    const live = (yield* liveShares(orgId, [auditId])).get(auditId)
+    return { published: published?.version ?? null, shared: live?.[0] ?? null }
   })
 
 export const getAudit = createServerFn({ method: "GET" })
@@ -551,10 +477,7 @@ export const getAudit = createServerFn({ method: "GET" })
           otherFailing,
         }
         const { audit: a } = found
-        const stage =
-          a.kind === "full"
-            ? yield* stageOf(orgId, found.audit, found.site.id, runs, findingRows, summary)
-            : null
+        const reportStatus = a.kind === "full" ? yield* reportStatusOf(orgId, found.audit.id) : null
         return {
           audit: {
             id: a.id,
@@ -577,7 +500,7 @@ export const getAudit = createServerFn({ method: "GET" })
             archived: found.site.archivedAt !== null,
           },
           summary,
-          stage,
+          reportStatus,
           findings: findings.filter((f) => f.kind === "fail"),
           runs,
         }
