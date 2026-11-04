@@ -47,7 +47,7 @@ export const sampleReport = {
       "What vendors do with the data after they receive it is not tested.",
     ],
     disclaimer:
-      "This report describes the technical behaviour of the audited pages in the scenarios listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business.",
+      "This report describes the technical behaviour of the audited pages in the choices listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business.",
   },
   method: {
     runs: {
@@ -519,7 +519,7 @@ export const sampleReport = {
       title: "Ad pixel fired without consent",
       ruleId: "consent.pixel-without-consent",
       severity: "critical",
-      scopeLine: "failed on 4 of 24 runs where it could be checked, on 1 page, in all 4 scenarios",
+      scopeLine: "failed on 4 of 24 runs where it could be checked, on 1 page, in all 4 choices",
     },
     counts: {
       info: 0,
@@ -951,7 +951,7 @@ export const sampleReport = {
         means:
           "Visits, purchases or revenue may be missing or inaccurate in your reports, so the numbers cannot be taken at face value.",
         happened:
-          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 scenarios.",
+          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 choices.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1016,7 +1016,7 @@ export const sampleReport = {
         means:
           "Some visits or sales may be counted twice, so the numbers look better than reality.",
         happened:
-          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 scenarios.",
+          "This showed up in 4 of the 8 test runs where it could be checked, on 1 page, in all 4 choices.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1116,7 +1116,7 @@ export const sampleReport = {
         means:
           "Visitors' cookie choices may not be respected, which can put the site at odds with its own consent promises and with privacy rules.",
         happened:
-          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 choices.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1181,7 +1181,7 @@ export const sampleReport = {
         means:
           "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
         happened:
-          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 choices.",
       },
       failingRuns: 4,
       ownerSource: "rule",
@@ -1260,7 +1260,7 @@ export const sampleReport = {
         means:
           "Tracking may be sending wrong or unwanted data, or failing without anyone noticing, so the numbers are harder to trust.",
         happened:
-          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 scenarios.",
+          "This showed up in 4 of the 24 test runs where it could be checked, on 1 page, in all 4 choices.",
       },
       failingRuns: 4,
       ownerSource: "rule",

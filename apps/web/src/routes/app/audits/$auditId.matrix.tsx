@@ -87,7 +87,7 @@ function TagMatrixScreen() {
       return (
         <EmptyState
           title="No runs for this selection"
-          description="This audit has no runs for the chosen viewport, pages and scenario."
+          description="This audit has no runs for the chosen viewport, pages and choice."
         />
       )
     if (neverCaptured)

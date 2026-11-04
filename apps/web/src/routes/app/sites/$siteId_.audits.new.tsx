@@ -188,7 +188,7 @@ function NewAuditForm() {
     crossHostRuns: crossHost && startError === undefined ? site.measuredHosts.length : 0,
   })
   const reloadTarget = keyPages[Math.min(keyPages.length, JOURNEY_STEPS) - 1]
-  const scenarioReason = scenarios.length === 0 ? "Choose at least one scenario." : undefined
+  const scenarioReason = scenarios.length === 0 ? "Pick at least one choice." : undefined
   const disabledReason =
     scenarioReason ?? (viewports.length === 0 ? "Choose at least one viewport." : undefined)
   const pageLimitError =
@@ -330,7 +330,7 @@ function NewAuditForm() {
         ]}
         description={
           <>
-            Every page is opened per scenario and viewport. Pages must be on{" "}
+            Every page is opened per choice and viewport. Pages must be on{" "}
             <code>{originHost(site.origin)}</code>.
           </>
         }
@@ -362,7 +362,7 @@ function NewAuditForm() {
         )}
         {noComparison && (
           <p>
-            No earlier audit checked these pages, scenarios and viewports, so this one will not be
+            No earlier audit checked these pages, choices and viewports, so this one will not be
             compared.
           </p>
         )}
@@ -443,7 +443,7 @@ function NewAuditForm() {
             </FormSection>
             <FormSection
               number={2}
-              title="Scenarios and viewports"
+              title="Choices and viewports"
               help="Which consent choices to try, on which screen sizes."
             >
               <fieldset
@@ -451,7 +451,7 @@ function NewAuditForm() {
                 aria-describedby={errors.scenarios === undefined ? undefined : "scenarios-error"}
               >
                 <legend className="flex items-center gap-1 text-sm font-medium">
-                  Consent scenarios
+                  Consent choices
                   <ScenarioHelp />
                 </legend>
                 <div className="flex flex-wrap items-center gap-2">
@@ -468,7 +468,7 @@ function NewAuditForm() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    title="Just the reject scenario: the quickest check that refusing stops the tags"
+                    title="Just the reject choice: the quickest check that refusing stops the tags"
                     onClick={() => setScenarios(["reject"])}
                   >
                     Reject only
@@ -563,7 +563,7 @@ function NewAuditForm() {
                 )}
                 <Toggle
                   label="Also walk through the key pages as a journey"
-                  help={`A journey opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session, like a visitor would, so cookies carry over. Adds one run per scenario and viewport; needs at least one key page.`}
+                  help={`A journey opens the start URL, then the first ${JOURNEY_STEPS} key pages in order, in one browser session, like a visitor would, so cookies carry over. Adds one run per choice and viewport; needs at least one key page.`}
                   checked={journey}
                   onChange={setJourney}
                 />
@@ -667,7 +667,7 @@ function NewAuditForm() {
             )}
             {breakdown.runs > 100 && (
               <p className="text-sm text-sev-warning">
-                Over 100 runs. Fewer pages or scenarios will shorten this audit.
+                Over 100 runs. Fewer pages or choices will shorten this audit.
               </p>
             )}
             <Button
@@ -704,14 +704,12 @@ function ScenarioHelp() {
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <Button type="button" variant="ghost" size="icon-sm" aria-label="What the scenarios mean">
+        <Button type="button" variant="ghost" size="icon-sm" aria-label="What the choices mean">
           <CircleHelp />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-80 space-y-2 text-xs">
-        <p>
-          Each scenario loads the page with a different consent choice, then records what fires.
-        </p>
+        <p>Zinko loads the page once per consent choice, then records what fires.</p>
         <dl className="space-y-2">
           {SCENARIOS.map((scenario) => (
             <div key={scenario.value}>

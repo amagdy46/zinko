@@ -197,7 +197,7 @@ function Detail({
             <TableHeader>
               <TableRow>
                 <TableHead>Page</TableHead>
-                <TableHead>Scenario</TableHead>
+                <TableHead>Choice</TableHead>
                 <TableHead>Viewport</TableHead>
                 <TableHead>Before</TableHead>
                 <TableHead>Now</TableHead>

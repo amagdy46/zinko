@@ -736,7 +736,7 @@ function FindingItem({
   const where = `${AREAS[row.area] ?? row.area} · ${count(row.pages, "page")}`
   let meta = row.reason ?? where
   if (failing) {
-    meta = `${where} · ${count(row.scenarios, "scenario")}`
+    meta = `${where} · ${count(row.scenarios, "choice")}`
   }
   return (
     <DataRow selected={selected} data-testid="finding" className="items-start">

@@ -122,7 +122,7 @@ export function RunSheet({
             <RunImage run={run} />
             <dl className="grid grid-cols-2 gap-3 text-sm">
               {[
-                ["Scenario", scenarioLabel(run.scenario)],
+                ["Choice", scenarioLabel(run.scenario)],
                 ["Viewport", run.viewport],
                 [
                   "Consent",

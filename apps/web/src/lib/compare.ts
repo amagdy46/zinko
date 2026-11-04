@@ -769,7 +769,7 @@ export const scoreDeltaOf = (
     if (before.coverage !== "full" || now.coverage !== "full")
       return "One of the audits was not fully evaluated."
     if (comparability.onlyBefore > 0 || comparability.onlyNow > 0)
-      return "The audits did not check the same pages, scenarios and viewports."
+      return "The audits did not check the same pages, choices and viewports."
     if (comparability.rulesChanged.ruleIds.length > 0)
       return "Some checks changed between the two rules versions."
     if (comparability.bannerDiffersCells > 0 || comparability.consentDiffersCells > 0)

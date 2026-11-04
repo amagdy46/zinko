@@ -75,7 +75,7 @@ const NOT_COMPARABLE_WORDS: Record<NotComparable, string> = {
     "This check changed between the two rules versions, so the two results are not alike.",
   rule_added: "This check was not run in the earlier audit.",
   rule_removed: "This check was not run in this audit.",
-  no_shared_scope: "No page, scenario and viewport was checked in both audits.",
+  no_shared_scope: "No page, choice and viewport was checked in both audits.",
   partly_rechecked: "",
 }
 
@@ -151,7 +151,7 @@ export const triageLine = (f: FindingChange, shortDate: (iso: string) => string)
  */
 export const refusalOf = (c: Comparison) =>
   c.comparability.commonCells === 0
-    ? "These audits did not check the same pages, scenarios and viewports, so there is nothing to compare."
+    ? "These audits did not check the same pages, choices and viewports, so there is nothing to compare."
     : null
 
 /** What limits the comparison, one entry each, in the order a reader should weigh them. */
@@ -169,7 +169,7 @@ export const noticesOf = (c: Comparison) => {
   const total = k.commonCells + k.onlyBefore + k.onlyNow
   if (k.onlyBefore > 0 || k.onlyNow > 0)
     notices.push(
-      `The audits share ${k.commonCells} of ${total} runs (page, scenario and viewport). ${k.onlyBefore} were only in the earlier audit and ${k.onlyNow} only in this one.`,
+      `The audits share ${k.commonCells} of ${total} runs (page, choice and viewport). ${k.onlyBefore} were only in the earlier audit and ${k.onlyNow} only in this one.`,
     )
   if (k.bannerDiffersCells > 0)
     notices.push(

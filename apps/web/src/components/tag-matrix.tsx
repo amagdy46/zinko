@@ -123,11 +123,11 @@ export function MatrixControls({
             if (by === "scenario" || by === "page") onChange({ by })
           }}
         >
-          <ToggleGroupItem value="scenario">By scenario</ToggleGroupItem>
+          <ToggleGroupItem value="scenario">By choice</ToggleGroupItem>
           <ToggleGroupItem value="page">By page</ToggleGroupItem>
         </ToggleGroup>
       </ControlGroup>
-      <ControlGroup label={matrix.by === "scenario" ? "Pages" : "Scenario"}>
+      <ControlGroup label={matrix.by === "scenario" ? "Pages" : "Choice"}>
         {matrix.by === "scenario" ? (
           <Select value={matrix.page} onValueChange={(page) => onChange({ page })}>
             <SelectTrigger size="sm" aria-label="Pages" className="max-w-56">
@@ -147,7 +147,7 @@ export function MatrixControls({
           </Select>
         ) : (
           <Select value={matrix.scenario} onValueChange={(scenario) => onChange({ scenario })}>
-            <SelectTrigger size="sm" aria-label="Scenario">
+            <SelectTrigger size="sm" aria-label="Choice">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -210,7 +210,7 @@ export function TagMatrixTable({
   return (
     <Table className="border-separate border-spacing-0">
       <caption className="sr-only">
-        {matrix.by === "scenario" ? "Tags by scenario" : "Tags by page"}
+        {matrix.by === "scenario" ? "Tags by choice" : "Tags by page"}
       </caption>
       <TableHeader>
         <TableRow className="hover:bg-transparent">

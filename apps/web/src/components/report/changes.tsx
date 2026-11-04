@@ -11,7 +11,7 @@ type Tag = Changes["tags"][number]
 const NOTICE_WORDS: Record<Changes["notices"][number], string> = {
   rules_changed:
     "Some checks changed between the two rules versions and are not compared; they are not listed above.",
-  scope_differs: "The two audits did not check exactly the same pages, scenarios and viewports.",
+  scope_differs: "The two audits did not check exactly the same pages, choices and viewports.",
   banner_differs: "The cookie banner was found in one audit and not in the other on some pages.",
   consent_differs: "A consent choice was applied in one audit and not in the other on some pages.",
   score_not_comparable: "The scores are shown, but not compared: the audits are not alike enough.",

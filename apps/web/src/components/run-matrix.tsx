@@ -124,18 +124,11 @@ export function RunMatrix({
       <Table>
         <TableHeader>
           <TableRow>
-            {[
-              "Page",
-              "Scenario",
-              "Viewport",
-              "Status",
-              "Failing",
-              "Hits",
-              "Duration",
-              "Reason",
-            ].map((label) => (
-              <TableHead key={label}>{label}</TableHead>
-            ))}
+            {["Page", "Choice", "Viewport", "Status", "Failing", "Hits", "Duration", "Reason"].map(
+              (label) => (
+                <TableHead key={label}>{label}</TableHead>
+              ),
+            )}
           </TableRow>
         </TableHeader>
         <TableBody>

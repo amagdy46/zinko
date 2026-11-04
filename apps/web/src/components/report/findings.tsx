@@ -347,7 +347,7 @@ export function Findings({ model, controls }: { model: ReportModel; controls?: R
       {shown.length === 0 ? (
         <p className="flex items-start gap-2" data-testid="no-findings">
           <StatusGlyph meaning="pass" className="mt-0.5" />
-          No failing checks in the pages and scenarios this audit ran.
+          No failing checks in the pages and choices this audit ran.
         </p>
       ) : (
         shown.map((finding) => {

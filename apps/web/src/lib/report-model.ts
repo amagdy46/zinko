@@ -524,7 +524,7 @@ export function headlinesOf(
   const open = failing.filter((f) => f.triage.status === "open").toSorted(byFindingOrder)
   const lines: string[] = []
   if (failing.length === 0 && coverage.leftOut === 0) {
-    let none = "No failing checks in the pages and scenarios this audit ran."
+    let none = "No failing checks in the pages and choices this audit ran."
     if (coverage.tooLittle) none = "Too little was captured to say whether anything fails."
     else if (coverage.partial) none = "No failing checks in the runs that were captured."
     lines.push(none)

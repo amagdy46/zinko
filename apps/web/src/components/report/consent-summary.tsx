@@ -51,12 +51,12 @@ function Footnotes({ rows }: { rows: ReportModel["consent"]["rows"] }) {
       ? `${PARTIAL_MARK} Counts include partial captures, where some data is missing.`
       : null,
     cells.some((c) => c.runs.none > 0 && c.runs.complete + c.runs.partial > 0)
-      ? `${MISSING_MARK} Some runs in this scenario were not captured.`
+      ? `${MISSING_MARK} Some runs in this choice were not captured.`
       : null,
     cells.some((c) => c.runsWithHits > 0 && CHOICE_SCENARIOS.has(c.scenario))
       ? "Before and after counts are hits on runs where the choice was seen to take effect."
       : null,
-    "Fired · 2 of 3 means the vendor sent a request on 2 of the 3 runs of that scenario; None seen counts the runs captured.",
+    "Fired · 2 of 3 means the vendor sent a request on 2 of the 3 runs of that choice; None seen counts the runs captured.",
     "A hit is a request the browser sent, not a verdict: whether it is a problem is decided by the findings below.",
   ].filter((note) => note !== null)
   return (
@@ -74,10 +74,10 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
   return (
     <section
       id="consent"
-      aria-label="Consent scenarios"
+      aria-label="Consent choices"
       className="space-y-4 px-4 sm:px-8 py-8 text-sm leading-6 print:p-0 print:pt-8 print:leading-snug"
     >
-      <h2 className="text-xl font-semibold">Consent scenarios</h2>
+      <h2 className="text-xl font-semibold">Consent choices</h2>
       {consent.rows.length === 0 ? (
         <p className="flex items-start gap-2" data-testid="consent-empty">
           <StatusGlyph meaning="none" className="mt-0.5" />
@@ -86,12 +86,12 @@ export function ConsentSummary({ model }: { model: ReportModel }) {
       ) : (
         <div
           role="region"
-          aria-label="Vendor by consent scenario, scrolls sideways on a narrow screen"
+          aria-label="Vendor by consent choice, scrolls sideways on a narrow screen"
           tabIndex={0}
           className="scroll-edges overflow-x-auto outline-none [--background:var(--card)] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset print:overflow-visible"
         >
           <table className="w-full min-w-[32rem] print:min-w-0 table-fixed border-collapse text-left align-top">
-            <caption className="sr-only">Vendor by consent scenario</caption>
+            <caption className="sr-only">Vendor by consent choice</caption>
             <thead>
               <tr className="border-b">
                 <th scope="col" className="w-28 py-2 pr-3 font-medium">

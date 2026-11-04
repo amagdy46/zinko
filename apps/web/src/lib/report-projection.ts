@@ -239,7 +239,7 @@ export function whereOf(
   const pageCount = new Set(pages.map((page) => page.replace(/^Journey from /, ""))).size
   const where =
     configuredScenarios > 1 && scenarios.length === configuredScenarios
-      ? `all ${configuredScenarios} scenarios`
+      ? `all ${configuredScenarios} choices`
       : scenarios.join(", ")
   return `on ${plural(pageCount, "page")}${where === "" ? "" : `, in ${where}`}`
 }
@@ -279,7 +279,7 @@ export const clientVoiceOf = (
 }
 
 export const NOT_LEGAL_ADVICE =
-  "This report describes the technical behaviour of the audited pages in the scenarios listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business."
+  "This report describes the technical behaviour of the audited pages in the choices listed. It is not legal advice and not a statement of legal compliance: ask a qualified adviser what the findings mean under the rules that apply to the business."
 
 const DECODED_VENDORS = Object.values(VENDOR_LABELS).join(", ")
 
@@ -304,7 +304,7 @@ export function notTestedOf(facts: {
     (s) => s.label,
   )
   if (missingScenarios.length > 0)
-    lines.push(`Consent scenarios not run: ${missingScenarios.join(", ")}.`)
+    lines.push(`Consent choices not run: ${missingScenarios.join(", ")}.`)
   const missingViewports = VIEWPORT_LABELS.filter((v) => !facts.viewports.includes(v.toLowerCase()))
   if (missingViewports.length > 0)
     lines.push(`Screen sizes not tested: ${missingViewports.join(", ")}.`)
@@ -316,7 +316,7 @@ export function notTestedOf(facts: {
   const unfinished = facts.runs.partial + facts.runs.failed
   if (unfinished > 0)
     lines.push(
-      `${unfinished} of ${plural(facts.runs.complete + unfinished, "run")} did not finish, so those pages and scenarios are only partly covered. The appendix lists them.`,
+      `${unfinished} of ${plural(facts.runs.complete + unfinished, "run")} did not finish, so those pages and choices are only partly covered. The appendix lists them.`,
     )
   if (facts.banner.notOperated > 0)
     lines.push(

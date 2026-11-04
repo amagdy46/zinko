@@ -25,7 +25,7 @@ export function Appendix({ model }: { model: ReportModel }) {
   const saysDelivery = model.limits?.notTested.includes(DELIVERY_NOT_CHECKED) === true
   const scope = [
     count(cover.scope.pages.length, "page"),
-    count(cover.scope.scenarios.length, "scenario"),
+    count(cover.scope.scenarios.length, "choice"),
     cover.scope.viewports.join(" and "),
   ].join(" × ")
   return (

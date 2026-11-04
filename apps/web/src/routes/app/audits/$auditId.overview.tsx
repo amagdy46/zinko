@@ -87,7 +87,7 @@ function OverviewScreen() {
     incompleteCause = `The start page${runHealth.startPage === null ? "" : ` (${runHealth.startPage})`} could not be loaded${runHealth.startReason === null ? "" : `: ${runHealth.startReason}`}. `
   const scope = [
     count(audit.config.pages.length, "page"),
-    count(audit.config.scenarios.length, "scenario"),
+    count(audit.config.scenarios.length, "choice"),
     audit.config.viewports.join(" and "),
   ].join(" × ")
   if (recheck !== null)
@@ -443,7 +443,7 @@ function WorstFinding({
       </div>
       <p className="max-w-prose text-sm text-muted-foreground">
         Failed on {worst.failingRuns} of {count(worst.knownRuns, "run")} where it could be checked,
-        across {count(worst.pages, "page")} and {count(worst.scenarios, "scenario")}.
+        across {count(worst.pages, "page")} and {count(worst.scenarios, "choice")}.
         {worst.bannerUncertainRuns > 0
           ? ` ${count(worst.bannerUncertainRuns, "failing run")} ${rests(worst.bannerUncertainRuns)} on an undetected banner.`
           : ""}

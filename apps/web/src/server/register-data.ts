@@ -38,7 +38,7 @@ export const REGISTER_COLUMNS = [
   "Runs checked",
   "Pages",
   "Page labels",
-  "Scenarios",
+  "Choices",
   "Triage",
   "Accepted-risk reason",
   "Note",

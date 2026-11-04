@@ -505,8 +505,8 @@ function HitsExplorer() {
       ),
     },
     {
-      label: "Scenario",
-      plural: "scenarios",
+      label: "Choice",
+      plural: "choices",
       selected: scenario,
       onChange: choose("scenario"),
       options: withSelected(

@@ -677,7 +677,7 @@ function DesignSystem() {
                       Ad tags fire before consent
                     </Link>
                     <span className="block text-sm text-muted-foreground">
-                      Consent · 3 pages · 4 scenarios
+                      Consent · 3 pages · 4 choices
                     </span>
                   </div>
                   <RowChevron />
@@ -689,7 +689,7 @@ function DesignSystem() {
                       Analytics sends the full page address
                     </Link>
                     <span className="block text-sm text-muted-foreground">
-                      Privacy · 1 page · 2 scenarios
+                      Privacy · 1 page · 2 choices
                     </span>
                   </div>
                   <RowChevron />
@@ -719,7 +719,7 @@ function DesignSystem() {
               icon={Globe}
               title="Add your first site"
               description="A site is the address Zinko audits."
-              steps={["Add the site", "Choose the scenarios", "Read the findings"]}
+              steps={["Add the site", "Pick the consent choices", "Read the findings"]}
               action={<Button>Add site</Button>}
             />
             <EmptyState

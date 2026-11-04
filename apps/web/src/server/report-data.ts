@@ -108,7 +108,7 @@ const scopeLineOf = (
   configured: number,
 ) => {
   let where = `in ${scenarios.join(", ")}`
-  if (configured > 1 && scenarios.length === configured) where = `in all ${configured} scenarios`
+  if (configured > 1 && scenarios.length === configured) where = `in all ${configured} choices`
   return `failed on ${finding.failingRuns} of ${plural(finding.knownRuns, "run")} where it could be checked, on ${plural(pages, "page")}, ${where}`
 }
 const VIEWPORT_WORDS = { desktop: "Desktop", mobile: "Mobile" } as const

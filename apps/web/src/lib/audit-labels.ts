@@ -56,14 +56,14 @@ export const runBreakdown = ({
     duration: estimateDuration(workUnits),
     lines: [
       {
-        label: `${count(pages, "page")} × ${count(scenarios, "scenario")} × ${count(viewports, "viewport")}`,
+        label: `${count(pages, "page")} × ${count(scenarios, "choice")} × ${count(viewports, "viewport")}`,
         runs: pageRuns,
         workUnits: pageRuns,
       },
       ...(journeySteps > 0
         ? [
             {
-              label: `Journey × ${count(scenarios, "scenario")} × ${count(viewports, "viewport")}`,
+              label: `Journey × ${count(scenarios, "choice")} × ${count(viewports, "viewport")}`,
               runs: journeyRuns,
               workUnits: journeyWork,
             },

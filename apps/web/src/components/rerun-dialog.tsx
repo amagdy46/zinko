@@ -104,7 +104,7 @@ function RerunBody({ auditId, onClose }: { auditId: string; onClose: () => void 
     })
     const carried = preview.carryOver === null ? "" : carryOverText(preview.carryOver)
     let comparison: ReactNode =
-      "There is no earlier evaluated audit with the same pages, scenarios and viewports to compare it with."
+      "There is no earlier evaluated audit with the same pages, choices and viewports to compare it with."
     if (baseline !== null)
       comparison =
         baseline.id === auditId ? (

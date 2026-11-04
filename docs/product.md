@@ -20,16 +20,16 @@ The secondary user is whoever reads the white-label report: the agency's client,
 2. **Sites, and clients if you want them:** add a site by its address. An agency turns on "Group sites by client" to add clients, give each site a client and move a site between clients; an owner or admin changes that switch, and nobody else sees it.
 3. **Run an audit:**
    - Enter the start URL and up to 19 key page URLs (20 pages in all). Funnel steps are entered manually as a list of URLs for now.
-   - Choose consent scenarios from no interaction, accept all, reject all and Global Privacy Control.
+   - Choose consent choices from no interaction, accept all, reject all and Global Privacy Control.
    - Choose desktop or mobile.
    - Turn landing click IDs (`gclid`, `fbclid`, `ttclid`, `utm_*`) on or off.
-4. **Live progress:** see each page and scenario as it runs, with a screenshot thumbnail.
+4. **Live progress:** see each page and choice as it runs, with a screenshot thumbnail.
 5. **Findings:** findings are grouped by severity and category. Each one shows:
    - the evidence: the decoded hit, the raw request and a screenshot
    - why it matters
    - fix steps written by the LLM if a key is configured, or a static template otherwise
    - a triage status: open, accepted risk, or fixed.
-6. **Tag matrix:** every vendor and destination ID, showing which events fired on which page in which consent scenario. This is the "what fires where" view consultants currently build in spreadsheets.
+6. **Tag matrix:** every vendor and destination ID, showing which events fired on which page in which consent choice. This is the "what fires where" view consultants currently build in spreadsheets.
 7. **Hit explorer:** a per-run timeline of decoded hits and `dataLayer` pushes. Think of it as Omnibug in the browser, filterable.
 8. **Report:** a white-label report with the organization's logo, accent color and the site, plus the client's name when the organization groups sites by client. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
 9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (confirmed only when the re-run passes every run that failed), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
@@ -62,5 +62,5 @@ Vendors in v0.1: GA4, Meta Pixel, Google Ads, TikTok. LinkedIn comes in v0.2.
 ## Success for v0.1
 
 - You deliver 3 paid client audits using only Zinko output.
-- An audit of 10 pages × 3 consent scenarios finishes in under 5 minutes.
+- An audit of 10 pages × 3 consent choices finishes in under 5 minutes.
 - Every finding links to evidence, and none relies only on the LLM's judgment.

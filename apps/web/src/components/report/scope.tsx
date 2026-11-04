@@ -36,7 +36,7 @@ export function Scope({ model }: { model: ReportModel }) {
         </div>
       </div>
       <div className="space-y-1">
-        <h3 className="font-semibold">Consent scenarios</h3>
+        <h3 className="font-semibold">Consent choices</h3>
         <ul className="space-y-0.5">
           {scope.scenarios.map((scenario) => (
             <li key={scenario}>
@@ -78,7 +78,7 @@ export function Scope({ model }: { model: ReportModel }) {
         </p>
         {model.limits === null ? (
           <p>
-            This report describes technical behaviour on the audited pages and scenarios. It is not
+            This report describes technical behaviour on the audited pages and choices. It is not
             legal advice and not a statement of legal compliance.
           </p>
         ) : null}
