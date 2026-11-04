@@ -270,7 +270,7 @@ export const clientVoiceOf = (
       }
     case "accepted_risk":
       return {
-        happened: `${seen} The agency has accepted it as a known risk.`,
+        happened: `${seen} It has been accepted as a known risk.`,
         means: `${ACCEPTED_PREFIX} ${ACCEPTED_NOTE} ${area}`,
       }
     default:

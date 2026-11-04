@@ -9,7 +9,6 @@ import { AuditLink } from "@/components/audit-link"
 import { SampleReportLink } from "@/components/sample-report-link"
 import { PageShell } from "@/components/page-shell"
 import { PageHeader } from "@/components/page-header"
-import { siteTrail } from "@/lib/site-trail"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -34,7 +33,7 @@ import {
 } from "@/lib/site-url"
 import { ambiguousClickIdPages, clickIdClashMessage } from "@/lib/page-match"
 import { previewBaseline, startAudit } from "@/server/audits"
-import { getSite } from "@/server/clients"
+import { getSite } from "@/server/sites"
 
 const StartPath = Schema.String.check(Schema.isMaxLength(2000))
 const decodeStartPath = Schema.decodeUnknownOption(StartPath)
@@ -91,8 +90,7 @@ function NewAudit() {
 }
 
 function NewAuditForm() {
-  const { site, client, lastConfig } = Route.useLoaderData()
-  const { groupByClient } = Route.useRouteContext()
+  const { site, lastConfig } = Route.useLoaderData()
   const { start: startPath } = Route.useSearch()
   const router = useRouter()
   const last = Option.getOrNull(decodeConfig(lastConfig))
@@ -324,7 +322,7 @@ function NewAuditForm() {
       <PageHeader
         title="New audit"
         breadcrumb={[
-          ...siteTrail(groupByClient, client),
+          { label: "Sites", to: "/app/sites" },
           { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
           { label: "New audit" },
         ]}

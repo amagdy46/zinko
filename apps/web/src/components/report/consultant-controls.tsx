@@ -13,7 +13,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { useReportVoice } from "@/lib/use-agency-voice"
 import { CHANGE_WORDS } from "@/lib/compare-text"
 import { cn } from "@/lib/utils"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -95,7 +94,6 @@ export function EditSummary({
   const [open, setOpen] = useState(false)
   const [text, setText] = useState(summary ?? "")
   const save = useSave(() => setOpen(false))
-  const { who } = useReportVoice()
   return (
     <Sheet
       open={open}
@@ -116,7 +114,7 @@ export function EditSummary({
         <SheetHeader>
           <SheetTitle>Edit summary</SheetTitle>
           <SheetDescription>
-            Your text opens the report as "Summary by" your {who} name; the sentences Zinko
+            Your text opens the report as "Summary by" your company name; the sentences Zinko
             generates from the findings follow the score. Clear it to go back to the generated
             summary alone.
           </SheetDescription>

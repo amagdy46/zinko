@@ -35,7 +35,7 @@ const touch = (auditId: string) =>
 /**
  * Runs `body` in a transaction whose first statement is the fence. A settled audit yields
  * `Fenced` and nothing is written. Lock order inside: audit, then runs, hits, pushes, check
- * results, findings; workflow transactions never lock a client or a site.
+ * results, findings; workflow transactions never lock a site.
  */
 export const fenced = <A, E, R>(auditId: string, body: Effect.Effect<A, E, R>) =>
   Effect.gen(function* () {

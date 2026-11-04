@@ -50,8 +50,8 @@ export const publishReportData = (orgId: string, userId: string, auditId: string
     return yield* atomically(
       Effect.gen(function* () {
         const { db } = yield* Database
-        // Lock order is client, site, audit: the site row (shared) keeps its client_id stable
-        // until commit and conflicts with a move; createAudit takes site then audit too.
+        // Lock order is site, audit: the site row (shared) keeps its name and report_for stable
+        // until commit; createAudit takes site then audit too.
         yield* db
           .select({ id: site.id })
           .from(site)

@@ -5,7 +5,7 @@ export const orgSetting = pgTable("org_setting", {
   orgId: text("org_id")
     .primaryKey()
     .references(() => organization.id, { onDelete: "cascade" }),
-  /** The only source of truth for talking about clients; no row means false. */
+  /** Nothing reads this any more; the table goes in the migration that drops `client`. */
   groupByClient: boolean("group_by_client").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 })

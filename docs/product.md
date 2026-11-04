@@ -4,10 +4,10 @@
 
 There are two primary users, and the app serves both without making either learn the other's words:
 
-- A **site owner** (an in-house marketer, analyst or developer) who audits their own site. They add a site and audit it. They never see the word "client".
-- A **tracking consultant or agency** auditing sites for clients, someone who today pays $50–150/h for this work or does it by hand in Tag Assistant and Omnibug. They turn on "Group sites by client" (Settings > Organization) and get Clients, client pages and the client's name on the report.
+- A **site owner** (an in-house marketer, analyst or developer) who audits their own site.
+- A **tracking consultant or agency** auditing sites for clients, someone who today pays $50–150/h for this work or does it by hand in Tag Assistant and Omnibug. They use the same screens, and set "Report for" on a site to put a client's name on its report.
 
-Sites come first and clients are optional: a site always belongs to a client in the data, but an organization that has not turned grouping on never sees one (a hidden default client holds its sites).
+Both organize by site alone, as a property is in Search Console: a flat list, with no clients, groups or projects in the app.
 The secondary user is whoever reads the white-label report: the agency's client, or the site owner's own stakeholders.
 
 ## The job
@@ -17,7 +17,7 @@ The secondary user is whoever reads the white-label report: the agency's client,
 ## v0.1 (MVP): web app
 
 1. **Workspace:** sign up, create an organization (a company or an agency), and invite teammates.
-2. **Sites, and clients if you want them:** add a site by its address. An agency turns on "Group sites by client" to add clients, give each site a client and move a site between clients; an owner or admin changes that switch, and nobody else sees it.
+2. **Sites:** add a site by its address.
 3. **Run an audit:**
    - Enter the start URL and up to 19 key page URLs (20 pages in all). Funnel steps are entered manually as a list of URLs for now.
    - Choose consent choices from no interaction, accept all, reject all and Global Privacy Control.
@@ -31,7 +31,7 @@ The secondary user is whoever reads the white-label report: the agency's client,
    - a triage status: open, accepted risk, or fixed.
 6. **Tag matrix:** every vendor and destination ID, showing which events fired on which page in which consent choice. This is the "what fires where" view consultants currently build in spreadsheets.
 7. **Hit explorer:** a per-run timeline of decoded hits and `dataLayer` pushes. Think of it as Omnibug in the browser, filterable.
-8. **Report:** a white-label report with the organization's logo, accent color and the site, plus the client's name when the organization groups sites by client. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
+8. **Report:** a white-label report with the organization's logo, accent color and the site, plus who it is for when the site says so. It can be shared through a link that holds a secret token and can be revoked, or exported to PDF.
 9. **Re-run and compare:** run the audit again and see findings marked new, regressed, fixed (confirmed only when the re-run passes every run that failed), unchanged, changed from or to "could not check", or not comparable (with the reason), plus the tags that disappeared, appeared or changed destination. Accepted risks and notes carry over, and a re-check confirms a change on exactly the pages it touched. Built in M6.
 
 ### Checks in v0.1 (28 deterministic rules)

@@ -35,7 +35,7 @@ export const client = pgTable(
     createdAt: createdAt(),
     name: text().notNull(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
-    /** The hidden client every site without a named one belongs to; one per organization. */
+    /** The hidden client every site belongs to; one per organization. Named clients are no longer created. */
     isDefault: boolean("is_default").notNull().default(false),
   },
   (t) => [
@@ -63,6 +63,8 @@ export const site = pgTable(
      * consent and identity there. The only definition of "related" the rules use.
      */
     measuredHosts: jsonb("measured_hosts").$type<string[]>().notNull().default([]),
+    /** Who the site's report is for, printed on its cover. */
+    reportFor: text("report_for"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (t) => [index("site_org_client_idx").on(t.orgId, t.clientId)],

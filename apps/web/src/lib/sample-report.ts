@@ -1,7 +1,7 @@
 import { REPORT_MODEL_VERSION, type ReportModel } from "./report-model"
 
 /**
- * The sample report shown at /app/sample-report before a first audit: fictional agency, client and
+ * The sample report shown at /app/sample-report before a first audit: fictional company, reader and
  * site (shop.example), no logo, no share link, no page addresses, and no baseline (so no "What
  * changed"). It is a frozen `ReportModel` taken from a real full audit of known bugs on the local
  * fixture sites, so the findings, evidence and wording are what a real report prints.
@@ -15,7 +15,7 @@ import { REPORT_MODEL_VERSION, type ReportModel } from "./report-model"
  * 2. Add a site on http://localhost:4400 and run a full audit (all four scenarios, desktop) with start
  *    page /meta-before-consent/ and key pages /tiktok-after-reject/, /duplicate-purchase/thank-you,
  *    /pii-in-url/, /purchase-missing-fields/thank-you and /debug-leak/. Name the organization
- *    "Sample Agency", the client "Example Shop Ltd" and the site "Example Shop".
+ *    "Sample Company", "Report for" "Example Shop Ltd" and the site "Example Shop".
  * 3. Open its report, Share, Create link; read `model` from the newest row of `report_snapshot`.
  * 4. Paste it below, then set `cover.host` to "shop.example", `changes` to null, and replace the
  *    fixture tag IDs (G-ZINKO..., AW-...) with G-SAMPLE0001 and AW-123456789.
@@ -886,7 +886,7 @@ export const sampleReport = {
   },
   branding: {
     accent: "slate",
-    agencyName: "Sample Agency",
+    agencyName: "Sample Company",
     footerText: null,
     logoDigest: null,
     showPoweredBy: true,

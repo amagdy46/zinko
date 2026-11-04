@@ -24,13 +24,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Table,
   TableBody,
   TableCell,
@@ -43,7 +36,7 @@ import { count } from "@/lib/format"
 import { formField } from "@/lib/form"
 import { pageTitle } from "@/lib/page-title"
 import { originHost, startPathOfAddress, withScheme } from "@/lib/site-url"
-import { createSite, listArchived, listClients, listSites } from "@/server/clients"
+import { createSite, listArchived, listSites } from "@/server/sites"
 
 type Attention = NonNullable<Awaited<ReturnType<typeof listSites>>[number]["attention"]>
 
@@ -95,7 +88,6 @@ function AttentionAction({ site, a }: { site: string; a: Attention }) {
   )
 }
 
-const NO_CLIENT = "none"
 const SEARCH_FROM = 8
 const decodeFlag = Schema.decodeUnknownOption(
   Schema.Union([Schema.Literal(true), Schema.Literal("true")]),
@@ -107,18 +99,14 @@ export const Route = createFileRoute("/app/sites/")({
     ...(Option.isSome(decodeFlag(search.archived)) ? { archived: true as const } : {}),
   }),
   head: () => pageTitle("Sites"),
-  loader: async ({ context }) => ({
-    sites: await listSites(),
-    archived: await listArchived(),
-    clients: context.groupByClient ? (await listClients()).clients : [],
-  }),
+  loader: async () => ({ sites: await listSites(), archived: await listArchived() }),
   pendingComponent: SitesSkeleton,
   component: Sites,
 })
 
 function Sites() {
-  const { sites, clients, archived } = Route.useLoaderData()
-  const { session, groupByClient } = Route.useRouteContext()
+  const { sites, archived } = Route.useLoaderData()
+  const { session } = Route.useRouteContext()
   const { add, archived: showArchived } = Route.useSearch()
   const router = useRouter()
   const [query, setQuery] = useState("")
@@ -127,7 +115,6 @@ function Sites() {
   const addButton = useRef<HTMLButtonElement>(null)
   const [pending, setPending] = useState(false)
   const [urlError, setUrlError] = useState<string>()
-  const [clientId, setClientId] = useState(NO_CLIENT)
   const [address, setAddress] = useState("")
   const startPath = startPathOfAddress(address)
   const keptHost = startPath === null ? null : originHost(new URL(withScheme(address)).origin)
@@ -140,7 +127,6 @@ function Sites() {
     try {
       const result = await createSite({
         data: {
-          ...(clientId === NO_CLIENT ? {} : { clientId }),
           name: formField(data, "name"),
           url: withScheme(formField(data, "url")),
         },
@@ -154,7 +140,6 @@ function Sites() {
       setUrlError(undefined)
       form.reset()
       setAddress("")
-      setClientId(NO_CLIENT)
       setOpen(false)
       if (first !== null) toast.success(`Site added. Start page set to ${first}.`)
       await (first === null
@@ -172,9 +157,7 @@ function Sites() {
   const needle = query.trim().toLocaleLowerCase()
   const filtered = sites.filter(
     (s) =>
-      s.name.toLocaleLowerCase().includes(needle) ||
-      s.host.toLocaleLowerCase().includes(needle) ||
-      (s.client?.name.toLocaleLowerCase().includes(needle) ?? false),
+      s.name.toLocaleLowerCase().includes(needle) || s.host.toLocaleLowerCase().includes(needle),
   )
   const addFirstSite = (
     <Button
@@ -216,7 +199,7 @@ function Sites() {
         secondary={<SampleReportLink />}
       />
     )
-  const archivedTotal = archived.sites.length + archived.clients.length
+  const archivedTotal = archived.sites.length
   const needing = sites.flatMap((s) => (s.attention === null ? [] : [{ site: s, a: s.attention }]))
   const audited = sites.some((s) => s.running > 0 || s.latest !== null)
   const unaudited = sites.find((s) => s.running === 0 && s.latest === null)
@@ -329,24 +312,6 @@ function Sites() {
                         </p>
                       )}
                     </div>
-                    {groupByClient ? (
-                      <div className="space-y-2">
-                        <Label htmlFor="site-client">Client</Label>
-                        <Select value={clientId} onValueChange={setClientId}>
-                          <SelectTrigger id="site-client" className="w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value={NO_CLIENT}>No client</SelectItem>
-                            {clients.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                {c.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    ) : null}
                     <Button type="submit" disabled={pending}>
                       {pending ? "Creating…" : "Create site"}
                     </Button>
@@ -358,7 +323,7 @@ function Sites() {
         }
       />
       {showArchived === true ? (
-        <ArchivedSites archived={archived} groupByClient={groupByClient} />
+        <ArchivedSites archived={archived} />
       ) : (
         <>
           {sites.length > 0 ? (
@@ -434,11 +399,6 @@ function Sites() {
                         <span className="block font-mono text-xs text-muted-foreground">
                           {s.host}
                         </span>
-                        {groupByClient ? (
-                          <span className="block text-xs text-muted-foreground">
-                            {s.client === null ? "No client" : s.client.name}
-                          </span>
-                        ) : null}
                       </div>
                       <div className="flex items-start gap-4">
                         <LatestScore latest={s.latest} />
@@ -457,7 +417,6 @@ function Sites() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Site</TableHead>
-                      {groupByClient ? <TableHead>Client</TableHead> : null}
                       <TableHead>Score</TableHead>
                       <TableHead>Last audit</TableHead>
                       <TableHead>Open findings</TableHead>
@@ -481,15 +440,6 @@ function Sites() {
                             {s.host}
                           </span>
                         </TableCell>
-                        {groupByClient ? (
-                          <TableCell>
-                            {s.client === null ? (
-                              <span className="text-muted-foreground">No client</span>
-                            ) : (
-                              s.client.name
-                            )}
-                          </TableCell>
-                        ) : null}
                         <TableCell>
                           <LatestScore latest={s.latest} />
                         </TableCell>

@@ -69,7 +69,7 @@ export const saveBranding = createServerFn({ method: "POST" })
         const agencyName = data.agencyName.trim()
         if (agencyName.length < 1 || agencyName.length > NAME_MAX)
           return yield* new Invalid({
-            message: `The agency name must be 1 to ${NAME_MAX} characters.`,
+            message: `The company name must be 1 to ${NAME_MAX} characters.`,
           })
         const footerText = data.footerText.trim()
         if (footerText.length > FOOTER_MAX)

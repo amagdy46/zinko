@@ -183,7 +183,7 @@ export const ReportModel = Schema.Struct({
     logoDigest: Schema.NullOr(Schema.String),
   }),
   cover: Schema.Struct({
-    /** Null for a site on the organization's default client; the cover then names the site alone. */
+    /** Null when the site's `report_for` is empty; the cover then names the site alone. */
     clientName: Schema.NullOr(Schema.String),
     siteName: Schema.String,
     host: Schema.String,

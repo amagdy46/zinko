@@ -1,6 +1,6 @@
 import { type AuditEvent, AuditProgress, Jobs } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, client, finding, run, site } from "@repo/db"
+import { audit, checkResult, finding, run, site } from "@repo/db"
 import { and, asc, eq, inArray, sql } from "drizzle-orm"
 import { Effect } from "effect"
 import { findingsFrom } from "../lib/findings-from"
@@ -86,7 +86,7 @@ const INTERRUPTED = {
 
 /**
  * The one way to close an audit whose workflow ended or went silent. One short transaction in the
- * AGENTS.md lock order (client, site, audit, then finer), then a revalidation: the audit is the
+ * AGENTS.md lock order (site, audit, then finer), then a revalidation: the audit is the
  * organization's, still queued or running, and `workflow_id` and `progress_at` are what the caller
  * saw (otherwise nothing changes). Unfinished runs are closed by what they hold: a run with a
  * stored capture keeps it and its capture time, so a retry can still use it. Because every
@@ -100,17 +100,11 @@ export const settleAudit = (orgId: string, auditId: string, observed: Observed) 
     const status = yield* atomically(
       Effect.gen(function* () {
         const [owner] = yield* db
-          .select({ siteId: audit.siteId, clientId: site.clientId })
+          .select({ siteId: audit.siteId })
           .from(audit)
-          .innerJoin(site, eq(site.id, audit.siteId))
           .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
           .limit(1)
         if (owner === undefined) return null
-        yield* db
-          .select({ id: client.id })
-          .from(client)
-          .where(eq(client.id, owner.clientId))
-          .for("key share")
         yield* db
           .select({ id: site.id })
           .from(site)

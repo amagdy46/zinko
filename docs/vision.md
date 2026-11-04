@@ -161,11 +161,11 @@ The site is the only thing you organize by, as a property is in Search Console: 
 
 | Change | How we will build it | Status |
 |---|---|---|
-| Site switcher | The top-bar breadcrumb opens a type-ahead list of the organization's sites; `/app` lands on Sites | planned |
-| Remove clients from the interface | Remove the Clients pages, the client column and picker, Change client, the `groupByClient` branches (17 files) and the Group sites by client setting | planned |
-| Report for | A new optional `site.report_for` text printed on the cover in place of the client's name. A migration data step copies each named client's name onto its sites first, so covers do not change | planned |
-| One word for who signs | "Company" everywhere; "agency" goes | planned |
-| Data | `site.client_id` stays required for now: every site moves to the organization's hidden default client after the copy, and dropping the column and table is a later, separate migration | planned |
+| Site switcher | `/app` lands on Sites (working). Find (⌘K) is the type-ahead list of sites today; the switcher in the top-bar breadcrumb comes with the redesign in `design/index.html` | planned |
+| Remove clients from the interface | Remove the Clients pages, the client column and picker, Change client, the `groupByClient` branches (17 files) and the Group sites by client setting | working: run in the dev server against the local database |
+| Report for | A new optional `site.report_for` text printed on the cover in place of the client's name. A migration data step copies each named client's name onto its sites first, so covers do not change | working: same run, data step run twice |
+| One word for who signs | "Company" everywhere on screen; `agencyName` stays in code and stored models | working |
+| Data | `site.client_id` stays required for now: every site moves to the organization's hidden default client after the copy, and dropping the column, the `client` and `org_setting` tables, and the always-zero `unauditedSites` from `ScoreCoverage` (it is in stored report models, so it needs a version bump) is a later, separate migration | moved: working; dropping planned |
 
 Open: agencies with many sites have only search to find their way around. Add a grouping only if real use asks for it.
 

@@ -16,7 +16,6 @@ type Result = {
   score: number | null
   band: Band | null
   scoreCoverage: ScoreCoverage
-  sites: number
   runs: number
   openFindings: { critical: number; warning: number; info: number }
 }
@@ -26,7 +25,7 @@ const runningLabel = (running: number, hasFinished: boolean) => {
   return hasFinished ? "New audit running" : "First audit running"
 }
 
-/** The score of the last finished audit as a chip; a client's is the lowest of its sites'. */
+/** The score of the last finished audit as a chip. */
 export function LatestScore({ latest }: { latest: Result | null }) {
   if (latest === null)
     return (
@@ -37,9 +36,6 @@ export function LatestScore({ latest }: { latest: Result | null }) {
   return (
     <div className="space-y-1">
       <ScoreChip score={latest.score} band={latest.band} coverage={latest.scoreCoverage} />
-      {latest.sites > 1 && latest.score !== null ? (
-        <p className="text-2xs text-muted-foreground">Lowest of {latest.sites} sites</p>
-      ) : null}
     </div>
   )
 }

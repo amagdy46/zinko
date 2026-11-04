@@ -14,7 +14,7 @@ export function EmptyState({
 }: {
   title: string
   description: string
-  /** Say what is missing (Globe for sites, Users for clients), not "empty". */
+  /** Say what is missing (Globe for sites), not "empty". */
   icon?: LucideIcon
   /** A short numbered "What happens next", for the first run of a list. */
   steps?: ReadonlyArray<string>

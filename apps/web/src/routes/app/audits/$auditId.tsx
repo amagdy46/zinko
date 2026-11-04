@@ -7,7 +7,6 @@ import {
   useRouter,
 } from "@tanstack/react-router"
 import { NotFound } from "@/components/not-found"
-import { siteTrail } from "@/lib/site-trail"
 import { type MouseEvent, useEffect, useRef, useState } from "react"
 import { ChevronDown } from "lucide-react"
 import { toast } from "sonner"
@@ -77,8 +76,7 @@ const RECONCILE_EVERY_MS = 5 * 60_000
 const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
-  const { audit, site, client, runs, summary, stage } = Route.useLoaderData()
-  const { groupByClient } = Route.useRouteContext()
+  const { audit, site, runs, summary, stage } = Route.useLoaderData()
   const router = useRouter()
   const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
@@ -333,7 +331,7 @@ function AuditPage() {
       <PageHeader
         title={title}
         breadcrumb={[
-          ...siteTrail(groupByClient, client),
+          { label: "Sites", to: "/app/sites" },
           { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
           { label: audit.kind === "narrow" ? "Re-check" : "Audit" },
         ]}

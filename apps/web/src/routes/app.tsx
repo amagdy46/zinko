@@ -6,7 +6,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router"
-import { Globe, Menu, Search, Settings, Users } from "lucide-react"
+import { Globe, Menu, Search, Settings } from "lucide-react"
 import { useEffect, useState } from "react"
 import { CommandPalette } from "@/components/command-palette"
 import { LogoMark } from "@/components/logo"
@@ -44,12 +44,6 @@ const sitesNav = {
   icon: Globe,
   sections: ["sites", "audits", "sample-report"],
 } as const
-const clientsNav = {
-  to: "/app/clients",
-  label: "Clients",
-  icon: Users,
-  sections: ["clients"],
-} as const
 const settingsNav = {
   to: "/app/settings",
   label: "Settings",
@@ -58,8 +52,8 @@ const settingsNav = {
 } as const
 
 function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFind: () => void }) {
-  const { session, organizations, groupByClient } = Route.useRouteContext()
-  const nav = groupByClient ? [clientsNav, sitesNav, settingsNav] : [sitesNav, settingsNav]
+  const { session, organizations } = Route.useRouteContext()
+  const nav = [sitesNav, settingsNav]
   const section = useRouterState({ select: (state) => state.location.pathname.split("/")[2] })
   const shortcut = useFindShortcut()
   return (
@@ -108,7 +102,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
 }
 
 function AppShell() {
-  const { session, organizations, groupByClient } = Route.useRouteContext()
+  const { session, organizations } = Route.useRouteContext()
   const [menuOpen, setMenuOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const router = useRouter()
@@ -178,12 +172,11 @@ function AppShell() {
           <Outlet />
         </main>
         <CommandPalette
-          key={`${session.activeOrganizationId}:${groupByClient}`}
+          key={session.activeOrganizationId}
           open={findOpen}
           onOpenChange={setFindOpen}
           organizations={organizations}
           activeId={session.activeOrganizationId}
-          groupByClient={groupByClient}
         />
       </div>
     </div>

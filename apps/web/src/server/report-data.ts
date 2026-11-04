@@ -3,7 +3,6 @@ import { Database } from "@repo/core/Database"
 import {
   audit,
   checkResult,
-  client,
   finding as findingTable,
   findingTriage,
   hit,
@@ -70,8 +69,8 @@ const VIEWPORT_LABEL = { desktop: "Desktop", mobile: "Mobile" } as const
  */
 export interface ReportStamp {
   auditFinishedAt: string | null
-  /** The site's client id, the client's name and whether it is the default: a move changes the cover. */
-  client: string
+  /** Who the site's report is for: a change there changes the cover. */
+  reportFor: string
   /** Fingerprints of the rows' values, not of their timestamps: an update stamped earlier can commit later. */
   branding: string
   edit: string
@@ -331,11 +330,10 @@ export const readStamp = (orgId: string, auditId: string) =>
     const [head] = yield* db
       .select({
         finishedAt: audit.finishedAt,
-        client: sql<string>`${site.clientId} || '|' || ${client.name} || '|' || ${client.isDefault}::text`,
+        reportFor: site.reportFor,
       })
       .from(audit)
       .innerJoin(site, eq(site.id, audit.siteId))
-      .innerJoin(client, eq(client.id, site.clientId))
       .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
       .limit(1)
     const [branding] = yield* db
@@ -356,7 +354,7 @@ export const readStamp = (orgId: string, auditId: string) =>
       .where(and(eq(findingTriage.auditId, auditId), eq(findingTriage.orgId, orgId)))
     return {
       auditFinishedAt: head?.finishedAt?.toISOString() ?? null,
-      client: head?.client ?? "",
+      reportFor: head?.reportFor ?? "",
       branding: branding?.fingerprint ?? "",
       edit: edit?.fingerprint ?? "",
       findingEdits: findingEdits?.fingerprint ?? "",
@@ -385,14 +383,12 @@ export const buildReport = (orgId: string, auditId: string) =>
             kind: audit.kind,
             createdAt: audit.createdAt,
             finishedAt: audit.finishedAt,
-            clientName: client.name,
-            clientIsDefault: client.isDefault,
+            reportFor: site.reportFor,
             siteName: site.name,
             host: site.host,
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
-          .innerJoin(client, eq(client.id, site.clientId))
           .where(and(eq(audit.id, auditId), eq(audit.orgId, orgId)))
           .limit(1)
         if (head === undefined) return yield* new NotFound({ message: "Not found" })
@@ -804,7 +800,7 @@ export const buildReport = (orgId: string, auditId: string) =>
         logoDigest: branding.logoSha256,
       },
       cover: {
-        clientName: head.clientIsDefault ? null : head.clientName,
+        clientName: head.reportFor,
         siteName: head.siteName,
         host: head.host,
         auditedAt: (head.finishedAt ?? head.createdAt).toISOString(),

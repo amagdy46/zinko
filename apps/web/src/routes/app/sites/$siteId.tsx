@@ -1,5 +1,4 @@
 import { NotFound } from "@/components/not-found"
-import { siteReturn, siteTrail } from "@/lib/site-trail"
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router"
 import { useRef, useState, type FormEvent } from "react"
 import { ClipboardList, MoreHorizontal } from "lucide-react"
@@ -26,13 +25,6 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import {
   DropdownMenu,
@@ -58,15 +50,12 @@ import {
   archiveSite,
   deleteSite,
   getSite,
-  listClients,
   renameSite,
   unarchiveSite,
   updateMeasuredHosts,
-  updateSiteClient,
+  updateReportFor,
   updateSiteAddress,
-} from "@/server/clients"
-
-const NO_CLIENT = "none"
+} from "@/server/sites"
 
 const Page = Schema.Int.check(Schema.isGreaterThan(0))
 
@@ -74,20 +63,14 @@ export const Route = createFileRoute("/app/sites/$siteId")({
   validateSearch: (search: Record<string, unknown>): { page?: number } =>
     Schema.is(Page)(search.page) ? { page: search.page } : {},
   loaderDeps: ({ search }) => ({ page: search.page ?? 0 }),
-  loader: async ({ params, deps, context }) => {
-    const found = await getSite({ data: { id: params.siteId, page: deps.page } })
-    const clients = context.groupByClient && found.canManage ? (await listClients()).clients : []
-    return { ...found, clients }
-  },
+  loader: ({ params, deps }) => getSite({ data: { id: params.siteId, page: deps.page } }),
   head: ({ loaderData }) => pageTitle(loaderData?.site.name ?? "Site", "Sites"),
   notFoundComponent: () => <NotFound what="Site" />,
   component: SitePage,
 })
 
 function SitePage() {
-  const { site, client, clients, canManage, hasAudits, audits, page, hasMore } =
-    Route.useLoaderData()
-  const { groupByClient } = Route.useRouteContext()
+  const { site, canManage, hasAudits, audits, page, hasMore } = Route.useLoaderData()
   const router = useRouter()
   const menuButton = useRef<HTMLButtonElement>(null)
   const [confirming, setConfirming] = useState<"archive" | "delete" | null>(null)
@@ -100,8 +83,7 @@ function SitePage() {
   const rerunButton = useRef<HTMLButtonElement>(null)
   const [urlError, setUrlError] = useState<string>()
   const [declaring, setDeclaring] = useState(false)
-  const [moving, setMoving] = useState(false)
-  const [destination, setDestination] = useState(NO_CLIENT)
+  const [namingReader, setNamingReader] = useState(false)
   const [hostsError, setHostsError] = useState<string>()
   const timeZone = useTimeZone()
 
@@ -165,19 +147,19 @@ function SitePage() {
     }
   }
 
-  async function saveClient(event: FormEvent<HTMLFormElement>) {
+  async function saveReportFor(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setPending(true)
     try {
-      const result = await updateSiteClient({
-        data: { siteId: site.id, clientId: destination === NO_CLIENT ? null : destination },
+      const result = await updateReportFor({
+        data: { id: site.id, reportFor: formField(new FormData(event.currentTarget), "reportFor") },
       })
       if (!result.ok) {
         toast.error(result.message)
         return
       }
-      setMoving(false)
-      toast.success("Client saved")
+      setNamingReader(false)
+      toast.success("Saved")
       await router.invalidate()
     } finally {
       setPending(false)
@@ -206,7 +188,7 @@ function SitePage() {
         action: { label: "Undo", onClick: () => void restore() },
       })
     else toast.success(`Deleted ${site.name}`)
-    await router.navigate(siteReturn(groupByClient, client))
+    await router.navigate({ to: "/app/sites" })
   }
 
   const auditSubtitle = (a: (typeof audits)[number]) =>
@@ -246,7 +228,7 @@ function SitePage() {
     <PageShell>
       <PageHeader
         title={site.name}
-        breadcrumb={[...siteTrail(groupByClient, client), { label: site.name }]}
+        breadcrumb={[{ label: "Sites", to: "/app/sites" }, { label: site.name }]}
         description={
           <>
             <span className="font-mono break-all" data-testid="site-origin">
@@ -260,11 +242,11 @@ function SitePage() {
                   : "An owner or admin can restore it."}
               </span>
             ) : null}
-            {groupByClient ? (
-              <span className="mt-1 block text-sm" data-testid="site-client">
-                {client === null ? "No client" : `Client: ${client.name}`}
+            {site.reportFor === null ? null : (
+              <span className="mt-1 block text-sm" data-testid="site-report-for">
+                Report for {site.reportFor}
               </span>
-            ) : null}
+            )}
             {site.measuredHosts.length === 0 ? null : (
               <span className="mt-1 block text-sm" data-testid="site-measured-hosts">
                 Also measured on <span className="font-mono">{site.measuredHosts.join(", ")}</span>
@@ -299,21 +281,14 @@ function SitePage() {
                   <DropdownMenuItem onSelect={() => setEditing(true)}>
                     Edit address
                   </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setNamingReader(true)}>
+                    Report for
+                  </DropdownMenuItem>
                   {canManage ? (
                     <>
                       <DropdownMenuItem onSelect={() => setDeclaring(true)}>
                         Other hosts
                       </DropdownMenuItem>
-                      {groupByClient ? (
-                        <DropdownMenuItem
-                          onSelect={() => {
-                            setDestination(client?.id ?? NO_CLIENT)
-                            setMoving(true)
-                          }}
-                        >
-                          Change client
-                        </DropdownMenuItem>
-                      ) : null}
                       <DropdownMenuItem onSelect={() => setConfirming("archive")}>
                         Archive
                       </DropdownMenuItem>
@@ -476,7 +451,7 @@ function SitePage() {
           </form>
         </DialogContent>
       </Dialog>
-      <Dialog open={moving} onOpenChange={setMoving}>
+      <Dialog open={namingReader} onOpenChange={setNamingReader}>
         <DialogContent
           onCloseAutoFocus={(event) => {
             event.preventDefault()
@@ -484,32 +459,25 @@ function SitePage() {
           }}
         >
           <DialogHeader>
-            <DialogTitle>Change client</DialogTitle>
+            <DialogTitle>Report for</DialogTitle>
             <DialogDescription>
-              The next report names the new client. Published reports keep the client they had.
+              Printed on the report cover. Leave it empty and the cover names the site. Reports
+              already published keep what they were published with.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={saveClient} className="space-y-4">
+          <form onSubmit={saveReportFor} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="site-client">Client</Label>
-              <Select value={destination} onValueChange={setDestination}>
-                <SelectTrigger id="site-client" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NO_CLIENT}>No client</SelectItem>
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.distinguisher === null
-                        ? c.name
-                        : `${c.name} · ${c.distinguisher} (${count(c.siteCount, "site")})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="site-report-for-input">Who is this site's report for?</Label>
+              <Input
+                id="site-report-for-input"
+                name="reportFor"
+                maxLength={200}
+                autoComplete="off"
+                defaultValue={site.reportFor ?? ""}
+              />
             </div>
-            <Button type="submit" disabled={pending || destination === (client?.id ?? NO_CLIENT)}>
-              {pending ? "Saving…" : "Save client"}
+            <Button type="submit" disabled={pending}>
+              {pending ? "Saving…" : "Save"}
             </Button>
           </form>
         </DialogContent>

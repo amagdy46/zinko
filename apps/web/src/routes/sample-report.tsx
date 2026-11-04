@@ -16,7 +16,7 @@ export const Route = createFileRoute("/sample-report")({
       {
         name: "description",
         content:
-          "What a client receives after a Zinko tracking and consent audit: score, what to fix first, who fixes it, and the evidence.",
+          "What a reader receives after a Zinko tracking and consent audit: score, what to fix first, who fixes it, and the evidence.",
       },
     ],
   }),
@@ -44,7 +44,7 @@ function PublicSampleReport() {
             <div className="space-y-2">
               <h1 className="text-2xl font-semibold tracking-tight">Sample report</h1>
               <p className="max-w-2xl text-sm text-muted-foreground">
-                This is what a client receives after an audit: the score, what to fix first, who
+                This is what a reader receives after an audit: the score, what to fix first, who
                 fixes it and the evidence behind each finding.
               </p>
             </div>
@@ -62,9 +62,9 @@ function PublicSampleReport() {
             <FlaskConical aria-hidden="true" />
             <AlertTitle>Sample report — fictional data</AlertTitle>
             <AlertDescription>
-              The shop, client and agency are made up and the findings come from a fixture test
-              page, not a real audit. Your reports use your own branding and what Zinko finds on
-              your site.
+              The shop and the company are made up and the findings come from a fixture test page,
+              not a real audit. Your reports use your own branding and what Zinko finds on your
+              site.
             </AlertDescription>
           </Alert>
           <p className="hidden text-sm text-muted-foreground print:block">

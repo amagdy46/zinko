@@ -1,14 +1,8 @@
 import { Database } from "@repo/core/Database"
-import { audit, checkResult, finding, findingTriage, run, site } from "@repo/db"
-import { and, count, desc, eq, inArray, lte, sql } from "drizzle-orm"
+import { audit, checkResult, finding, findingTriage, run } from "@repo/db"
+import { and, count, desc, eq, inArray, sql } from "drizzle-orm"
 import { Effect } from "effect"
-import {
-  healthScore,
-  type Band,
-  scoreCoverage,
-  type ScoreCoverage,
-  type ScoreFinding,
-} from "@/lib/health-score"
+import { healthScore, type Band, type ScoreCoverage, type ScoreFinding } from "@/lib/health-score"
 import { decodeSeverity } from "./findings-data"
 import { liveShares } from "./report-share-data"
 
@@ -20,14 +14,13 @@ type Latest = {
   couldNotCheck: number
   /** Runs that ended partial or failed. */
   incompleteRuns: number
-  /** The health score; the lowest of the sites' when `sites` is more than 1. Null when not evaluated. */
+  /** The health score. Null when not evaluated. */
   score: number | null
   /** The band of that score (the worst failing finding's severity), for the bar under it. */
   band: Band | null
-  sites: number
-  /** What the score was computed from, summed over the sites when `sites` is more than 1. */
+  /** What the score was computed from. */
   scoreCoverage: ScoreCoverage
-  /** Runs in the audit the score comes from; the newest audit's when `sites` is more than 1. */
+  /** Runs in the audit the score comes from. */
   runs: number
   openFindings: { critical: number; warning: number; info: number }
 }
@@ -170,7 +163,6 @@ const latestOf = (
   score: scored?.score ?? null,
   band: scored?.band ?? null,
   scoreCoverage: coverageOfAudit(detail),
-  sites: 1,
   runs: detail.total,
   openFindings: { critical: detail.critical, warning: detail.warning, info: detail.info },
 })
@@ -394,111 +386,3 @@ const coverageOf = (a: { evaluated: number; total: number }): Latest["coverage"]
   if (a.evaluated === 0) return "not-evaluated"
   return a.evaluated === a.total ? "full" : "partial"
 }
-
-const worstCoverage = (results: readonly Latest[], siteCount: number): Latest["coverage"] => {
-  if (results.every((r) => r.coverage === "not-evaluated")) return "not-evaluated"
-  return results.length === siteCount && results.every((r) => r.coverage === "full")
-    ? "full"
-    : "partial"
-}
-
-const lowestScored = (results: readonly Latest[]) =>
-  results.filter((r) => r.score !== null).toSorted((a, b) => (a.score ?? 0) - (b.score ?? 0))[0]
-
-const lowestScore = (results: readonly Latest[]) => lowestScored(results)?.score ?? null
-
-const sum = (results: readonly Latest[], pick: (r: Latest) => number) =>
-  results.reduce((n, r) => n + pick(r), 0)
-
-export const clientSummary = (sites: readonly SiteSummary[]) => {
-  const results = sites
-    .flatMap((s) => (s.latest === null ? [] : [s.latest]))
-    .toSorted((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-  const newest = results[0]
-  const latest: Latest | null =
-    newest === undefined
-      ? null
-      : {
-          ...newest,
-          coverage: worstCoverage(results, sites.length),
-          couldNotCheck: results.reduce((n, r) => n + r.couldNotCheck, 0),
-          incompleteRuns: results.reduce((n, r) => n + r.incompleteRuns, 0),
-          score: lowestScore(results),
-          band: lowestScored(results)?.band ?? null,
-          scoreCoverage: {
-            totalRuns: sum(results, (r) => r.scoreCoverage.totalRuns),
-            evaluatedRuns: sum(results, (r) => r.scoreCoverage.evaluatedRuns),
-            unfinishedRuns: sum(results, (r) => r.scoreCoverage.unfinishedRuns),
-            checks: sum(results, (r) => r.scoreCoverage.checks),
-            unresolvedChecks: sum(results, (r) => r.scoreCoverage.unresolvedChecks),
-            unauditedSites: sites.length - results.length,
-          },
-          sites: results.length,
-          openFindings: results.reduce(
-            (n, r) => ({
-              critical: n.critical + r.openFindings.critical,
-              warning: n.warning + r.openFindings.warning,
-              info: n.info + r.openFindings.info,
-            }),
-            { critical: 0, warning: 0, info: 0 },
-          ),
-        }
-  return { latest, running: sites.reduce((n, s) => n + s.running, 0) }
-}
-
-const TREND_AUDITS = 5
-
-export type TrendPoint = { score: number; full: boolean }
-
-/**
- * The last few scored audits of each client (settled, with check results), oldest first, from one
- * ranked query plus the batched detail and score queries, so a list of clients costs the same
- * number of queries as one client.
- */
-export const trendsOf = (orgId: string, clientIds: readonly string[]) =>
-  Effect.gen(function* () {
-    const { db } = yield* Database
-    const trends = new Map<string, TrendPoint[]>()
-    if (clientIds.length === 0) return trends
-    const ranked = db
-      .select({
-        id: audit.id,
-        clientId: site.clientId,
-        rank: sql<number>`row_number() over (partition by ${site.clientId} order by ${audit.createdAt} desc, ${audit.id} desc)`
-          .mapWith(Number)
-          .as("rank"),
-      })
-      .from(audit)
-      .innerJoin(site, eq(site.id, audit.siteId))
-      .where(
-        and(
-          eq(audit.orgId, orgId),
-          eq(site.orgId, orgId),
-          inArray(site.clientId, [...clientIds]),
-          eq(audit.kind, "full"),
-          inArray(audit.status, [...SETTLED]),
-        ),
-      )
-      .as("ranked")
-    const recent = yield* db
-      .select({ id: ranked.id, clientId: ranked.clientId })
-      .from(ranked)
-      .where(lte(ranked.rank, TREND_AUDITS))
-      .orderBy(desc(ranked.rank))
-    const details = yield* auditDetails(
-      orgId,
-      recent.map((r) => r.id),
-    )
-    const scores = yield* scoresOf(orgId, details)
-    const detailById = new Map(details.map((d) => [d.id, d]))
-    for (const { id, clientId } of recent) {
-      const score = scores.get(id)?.score
-      const detail = detailById.get(id)
-      if (score === undefined || detail === undefined) continue
-      trends.set(clientId, [
-        ...(trends.get(clientId) ?? []),
-        { score, full: scoreCoverage(coverageOfAudit(detail)).state !== "runs" },
-      ])
-    }
-    return trends
-  })

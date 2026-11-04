@@ -3,7 +3,6 @@ import { createServerFn } from "@tanstack/react-start"
 import { getRequestHeaders } from "@tanstack/react-start/server"
 import { Effect } from "effect"
 import { BetterAuth } from "./auth-live"
-import { groupByClientOf } from "./org-setting-data"
 import { runtime } from "./runtime"
 
 /** The signed-in user, or null. Route guards call this. */
@@ -38,14 +37,9 @@ export const getAppState = createServerFn({ method: "GET" }).handler(() =>
           auth.api.setActiveOrganization({ headers, body: { organizationId: first.id } }),
         )
       }
-      const groupByClient =
-        activeOrganizationId !== null && organizations.some(({ id }) => id === activeOrganizationId)
-          ? yield* groupByClientOf(activeOrganizationId)
-          : false
       return {
         session: { ...session, activeOrganizationId },
         organizations: organizations.map(({ id, name, slug }) => ({ id, name, slug })),
-        groupByClient,
       }
     }).pipe(Effect.catchTag("Unauthorized", () => Effect.succeed(null))),
   ),

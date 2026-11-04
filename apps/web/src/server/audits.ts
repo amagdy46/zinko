@@ -1,7 +1,7 @@
 import { CaptureResult } from "@repo/capture-contract"
 import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
-import { audit, run, site, client, checkResult, reportSnapshot } from "@repo/db"
+import { audit, run, site, checkResult, reportSnapshot } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, desc, eq, countDistinct, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -416,11 +416,9 @@ export const getAudit = createServerFn({ method: "GET" })
           .select({
             audit,
             site: { id: site.id, name: site.name, host: site.host, archivedAt: site.archivedAt },
-            client: { id: client.id, name: client.name, isDefault: client.isDefault },
           })
           .from(audit)
           .innerJoin(site, eq(site.id, audit.siteId))
-          .innerJoin(client, eq(client.id, site.clientId))
           .where(and(eq(audit.id, data.id), eq(audit.orgId, orgId)))
           .limit(1)
         if (found === undefined) return yield* new NotFound({ message: "Not found" })
@@ -578,7 +576,6 @@ export const getAudit = createServerFn({ method: "GET" })
             host: found.site.host,
             archived: found.site.archivedAt !== null,
           },
-          client: found.client.isDefault ? null : { id: found.client.id, name: found.client.name },
           summary,
           stage,
           findings: findings.filter((f) => f.kind === "fail"),

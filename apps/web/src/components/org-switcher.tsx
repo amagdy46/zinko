@@ -22,7 +22,6 @@ interface Organization {
 /** A page of another organization's data does not exist here, so only the section is kept. */
 const sectionOf = (pathname: string) => {
   if (pathname.startsWith("/app/sites")) return "/app/sites"
-  if (pathname.startsWith("/app/clients")) return "/app/clients"
   if (pathname.startsWith("/app/settings/ai")) return "/app/settings/ai"
   if (pathname.startsWith("/app/settings/members")) return "/app/settings/members"
   if (pathname.startsWith("/app/settings/branding")) return "/app/settings/branding"

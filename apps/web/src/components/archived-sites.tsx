@@ -13,7 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { RelativeTime } from "@/components/relative-time"
-import { unarchiveClient, unarchiveSite } from "@/server/clients"
+import { unarchiveSite } from "@/server/sites"
 
 type Archived = {
   canManage: boolean
@@ -22,32 +22,20 @@ type Archived = {
     name: string
     host: string
     archivedAt: Date | string | null
-    client: { id: string; name: string; archived: boolean } | null
   }>
-  clients: ReadonlyArray<{ id: string; name: string; archivedAt: Date | string | null }>
 }
 
 const rowAction =
   "-my-1.5 inline-flex min-h-8 items-center rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset"
 
-export function ArchivedSites({
-  archived,
-  groupByClient,
-}: {
-  archived: Archived
-  groupByClient: boolean
-}) {
+export function ArchivedSites({ archived }: { archived: Archived }) {
   const router = useRouter()
   const [restoring, setRestoring] = useState<string | null>(null)
 
-  async function restore(
-    id: string,
-    name: string,
-    action: typeof unarchiveSite | typeof unarchiveClient,
-  ) {
+  async function restore(id: string, name: string) {
     setRestoring(id)
     try {
-      const result = await action({ data: { id } })
+      const result = await unarchiveSite({ data: { id } })
       if (!result.ok) {
         toast.error(result.message)
         return
@@ -59,12 +47,12 @@ export function ArchivedSites({
     }
   }
 
-  if (archived.sites.length === 0 && archived.clients.length === 0)
+  if (archived.sites.length === 0)
     return (
       <EmptyState
         icon={Archive}
         title="Nothing is archived"
-        description="A site or client you archive waits here until you restore it."
+        description="A site you archive waits here until you restore it."
         action={
           <Button variant="outline" asChild>
             <Link to="/app/sites">Back to sites</Link>
@@ -84,7 +72,6 @@ export function ArchivedSites({
             <TableHeader>
               <TableRow>
                 <TableHead>Site</TableHead>
-                {groupByClient ? <TableHead>Client</TableHead> : null}
                 <TableHead>Archived</TableHead>
                 <TableHead>
                   <span className="sr-only">Actions</span>
@@ -102,15 +89,6 @@ export function ArchivedSites({
                       {s.host}
                     </span>
                   </TableCell>
-                  {groupByClient ? (
-                    <TableCell>
-                      {s.client === null ? (
-                        <span className="text-muted-foreground">No client</span>
-                      ) : (
-                        s.client.name
-                      )}
-                    </TableCell>
-                  ) : null}
                   <TableCell className="text-sm text-muted-foreground">
                     {s.archivedAt === null ? null : <RelativeTime date={s.archivedAt} />}
                   </TableCell>
@@ -119,50 +97,8 @@ export function ArchivedSites({
                       site={s}
                       canManage={archived.canManage}
                       restoring={restoring === s.id}
-                      onRestore={() => restore(s.id, s.name, unarchiveSite)}
+                      onRestore={() => restore(s.id, s.name)}
                     />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
-      ) : null}
-      {archived.clients.length > 0 ? (
-        <section aria-labelledby="archived-clients" className="space-y-2">
-          <h2 id="archived-clients" className="text-sm font-medium">
-            Archived clients
-          </h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Archived</TableHead>
-                <TableHead>
-                  <span className="sr-only">Actions</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {archived.clients.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
-                    {c.archivedAt === null ? null : <RelativeTime date={c.archivedAt} />}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {archived.canManage ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8"
-                        disabled={restoring === c.id}
-                        onClick={() => restore(c.id, c.name, unarchiveClient)}
-                      >
-                        {restoring === c.id ? "Restoring…" : "Restore"}
-                        <span className="sr-only"> {c.name} and its sites</span>
-                      </Button>
-                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}
@@ -187,8 +123,6 @@ function RestoreSite({
 }) {
   if (!canManage)
     return <span className="text-xs text-muted-foreground">An owner or admin can restore it</span>
-  if (site.client?.archived === true)
-    return <span className="text-xs text-muted-foreground">Restore {site.client.name} first</span>
   return (
     <Button variant="outline" size="sm" className="h-8" disabled={restoring} onClick={onRestore}>
       {restoring ? "Restoring…" : "Restore"}
