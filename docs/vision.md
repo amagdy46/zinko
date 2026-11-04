@@ -2,7 +2,7 @@
 
 Every feature we plan to build, how we will build it, what we take from other products, and what is still open. `docs/product.md` is the v0.1 scope, `docs/architecture.md` the stack, `docs/roadmap.md` the milestones; this file ties them together and is updated whenever a spike or a working feature changes the plan.
 
-Last updated 2026-11-01 (design pass: the audit says where it is in the job loop; capture admission revised to per-capture FIFO 2026-10-24).
+Last updated 2026-11-04 (sites only, like Search Console: planned, no clients or groups; design pass 2026-11-01: the audit says where it is in the job loop; capture admission revised to per-capture FIFO 2026-10-24).
 
 Local admission proof: five two-capture audits interleaved in FIFO order; four single-capture audits finished before an earlier four-capture audit. Real five-minute lease expiry rejected stale tokens, and an injected expired-grant workflow retry requeued under new step names without calling the occupied engine. Commands, timings and local runtime limitations are in [decision 0003](decisions/0003-capture-admission.md#local-verification-2026-10-22). Cloudflare container behavior remains unverified.
 
@@ -139,7 +139,7 @@ The M2 demo, run locally on 2026-10-20 in a browser (Playwright) against the eng
 | **Three outcomes per check** | Pass, fail, and **inconclusive** (the page or CMP didn't load), plus **"suppressed, with reason"** (for example "no consent, so the Ads hit was correctly not sent"). From Trackingplan and Elevar | working (M3): `pass`, `fail`, `inconclusive` and `not_applicable`, each with a message that names the reason ("the banner was not found", "every tracking request was answered locally"); the Findings screen keeps inconclusive checks in a separate "Could not check" group and never counts them as passes. A separate "suppressed, with reason" outcome was not built: a `pass` message says what was correctly absent ("no Meta or TikTok hit after the rejection"). Verified on the demo audits (`no-cmp`, both real sites) |
 | **Google's names where we overlap** | Reuse Tag Diagnostics wording and severity (Urgent, Needs attention) for overlapping rules, so findings read the way users already know them | working (M3): the overlapping rules reuse Tag Diagnostics wording ("Tag fired before consent default", "Missing conversion linker", "Redirects dropping click IDs", "Likely overcounting", "Purchase missing transaction ID, value or currency"). The severities stay `critical`, `warning` and `info`, not Google's Urgent and Needs attention |
 | **Click ID survives redirects** | A rule that follows redirects on the landing URL and checks the ID reaches the final page and its cookie (a Tag Diagnostics check) | working (M3): `clickid.lost-on-redirect` compares the run URL with the landing document's final URL; `clickid.cookie-missing` and `clickid.lost-across-navigation` follow it into the cookie and later pages. Verified on `redirect-gclid` (fails under all four scenarios; the Happy Socks and Allbirds landing URLs were not redirected, so the rule passed) |
-| **Approved vendor list per client** | Each client lists allowed, required and forbidden vendors or domains per consent category; a rule flags anything outside it (ObservePoint Consent Categories, DataTrue policies) | later (needs client settings, which do not exist yet): moved out of v0.1 by the M3 plan |
+| **Approved vendor list per site** | Each site lists allowed, required and forbidden vendors or domains per consent category; a rule flags anything outside it (ObservePoint Consent Categories, DataTrue policies) | later (needs client settings, which do not exist yet): moved out of v0.1 by the M3 plan |
 
 ### UI refresh (approved, 2026-10-22)
 
@@ -154,6 +154,20 @@ The implementation plan is `docs/plans/2026-10-22-ui-refresh/plan.md`. It keeps 
 | Hits, settings and final sweep | Organization-scoped timeline accepts multi-value filters and search while retaining old single-value links; explicit matched/total counts and a per-run consent divider work across pagination. Auth/settings use the shared frame, followed by a responsive/theme sweep and documentation | working (Tasks 9, 10, 11). Sweep of 28 screens or states (clients, client, site, new audit, runs in three views and the run sheet, findings in three audits, the finding sheet and accept-risk dialog, hits with the filter popover or sheet and the detail sheet, palette, account menu, org switcher, settings x3, sign-in with an error, sign-up, onboarding, accept-invite and its not-found state) at 390px and 1440px, light and dark, with a scripted check on each: no horizontal page scroll anywhere (tables scroll in their container), no hard-coded colours in the source (only the logo mark and dialog scrim), keyboard focus rings on every focused element except menu items and the palette input (both highlight instead), and 32px touch targets except inline text links, label-wrapped checkboxes and dense hit rows with a pointer (28px; 36px below `md`). A grayscale pass of runs, findings and clients tells every severity and status apart by shape and word. Fixes from the sweep: 32px tabs, close buttons, copy buttons, breadcrumb and nav targets, a focus ring on focusable tab panels and on hits rows, and partial-run reasons that broke mid-word. Sales-page refresh remains optional |
 
 Decisions taken (2026-10-22): `cmdk` for the palette (the only new package); a required reason when accepting a risk (`finding_triage.reason`); stored neutral check titles (`check_result.check_title`, `finding.check_title`); the Findings list opens on Open with triaged findings in their own tabs, a finished audit with failures opens on Findings, and Hits has multi-value filters and search. Not covered by the browser sweep, open in the plan's leftovers: a 44-run density audit, the "Audit failed" and "not evaluated" toast variants, the mixed-rules-versions alert, the null `check_title` fallback and Open in Hits from every evidence kind.
+
+### Sites only, like Search Console (decided 2026-11-04)
+
+The site is the only thing you organize by, as a property is in Search Console: a flat list and one switcher in the top bar. No clients, no groups and no projects. The organization stays as the team: members and roles do not move to the site. Zinko does not copy Search Console's ownership check, because auditing from the outside, with nothing installed, is the product.
+
+| Change | How we will build it | Status |
+|---|---|---|
+| Site switcher | The top-bar breadcrumb opens a type-ahead list of the organization's sites; `/app` lands on Sites | planned |
+| Remove clients from the interface | Remove the Clients pages, the client column and picker, Change client, the `groupByClient` branches (17 files) and the Group sites by client setting | planned |
+| Report for | A new optional `site.report_for` text printed on the cover in place of the client's name. A migration data step copies each named client's name onto its sites first, so covers do not change | planned |
+| One word for who signs | "Company" everywhere; "agency" goes | planned |
+| Data | `site.client_id` stays required for now: every site moves to the organization's hidden default client after the copy, and dropping the column and table is a later, separate migration | planned |
+
+Open: agencies with many sites have only search to find their way around. Add a grouping only if real use asks for it.
 
 ### Design pass: the job loop (2026-10-31)
 

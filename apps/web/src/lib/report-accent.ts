@@ -16,7 +16,7 @@ export const ACCENTS = [
 
 export type AccentId = (typeof ACCENTS)[number]["id"]
 
-export const DEFAULT_ACCENT: AccentId = "violet"
+export const DEFAULT_ACCENT: AccentId = "slate"
 
 const clamp = (value: number) => Math.min(1, Math.max(0, value))
 

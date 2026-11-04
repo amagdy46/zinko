@@ -184,7 +184,11 @@
 }
 
 /* The report accent presets (mirrored in lib/report-accent.ts); each is at least 4.5:1 on white. */
-.report-paper,
+.report-paper {
+  --report-accent: oklch(0.45 0.03 260);
+  --report-tint: oklch(0.96 0.01 260);
+}
+
 [data-accent="violet"] {
   --report-accent: oklch(0.5 0.19 286);
   --report-tint: oklch(0.96 0.025 286);

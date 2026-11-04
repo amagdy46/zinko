@@ -885,7 +885,7 @@ export const sampleReport = {
     ],
   },
   branding: {
-    accent: "violet",
+    accent: "slate",
     agencyName: "Sample Agency",
     footerText: null,
     logoDigest: null,
