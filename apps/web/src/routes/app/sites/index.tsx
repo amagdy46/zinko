@@ -58,7 +58,7 @@ const attentionGlyph = (a: Attention) => {
 }
 
 function AttentionAction({ site, a }: { site: string; a: Attention }) {
-  const className = cn(rowLink, "shrink-0 text-sm text-status-active")
+  const className = cn(rowLink, "shrink-0 text-sm")
   const hidden = <span className="sr-only"> for {site}</span>
   if (a.reason === "incomplete")
     return (
@@ -336,7 +336,7 @@ function Sites() {
               next={
                 unaudited === undefined || audited ? undefined : (
                   <Link
-                    className="inline-flex h-8 items-center rounded-sm text-sm text-status-active underline-offset-4 hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
+                    className="inline-flex h-8 items-center rounded-sm text-sm underline decoration-brand underline-offset-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
                     to="/app/sites/$siteId/audits/new"
                     params={{ siteId: unaudited.id }}
                   >
