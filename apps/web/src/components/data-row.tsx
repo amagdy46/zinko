@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils"
  * A row that opens something. The link inside it carries `rowLink`, which stretches it over the
  * whole row, so a click anywhere navigates while the row's own text stays selectable and any
  * other control (a button in the last cell) sits above it with `relative`. Hover and keyboard focus
- * fill the row; `selected` adds the 2px primary rule. Put a `RowChevron` in the last cell.
+ * fill the row; `selected` adds the 2px brand rule. Put a `RowChevron` in the last cell.
  */
 export function LinkRow({
   selected,

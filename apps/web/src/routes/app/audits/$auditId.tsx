@@ -361,7 +361,7 @@ function AuditPage() {
                       <span
                         className={
                           connected
-                            ? "size-2 rounded-full bg-primary"
+                            ? "size-2 rounded-full bg-brand"
                             : "size-2 rounded-full border border-muted-foreground"
                         }
                       />

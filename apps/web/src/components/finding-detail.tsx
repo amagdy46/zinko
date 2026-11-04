@@ -501,7 +501,7 @@ export function FindingDetail({
                   }}
                   className={cn(
                     "flex min-h-8 w-full flex-col gap-1 px-3 py-2 text-left outline-none transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
-                    c.runId === check?.runId && "bg-accent shadow-[inset_2px_0_0_var(--primary)]",
+                    c.runId === check?.runId && "bg-accent shadow-[inset_2px_0_0_var(--brand)]",
                   )}
                 >
                   <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">

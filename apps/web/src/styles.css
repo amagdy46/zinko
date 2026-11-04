@@ -16,8 +16,9 @@
   --card-foreground: oklch(0.19 0.012 285);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.19 0.012 285);
-  --primary: oklch(0.52 0.19 286);
+  --primary: oklch(0.19 0.012 285);
   --primary-foreground: oklch(0.99 0.003 285);
+  --brand: oklch(0.52 0.19 286);
   --secondary: oklch(0.945 0.006 285);
   --secondary-foreground: oklch(0.25 0.012 285);
   --muted: oklch(0.945 0.006 285);
@@ -64,8 +65,9 @@
   --card-foreground: oklch(0.945 0.007 286);
   --popover: oklch(0.225 0.012 285);
   --popover-foreground: oklch(0.945 0.007 286);
-  --primary: oklch(0.56 0.18 286);
-  --primary-foreground: oklch(0.99 0.003 285);
+  --primary: oklch(0.945 0.007 286);
+  --primary-foreground: oklch(0.166 0.008 285);
+  --brand: oklch(0.74 0.16 286);
   --secondary: oklch(0.245 0.012 285);
   --secondary-foreground: oklch(0.945 0.007 286);
   --muted: oklch(0.245 0.012 285);
@@ -160,6 +162,7 @@
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
+  --color-brand: var(--brand);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
@@ -220,6 +223,16 @@
 [data-accent="slate"] {
   --report-accent: oklch(0.45 0.03 260);
   --report-tint: oklch(0.96 0.01 260);
+}
+
+/* Violet stays out of the client's document: a report's focus ring takes the agency's accent. */
+.report-paper {
+  --ring: var(--report-accent);
+}
+
+/* A text link's underline carries the accent; the report keeps its own. */
+:where(a.underline:not(.report-paper a)) {
+  text-decoration-color: var(--brand);
 }
 
 @layer base {

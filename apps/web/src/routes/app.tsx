@@ -95,7 +95,7 @@ function SidebarContent({ onNavigate, onFind }: { onNavigate?: () => void; onFin
             to={to}
             onClick={onNavigate}
             aria-current={sections.some((name) => name === section) ? "page" : undefined}
-            className="relative flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 last:mt-auto before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground aria-[current=page]:before:bg-primary"
+            className="relative flex h-9 items-center gap-2 rounded-md px-2 text-sm text-muted-foreground transition-colors duration-150 last:mt-auto before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none aria-[current=page]:bg-accent aria-[current=page]:font-medium aria-[current=page]:text-accent-foreground aria-[current=page]:before:bg-brand"
           >
             <Icon className="size-4" />
             {label}

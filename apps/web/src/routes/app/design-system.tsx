@@ -75,8 +75,9 @@ const TOKENS: ReadonlyArray<{
   },
   {
     role: "Brand and actions",
-    note: "primary is the only brand accent; destructive is for destructive actions and form errors.",
+    note: "brand is the only accent, for selection, activity and focus; primary is ink, for actions; destructive is for destructive actions and form errors.",
     swatches: [
+      { name: "brand", className: "bg-brand" },
       { name: "primary", className: "bg-primary" },
       { name: "primary-foreground", className: "bg-primary-foreground" },
       { name: "destructive", className: "bg-destructive" },

@@ -478,7 +478,7 @@ function NewAuditForm() {
                   {SCENARIOS.map((scenario) => (
                     <label
                       key={scenario.value}
-                      className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm ${scenarios.includes(scenario.value) ? "border-primary bg-primary/5" : "hover:bg-accent"}`}
+                      className={`flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2 text-sm ${scenarios.includes(scenario.value) ? "border-brand bg-brand/5" : "hover:bg-accent"}`}
                     >
                       <Checkbox
                         checked={scenarios.includes(scenario.value)}

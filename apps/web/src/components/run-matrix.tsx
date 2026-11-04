@@ -96,7 +96,7 @@ export function RunMatrix({
               aria-current={run.id === selectedId ? "true" : undefined}
               className={cn(
                 "flex w-full flex-col gap-2 rounded-lg border bg-card p-3 text-left text-sm transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none",
-                run.id === selectedId && "border-primary bg-accent hover:bg-accent",
+                run.id === selectedId && "border-brand bg-accent hover:bg-accent",
               )}
             >
               <RunPath run={run} className="max-w-full text-xs" />
@@ -325,7 +325,7 @@ function MatrixCell({
           aria-current={selected ? "true" : undefined}
           className={cn(
             "inline-flex h-8 min-w-28 cursor-pointer items-center justify-center gap-1.5 rounded-md px-2 transition-colors duration-150 hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset focus-visible:outline-none",
-            selected && "bg-accent shadow-[inset_2px_0_0_var(--primary)] hover:bg-accent",
+            selected && "bg-accent shadow-[inset_2px_0_0_var(--brand)] hover:bg-accent",
           )}
         >
           {run.failing && run.status === "complete" ? null : (

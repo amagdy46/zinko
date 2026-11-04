@@ -13,7 +13,7 @@ function Progress({
       data-slot="progress"
       value={value}
       max={max}
-      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-primary/20", className)}
+      className={cn("relative h-2 w-full overflow-hidden rounded-full bg-brand/20", className)}
       {...props}
     >
       <progress
@@ -21,7 +21,7 @@ function Progress({
         max={max}
         value={value ?? undefined}
         data-slot="progress-indicator"
-        className="block h-full w-full appearance-none border-0 bg-transparent accent-primary [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:bg-primary [&::-moz-progress-bar]:bg-primary"
+        className="block h-full w-full appearance-none border-0 bg-transparent accent-brand [&::-webkit-progress-bar]:bg-transparent [&::-webkit-progress-value]:bg-brand [&::-moz-progress-bar]:bg-brand"
       />
     </ProgressPrimitive.Root>
   )
