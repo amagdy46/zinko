@@ -78,7 +78,7 @@ function AttentionAction({ site, a }: { site: string; a: Attention }) {
         to="/app/audits/$auditId/findings"
         params={{ auditId: a.auditId }}
       >
-        Open findings{hidden}
+        Open problems{hidden}
       </Link>
     )
   return (
@@ -193,7 +193,7 @@ function Sites() {
         steps={[
           "Add a site address.",
           "Start an audit: Zinko loads the site, accepts or rejects the banner and records every tag.",
-          "Read the findings with the evidence behind each one.",
+          "Read the problems with the evidence behind each one.",
         ]}
         action={addFirstSite}
         secondary={<SampleReportLink />}
@@ -414,7 +414,7 @@ function Sites() {
                       <TableHead>Site</TableHead>
                       <TableHead>Score</TableHead>
                       <TableHead>Last audit</TableHead>
-                      <TableHead>Open findings</TableHead>
+                      <TableHead>Open problems</TableHead>
                       <TableHead className="w-8">
                         <span className="sr-only">Open</span>
                       </TableHead>

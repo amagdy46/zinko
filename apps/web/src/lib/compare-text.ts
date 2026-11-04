@@ -259,18 +259,23 @@ const titles = (findings: ReadonlyArray<FindingChange>, shown = 2) => {
 const SEVERITY_WORD = { critical: "Critical", warning: "Warning", info: "Info" } as const
 
 /**
- * At most six deterministic lines for the top of a re-run's Overview: regressions, new critical and
+ * At most six deterministic lines for the top of a re-run's Problems tab and its report: regressions, new critical and
  * warning findings, fixes, tags that stopped firing, what could not be compared, then the counts and
  * the score. Built only from the comparison and stored wording; `tagsGone` are labels such as
  * "TikTok ZINKOTT0001" that no longer fire on any run checked in both audits.
  */
-export const changesBriefing = (c: Comparison, tagsGone: ReadonlyArray<string>): string[] => {
+export const changesBriefing = (
+  c: Comparison,
+  tagsGone: ReadonlyArray<string>,
+  // the report's own word by default: a stored report must keep reading the same
+  noun: "finding" | "problem" = "finding",
+): string[] => {
   const of = (state: ChangeState) => c.findings.filter((f) => f.state === state)
   const lines: string[] = []
   const regressed = of("regressed")
   if (regressed.length > 0)
     lines.push(
-      `${count(regressed.length, "finding")} came back after being absent: ${titles(regressed)}.`,
+      `${count(regressed.length, noun)} came back after being absent: ${titles(regressed)}.`,
     )
   const fresh = of("new").filter((f) => f.severity !== "info")
   if (fresh.length > 0) {
@@ -296,7 +301,7 @@ export const changesBriefing = (c: Comparison, tagsGone: ReadonlyArray<string>):
       `Could not compare ${count(notComparable.length, "check")}: a check changed between rules versions, or not every run that failed was checked again.`,
     )
   lines.push(
-    `${count(c.counts.unchanged, "finding")} unchanged. ${scoreSentence(c.score)} Both scores use score version ${c.score.scoreVersion}.`,
+    `${count(c.counts.unchanged, noun)} unchanged. ${scoreSentence(c.score)} Both scores use score version ${c.score.scoreVersion}.`,
   )
   return lines.slice(0, 6)
 }

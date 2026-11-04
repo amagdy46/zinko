@@ -85,7 +85,7 @@ function NoFindings({ latest, full }: { latest: Result; full: boolean }) {
   return (
     <span className="flex items-center gap-1.5">
       <StatusGlyph meaning={full ? "pass" : "could-not-check"} />
-      {full ? "No open findings" : `0 open · ${gap(latest)}`}
+      {full ? "No open problems" : `0 open · ${gap(latest)}`}
     </span>
   )
 }
@@ -127,7 +127,7 @@ export function FindingCounts({
   )
   const unchecked = counts.couldNotCheck !== undefined && counts.couldNotCheck > 0
   if (shown.length === 0 && !unchecked)
-    return <span className="text-xs text-muted-foreground">No open findings</span>
+    return <span className="text-xs text-muted-foreground">No open problems</span>
   return (
     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs tabular-nums">
       {shown.map((severity) => (

@@ -97,7 +97,7 @@ function TriageNote({
         {triage.fixed > 0 ? (
           <span className="text-muted-foreground">
             {" "}
-            {triage.fixed} fixed {triage.fixed === 1 ? "finding counts" : "findings count"} too: the
+            {triage.fixed} fixed {triage.fixed === 1 ? "problem counts" : "problems count"} too: the
             score describes this audit.
           </span>
         ) : null}
@@ -106,7 +106,7 @@ function TriageNote({
   if (triage.fixed > 0)
     return (
       <p className="text-sm text-muted-foreground" data-testid="triage-tally">
-        {triage.fixed} fixed. Fixed findings still count in the score: it describes this audit.
+        {triage.fixed} fixed. Fixed problems still count in the score: it describes this audit.
       </p>
     )
   return null
@@ -290,7 +290,7 @@ export function Caveats({
                   {count(uncertainty.bannerUncertainRuns, "failing consent check")}{" "}
                   {rests(uncertainty.bannerUncertainRuns)} on an undetected banner.{" "}
                 </span>
-                {BANNER_NOTE.summary} The findings keep their severity and their weight in the
+                {BANNER_NOTE.summary} The problems keep their severity and their weight in the
                 score.
               </p>
               <p className="text-muted-foreground">

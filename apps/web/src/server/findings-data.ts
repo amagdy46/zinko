@@ -241,6 +241,22 @@ export const findingsOf = (orgId: string, auditId: string) =>
         ),
       )
       .groupBy(checkResult.ruleId, checkResult.status, checkResult.area, checkResult.checkTitle)
+    const ruleOutcomes = yield* db
+      .select({ ruleId: checkResult.ruleId, runId: checkResult.runId, status: checkResult.status })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+          scope,
+        ),
+      )
+    const outcomesOf = new Map<string, Record<string, string>>()
+    for (const o of ruleOutcomes)
+      outcomesOf.set(o.ruleId, { ...outcomesOf.get(o.ruleId), [o.runId]: o.status })
     const failedDependent = yield* db
       .select({ ruleId: checkResult.ruleId, runId: checkResult.runId })
       .from(checkResult)
@@ -344,6 +360,7 @@ export const findingsOf = (orgId: string, auditId: string) =>
             bannerUncertainRuns: bannerUncertain.get(f.ruleId) ?? 0,
             inconclusiveRuns: f.inconclusiveRuns,
             runIds: f.runIds,
+            outcomes: outcomesOf.get(f.ruleId) ?? {},
             pages: new Set(affected.map((r) => r.pageUrl)).size,
             scenarios: new Set(affected.map((r) => r.scenario)).size,
             triage: yield* triageOf(triage, originStart),

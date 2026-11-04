@@ -43,10 +43,12 @@ import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { recheckVerdict } from "@/lib/compare-text"
 import { count, relativeTime, shortDate as dayOf } from "@/lib/format"
 import { OWNER_LABELS } from "@/lib/report-model"
+import { ProblemGrid } from "@/components/problem-grid"
 import { Skeleton } from "@/components/ui/skeleton"
 import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
 import { cn } from "@/lib/utils"
+import type { getAudit } from "@/server/audits"
 import { explainFinding, getExplanation as fetchExplanation } from "@/server/explain"
 import {
   getEvidence as fetchEvidence,
@@ -203,7 +205,7 @@ function TriageMenu({
             <DialogHeader>
               <DialogTitle>Accept this risk</DialogTitle>
               <DialogDescription>
-                The finding leaves the Open list. Say why, so the next person to look knows.
+                It leaves the Open list. Say why, so the next person to look knows.
               </DialogDescription>
             </DialogHeader>
             <Textarea
@@ -250,7 +252,7 @@ export function FindingDetail({
   row: FindingRow
   canVerify: boolean
   onTriaged: () => void
-  runs: ReadonlyArray<{ id: string; screenshotUrl: string | null }>
+  runs: Awaited<ReturnType<typeof getAudit>>["runs"]
 }) {
   const router = useRouter()
   const [detail, setDetail] = useState<Loaded<FindingDetailData>>({ state: "loading" })
@@ -353,7 +355,7 @@ export function FindingDetail({
               className="h-8"
               onClick={() => setVerifying(true)}
             >
-              Re-check this finding
+              Re-check this problem
             </Button>
             <RecheckDialog
               auditId={auditId}
@@ -386,7 +388,7 @@ export function FindingDetail({
         <div aria-live="polite" className="p-4 text-sm">
           {detail.state === "loading" ? (
             <div className="space-y-5" data-testid="detail-skeleton">
-              <span className="sr-only">Loading finding</span>
+              <span className="sr-only">Loading problem</span>
               {[0, 1].map((section) => (
                 <div key={section} className="space-y-2" aria-hidden>
                   <Skeleton className="h-3 w-28" />
@@ -399,7 +401,7 @@ export function FindingDetail({
           ) : null}
           {detail.state === "failed" ? (
             <LoadFailure
-              what="This finding"
+              what="This problem"
               gone={detail.gone}
               onRetry={() => {
                 setDetail({ state: "loading" })
@@ -427,6 +429,7 @@ export function FindingDetail({
     <div>
       {header}
       <div className="space-y-5 p-4 text-sm">
+        <ProblemGrid auditId={auditId} problem={row} runs={runs} />
         {couldNotCheck ? (
           <Alert role="status" className="border-dashed">
             <CircleDashed aria-hidden="true" />
@@ -486,7 +489,7 @@ export function FindingDetail({
           {noted.map((detection) => (
             <p key={detection} className="text-xs text-muted-foreground" data-testid="banner-note">
               <StatusGlyph meaning="could-not-check" className="mr-1 inline align-text-bottom" />
-              {BANNER_NOTE[detection]} The finding keeps its severity.
+              {BANNER_NOTE[detection]} The problem keeps its severity.
             </p>
           ))}
           <ul className="divide-y rounded-md border text-xs" aria-label="Where it was seen">

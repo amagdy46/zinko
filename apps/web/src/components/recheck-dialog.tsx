@@ -141,7 +141,7 @@ function RecheckBody({
   return (
     <>
       <DialogHeader>
-        <DialogTitle>{verify ? "Re-check this finding?" : "Re-check these pages?"}</DialogTitle>
+        <DialogTitle>{verify ? "Re-check this problem?" : "Re-check these pages?"}</DialogTitle>
         <p className="text-sm font-medium [overflow-wrap:anywhere]">{title}</p>
         <DialogDescription>{description}</DialogDescription>
       </DialogHeader>

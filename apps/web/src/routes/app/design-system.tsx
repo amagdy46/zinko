@@ -452,7 +452,7 @@ function DesignSystem() {
                   className="scroll-edges -mx-2.5 flex gap-1 overflow-x-auto overflow-y-hidden border-b text-sm tabular-nums"
                 >
                   {[
-                    ["findings", "Findings 7"],
+                    ["findings", "Problems 7"],
                     ["changes", "Changes"],
                     ["evidence", "Evidence 24"],
                     ["report", "Report"],
@@ -505,13 +505,13 @@ function DesignSystem() {
                   <TabsTrigger value="fixed">Fixed</TabsTrigger>
                 </TabsList>
                 <TabsContent value="open" className="p-2 text-sm">
-                  Findings that still fail and have no decision.
+                  Problems that still fail and have no decision.
                 </TabsContent>
                 <TabsContent value="accepted" className="p-2 text-sm">
-                  Findings someone chose to live with, with a reason.
+                  Problems someone chose to live with, with a reason.
                 </TabsContent>
                 <TabsContent value="fixed" className="p-2 text-sm">
-                  Findings marked fixed by the author.
+                  Problems marked fixed by the author.
                 </TabsContent>
               </Tabs>
             </Sample>
@@ -607,7 +607,7 @@ function DesignSystem() {
               icon={Globe}
               title="Add your first site"
               description="A site is the address Zinko audits."
-              steps={["Add the site", "Pick the consent choices", "Read the findings"]}
+              steps={["Add the site", "Pick the consent choices", "Read the problems"]}
               action={<Button>Add site</Button>}
             />
             <EmptyState
@@ -640,7 +640,7 @@ function DesignSystem() {
         <Block
           id="ds-evidence"
           title="Evidence"
-          description="The request view is compact on Start with and full in the finding detail. The sample request is fixed."
+          description="The request view is compact in samples and full in the problem detail. The sample request is fixed."
         >
           <div className="space-y-5">
             <Sample label="RequestView compact">

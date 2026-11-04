@@ -97,7 +97,7 @@ function Explanations({
   return (
     <SettingsSection
       title="Explanations"
-      description="Optional text beside a finding that explains it in plain words. It never changes a verdict, and nothing is sent unless you allow it here."
+      description="Optional text beside a problem that explains it in plain words. It never changes a verdict, and nothing is sent unless you allow it here."
     >
       <div className="max-w-xl">
         <form onSubmit={save} className="space-y-4">
@@ -114,7 +114,7 @@ function Explanations({
                 Allow AI explanations
               </Label>
               <p className="text-sm text-muted-foreground">
-                Off by default. Members can ask for an explanation of a finding once this is on and
+                Off by default. Members can ask for an explanation of a problem once this is on and
                 a key is set.
               </p>
             </div>
@@ -122,7 +122,7 @@ function Explanations({
           {enabled ? (
             <div className="space-y-3 rounded-md border p-3 text-sm" data-testid="ai-disclosure">
               <p>
-                When someone asks for an explanation, a reduced summary of the finding is sent to
+                When someone asks for an explanation, a reduced summary of the problem is sent to
                 the provider you configured above. Aliasing and redaction lower the exposure; they
                 are not a guarantee.
               </p>
@@ -273,7 +273,7 @@ function AiSettings() {
             >
               <Info aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
               <p>
-                No key is set for this organization. Without a key, findings show the built-in fix
+                No key is set for this organization. Without a key, problems show the built-in fix
                 steps.
               </p>
             </div>

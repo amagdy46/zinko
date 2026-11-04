@@ -1,12 +1,13 @@
 import { createFileRoute, getRouteApi, Link } from "@tanstack/react-router"
 import { Option, Schema } from "effect"
-import { useEffect, useRef, useState } from "react"
+import { type ComponentProps, useEffect, useRef, useState } from "react"
 import { ChevronDown, ChevronLeft, ChevronRight, Download, ListFilter } from "lucide-react"
 import { Caveats, incompleteCauseOf, ScoreLine } from "@/components/audit-summary"
 import { ChangeGlyph } from "@/components/change-badge"
 import { Briefing, RecheckResult } from "@/components/compare/briefing"
 import { FindingDetail, type FindingRow, type Triage } from "@/components/finding-detail"
 import { DataRow, rowLink } from "@/components/data-row"
+import { ProblemFingerprint } from "@/components/problem-grid"
 import { FindingsSkeleton } from "@/components/page-skeleton"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -370,6 +371,7 @@ function FindingsScreen() {
                           <FindingItem
                             key={row.ruleId}
                             row={row}
+                            runs={runs}
                             selected={row.ruleId === selected?.ruleId}
                             chip={chips.get(row.ruleId)}
                           />
@@ -402,6 +404,7 @@ function FindingsScreen() {
                         <FindingItem
                           key={row.ruleId}
                           row={row}
+                          runs={runs}
                           selected={row.ruleId === selected?.ruleId}
                           chip={chips.get(row.ruleId)}
                         />
@@ -722,10 +725,12 @@ function EmptyList({
 
 function FindingItem({
   row,
+  runs,
   selected,
   chip,
 }: {
   row: FindingRow
+  runs: ComponentProps<typeof ProblemFingerprint>["runs"]
   selected: boolean
   chip: Chip | undefined
 }) {
@@ -767,11 +772,7 @@ function FindingItem({
           <p className="text-xs text-muted-foreground">Expected: requests are answered locally</p>
         ) : null}
       </div>
-      {failing && row.knownRuns > 0 ? (
-        <span className="mt-0.5 shrink-0 text-xs tabular-nums text-muted-foreground">
-          {row.failingRuns} of {count(row.knownRuns, "run")}
-        </span>
-      ) : null}
+      <ProblemFingerprint problem={row} runs={runs} />
     </DataRow>
   )
 }

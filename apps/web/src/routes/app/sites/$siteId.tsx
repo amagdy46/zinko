@@ -568,7 +568,7 @@ function SitePage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Runs</TableHead>
                   <TableHead>Score</TableHead>
-                  <TableHead>Findings</TableHead>
+                  <TableHead>Problems</TableHead>
                   <TableHead>
                     <span className="sr-only">Actions</span>
                   </TableHead>

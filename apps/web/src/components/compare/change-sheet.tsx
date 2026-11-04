@@ -84,7 +84,7 @@ export function ChangeSheet({
           </SheetTitle>
           <SheetDescription>
             {finding === undefined
-              ? "This finding is not part of this comparison."
+              ? "This problem is not part of this comparison."
               : `${finding.ruleId}, compared with the audit of ${auditName(comparison.before, timeZone)}`}
           </SheetDescription>
         </SheetHeader>
@@ -177,7 +177,7 @@ function Detail({
           search={{ finding: finding.ruleId }}
           className="inline-flex h-8 items-center rounded-sm text-sm underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
-          Open in Findings
+          Open in Problems
         </Link>
       ) : null}
       <section className="space-y-2" aria-label="Runs">

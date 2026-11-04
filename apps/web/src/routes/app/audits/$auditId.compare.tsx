@@ -209,7 +209,7 @@ function CompareScreen() {
           <CompareNotices comparison={comparison} />
           {nothingChanged(comparison) ? (
             <p role="status" className="text-sm">
-              No finding changed in the {comparison.comparability.commonCells} shared runs. Open
+              No problem changed in the {comparison.comparability.commonCells} shared runs. Open
               Tags below to see whether any tag did.
             </p>
           ) : null}

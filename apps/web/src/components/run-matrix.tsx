@@ -260,7 +260,7 @@ export function RunMatrix({
       </Table>
       <p className="text-xs text-muted-foreground">
         <StatusGlyph meaning="captured" className="mr-1 inline align-text-bottom" />
-        Captured means the page was loaded and recorded. Open Findings for pass or fail. A cell
+        Captured means the page was loaded and recorded. Open Problems for pass or fail. A cell
         shows the worst failing severity with its number of failing checks, then the hits.
       </p>
       <MatrixLegend runs={runs} />

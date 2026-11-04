@@ -592,7 +592,7 @@ export const briefingOf = (orgId: string, auditId: string) =>
       .filter((c) => c.change === "disappeared" && c.cellsAffected === c.cellsCompared)
       .map((c) => `${vendorName(c.vendor)} ${c.destinationId}`)
     if (refusalOf(comparison) !== null) return null
-    return { since: comparison.before, lines: changesBriefing(comparison, gone) }
+    return { since: comparison.before, lines: changesBriefing(comparison, gone, "problem") }
   })
 
 /**
