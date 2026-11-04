@@ -35,7 +35,7 @@ Never set `ALLOW_PRIVATE_NETWORKS` or `BROWSER_URL` for a deployed stage: the en
    pnpm install && pnpm build && pnpm db:migrate
    ```
 
-   `pnpm db:migrate` applies the migrations and then the idempotent backfill: each organization gets its default client, and a site on a named client takes that name as "Report for" and moves to the default; a re-run is harmless and a cleared "Report for" stays cleared. Run it in a quiet window and deploy straight after: until the deploy, the old app still shows clients, without their sites.
+   `pnpm db:migrate` applies the migrations and then the idempotent backfill: each organization gets its default client, and a site on a named client takes that name as "Report for" and moves to the default; a re-run is harmless and a cleared "Report for" stays cleared. Nobody should publish a report or create a share link between this step and the deploy: the old Worker would freeze that version with no name on the cover. Run it in a quiet window and deploy straight after: until the deploy, the old app still shows clients, without their sites.
 
 2. Export the other settings from the table, then deploy:
 

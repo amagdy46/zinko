@@ -189,8 +189,8 @@ function CompareScreen() {
         </div>
         {against !== baselineId ? (
           <p className="text-sm text-muted-foreground">
-            This is not the baseline of this audit. Make it the baseline to use it in the Overview
-            and the report.
+            This is not the baseline of this audit. Make it the baseline to use it on Problems and
+            in the report.
           </p>
         ) : null}
         {message === undefined ? null : (
@@ -214,7 +214,7 @@ function CompareScreen() {
             </p>
           ) : null}
           {shownCount === 0 ? (
-            <p className="text-sm text-muted-foreground">No findings in this state.</p>
+            <p className="text-sm text-muted-foreground">No problems in this state.</p>
           ) : (
             <FindingsTable
               findings={comparison.findings}

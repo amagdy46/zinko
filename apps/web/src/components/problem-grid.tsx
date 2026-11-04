@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router"
-import { runPageLabel } from "@/lib/page-label"
+import { pathLabels } from "@/lib/page-label"
 import { scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -41,7 +41,7 @@ const fillOf = (state: CellState, severity: Severity) => {
   if (state === "failed") return FAILED_FILL[severity]
   if (state === "passed") return "bg-muted-foreground/25"
   if (state === "could-not-check") return "border border-muted-foreground"
-  return state === "not-run" ? HATCH : ""
+  return state === "not-run" ? HATCH : "border border-dashed border-border"
 }
 
 const pageKey = (run: Run) => `${run.pageUrl}\0${run.journey}\0${run.followHost ?? ""}`
@@ -60,8 +60,20 @@ const layoutOf = (runs: ReadonlyArray<Run>) => {
   )
   const at = (page: Run, column: (typeof columns)[number]) =>
     cell.get(`${pageKey(page)}\0${column.viewport}\0${column.scenario}`)
-  return { pages, viewports, scenarios, columns, at }
+  const paths = pathLabels(results.map((run) => run.pageUrl))
+  const labelOf = (run: Run) => {
+    const path = paths.get(run.pageUrl) ?? run.pageUrl
+    if (run.followHost !== null) return `Journey from ${path}, then ${run.followHost}`
+    return run.journey ? `Journey from ${path}` : path
+  }
+  return { pages, viewports, scenarios, columns, at, labelOf }
 }
+
+/** The same sentence on the row and in the pane: a check that could not run never reads as "0 failed". */
+const summaryOf = (problem: Problem) =>
+  problem.kind === "fail"
+    ? `${problem.failingRuns} of ${count(problem.knownRuns, "run")}`
+    : `Could not check on ${count(problem.inconclusiveRuns, "run")}`
 
 // Past this a fingerprint is taller than its row, so the row says it in words.
 const MAX_FINGERPRINT_PAGES = 5
@@ -76,44 +88,53 @@ export function ProblemFingerprint({
   runs: ReadonlyArray<Run>
 }) {
   const { pages, columns, at } = layoutOf(runs)
-  const words =
-    problem.knownRuns > 0 ? `${problem.failingRuns} of ${count(problem.knownRuns, "run")}` : null
+  const words = summaryOf(problem)
+  const text = (
+    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+      {problem.kind === "fail" ? (
+        <>
+          {problem.failingRuns} of {problem.knownRuns}
+        </>
+      ) : (
+        "Could not check"
+      )}
+    </span>
+  )
   if (
     pages.length === 0 ||
     pages.length > MAX_FINGERPRINT_PAGES ||
     columns.length > MAX_FINGERPRINT_COLUMNS
   )
-    return words === null ? null : (
+    return (
       <span className="mt-0.5 shrink-0 text-xs tabular-nums text-muted-foreground">{words}</span>
     )
   return (
-    <span
-      role="img"
-      aria-label={words === null ? "Could not check on any run" : `Failed on ${words}`}
-      title={words ?? undefined}
-      className="mt-1 shrink-0"
-    >
-      <table aria-hidden="true" className="border-separate border-spacing-0.5">
-        <tbody>
-          {pages.map((page) => (
-            <tr key={pageKey(page)}>
-              {columns.map((column) => {
-                const run = at(page, column)
-                const state = stateOf(run === undefined ? undefined : problem.outcomes[run.id])
-                return (
-                  <td
-                    key={`${column.viewport}-${column.scenario}`}
-                    className={cn(
-                      "size-1.5 rounded-[1px] p-0",
-                      run === undefined ? "" : fillOf(state, problem.severity),
-                    )}
-                  />
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <span className="mt-1 flex shrink-0 items-start gap-2">
+      <span className="sr-only">{problem.kind === "fail" ? `Failed on ${words}` : words}</span>
+      <span aria-hidden="true">{text}</span>
+      <span aria-hidden="true" className="contents">
+        <table className="border-separate border-spacing-0.5">
+          <tbody>
+            {pages.map((page) => (
+              <tr key={pageKey(page)}>
+                {columns.map((column) => {
+                  const run = at(page, column)
+                  const state = stateOf(run === undefined ? undefined : problem.outcomes[run.id])
+                  return (
+                    <td
+                      key={`${column.viewport}-${column.scenario}`}
+                      className={cn(
+                        "size-1.5 rounded-[1px] p-0",
+                        run === undefined ? "" : fillOf(state, problem.severity),
+                      )}
+                    />
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </span>
     </span>
   )
 }
@@ -128,7 +149,7 @@ export function ProblemGrid({
   problem: Problem
   runs: ReadonlyArray<Run>
 }) {
-  const { pages, viewports, scenarios, columns, at } = layoutOf(runs)
+  const { pages, viewports, scenarios, columns, at, labelOf } = layoutOf(runs)
   if (pages.length === 0) return null
   const present = new Set<CellState>(
     pages.flatMap((page) =>
@@ -139,7 +160,11 @@ export function ProblemGrid({
     ),
   )
   return (
-    <section aria-label="Where it failed" className="space-y-2" data-testid="problem-grid">
+    <section
+      aria-label={problem.kind === "fail" ? "Where it failed" : "Where it could not be checked"}
+      className="space-y-2"
+      data-testid="problem-grid"
+    >
       <div className="overflow-x-auto">
         <table className="border-separate border-spacing-0.5 text-xs">
           <thead>
@@ -173,13 +198,13 @@ export function ProblemGrid({
           </thead>
           <tbody>
             {pages.map((page) => {
-              const label = runPageLabel(page)
+              const label = labelOf(page)
               return (
                 <tr key={pageKey(page)}>
                   <th
                     scope="row"
                     title={label}
-                    className="max-w-24 truncate pr-2 text-left sm:max-w-40 font-mono font-normal text-muted-foreground"
+                    className="max-w-24 pr-2 text-left break-all sm:max-w-40 font-mono font-normal text-muted-foreground"
                   >
                     {label}
                   </th>
@@ -197,7 +222,7 @@ export function ProblemGrid({
                           aria-label={`${label}, ${scenarioLabel(column.scenario)}, ${column.viewport}: ${STATE_WORD[state]}. Open the run`}
                           title={STATE_WORD[state]}
                           className={cn(
-                            "flex h-8 items-center justify-center rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset",
+                            "flex h-8 items-center justify-center rounded-sm outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--background),inset_0_0_0_4px_var(--ring)]",
                             fillOf(state, problem.severity),
                           )}
                         >
@@ -222,7 +247,6 @@ export function ProblemGrid({
               className={cn(
                 "flex size-3 items-center justify-center rounded-[2px]",
                 fillOf(state, problem.severity),
-                state === "not-applicable" && "border border-dashed border-border",
               )}
             >
               {state === "failed" ? <span className="size-1.5 rotate-45 bg-background" /> : null}
@@ -231,11 +255,9 @@ export function ProblemGrid({
           </li>
         ))}
       </ul>
-      {problem.knownRuns > 0 ? (
-        <p className="sr-only">
-          Failed on {problem.failingRuns} of {count(problem.knownRuns, "run")}.
-        </p>
-      ) : null}
+      <p className="text-xs text-muted-foreground">
+        {problem.kind === "fail" ? `Failed on ${summaryOf(problem)}.` : `${summaryOf(problem)}.`}
+      </p>
     </section>
   )
 }

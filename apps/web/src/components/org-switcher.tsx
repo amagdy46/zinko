@@ -42,6 +42,7 @@ export function OrgSwitcher({
   const active = organizations.find((org) => org.id === activeId)
 
   async function select(organizationId: string) {
+    if (switching) return
     setSwitching(true)
     const { error } = await authClient.organization.setActive({ organizationId })
     if (error) {
@@ -60,8 +61,10 @@ export function OrgSwitcher({
         <Button
           variant="ghost"
           className="h-8 max-w-56 justify-start gap-1.5 px-1 sm:px-2"
-          disabled={switching}
-          aria-label="Switch organization"
+          aria-disabled={switching}
+          aria-label={
+            active === undefined ? "Switch organization" : `${active.name}, switch organization`
+          }
         >
           <Avatar className="size-6 rounded-md sm:hidden">
             <AvatarFallback className="text-xs">
@@ -79,7 +82,12 @@ export function OrgSwitcher({
         {organizations.map((org) => (
           <DropdownMenuItem key={org.id} onSelect={() => select(org.id)}>
             <span className="flex-1 truncate">{org.name}</span>
-            {org.id === activeId ? <Check className="size-4" /> : null}
+            {org.id === activeId ? (
+              <>
+                <Check className="size-4" />
+                <span className="sr-only">(current)</span>
+              </>
+            ) : null}
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator />

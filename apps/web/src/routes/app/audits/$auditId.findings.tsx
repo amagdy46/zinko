@@ -134,11 +134,14 @@ function useChips(auditId: string) {
 function FindingsScreen() {
   const { audit, runs } = auditRoute.useLoaderData()
   const chips = useChips(audit.id)
-  const { status, coverage, findings, overview } = Route.useLoaderData()
+  const { status, coverage, findings: listed, overview } = Route.useLoaderData()
+  // most runs first within a severity: the first row selected is the one to start with
+  const findings = listed.toSorted((a, b) => b.failingRuns - a.failingRuns)
   const search = Route.useSearch()
   const navigate = Route.useNavigate()
   const below = useBelowLg()
   const opener = useRef<HTMLElement | null>(null)
+  const filterButton = useRef<HTMLButtonElement>(null)
   const sheetOpen = search.finding !== undefined
   useEffect(() => {
     if (sheetOpen) return undefined
@@ -219,7 +222,7 @@ function FindingsScreen() {
           localLimit={couldNotCheck.some(isLocalLimit)}
         />
       ) : null}
-      {overview.recheck === null ? null : <RecheckResult {...overview.recheck} />}
+      {active || overview.recheck === null ? null : <RecheckResult {...overview.recheck} />}
       {!active && overview.recheck === null && overview.score.evaluated ? (
         <ScoreLine
           score={overview.score}
@@ -245,19 +248,20 @@ function FindingsScreen() {
           score={overview.score}
           couldNotCheck={overview.couldNotCheck}
           bannerUncertain={overview.bannerUncertain}
+          uncheckedAreas={overview.uncheckedAreas}
           scored={overview.recheck === null}
         />
       ) : null}
       <div
         className={cn(
-          "grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]",
-          hasPane && "lg:h-[calc(100dvh-2rem)]",
+          "grid grid-cols-[minmax(0,1fr)] gap-4",
+          hasPane && "lg:h-[calc(100dvh-2rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]",
         )}
       >
         <div
           role="region"
           aria-label="Problems list"
-          className="min-w-0 space-y-4 lg:min-h-0 lg:overflow-y-auto lg:pr-2"
+          className="min-w-0 space-y-4 lg:-m-1 lg:min-h-0 lg:overflow-y-auto lg:p-1 lg:pr-2"
         >
           <Tabs
             value={triage}
@@ -280,7 +284,7 @@ function FindingsScreen() {
                 {inTab.length === 0 && !filtered ? null : (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm">
+                      <Button ref={filterButton} variant="outline" size="sm">
                         <ListFilter aria-hidden="true" />
                         Filter
                         {filtered ? (
@@ -327,7 +331,10 @@ function FindingsScreen() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => go({ severity: undefined, area: undefined })}
+                    onClick={() => {
+                      go({ severity: undefined, area: undefined })
+                      filterButton.current?.focus()
+                    }}
                   >
                     Clear
                   </Button>
@@ -524,7 +531,8 @@ function KeepFocus({ ruleId, listed }: { ruleId: string | undefined; listed: str
     if (previous === undefined || listed.split(",").includes(previous)) return
     const target =
       document.querySelector<HTMLElement>("[data-finding-heading]") ??
-      document.querySelector<HTMLElement>('aside[aria-label="Problem detail"]')
+      document.querySelector<HTMLElement>('aside[aria-label="Problem detail"]') ??
+      document.querySelector<HTMLElement>('[aria-label="Triage status"] [data-state="active"]')
     target?.focus()
   }, [ruleId, listed])
   return null

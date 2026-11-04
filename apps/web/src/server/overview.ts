@@ -3,7 +3,7 @@ import { Database } from "@repo/core/Database"
 import { audit, checkResult, run } from "@repo/db"
 import { and, asc, eq, sql } from "drizzle-orm"
 import { Effect, Schema } from "effect"
-import { runReason } from "@/lib/audit-labels"
+import { AREAS, runReason } from "@/lib/audit-labels"
 import { auditInOrg } from "./audit-data"
 import { briefingOf } from "./compare-data"
 import { findingsOf } from "./findings-data"
@@ -20,13 +20,11 @@ const decodeErrors = Schema.decodeUnknownEffect(
 )
 
 /**
- * What the Overview shows, computed from the stored findings and check results on every read:
- * the score, the counts by area (failing findings by severity, and rules that could not be
- * checked), the triage tally, the worst open failing finding in full (the stored text of the
- * finding and the proof from its first failing run) and the tags seen. Triage does not change
- * the score or the counts, only which finding is the worst; `withoutAccepted` is the same score
- * with accepted risks left out, for the one place that shows both. `runHealth` says whether the
- * start page could not be loaded or most runs did not finish, which makes the score incomplete.
+ * What the top of the Problems tab shows, computed from the stored findings and check results on
+ * every read: the score, the triage tally, the briefing and the caveats. Triage does not change
+ * the score; `withoutAccepted` is the same score with accepted risks left out. `runHealth` says
+ * whether the start page could not be loaded or most runs did not finish, which makes the score
+ * incomplete. `uncheckedAreas` are the areas where no rule passed, failed or was left unresolved.
  */
 export const getOverview = createServerFn({ method: "GET" })
   .middleware([requireSession])
@@ -36,7 +34,7 @@ export const getOverview = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
-        const { status, coverage, uncertainty, findings } = yield* findingsOf(orgId, auditId)
+        const { coverage, uncertainty, findings } = yield* findingsOf(orgId, auditId)
         const failing = findings.filter((f) => f.kind === "fail")
         const unchecked = findings.filter((f) => f.kind === "inconclusive")
         const { db } = yield* Database
@@ -134,8 +132,11 @@ export const getOverview = createServerFn({ method: "GET" })
             titles: unchecked.map((f) => f.checkTitle).toSorted(),
           },
           withoutAccepted: summary.withoutAccepted,
-          status,
-          coverage,
+          uncheckedAreas: Object.keys(AREAS).filter(
+            (area) =>
+              !findings.some((f) => f.area === area) &&
+              (checked.find((c) => c.area === area)?.passedRules ?? 0) === 0,
+          ),
           score: summary.score,
           bannerUncertain: failing
             .filter((f) => f.bannerUncertainRuns > 0)

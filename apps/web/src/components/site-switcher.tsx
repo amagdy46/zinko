@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router"
 import { ChevronsUpDown, Globe, Plus } from "lucide-react"
 import { useRef, useState } from "react"
-import { ScoreChip } from "@/components/score-figure"
+import { ScoreFigure } from "@/components/score-figure"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,11 +40,13 @@ function SiteState({ site }: { site: Sites[number] }) {
     )
   if (site.latest === null)
     return <span className="shrink-0 text-xs text-muted-foreground">Not audited</span>
+  if (site.latest.score === null)
+    return <span className="shrink-0 text-xs text-muted-foreground">Not scored</span>
   return (
-    <ScoreChip
-      className="w-auto shrink-0 text-right"
+    <ScoreFigure
+      size="inline"
+      className="shrink-0"
       score={site.latest.score}
-      band={site.latest.band}
       coverage={site.latest.scoreCoverage}
     />
   )
@@ -153,6 +155,7 @@ export function SiteSwitcher({
         <Link
           to="/app/sites/$siteId"
           params={{ siteId: site.id }}
+          activeOptions={{ exact: true }}
           aria-current={current ? "page" : undefined}
           className={crumbLink}
         >
@@ -182,25 +185,25 @@ export function SiteSwitcher({
                   go(() => navigate({ to: "/app/sites/$siteId", params: { siteId } }))
                 }
               />
+              <CommandGroup forceMount className="sticky bottom-0 border-t bg-popover">
+                <CommandItem
+                  forceMount
+                  value="All sites"
+                  onSelect={() => go(() => navigate({ to: "/app/sites" }))}
+                >
+                  <Globe />
+                  All sites
+                </CommandItem>
+                <CommandItem
+                  forceMount
+                  value="Add site"
+                  onSelect={() => go(() => navigate({ to: "/app/sites", search: { add: true } }))}
+                >
+                  <Plus />
+                  Add site
+                </CommandItem>
+              </CommandGroup>
             </CommandList>
-            <CommandGroup forceMount className="border-t">
-              <CommandItem
-                forceMount
-                value="All sites"
-                onSelect={() => go(() => navigate({ to: "/app/sites" }))}
-              >
-                <Globe />
-                All sites
-              </CommandItem>
-              <CommandItem
-                forceMount
-                value="Add site"
-                onSelect={() => go(() => navigate({ to: "/app/sites", search: { add: true } }))}
-              >
-                <Plus />
-                Add site
-              </CommandItem>
-            </CommandGroup>
           </Command>
         </PopoverContent>
       </Popover>

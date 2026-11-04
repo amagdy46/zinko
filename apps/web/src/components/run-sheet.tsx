@@ -191,7 +191,7 @@ export function RunSheet({
             </Button>
             {runReason(run) === null ? (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Failing findings for this run</h3>
+                <h3 className="text-sm font-medium">Failing problems for this run</h3>
                 {findings
                   .filter((finding) => finding.runIds.includes(run.id))
                   .map((finding) => (

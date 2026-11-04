@@ -166,7 +166,9 @@ export function scoreCoverage(c: ScoreCoverage): {
 }
 
 /** Half the runs or fewer were captured (evaluated and finished): too little to put a number on. */
-export function tooLittleCaptured(c: ScoreCoverage): boolean {
+export function tooLittleCaptured(
+  c: Pick<ScoreCoverage, "evaluatedRuns" | "totalRuns" | "unfinishedRuns">,
+): boolean {
   const captured = Math.min(c.evaluatedRuns, c.totalRuns - c.unfinishedRuns)
   return captured * 2 <= c.totalRuns
 }

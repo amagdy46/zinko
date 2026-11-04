@@ -3,7 +3,7 @@ import { AuditConfig, Storage } from "@repo/core"
 import { Database } from "@repo/core/Database"
 import { audit, run, site, checkResult, reportSnapshot } from "@repo/db"
 import { createServerFn } from "@tanstack/react-start"
-import { and, asc, eq, countDistinct, max, sql } from "drizzle-orm"
+import { and, asc, count, desc, eq, countDistinct, max, sql } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
 import { isPrivateHost } from "@repo/capture-contract"
 import { canonicalHost, isOnSite, originHost } from "@/lib/site-url"
@@ -329,6 +329,26 @@ const reportStatusOf = (orgId: string, auditId: string) =>
     return { published: published?.version ?? null, shared: live?.[0] ?? null }
   })
 
+/** The newest full audit that re-ran this one, so a superseded audit says so. */
+const successorOf = (orgId: string, a: typeof audit.$inferSelect) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const [successor] = yield* db
+      .select({ id: audit.id, status: audit.status })
+      .from(audit)
+      .where(
+        and(
+          eq(audit.orgId, orgId),
+          eq(audit.siteId, a.siteId),
+          eq(audit.kind, "full"),
+          eq(audit.baselineAuditId, a.id),
+        ),
+      )
+      .orderBy(desc(audit.createdAt), desc(audit.id))
+      .limit(1)
+    return successor ?? null
+  })
+
 export const getAudit = createServerFn({ method: "GET" })
   .middleware([requireSession])
   .validator(Schema.toStandardSchemaV1(Schema.Struct({ id: Schema.String })))
@@ -451,6 +471,19 @@ export const getAudit = createServerFn({ method: "GET" })
               eq(checkResult.orgId, orgId),
             ),
           )
+        const [unresolved] = yield* db
+          .select({ total: count() })
+          .from(checkResult)
+          .innerJoin(run, eq(run.id, checkResult.runId))
+          .where(
+            and(
+              eq(run.auditId, found.audit.id),
+              eq(run.role, "target"),
+              eq(run.orgId, orgId),
+              eq(checkResult.orgId, orgId),
+              eq(checkResult.status, "inconclusive"),
+            ),
+          )
         const openCount = (severity: string) =>
           findings.filter(
             (f) =>
@@ -474,10 +507,12 @@ export const getAudit = createServerFn({ method: "GET" })
             info: openCount("info"),
           },
           evaluatedRuns: evaluation?.total ?? 0,
+          unresolvedChecks: unresolved?.total ?? 0,
           otherFailing,
         }
         const { audit: a } = found
         const reportStatus = a.kind === "full" ? yield* reportStatusOf(orgId, found.audit.id) : null
+        const successor = a.kind === "full" ? yield* successorOf(orgId, found.audit) : null
         return {
           audit: {
             id: a.id,
@@ -501,6 +536,7 @@ export const getAudit = createServerFn({ method: "GET" })
           },
           summary,
           reportStatus,
+          successor,
           findings: findings.filter((f) => f.kind === "fail"),
           runs,
         }

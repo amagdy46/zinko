@@ -17,6 +17,7 @@ import {
   findingsOf,
   triageOf,
   TriageStatus,
+  outcomesOf,
 } from "./findings-data"
 import { latestRecheckOf } from "./recheck-data"
 import { requireSession } from "./require-session"
@@ -52,7 +53,18 @@ export const listFindings = createServerFn({ method: "GET" })
       Effect.gen(function* () {
         const { organizationId: orgId } = yield* membership(context.session)
         const auditId = yield* auditInOrg(orgId, data.auditId)
-        return yield* findingsOf(orgId, auditId)
+        const listing = yield* findingsOf(orgId, auditId)
+        const outcomes = yield* outcomesOf(
+          orgId,
+          auditId,
+          listing.findings.map((f) => f.ruleId),
+        )
+        return {
+          ...listing,
+          findings: listing.findings.map((f) =>
+            Object.assign(f, { outcomes: outcomes.get(f.ruleId) ?? {} }),
+          ),
+        }
       }),
     ),
   )

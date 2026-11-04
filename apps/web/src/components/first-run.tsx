@@ -94,7 +94,7 @@ export function OpenFindings({ latest }: { latest: Result | null }) {
   if (latest === null)
     return (
       <span className="text-muted-foreground">
-        —<span className="sr-only">No audit to count findings from</span>
+        —<span className="sr-only">No audit to count problems from</span>
       </span>
     )
   const total = Object.values(latest.openFindings).reduce((sum, n) => sum + n, 0)

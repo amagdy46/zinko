@@ -241,22 +241,6 @@ export const findingsOf = (orgId: string, auditId: string) =>
         ),
       )
       .groupBy(checkResult.ruleId, checkResult.status, checkResult.area, checkResult.checkTitle)
-    const ruleOutcomes = yield* db
-      .select({ ruleId: checkResult.ruleId, runId: checkResult.runId, status: checkResult.status })
-      .from(checkResult)
-      .innerJoin(run, eq(run.id, checkResult.runId))
-      .where(
-        and(
-          eq(run.auditId, auditId),
-          eq(run.role, "target"),
-          eq(run.orgId, orgId),
-          eq(checkResult.orgId, orgId),
-          scope,
-        ),
-      )
-    const outcomesOf = new Map<string, Record<string, string>>()
-    for (const o of ruleOutcomes)
-      outcomesOf.set(o.ruleId, { ...outcomesOf.get(o.ruleId), [o.runId]: o.status })
     const failedDependent = yield* db
       .select({ ruleId: checkResult.ruleId, runId: checkResult.runId })
       .from(checkResult)
@@ -360,7 +344,6 @@ export const findingsOf = (orgId: string, auditId: string) =>
             bannerUncertainRuns: bannerUncertain.get(f.ruleId) ?? 0,
             inconclusiveRuns: f.inconclusiveRuns,
             runIds: f.runIds,
-            outcomes: outcomesOf.get(f.ruleId) ?? {},
             pages: new Set(affected.map((r) => r.pageUrl)).size,
             scenarios: new Set(affected.map((r) => r.scenario)).size,
             triage: yield* triageOf(triage, originStart),
@@ -397,4 +380,30 @@ export const findingsOf = (orgId: string, auditId: string) =>
           a.ruleId.localeCompare(b.ruleId),
       ),
     }
+  })
+
+/** What each listed rule said on each result run, for the grid on the Problems tab. A run with no row has no result for that rule. */
+export const outcomesOf = (orgId: string, auditId: string, ruleIds: ReadonlyArray<string>) =>
+  Effect.gen(function* () {
+    const { db } = yield* Database
+    const rows = yield* db
+      .select({ ruleId: checkResult.ruleId, runId: checkResult.runId, status: checkResult.status })
+      .from(checkResult)
+      .innerJoin(run, eq(run.id, checkResult.runId))
+      .where(
+        and(
+          eq(run.auditId, auditId),
+          eq(run.role, "target"),
+          eq(run.orgId, orgId),
+          eq(checkResult.orgId, orgId),
+          inArray(checkResult.ruleId, [...ruleIds]),
+        ),
+      )
+    const outcomes = new Map<string, Record<string, string>>()
+    for (const row of rows) {
+      const rule = outcomes.get(row.ruleId) ?? {}
+      rule[row.runId] = row.status
+      outcomes.set(row.ruleId, rule)
+    }
+    return outcomes
   })

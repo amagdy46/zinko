@@ -53,7 +53,8 @@ export function TopBar({
         <ol className="flex items-center gap-0.5">
           <li className="mr-1 shrink-0">
             <Link
-              to="/app/sites"
+              to="/app"
+              activeOptions={{ exact: true }}
               aria-label="Zinko, all sites"
               className="flex size-8 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none"
             >

@@ -161,6 +161,8 @@ function SitePage() {
       setNamingReader(false)
       toast.success("Saved")
       await router.invalidate()
+    } catch {
+      toast.error("Could not save. Check your connection and try again.")
     } finally {
       setPending(false)
     }
@@ -242,7 +244,10 @@ function SitePage() {
               </span>
             ) : null}
             {site.reportFor === null ? null : (
-              <span className="mt-1 block text-sm" data-testid="site-report-for">
+              <span
+                className="mt-1 block text-sm [overflow-wrap:anywhere]"
+                data-testid="site-report-for"
+              >
                 Report for {site.reportFor}
               </span>
             )}

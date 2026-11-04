@@ -7,7 +7,7 @@ import { StatusGlyph } from "@/components/status-glyph"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
+import { AREAS, BANNER_NOTE, pagePath, runReason, scenarioLabel } from "@/lib/audit-labels"
 import { count } from "@/lib/format"
 import { type HealthScore, tooLittleCaptured } from "@/lib/health-score"
 import { checkGapReason } from "@/lib/report-projection"
@@ -15,9 +15,9 @@ import { cn } from "@/lib/utils"
 import type { getAudit } from "@/server/audits"
 import type { getOverview } from "@/server/overview"
 
-export type Overview = Awaited<ReturnType<typeof getOverview>>
+type Overview = Awaited<ReturnType<typeof getOverview>>
 type AuditRun = Awaited<ReturnType<typeof getAudit>>["runs"][number]
-export type Scored = Extract<HealthScore, { evaluated: true }>
+type Scored = Extract<HealthScore, { evaluated: true }>
 
 const CAVEAT_LIST = 5
 
@@ -74,6 +74,11 @@ export function ScoreLine({
           <Arithmetic score={score} scope={scope} />
         </PopoverContent>
       </Popover>
+      {triage.acceptedRisk > 0 ? (
+        <p className="self-center text-xs text-muted-foreground">
+          Counts {count(triage.acceptedRisk, "accepted risk")}
+        </p>
+      ) : null}
     </section>
   )
 }
@@ -90,7 +95,7 @@ function TriageNote({
   if (triage.acceptedRisk > 0 && withoutAccepted !== null)
     return (
       <p className="text-sm" data-testid="score-without-accepted">
-        The score of {score} counts all findings, including{" "}
+        The score of {score} counts all problems, including{" "}
         {count(triage.acceptedRisk, "accepted risk")}. Without{" "}
         {triage.acceptedRisk === 1 ? "it" : "them"}:{" "}
         <span className="font-medium tabular-nums">{withoutAccepted}</span>.
@@ -151,6 +156,7 @@ export function Caveats({
   score,
   couldNotCheck,
   bannerUncertain,
+  uncheckedAreas,
   scored = true,
 }: {
   auditId: string
@@ -161,6 +167,7 @@ export function Caveats({
   score: Scored
   couldNotCheck: Overview["couldNotCheck"]
   bannerUncertain: Overview["bannerUncertain"]
+  uncheckedAreas: Overview["uncheckedAreas"]
   /** False for a re-check, which has a result and no score. */
   scored?: boolean
 }) {
@@ -300,6 +307,19 @@ export function Caveats({
           ),
         }
       : null,
+    uncheckedAreas.length > 0
+      ? {
+          key: "areas",
+          node: (
+            <p data-testid="unchecked-areas">
+              <span className="font-medium">
+                Nothing was checked in {uncheckedAreas.map((a) => AREAS[a] ?? a).join(", ")}.{" "}
+              </span>
+              No rule there applied or was evaluated, so these areas say nothing about the site.
+            </p>
+          ),
+        }
+      : null,
     score.mixedVersions
       ? {
           key: "versions",
@@ -326,9 +346,11 @@ export function Caveats({
         )}
       >
         <StatusGlyph meaning="partial" />
-        {count(items.length, "caveat")}
+        <span className="shrink-0">{count(items.length, "caveat")}</span>
         <span className="font-normal text-muted-foreground">
-          {runHealth.incomplete ? "· read these before the score" : "· what qualifies the score"}
+          {runHealth.incomplete
+            ? `${cause}Read these before the score.`
+            : "What qualifies the score"}
         </span>
         <ChevronDown
           aria-hidden="true"

@@ -20,6 +20,7 @@ import { StatusBadge, toBadgeStatus } from "@/components/status-badge"
 import { StatusGlyph } from "@/components/status-glyph"
 import { Progress } from "@/components/ui/progress"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { tooLittleCaptured } from "@/lib/health-score"
 import { pageTitle } from "@/lib/page-title"
 import {
   auditTabName,
@@ -61,7 +62,7 @@ const SEVERITY_WORDS = [
 ] as const
 
 const reportWord = ({ published, shared }: { published: number | null; shared: number | null }) => {
-  if (shared !== null) return "Shared"
+  if (shared !== null) return shared === published ? "Shared" : `Shared v${shared} of v${published}`
   return published === null ? "Draft" : "Published"
 }
 
@@ -74,7 +75,7 @@ const RECONCILE_EVERY_MS = 5 * 60_000
 const FINISHED_TOAST_MS = 30_000
 
 function AuditPage() {
-  const { audit, site, runs, summary, reportStatus } = Route.useLoaderData()
+  const { audit, site, runs, summary, reportStatus, successor } = Route.useLoaderData()
   const router = useRouter()
   const timeZone = useTimeZone()
   const active = ACTIVE.has(audit.status)
@@ -177,13 +178,13 @@ function AuditPage() {
   else if (clockKnown) progressNote = remainingTime(remainingUnits, elapsed, workUnits)
   useEffect(() => {
     if (previous.current.id === audit.id && previous.current.active && !active) {
-      const noun = findings === 1 ? "problem" : "problems"
-      let message = `Audit complete: ${findings} ${noun}`
+      const noun = openFindings === 1 ? "problem" : "problems"
+      let message = `Audit complete: ${openFindings} ${noun}`
       if (audit.status === "failed") message = "Audit failed"
       if (audit.status === "partial" && summary.evaluatedRuns === 0)
         message = "Audit finished: not evaluated"
       else if (audit.status === "partial")
-        message = `Audit finished with gaps: ${findings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
+        message = `Audit finished with gaps: ${openFindings} ${noun}, ${partial + failed} ${partial + failed === 1 ? "run" : "runs"} incomplete`
       const onProblems = router.state.location.pathname.endsWith("/findings")
       toast(message, {
         id: `audit-finished-${audit.id}`,
@@ -202,7 +203,7 @@ function AuditPage() {
       })
     }
     previous.current = { id: audit.id, active }
-  }, [audit.id, audit.status, active, findings, partial, failed, summary.evaluatedRuns, router])
+  }, [audit.id, audit.status, active, openFindings, partial, failed, summary.evaluatedRuns, router])
   const problems = runs.filter((r) => r.status === "partial" || r.status === "failed")
   const params = { auditId: audit.id }
   const named = {
@@ -214,12 +215,19 @@ function AuditPage() {
   let title = auditHeading(named)
   if (audit.kind === "full") {
     title = count(openFindings, "problem")
-    if (openFindings === 0)
-      // never a clean headline for an audit that did not see everything
-      title =
-        audit.status === "complete" && summary.findings.couldNotCheck === 0
-          ? "No open problems"
-          : "No problems in what was checked"
+    // never a clean headline over an audit that did not see everything, or that has accepted failures
+    if (openFindings === 0) {
+      const targets = runs.filter((run) => run.role === "target")
+      const sparse = tooLittleCaptured({
+        evaluatedRuns: summary.evaluatedRuns,
+        totalRuns: targets.length,
+        unfinishedRuns: targets.filter((run) => run.status !== "complete").length,
+      })
+      const sawEverything = audit.status === "complete" && summary.unresolvedChecks === 0
+      const scope = sawEverything ? "" : " in what was checked"
+      title = findings > 0 || sawEverything ? `No open problems${scope}` : `No problems${scope}`
+      if (sparse) title = "Too little captured to say"
+    }
     if (summary.evaluatedRuns === 0) title = "Not evaluated"
     if (active) title = `${done} of ${count(runs.length, "run")}`
   }
@@ -346,6 +354,17 @@ function AuditPage() {
               <StatusBadge status={toBadgeStatus(audit.status)} />
             )}
             <span>{facts}</span>
+            {successor === null ? null : (
+              <Link
+                to="/app/audits/$auditId/findings"
+                params={{ auditId: successor.id }}
+                className="inline-flex h-8 items-center rounded-sm underline decoration-brand underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                {ACTIVE.has(successor.status)
+                  ? "A re-run is in progress"
+                  : "There is a newer re-run"}
+              </Link>
+            )}
             {active ? (
               <TooltipProvider>
                 <Tooltip>

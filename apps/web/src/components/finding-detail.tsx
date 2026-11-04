@@ -786,7 +786,7 @@ function ExplainSection({ auditId, ruleId }: { auditId: string; ruleId: string }
               {written.text}
             </time>
             .{cached.createdByName === null ? "" : ` Asked by ${cached.createdByName}.`} Check it
-            against the evidence below. The rule, not the model, decided this finding.
+            against the evidence below. The rule, not the model, decided this problem.
           </p>
         </div>
       )}

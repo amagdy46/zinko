@@ -20,11 +20,7 @@ export const backfillDefaultClients = (
         on conflict (org_id) where is_default do update set archived_at = null
         where client.archived_at is not null`)
       yield* db.execute(sql`
-        update site s set report_for = coalesce(s.report_for, c.name)
-        from client c
-        where c.id = s.client_id and not c.is_default`)
-      yield* db.execute(sql`
-        update site s set client_id = d.id
+        update site s set report_for = coalesce(s.report_for, c.name), client_id = d.id
         from client c, client d
         where c.id = s.client_id and not c.is_default
           and d.org_id = s.org_id and d.is_default`)

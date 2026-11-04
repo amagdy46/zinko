@@ -53,7 +53,7 @@ const authorize = (session: Parameters<typeof membership>[0], data: typeof Findi
     const auditId = yield* auditInOrg(orgId, data.auditId)
     const { finding: found } = yield* findingRowOf(orgId, auditId, data.ruleId)
     if (found.kind !== "fail")
-      return yield* new Invalid({ message: "Only a failing finding can be explained." })
+      return yield* new Invalid({ message: "Only a failing problem can be explained." })
     return { orgId, userId, role, auditId, finding: found, policy: yield* aiPolicyOf(orgId) }
   })
 
@@ -165,7 +165,7 @@ const MESSAGES = {
   noKey: "No API key is set for this organization. Add one in Settings > AI.",
   unreadableKey: "The saved API key could not be read. Enter it again in Settings > AI.",
   limit: "This organization has reached its hourly limit of AI explanations. Try again later.",
-  inFlight: "An explanation for this finding is already being written. Check again in a moment.",
+  inFlight: "An explanation for this problem is already being written. Check again in a moment.",
   unreadable: "The model's answer could not be used. Nothing was stored.",
   timeout: "The model did not answer in time.",
   provider: "The model provider returned an error.",
