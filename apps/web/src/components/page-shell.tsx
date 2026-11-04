@@ -13,7 +13,7 @@ const Framed = createContext(false)
 /**
  * The one frame of every `/app` page: the padding around it, the width, and the vertical rhythm.
  * `main` carries no padding, so a page that skips the shell would touch the screen edge.
- * Pair it with `PageHeader`, whose breadcrumb row keeps the title at the same height on every page.
+ * Pair it with `PageHeader`.
  * Inside another shell (an audit tab, or a loading skeleton of one) it only keeps the rhythm, so
  * the frame is never doubled.
  */

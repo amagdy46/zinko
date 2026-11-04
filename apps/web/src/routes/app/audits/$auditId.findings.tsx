@@ -192,7 +192,7 @@ function FindingsScreen() {
   const severityCount = (severity: Severity) => inTab.filter((f) => f.severity === severity).length
 
   return (
-    <div className="space-y-4 lg:flex lg:h-[calc(100dvh-8.5rem)] lg:flex-col">
+    <div className="space-y-4 lg:flex lg:h-[calc(100dvh-10rem)] lg:flex-col">
       <Coverage
         coverage={coverage}
         full={full}

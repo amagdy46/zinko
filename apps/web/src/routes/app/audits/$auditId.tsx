@@ -330,11 +330,6 @@ function AuditPage() {
     <PageShell className="print:[&>:not([data-report])]:hidden">
       <PageHeader
         title={title}
-        breadcrumb={[
-          { label: "Sites", to: "/app/sites" },
-          { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-          { label: audit.kind === "narrow" ? "Re-check" : "Audit" },
-        ]}
         meta={
           <>
             <StatusBadge status={toBadgeStatus(audit.status)} />

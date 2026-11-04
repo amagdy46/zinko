@@ -1,15 +1,12 @@
 import { PageShell } from "@/components/page-shell"
 import { Skeleton } from "@/components/ui/skeleton"
 
-/** The title block of `PageHeader`: the breadcrumb row, the title, and an action at the right. */
+/** The title block of `PageHeader`: the title and an action at the right. */
 function HeaderSkeleton({ action = false }: { action?: boolean }) {
   return (
-    <div className="space-y-3">
-      <div className="h-5" />
-      <div className="flex items-start justify-between gap-4">
-        <Skeleton className="h-8 w-48" />
-        {action ? <Skeleton className="h-9 w-24" /> : null}
-      </div>
+    <div className="flex items-start justify-between gap-4">
+      <Skeleton className="h-8 w-48" />
+      {action ? <Skeleton className="h-9 w-24" /> : null}
     </div>
   )
 }

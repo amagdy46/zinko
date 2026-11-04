@@ -50,7 +50,7 @@ const TOKENS: ReadonlyArray<{
 }> = [
   {
     role: "Surfaces",
-    note: "Page, card, raised surfaces and the sidebar. Depth is the hierarchy.",
+    note: "Page, card, raised surfaces and the sign-in panel. Depth is the hierarchy.",
     swatches: [
       { name: "background", className: "bg-background" },
       { name: "card", className: "bg-card" },
@@ -327,7 +327,6 @@ function DesignSystem() {
   return (
     <PageShell>
       <PageHeader
-        breadcrumb={[{ label: "Design system" }]}
         title="Design system"
         description="The tokens, type roles and shared components of the app, drawn by the real code. The written rules are in docs/ui.md."
         actions={

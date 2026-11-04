@@ -1,4 +1,5 @@
-import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react"
+import { Link } from "@tanstack/react-router"
+import { LogOut, Monitor, Moon, Settings, Sun } from "lucide-react"
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -34,21 +35,26 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
+          size="icon"
           aria-label="Account menu"
-          className="h-10 w-full justify-start gap-2 px-2"
+          className="size-8 rounded-full"
         >
-          <Avatar className="size-6">
+          <Avatar className="size-8">
             <AvatarFallback className="text-xs">{initials(name)}</AvatarFallback>
           </Avatar>
-          <span className="flex-1 truncate text-left">{name}</span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="start" className="w-56 max-w-[calc(100vw-2rem)]">
+      <DropdownMenuContent align="end" className="w-56 max-w-[calc(100vw-2rem)]">
         <DropdownMenuLabel>
           <div className="truncate font-medium">{name}</div>
           <div className="truncate text-xs font-normal text-muted-foreground">{email}</div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/app/settings">
+            <Settings /> Settings
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Theme</DropdownMenuLabel>
         <DropdownMenuRadioGroup

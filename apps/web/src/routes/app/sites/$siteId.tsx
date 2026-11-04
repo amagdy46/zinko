@@ -228,7 +228,6 @@ function SitePage() {
     <PageShell>
       <PageHeader
         title={site.name}
-        breadcrumb={[{ label: "Sites", to: "/app/sites" }, { label: site.name }]}
         description={
           <>
             <span className="font-mono break-all" data-testid="site-origin">

@@ -35,7 +35,6 @@ function SampleReport() {
     <PageShell>
       <PageHeader
         title="Sample report"
-        breadcrumb={[{ label: "Sites", to: "/app/sites" }, { label: "Sample report" }]}
         description={`This is what a reader receives after an audit: the score, what to fix first, who fixes it and the evidence behind each finding.`}
         actions={
           <Button

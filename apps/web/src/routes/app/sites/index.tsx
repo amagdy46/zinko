@@ -207,11 +207,6 @@ function Sites() {
     <PageShell>
       <PageHeader
         title={showArchived === true ? "Archived" : "Sites"}
-        breadcrumb={
-          showArchived === true
-            ? [{ label: "Sites", to: "/app/sites" }, { label: "Archived" }]
-            : undefined
-        }
         meta={
           showArchived !== true && needing.length > 0 ? (
             <span className="inline-flex items-center gap-1.5">

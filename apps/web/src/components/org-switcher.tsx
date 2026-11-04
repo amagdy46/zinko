@@ -29,15 +29,13 @@ const sectionOf = (pathname: string) => {
   return "/app"
 }
 
-/** Lists the user's organizations in the sidebar; picking one makes it the active organization. */
+/** The first crumb of the top bar: lists the user's organizations; picking one makes it the active organization. Below `sm` it shrinks to the initial, so the site keeps the room. */
 export function OrgSwitcher({
   organizations,
   activeId,
-  onNavigate,
 }: {
   organizations: ReadonlyArray<Organization>
   activeId: string | null
-  onNavigate?: () => void
 }) {
   const router = useRouter()
   const [switching, setSwitching] = useState(false)
@@ -54,7 +52,6 @@ export function OrgSwitcher({
     await router.invalidate()
     await router.navigate({ to: sectionOf(router.state.location.pathname) })
     setSwitching(false)
-    onNavigate?.()
   }
 
   return (
@@ -62,17 +59,19 @@ export function OrgSwitcher({
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          className="h-10 w-full justify-start gap-2 px-2"
+          className="h-8 max-w-56 justify-start gap-1.5 px-1 sm:px-2"
           disabled={switching}
           aria-label="Switch organization"
         >
-          <Avatar className="size-6 rounded-md">
+          <Avatar className="size-6 rounded-md sm:hidden">
             <AvatarFallback className="text-xs">
               {active?.name.charAt(0).toUpperCase() ?? "?"}
             </AvatarFallback>
           </Avatar>
-          <span className="flex-1 truncate text-left">{active?.name ?? "Select organization"}</span>
-          <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground" />
+          <span className="hidden truncate text-left font-medium sm:inline">
+            {active?.name ?? "Select organization"}
+          </span>
+          <ChevronsUpDown className="hidden size-3.5 shrink-0 text-muted-foreground sm:block" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-56">
@@ -85,7 +84,7 @@ export function OrgSwitcher({
         ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/onboarding" onClick={onNavigate}>
+          <Link to="/onboarding">
             <Plus className="size-4" />
             Create organization
           </Link>

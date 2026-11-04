@@ -321,11 +321,6 @@ function NewAuditForm() {
     <PageShell width="readable">
       <PageHeader
         title="New audit"
-        breadcrumb={[
-          { label: "Sites", to: "/app/sites" },
-          { label: site.name, to: "/app/sites/$siteId", params: { siteId: site.id } },
-          { label: "New audit" },
-        ]}
         description={
           <>
             Every page is opened per choice and viewport. Pages must be on{" "}

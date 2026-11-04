@@ -9,7 +9,7 @@ import {
   Sparkles,
   Users,
 } from "lucide-react"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
   CommandDialog,
@@ -103,12 +103,16 @@ export function CommandPalette({
     }
   }, [open, query])
 
+  // A layout effect, so it runs before the dialog takes focus, however the palette was opened.
+  useLayoutEffect(() => {
+    if (!open) return
+    openedOn.current = router.state.location.pathname
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  }, [open, router])
+
   function change(next: boolean) {
     if (next === open || (next && switching)) return
-    if (next) {
-      openedOn.current = router.state.location.pathname
-      opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    } else {
+    if (!next) {
       setSearch("")
       setTargets(null)
       loaded.current = false

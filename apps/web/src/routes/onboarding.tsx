@@ -57,7 +57,7 @@ function Onboarding() {
       title={another ? "Create another organization" : "Create your organization"}
       description={
         another
-          ? "A separate organization has its own sites, audits, members and reports. You can switch between organizations from the sidebar."
+          ? "A separate organization has its own sites, audits, members and reports. You can switch between organizations from the top bar."
           : "Your organization is your company or team. Its name appears on the reports you share, and you can add a logo later. You add your first site next."
       }
       account={
