@@ -41,9 +41,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { AREAS, BANNER_NOTE, scenarioLabel } from "@/lib/audit-labels"
 import { recheckVerdict } from "@/lib/compare-text"
+import { runPageLabel } from "@/lib/page-label"
 import { count, relativeTime, shortDate as dayOf } from "@/lib/format"
 import { OWNER_LABELS } from "@/lib/report-model"
 import { ProblemGrid } from "@/components/problem-grid"
+import { ProofTimeline } from "@/components/proof-timeline"
 import { Skeleton } from "@/components/ui/skeleton"
 import { sharePending } from "@/lib/share-pending"
 import { vendorName } from "@/lib/tag-matrix"
@@ -429,7 +431,26 @@ export function FindingDetail({
     <div>
       {header}
       <div className="space-y-5 p-4 text-sm">
-        <ProblemGrid auditId={auditId} problem={row} runs={runs} />
+        <ProblemGrid
+          auditId={auditId}
+          problem={row}
+          runs={runs}
+          pickable={checks.map((c) => c.runId)}
+          selectedRunId={check?.runId}
+          onPick={(runId) => {
+            setPickedRun(runId)
+            setPickedRef(null)
+          }}
+        />
+        {check?.status === "fail" ? (
+          <ProofTimeline
+            auditId={auditId}
+            runId={check.runId}
+            ruleId={row.ruleId}
+            severity={row.severity}
+            where={`${runPageLabel(check)}, ${scenarioLabel(check.scenario)}, ${check.viewport}`}
+          />
+        ) : null}
         {couldNotCheck ? (
           <Alert role="status" className="border-dashed">
             <CircleDashed aria-hidden="true" />

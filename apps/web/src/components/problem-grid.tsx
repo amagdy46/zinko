@@ -44,6 +44,9 @@ const fillOf = (state: CellState, severity: Severity) => {
   return state === "not-run" ? HATCH : "border border-dashed border-border"
 }
 
+const cellClass =
+  "flex h-8 w-full items-center justify-center rounded-sm outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--background),inset_0_0_0_4px_var(--ring)]"
+
 const pageKey = (run: Run) => `${run.pageUrl}\0${run.journey}\0${run.followHost ?? ""}`
 
 /** Pages by choice, one set of choices per viewport. Only the runs that are results: a re-check's banner checks and extras are not. */
@@ -144,10 +147,17 @@ export function ProblemGrid({
   auditId,
   problem,
   runs,
+  pickable,
+  selectedRunId,
+  onPick,
 }: {
   auditId: string
   problem: Problem
   runs: ReadonlyArray<Run>
+  /** Runs this check flagged: their cell shows that run's proof here instead of opening Evidence. */
+  pickable: ReadonlyArray<string>
+  selectedRunId: string | undefined
+  onPick: (runId: string) => void
 }) {
   const { pages, viewports, scenarios, columns, at, labelOf } = layoutOf(runs)
   if (pages.length === 0) return null
@@ -215,21 +225,37 @@ export function ProblemGrid({
                     const state = stateOf(problem.outcomes[run.id])
                     return (
                       <td key={`${column.viewport}-${column.scenario}`} className="p-0">
-                        <Link
-                          to="/app/audits/$auditId"
-                          params={{ auditId }}
-                          search={{ view: "matrix", run: run.id }}
-                          aria-label={`${label}, ${scenarioLabel(column.scenario)}, ${column.viewport}: ${STATE_WORD[state]}. Open the run`}
-                          title={STATE_WORD[state]}
-                          className={cn(
-                            "flex h-8 items-center justify-center rounded-sm outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--background),inset_0_0_0_4px_var(--ring)]",
-                            fillOf(state, problem.severity),
-                          )}
-                        >
-                          {state === "failed" ? (
-                            <span className="size-2 rotate-45 bg-background" />
-                          ) : null}
-                        </Link>
+                        {pickable.includes(run.id) ? (
+                          <button
+                            type="button"
+                            aria-pressed={run.id === selectedRunId}
+                            aria-label={`${label}, ${scenarioLabel(column.scenario)}, ${column.viewport}: ${STATE_WORD[state]}. Show this run`}
+                            title={STATE_WORD[state]}
+                            onClick={() => onPick(run.id)}
+                            className={cn(
+                              cellClass,
+                              fillOf(state, problem.severity),
+                              "aria-pressed:outline-2 aria-pressed:outline-offset-1 aria-pressed:outline-foreground",
+                            )}
+                          >
+                            {state === "failed" ? (
+                              <span className="size-2 rotate-45 bg-background" />
+                            ) : null}
+                          </button>
+                        ) : (
+                          <Link
+                            to="/app/audits/$auditId"
+                            params={{ auditId }}
+                            search={{ view: "matrix", run: run.id }}
+                            aria-label={`${label}, ${scenarioLabel(column.scenario)}, ${column.viewport}: ${STATE_WORD[state]}. Open the run`}
+                            title={STATE_WORD[state]}
+                            className={cn(cellClass, fillOf(state, problem.severity))}
+                          >
+                            {state === "failed" ? (
+                              <span className="size-2 rotate-45 bg-background" />
+                            ) : null}
+                          </Link>
+                        )}
                       </td>
                     )
                   })}

@@ -52,6 +52,7 @@ export const ENTRY_POINTS: Record<string, "read" | "mutation"> = {
   "findings.getFinding": "read",
   "findings.setTriage": "mutation",
   "findings.getEvidence": "read",
+  "proof-timeline.getProofTimeline": "read",
   "overview.getOverview": "read",
   "report-publish.publishReport": "mutation",
   "report-publish.deleteSnapshot": "mutation",
