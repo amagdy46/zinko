@@ -298,10 +298,13 @@ export const changesBriefing = (
   const notComparable = of("not_comparable")
   if (notComparable.length > 0)
     lines.push(
-      `Could not compare ${count(notComparable.length, "check")}: a check changed between rules versions, or not every run that failed was checked again.`,
+      `Could not compare ${count(notComparable.length, "check")}: a check changed between rules versions, or the two audits did not check the same runs.`,
     )
+  const unchanged = of("unchanged")
+  const failing = unchanged.filter((f) => f.now === "fail").length
+  const unknown = unchanged.length - failing
   lines.push(
-    `${count(c.counts.unchanged, noun)} unchanged. ${scoreSentence(c.score)} Both scores use score version ${c.score.scoreVersion}.`,
+    `${count(failing, noun)} unchanged${unknown > 0 ? `, ${count(unknown, "check")} still could not be checked` : ""}. ${scoreSentence(c.score)} Both scores use score version ${c.score.scoreVersion}.`,
   )
   return lines.slice(0, 6)
 }

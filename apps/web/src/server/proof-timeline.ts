@@ -1,6 +1,7 @@
 import { CaptureResult, CookieSnapshot } from "@repo/capture-contract"
 import { Database } from "@repo/core/Database"
 import { checkResult, hit, run } from "@repo/db"
+import { pushCommand } from "@repo/llm"
 import { createServerFn } from "@tanstack/react-start"
 import { and, asc, eq } from "drizzle-orm"
 import { Effect, Option, Schema } from "effect"
@@ -130,7 +131,7 @@ export const getProofTimeline = createServerFn({ method: "GET" })
                   add("dataLayer", "dataLayer", {
                     id: `${ref.seq}`,
                     at: Math.round(push.at),
-                    label: "push",
+                    label: pushCommand(push.value),
                     cited: true,
                   })
               }
@@ -138,10 +139,10 @@ export const getProofTimeline = createServerFn({ method: "GET" })
                 const request = capture.requests.find((r) => r.id === ref.requestId)
                 if (request === undefined || !URL.canParse(request.url)) unreadable = true
                 else
-                  add("request", new URL(request.url).hostname, {
+                  add("request", new URL(request.url).hostname.replace(/^www\./, ""), {
                     id: request.id,
                     at: Math.round(request.startedAt),
-                    label: request.method,
+                    label: request.resourceType,
                     cited: true,
                   })
               }

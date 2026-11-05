@@ -13,7 +13,7 @@
   <a href="https://github.com/amagdy46/zinko/blob/main/LICENSE"><img src="https://img.shields.io/github/license/amagdy46/zinko" alt="AGPL-3.0 license"></a>
 </p>
 
-**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a site (and a client, if you audit for clients), audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has been deployed to Cloudflare once, on a workers.dev stage, where a one-page audit ran end to end; the [self-hosting guide](https://github.com/amagdy46/zinko/blob/main/docs/self-hosting.md) describes that deploy. The container's idle shutdown, several audits at once and heavy pages are not measured yet. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
+**Status: release candidate for v0.1, runs locally.** The web app works end to end on your machine: add a site, audit its pages under each consent choice, watch the run grid fill in, browse every decoded hit and `dataLayer` push, read 28 deterministic findings each with the request, cookie or `dataLayer` push that proves it, **re-run the audit and see what was fixed, what is new and what came back**, re-check just the pages a fix touched, and send the client a white-label report. It has been deployed to Cloudflare once, on a workers.dev stage, where a one-page audit ran end to end; the [self-hosting guide](https://github.com/amagdy46/zinko/blob/main/docs/self-hosting.md) describes that deploy. The container's idle shutdown, several audits at once and heavy pages are not measured yet. Zinko is written in TypeScript; the web app runs on Cloudflare Workers.
 
 Licensed AGPL-3.0. If you modify Zinko and let people use it over a network, you must offer those users the source of your version.
 
@@ -43,7 +43,7 @@ pnpm dev                                                            # the app on
 
 `.env.example` already sets `BROWSER_URL=http://localhost:8080`, which points the app at that engine (local `dev` stages only). The app listens on port 1337 (Alchemy's default); if that is taken it moves to the next free port, so read the URL `pnpm dev` prints when it starts. Sign-in works on any port because `BETTER_AUTH_URL` stays empty locally.
 
-Then open the app and sign up. Create an organization, then add a site with the address `http://localhost:4400/` (Sites > Add site; private addresses are accepted on local dev stages only), and choose New audit on the site. If you audit sites for clients, switch on Settings > Organization > Group sites by client first: Clients then appears beside Sites and each site belongs to one. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
+Then open the app and sign up. Create an organization, then add a site with the address `http://localhost:4400/` (Sites > Add site; private addresses are accepted on local dev stages only), and choose New audit on the site. The numbered click-through, with the pages to pick, is in [CONTRIBUTING.md](https://github.com/amagdy46/zinko/blob/main/CONTRIBUTING.md#run-an-audit-locally).
 
 ## Known limits
 
@@ -176,7 +176,7 @@ These 28 checks are built and run on every audit. Each is a plain function over 
 
 ```
 apps/cli            zinko CLI (decode and capture, with --rules; audit is planned)
-apps/web            TanStack Start web app on Cloudflare Workers: sites, optional clients, audits, live progress, Hits explorer, Findings, Compare, reports
+apps/web            TanStack Start web app on Cloudflare Workers: sites, audits, live progress, Hits explorer, Problems, Compare, reports
 apps/browser        capture engine: Node server, egress proxy, Scrapling (Python) in a container image
 packages/decoders   GA4, Google Ads, Meta Pixel and TikTok decoders -> a normalized Hit
 packages/rules      the 28 checks: one run's capture and hits -> pass, fail, inconclusive or not applicable, with evidence

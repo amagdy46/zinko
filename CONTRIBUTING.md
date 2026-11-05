@@ -46,12 +46,12 @@ pnpm dev                                          # app on http://localhost:1337
 With everything above running (Postgres, the engine with `ALLOW_PRIVATE_NETWORKS=true`, the fixtures, `pnpm dev`; the engine, the fixtures and the dev server each need their own terminal), open http://localhost:1337:
 
 1. Sign up, then create an organization.
-2. Sites > Add site, with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only). No client is needed; turn on Settings > Organization > Group sites by client if you want to try Clients.
+2. Sites > Add site, with the address `http://localhost:4400/` (private addresses are accepted on local dev stages only).
 3. On the site, choose New audit. Start URL `http://localhost:4400/clean/`, key pages `http://localhost:4400/meta-before-consent/` and `http://localhost:4400/ga4-batch/`, scenarios none, accept and reject, desktop. Leave "Answer tracking requests locally" on, so fixture traffic never reaches Google, Meta or TikTok.
 4. Start the audit and watch the run grid fill in. Nine runs take about 1.5 to 2 minutes.
    To see a comparison, switch the `drift` fixture site to another release (`pnpm --filter @repo/fixtures release drift 1`), audit `http://localhost:4400/drift/` first at release 0, then press Re-run: the Compare tab shows what was fixed, what is new and the tags that disappeared (`packages/fixtures/README.md` lists the expected result per release).
-5. Open the Hits tab. Filter the run to `/meta-before-consent/` under reject and the vendor to Meta: the `PageView` fires before the consent update, and nothing follows it. Open the `ga4-batch` accept hit to see one request carrying three events.
-6. Open the Findings tab once the audit finishes. `meta-before-consent` fails "Ad pixel fired without consent" under none, accept and reject; select it to read why it matters and the fix steps, and open its Hit, Request, Cookies and dataLayer evidence. `clean` raises nothing but `hygiene.tag-errors`, which reads "could not check" because the tracking requests were answered locally.
+5. Open Evidence, then Hits. Filter the run to `/meta-before-consent/` under reject and the vendor to Meta: the `PageView` fires before the consent update, and nothing follows it. Open the `ga4-batch` accept hit to see one request carrying three events.
+6. Open the Problems tab once the audit finishes. `meta-before-consent` fails "Ad pixel fired without consent" under none, accept and reject; select it to see where it failed, what fired on a line of time, why it matters and the fix steps. `clean` raises nothing but `hygiene.tag-errors`, which reads "could not check" because the tracking requests were answered locally.
 
 - [AGENTS.md](./AGENTS.md): code layout and rules, for people and coding agents.
 - [infra/README.md](./infra/README.md): running the web app locally (`pnpm dev`) and deploying it; [docs/self-hosting.md](./docs/self-hosting.md): the self-hosting guide (written, not yet run end to end).

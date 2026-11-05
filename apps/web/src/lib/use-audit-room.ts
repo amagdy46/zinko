@@ -48,6 +48,7 @@ export function useAuditRoom(
       ws = new WebSocket(`${scheme}://${location.host}/ws/audits/${encodeURIComponent(auditId)}`)
       const socket = ws
       socket.addEventListener("open", () => {
+        if (closed) return
         setConnected(true)
         attempt = 0
         handler.current({ type: "refresh" })
@@ -62,14 +63,17 @@ export function useAuditRoom(
       socket.addEventListener("close", () => {
         clearInterval(ping)
         clearInterval(refresh)
+        // a socket this effect already gave up on can close long after its replacement has opened
+        if (closed) return
         setConnected(false)
-        if (!closed) retry = setTimeout(connect, reconnectDelay(attempt++))
+        retry = setTimeout(connect, reconnectDelay(attempt++))
       })
     }
     connect()
 
     return () => {
       closed = true
+      setConnected(false)
       clearTimeout(retry)
       clearInterval(ping)
       clearInterval(refresh)

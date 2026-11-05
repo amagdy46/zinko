@@ -214,7 +214,7 @@ export function ProblemGrid({
                   <th
                     scope="row"
                     title={label}
-                    className="max-w-24 pr-2 text-left break-all sm:max-w-40 font-mono font-normal text-muted-foreground"
+                    className="max-w-40 min-w-28 pr-2 text-left wrap-anywhere font-mono font-normal text-muted-foreground"
                   >
                     {label}
                   </th>
